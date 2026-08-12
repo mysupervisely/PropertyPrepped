@@ -124,6 +124,8 @@ export default function Home() {
   const [financialYear, setFinancialYear] = useState(String(new Date().getFullYear()))
   const [transactionDraft, setTransactionDraft] = useState({ date: new Date().toISOString().slice(0, 10), type: 'Expense' as 'Income' | 'Expense', category: 'Repairs', vendor: '', description: '', amount: '', documentId: '', recurring: false })
   const [showAdd, setShowAdd] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('Overview')
   const [docCategory, setDocCategory] = useState('All')
@@ -132,6 +134,9 @@ export default function Home() {
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState('')
   const [draft, setDraft] = useState({
+    address: '', city: '', type: 'Rental Property', value: '', mortgage: '', rent: '', purchasePrice: '', monthlyExpenses: '',
+  })
+  const [editDraft, setEditDraft] = useState({
     address: '', city: '', type: 'Rental Property', value: '', mortgage: '', rent: '', purchasePrice: '', monthlyExpenses: '',
   })
 
@@ -292,6 +297,80 @@ export default function Home() {
     setCoverFile(null)
     setImagePreview('')
     setShowAdd(false)
+    await loadPortfolio()
+    setBusy(false)
+  }
+
+  function openEditProperty(property: Property) {
+    setEditDraft({
+      address: property.address,
+      city: property.city,
+      type: property.property_type,
+      value: String(property.estimated_value || ''),
+      mortgage: String(property.mortgage_balance || ''),
+      rent: String(property.monthly_rent || ''),
+      purchasePrice: String(property.purchase_price || ''),
+      monthlyExpenses: String(property.monthly_expenses || ''),
+    })
+    setShowEdit(true)
+    setShowDeleteConfirm(false)
+    setError('')
+  }
+
+  async function updateProperty() {
+    if (!supabase || !user || !selected || !editDraft.address.trim() || !editDraft.city.trim()) return
+    setBusy(true)
+    setError('')
+    const { error: updateError } = await supabase.from('properties').update({
+      address: editDraft.address.trim(),
+      city: editDraft.city.trim(),
+      property_type: editDraft.type,
+      estimated_value: Number(editDraft.value || 0),
+      mortgage_balance: Number(editDraft.mortgage || 0),
+      monthly_rent: Number(editDraft.rent || 0),
+      purchase_price: Number(editDraft.purchasePrice || 0),
+      monthly_expenses: Number(editDraft.monthlyExpenses || 0),
+    }).eq('id', selected.id).eq('owner_id', user.id)
+
+    if (updateError) {
+      setError(updateError.message)
+      setBusy(false)
+      return
+    }
+    setShowEdit(false)
+    await loadPortfolio()
+    setBusy(false)
+  }
+
+  async function deleteProperty() {
+    if (!supabase || !user || !selected) return
+    setBusy(true)
+    setError('')
+
+    const propertyDocs = documents.filter((doc) => doc.property_id === selected.id)
+    const propertyPhotos = photos.filter((photo) => photo.property_id === selected.id)
+    const documentPaths = propertyDocs.map((doc) => doc.storage_path)
+    const photoPaths = propertyPhotos.map((photo) => photo.storage_path)
+
+    if (documentPaths.length) {
+      const { error: storageError } = await supabase.storage.from('property-documents').remove(documentPaths)
+      if (storageError) { setError(`Could not remove property documents: ${storageError.message}`); setBusy(false); return }
+    }
+    if (photoPaths.length) {
+      const { error: storageError } = await supabase.storage.from('property-photos').remove(photoPaths)
+      if (storageError) { setError(`Could not remove property photos: ${storageError.message}`); setBusy(false); return }
+    }
+
+    const { error: deleteError } = await supabase.from('properties').delete().eq('id', selected.id).eq('owner_id', user.id)
+    if (deleteError) {
+      setError(deleteError.message)
+      setBusy(false)
+      return
+    }
+
+    setShowDeleteConfirm(false)
+    setShowEdit(false)
+    setSelectedId(null)
     await loadPortfolio()
     setBusy(false)
   }
@@ -607,7 +686,7 @@ export default function Home() {
       <main className="shell workspaceShell">
         <header className="topbar">
           <button className="brandButton" onClick={() => setSelectedId(null)}><span className="brand">PropPrepped</span><span className="tagline">Your properties. Organized.</span></button>
-          <div className="accountActions"><span>{user.email}</span><button className="secondary" onClick={() => setSelectedId(null)}>← All Properties</button><button className="secondary" onClick={() => void signOut()}>Log out</button></div>
+          <div className="accountActions"><span>{user.email}</span><button className="secondary" onClick={() => openEditProperty(selected)}>Edit Property</button><button className="secondary" onClick={() => setSelectedId(null)}>← All Properties</button><button className="secondary" onClick={() => void signOut()}>Log out</button></div>
         </header>
         {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
 
@@ -685,6 +764,10 @@ export default function Home() {
           {showModuleForm === 'Maintenance' && <div className="formGrid"><label>Service date<input type="date" value={maintenanceDraft.serviceDate} onChange={e=>setMaintenanceDraft({...maintenanceDraft,serviceDate:e.target.value})} /></label><label>Status<select value={maintenanceDraft.status} onChange={e=>setMaintenanceDraft({...maintenanceDraft,status:e.target.value})}><option>Completed</option><option>Scheduled</option><option>In progress</option><option>Needs follow-up</option></select></label><label>Category<select value={maintenanceDraft.category} onChange={e=>setMaintenanceDraft({...maintenanceDraft,category:e.target.value})}><option>Repair</option><option>Preventative</option><option>Inspection</option><option>Renovation</option><option>Landscaping</option><option>HVAC</option><option>Plumbing</option><option>Electrical</option><option>Other</option></select></label><label>Vendor<input value={maintenanceDraft.vendor} onChange={e=>setMaintenanceDraft({...maintenanceDraft,vendor:e.target.value})} /></label><label>Cost<input inputMode="decimal" value={maintenanceDraft.cost} onChange={e=>setMaintenanceDraft({...maintenanceDraft,cost:e.target.value})} /></label><label>Receipt / invoice<select value={maintenanceDraft.documentId} onChange={e=>setMaintenanceDraft({...maintenanceDraft,documentId:e.target.value})}><option value="">No attachment</option>{selectedDocs.filter(d=>['Receipts','Warranties','Other'].includes(d.category)).map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><label className="fullField">Description<input value={maintenanceDraft.description} onChange={e=>setMaintenanceDraft({...maintenanceDraft,description:e.target.value})} placeholder="HVAC repair, annual service, roof inspection…" /></label><label className="recurringCheck fullField"><input type="checkbox" checked={maintenanceDraft.addToFinancials} onChange={e=>setMaintenanceDraft({...maintenanceDraft,addToFinancials:e.target.checked})} /><span>Add this cost to Financials</span><small>PropPrepped creates a linked Maintenance expense so you only enter the cost once.</small></label></div>}
           <div className="modalActions"><button className="secondary" onClick={() => setShowModuleForm(null)}>Cancel</button><button className="primary" disabled={busy} onClick={() => void (showModuleForm==='Lease'?saveLease():showModuleForm==='Mortgage'?saveMortgage():showModuleForm==='Insurance'?saveInsurance():saveMaintenance())}>{busy?'Saving…':'Save'}</button></div></div></div>}
 
+        {showEdit && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowEdit(false)}><div className="modal"><div className="modalTop"><div><p className="eyebrow">PROPERTY SETTINGS</p><h2>Edit property</h2></div><button className="iconButton" onClick={() => setShowEdit(false)}>×</button></div><div className="formGrid"><label>Street address<input value={editDraft.address} onChange={(e) => setEditDraft({ ...editDraft, address: e.target.value })} placeholder="123 Example Street" /></label><label>City, state & ZIP<input value={editDraft.city} onChange={(e) => setEditDraft({ ...editDraft, city: e.target.value })} placeholder="Example City, FL 12345" /></label><label>Property type<select value={editDraft.type} onChange={(e) => setEditDraft({ ...editDraft, type: e.target.value })}><option>Rental Property</option><option>Primary Residence</option><option>Vacation Home</option><option>Commercial</option><option>Land</option><option>Other</option></select></label><label>Purchase price<input inputMode="decimal" value={editDraft.purchasePrice} onChange={(e) => setEditDraft({ ...editDraft, purchasePrice: e.target.value })} placeholder="390000" /></label><label>Estimated value<input inputMode="decimal" value={editDraft.value} onChange={(e) => setEditDraft({ ...editDraft, value: e.target.value })} placeholder="520000" /></label><label>Mortgage balance<input inputMode="decimal" value={editDraft.mortgage} onChange={(e) => setEditDraft({ ...editDraft, mortgage: e.target.value })} placeholder="310000" /></label><label>Monthly rent<input inputMode="decimal" value={editDraft.rent} onChange={(e) => setEditDraft({ ...editDraft, rent: e.target.value })} placeholder="2950" /></label><label>Monthly property expenses<input inputMode="decimal" value={editDraft.monthlyExpenses} onChange={(e) => setEditDraft({ ...editDraft, monthlyExpenses: e.target.value })} placeholder="1925" /></label></div><div className="editPropertyFooter"><button className="dangerButton" onClick={() => setShowDeleteConfirm(true)}>Delete Property</button><div className="modalActions compactActions"><button className="secondary" onClick={() => setShowEdit(false)}>Cancel</button><button className="primary" disabled={busy || !editDraft.address.trim() || !editDraft.city.trim()} onClick={() => void updateProperty()}>{busy ? 'Saving…' : 'Save Changes'}</button></div></div></div></div>}
+
+        {showDeleteConfirm && <div className="overlay deleteOverlay" onMouseDown={(e) => e.target === e.currentTarget && setShowDeleteConfirm(false)}><div className="modal deleteModal"><div className="modalTop"><div><p className="eyebrow dangerEyebrow">PERMANENT ACTION</p><h2>Delete this property?</h2></div><button className="iconButton" onClick={() => setShowDeleteConfirm(false)}>×</button></div><p className="deleteWarning">This permanently removes <strong>{selected.address}</strong> and its associated documents, photos, financial transactions, lease, mortgage, insurance, and maintenance records. This cannot be undone.</p><div className="modalActions"><button className="secondary" onClick={() => setShowDeleteConfirm(false)}>Keep Property</button><button className="dangerButton solidDanger" disabled={busy} onClick={() => void deleteProperty()}>{busy ? 'Deleting…' : 'Delete Permanently'}</button></div></div></div>}
+
         {showTransaction && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowTransaction(false)}><div className="modal transactionModal"><div className="modalTop"><div><p className="eyebrow">FINANCIALS</p><h2>Add transaction</h2></div><button className="iconButton" onClick={() => setShowTransaction(false)}>×</button></div><div className="formGrid transactionGrid"><label>Date<input type="date" value={transactionDraft.date} onChange={(e) => setTransactionDraft({ ...transactionDraft, date: e.target.value })} /></label><label>Type<select value={transactionDraft.type} onChange={(e) => setTransactionDraft({ ...transactionDraft, type: e.target.value as 'Income' | 'Expense', category: e.target.value === 'Income' ? 'Rent' : 'Repairs' })}><option>Income</option><option>Expense</option></select></label><label>Category<select value={transactionDraft.category} onChange={(e) => setTransactionDraft({ ...transactionDraft, category: e.target.value })}>{financialCategories.map((category) => <option key={category}>{category}</option>)}</select></label><label>Amount<input inputMode="decimal" value={transactionDraft.amount} onChange={(e) => setTransactionDraft({ ...transactionDraft, amount: e.target.value })} placeholder="1250.00" /></label><label>Vendor / payer<input value={transactionDraft.vendor} onChange={(e) => setTransactionDraft({ ...transactionDraft, vendor: e.target.value })} placeholder={transactionDraft.type === 'Income' ? 'Tenant name' : 'Vendor or company'} /></label><label>Attach document<select value={transactionDraft.documentId} onChange={(e) => setTransactionDraft({ ...transactionDraft, documentId: e.target.value })}><option value="">No attachment</option>{selectedDocs.map((doc) => <option value={doc.id} key={doc.id}>{doc.name}</option>)}</select></label><label className="fullField">Description<input value={transactionDraft.description} onChange={(e) => setTransactionDraft({ ...transactionDraft, description: e.target.value })} placeholder="August rent, HVAC repair, property tax…" /></label><label className="recurringCheck fullField"><input type="checkbox" checked={transactionDraft.recurring} onChange={(e) => setTransactionDraft({ ...transactionDraft, recurring: e.target.checked })} /><span>Mark as recurring monthly</span><small>This labels the transaction as recurring; automatic future posting can be enabled in a later milestone.</small></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowTransaction(false)}>Cancel</button><button className="primary" disabled={busy || !transactionDraft.description.trim() || Number(transactionDraft.amount) <= 0} onClick={() => void addTransaction()}>{busy ? 'Saving…' : 'Save transaction'}</button></div></div></div>}
       </main>
     )
@@ -702,7 +785,7 @@ export default function Home() {
         </div>
       </section>
 
-      {showAdd && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowAdd(false)}><div className="modal"><div className="modalTop"><h2>Add a property</h2><button className="iconButton" onClick={() => setShowAdd(false)}>×</button></div><label className="uploadBox">{imagePreview ? <img src={imagePreview} alt="Property preview" /> : <div><strong>Add a cover photo</strong><span>Choose a photo now or add one later</span></div>}<input type="file" accept="image/*" onChange={handleImage} /></label><div className="formGrid"><label>Street address<input value={draft.address} onChange={(e) => setDraft({ ...draft, address: e.target.value })} placeholder="12109 Rustic River Way" /></label><label>City, state & ZIP<input value={draft.city} onChange={(e) => setDraft({ ...draft, city: e.target.value })} placeholder="Tampa, FL 33635" /></label><label>Property type<select value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })}><option>Rental Property</option><option>Primary Residence</option><option>Vacation Home</option><option>Commercial</option><option>Land</option><option>Other</option></select></label><label>Purchase price<input inputMode="decimal" value={draft.purchasePrice} onChange={(e) => setDraft({ ...draft, purchasePrice: e.target.value })} placeholder="390000" /></label><label>Estimated value<input inputMode="decimal" value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} placeholder="520000" /></label><label>Mortgage balance<input inputMode="decimal" value={draft.mortgage} onChange={(e) => setDraft({ ...draft, mortgage: e.target.value })} placeholder="310000" /></label><label>Monthly rent<input inputMode="decimal" value={draft.rent} onChange={(e) => setDraft({ ...draft, rent: e.target.value })} placeholder="2950" /></label><label>Monthly property expenses<input inputMode="decimal" value={draft.monthlyExpenses} onChange={(e) => setDraft({ ...draft, monthlyExpenses: e.target.value })} placeholder="1925" /></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowAdd(false)}>Cancel</button><button className="primary" disabled={busy} onClick={() => void addProperty()}>{busy ? 'Saving…' : 'Save Property'}</button></div></div></div>}
+      {showAdd && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowAdd(false)}><div className="modal"><div className="modalTop"><h2>Add a property</h2><button className="iconButton" onClick={() => setShowAdd(false)}>×</button></div><label className="uploadBox">{imagePreview ? <img src={imagePreview} alt="Property preview" /> : <div><strong>Add a cover photo</strong><span>Choose a photo now or add one later</span></div>}<input type="file" accept="image/*" onChange={handleImage} /></label><div className="formGrid"><label>Street address<input value={draft.address} onChange={(e) => setDraft({ ...draft, address: e.target.value })} placeholder="123 Example Street" /></label><label>City, state & ZIP<input value={draft.city} onChange={(e) => setDraft({ ...draft, city: e.target.value })} placeholder="Example City, FL 12345" /></label><label>Property type<select value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })}><option>Rental Property</option><option>Primary Residence</option><option>Vacation Home</option><option>Commercial</option><option>Land</option><option>Other</option></select></label><label>Purchase price<input inputMode="decimal" value={draft.purchasePrice} onChange={(e) => setDraft({ ...draft, purchasePrice: e.target.value })} placeholder="390000" /></label><label>Estimated value<input inputMode="decimal" value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} placeholder="520000" /></label><label>Mortgage balance<input inputMode="decimal" value={draft.mortgage} onChange={(e) => setDraft({ ...draft, mortgage: e.target.value })} placeholder="310000" /></label><label>Monthly rent<input inputMode="decimal" value={draft.rent} onChange={(e) => setDraft({ ...draft, rent: e.target.value })} placeholder="2950" /></label><label>Monthly property expenses<input inputMode="decimal" value={draft.monthlyExpenses} onChange={(e) => setDraft({ ...draft, monthlyExpenses: e.target.value })} placeholder="1925" /></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowAdd(false)}>Cancel</button><button className="primary" disabled={busy} onClick={() => void addProperty()}>{busy ? 'Saving…' : 'Save Property'}</button></div></div></div>}
     </main>
   )
 }
