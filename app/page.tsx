@@ -75,11 +75,22 @@ type MaintenanceRecord = {
   id: string; property_id: string; owner_id: string; service_date: string; status: string; category: string; vendor: string | null; description: string; cost: number; document_id: string | null; financial_transaction_id: string | null; created_at: string
 }
 
-type Tab = 'Overview' | 'Documents' | 'Photos' | 'Financials' | 'Lease' | 'Maintenance' | 'Mortgage' | 'Insurance'
+type PropertyContact = {
+  id: string; property_id: string; owner_id: string; name: string; business_name: string | null; role: string; phone: string | null; email: string | null; website: string | null; notes: string | null; created_at: string
+}
 
-const tabs: Tab[] = ['Overview', 'Documents', 'Photos', 'Financials', 'Lease', 'Maintenance', 'Mortgage', 'Insurance']
+type MaintenanceRequest = {
+  id: string; property_id: string; owner_id: string; tenant_name: string; tenant_email: string | null; title: string; description: string; priority: string; status: string; created_at: string
+}
+
+type Tab = 'Overview' | 'Documents' | 'Photos' | 'Financials' | 'Lease' | 'Maintenance' | 'Mortgage' | 'Insurance' | 'Contacts' | 'Landlord'
+
+const tabs: Tab[] = ['Overview', 'Documents', 'Photos', 'Financials', 'Lease', 'Maintenance', 'Mortgage', 'Insurance', 'Contacts', 'Landlord']
 const docCategories = ['All', 'Closing', 'Mortgage', 'Insurance', 'Lease', 'Tax', 'Inspection', 'Receipts', 'Warranties', 'Other']
 const financialCategories = ['Rent', 'Other Income', 'Mortgage', 'Taxes', 'Insurance', 'HOA', 'Utilities', 'Repairs', 'Maintenance', 'CapEx', 'Management', 'Legal & Professional', 'Supplies', 'Other']
+const contactRoles = ['Contractor', 'HVAC', 'Plumber', 'Electrician', 'Roofer', 'Realtor', 'Insurance Agent', 'Lender', 'Property Manager', 'Attorney', 'CPA', 'Inspector', 'Other']
+const requestPriorities = ['Low', 'Normal', 'High', 'Urgent']
+const requestStatuses = ['Submitted', 'Scheduled', 'In Progress', 'Completed']
 
 const money = (n: number) => new Intl.NumberFormat('en-US', {
   style: 'currency', currency: 'USD', maximumFractionDigits: 0,
@@ -91,6 +102,8 @@ const formatSize = (bytes: number) => {
 }
 
 const safeName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_')
+
+const normalizeUrl = (url: string) => /^https?:\/\//i.test(url) ? url : `https://${url}`
 
 
 function EmptyModule({ title, text, action, onClick }: { title: string; text: string; action: string; onClick: () => void }) {
@@ -115,12 +128,18 @@ export default function Home() {
   const [mortgages, setMortgages] = useState<MortgageRecord[]>([])
   const [insurancePolicies, setInsurancePolicies] = useState<InsuranceRecord[]>([])
   const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>([])
+  const [contacts, setContacts] = useState<PropertyContact[]>([])
+  const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([])
   const [showTransaction, setShowTransaction] = useState(false)
   const [showModuleForm, setShowModuleForm] = useState<'Lease'|'Mortgage'|'Insurance'|'Maintenance'|null>(null)
+  const [showContactForm, setShowContactForm] = useState(false)
+  const [showRequestForm, setShowRequestForm] = useState(false)
   const [leaseDraft, setLeaseDraft] = useState({ tenantName:'', tenantEmail:'', monthlyRent:'', securityDeposit:'', startDate:new Date().toISOString().slice(0,10), endDate:'', renewalStatus:'Active', documentId:'', notes:'' })
   const [mortgageDraft, setMortgageDraft] = useState({ lender:'', loanNumber:'', originalBalance:'', currentBalance:'', interestRate:'', monthlyPayment:'', escrowAmount:'', loanTermYears:'30', maturityDate:'', documentId:'' })
   const [insuranceDraft, setInsuranceDraft] = useState({ carrier:'', policyNumber:'', annualPremium:'', deductible:'', effectiveDate:'', expirationDate:'', documentId:'' })
   const [maintenanceDraft, setMaintenanceDraft] = useState({ serviceDate:new Date().toISOString().slice(0,10), status:'Completed', category:'Repair', vendor:'', description:'', cost:'', documentId:'', addToFinancials:true })
+  const [contactDraft, setContactDraft] = useState({ name:'', businessName:'', role:'Contractor', phone:'', email:'', website:'', notes:'' })
+  const [requestDraft, setRequestDraft] = useState({ tenantName:'', tenantEmail:'', title:'', description:'', priority:'Normal', status:'Submitted' })
   const [financialYear, setFinancialYear] = useState(String(new Date().getFullYear()))
   const [transactionDraft, setTransactionDraft] = useState({ date: new Date().toISOString().slice(0, 10), type: 'Expense' as 'Income' | 'Expense', category: 'Repairs', vendor: '', description: '', amount: '', documentId: '', recurring: false })
   const [showAdd, setShowAdd] = useState(false)
@@ -167,6 +186,8 @@ export default function Home() {
       setMortgages([])
       setInsurancePolicies([])
       setMaintenanceRecords([])
+      setContacts([])
+      setMaintenanceRequests([])
     }
   }, [user?.id])
 
@@ -191,13 +212,17 @@ export default function Home() {
   const selectedMortgages = mortgages.filter((row) => row.property_id === selectedId)
   const selectedInsurance = insurancePolicies.filter((row) => row.property_id === selectedId)
   const selectedMaintenance = maintenanceRecords.filter((row) => row.property_id === selectedId)
+  const selectedContacts = contacts.filter((row) => row.property_id === selectedId)
+  const selectedRequests = maintenanceRequests.filter((row) => row.property_id === selectedId)
+  const openRequests = selectedRequests.filter((row) => row.status !== 'Completed')
+  const completedRequests = selectedRequests.filter((row) => row.status === 'Completed')
 
   async function loadPortfolio() {
     if (!supabase || !user) return
     const client = supabase
     setBusy(true)
     setError('')
-    const [{ data: propertyRows, error: propertyError }, { data: docRows, error: docError }, { data: photoRows, error: photoError }, { data: transactionRows, error: transactionError }, { data: leaseRows, error: leaseError }, { data: mortgageRows, error: mortgageError }, { data: insuranceRows, error: insuranceError }, { data: maintenanceRows, error: maintenanceError }] = await Promise.all([
+    const [{ data: propertyRows, error: propertyError }, { data: docRows, error: docError }, { data: photoRows, error: photoError }, { data: transactionRows, error: transactionError }, { data: leaseRows, error: leaseError }, { data: mortgageRows, error: mortgageError }, { data: insuranceRows, error: insuranceError }, { data: maintenanceRows, error: maintenanceError }, { data: contactRows, error: contactError }, { data: requestRows, error: requestError }] = await Promise.all([
       client.from('properties').select('*').order('created_at', { ascending: true }),
       client.from('property_documents').select('*').order('created_at', { ascending: false }),
       client.from('property_photos').select('*').order('created_at', { ascending: false }),
@@ -206,8 +231,10 @@ export default function Home() {
       client.from('mortgages').select('*').order('created_at', { ascending: false }),
       client.from('insurance_policies').select('*').order('created_at', { ascending: false }),
       client.from('maintenance_records').select('*').order('service_date', { ascending: false }),
+      client.from('property_contacts').select('*').order('created_at', { ascending: false }),
+      client.from('maintenance_requests').select('*').order('created_at', { ascending: false }),
     ])
-    const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError
+    const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError || contactError || requestError
     if (firstError) {
       setError(firstError.message)
       setBusy(false)
@@ -229,6 +256,8 @@ export default function Home() {
     setMortgages((mortgageRows || []) as MortgageRecord[])
     setInsurancePolicies((insuranceRows || []) as InsuranceRecord[])
     setMaintenanceRecords((maintenanceRows || []) as MaintenanceRecord[])
+    setContacts((contactRows || []) as PropertyContact[])
+    setMaintenanceRequests((requestRows || []) as MaintenanceRequest[])
     setBusy(false)
   }
 
@@ -551,6 +580,46 @@ export default function Home() {
     setBusy(false)
   }
 
+  async function saveContact() {
+    if (!supabase || !user || !selectedId || !contactDraft.name.trim()) return
+    setBusy(true); setError('')
+    const { error: e } = await supabase.from('property_contacts').insert({ owner_id:user.id, property_id:selectedId, name:contactDraft.name.trim(), business_name:contactDraft.businessName.trim()||null, role:contactDraft.role, phone:contactDraft.phone.trim()||null, email:contactDraft.email.trim()||null, website:contactDraft.website.trim()||null, notes:contactDraft.notes.trim()||null })
+    if (e) setError(e.message); else { setShowContactForm(false); setContactDraft({ name:'', businessName:'', role:'Contractor', phone:'', email:'', website:'', notes:'' }); await loadPortfolio() }
+    setBusy(false)
+  }
+
+  async function removeContact(id: string) {
+    if (!supabase) return
+    setBusy(true); setError('')
+    const { error: e } = await supabase.from('property_contacts').delete().eq('id', id)
+    if (e) setError(e.message); else await loadPortfolio()
+    setBusy(false)
+  }
+
+  async function saveRequest() {
+    if (!supabase || !user || !selectedId || !requestDraft.tenantName.trim() || !requestDraft.title.trim()) return
+    setBusy(true); setError('')
+    const { error: e } = await supabase.from('maintenance_requests').insert({ owner_id:user.id, property_id:selectedId, tenant_name:requestDraft.tenantName.trim(), tenant_email:requestDraft.tenantEmail.trim()||null, title:requestDraft.title.trim(), description:requestDraft.description.trim(), priority:requestDraft.priority, status:requestDraft.status })
+    if (e) setError(e.message); else { setShowRequestForm(false); setRequestDraft({ tenantName:'', tenantEmail:'', title:'', description:'', priority:'Normal', status:'Submitted' }); await loadPortfolio() }
+    setBusy(false)
+  }
+
+  async function updateRequestStatus(id: string, status: string) {
+    if (!supabase) return
+    setBusy(true); setError('')
+    const { error: e } = await supabase.from('maintenance_requests').update({ status }).eq('id', id)
+    if (e) setError(e.message); else await loadPortfolio()
+    setBusy(false)
+  }
+
+  async function removeRequest(id: string) {
+    if (!supabase) return
+    setBusy(true); setError('')
+    const { error: e } = await supabase.from('maintenance_requests').delete().eq('id', id)
+    if (e) setError(e.message); else await loadPortfolio()
+    setBusy(false)
+  }
+
   async function removeModuleRecord(table: 'leases'|'mortgages'|'insurance_policies'|'maintenance_records', id: string, financialTransactionId?: string | null) {
     if (!supabase) return
     setBusy(true); setError('')
@@ -643,9 +712,9 @@ export default function Home() {
     return (
       <main className="authShell">
         <section className="authCard setupCard">
-          <p className="eyebrow">PROPPREPPED MILESTONE 5</p>
+          <p className="eyebrow">PROPPREPPED MILESTONE 6</p>
           <h1>Connect Supabase</h1>
-          <p>PropPrepped is ready for persistent accounts, properties and private uploads. Add your project values to <code>.env.local</code>, then run the included <code>supabase/schema.sql</code> for a fresh project, or <code>supabase/milestone-5-property-records.sql</code> if upgrading from Milestone 4.</p>
+          <p>PropPrepped is ready for persistent accounts, properties and private uploads. Add your project values to <code>.env.local</code>, then run the included <code>supabase/schema.sql</code> for a fresh project, or the <code>supabase/milestone-5-property-records.sql</code> and <code>supabase/milestone-6-property-network.sql</code> upgrade files if you already have an earlier milestone installed.</p>
           <div className="setupCode">NEXT_PUBLIC_SUPABASE_URL=...<br />NEXT_PUBLIC_SUPABASE_ANON_KEY=...</div>
           <p className="muted">A ready-to-copy <code>.env.example</code> is included in the project.</p>
         </section>
@@ -698,7 +767,7 @@ export default function Home() {
           </div>
         </section>
 
-        <nav className="tabs" aria-label="Property sections">{tabs.map((tab) => <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
+        <nav className="tabs" aria-label="Property sections">{tabs.filter((tab) => tab !== 'Landlord' || selected.property_type === 'Rental Property').map((tab) => <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
 
         {activeTab === 'Overview' && <section className="workspaceContent">
           <div className="sectionHead workspaceHeading"><div><p className="eyebrow">PROPERTY OVERVIEW</p><h2>At a glance</h2></div></div>
@@ -757,6 +826,10 @@ export default function Home() {
 
         {activeTab === 'Maintenance' && <section className="workspaceContent moduleWorkspace"><div className="sectionHead workspaceHeading"><div><p className="eyebrow">MAINTENANCE</p><h2>Property service history</h2><p>Repairs, preventative work, vendors, costs and receipts in one timeline.</p></div><button className="primary" onClick={() => setShowModuleForm('Maintenance')}>+ Add maintenance</button></div>{selectedMaintenance.length ? <div className="maintenanceList">{selectedMaintenance.map((item) => { const doc=selectedDocs.find(d=>d.id===item.document_id); return <article className="maintenanceRow" key={item.id}><div className="maintenanceDate"><strong>{new Date(`${item.service_date}T12:00:00`).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(`${item.service_date}T12:00:00`).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div><span className="statusPill">{item.status}</span><h3>{item.description}</h3><p>{item.category}{item.vendor ? ` · ${item.vendor}` : ''}</p></div><strong>{money(item.cost)}</strong></div><div className="maintenanceActions">{doc && <button onClick={() => void openDocument(doc)}>Open {doc.name}</button>}{item.financial_transaction_id && <span>Linked to Financials</span>}<button className="dangerLink" onClick={() => void removeModuleRecord('maintenance_records', item.id, item.financial_transaction_id)}>Remove</button></div></div></article>})}</div> : <EmptyModule title="No maintenance records yet" text="Add repairs, service calls, vendors, costs and receipts as they happen." action="Add maintenance" onClick={() => setShowModuleForm('Maintenance')} />}</section>}
 
+        {activeTab === 'Contacts' && <section className="workspaceContent moduleWorkspace"><div className="sectionHead workspaceHeading"><div><p className="eyebrow">CONTACTS</p><h2>Property network</h2><p>Contractors, agents, lenders and every important number for this property, in one place.</p></div><button className="primary" onClick={() => setShowContactForm(true)}>+ Add contact</button></div>{selectedContacts.length ? <div className="moduleGrid contactGrid">{selectedContacts.map((contact) => <article className="recordCard contactCard" key={contact.id}><div className="recordTop"><div><span className="statusPill">{contact.role}</span><h3>{contact.name}</h3><p>{contact.business_name || 'No business name added'}</p></div><button className="recordDelete" onClick={() => void removeContact(contact.id)}>×</button></div><div className="contactLinks">{contact.phone && <a href={`tel:${contact.phone}`}>{contact.phone}</a>}{contact.email && <a href={`mailto:${contact.email}`}>{contact.email}</a>}{contact.website && <a href={normalizeUrl(contact.website)} target="_blank" rel="noopener noreferrer">{contact.website}</a>}{!contact.phone && !contact.email && !contact.website && <span className="muted">No contact details added</span>}</div>{contact.notes && <div className="recordRows"><div><span>Private notes</span><strong>{contact.notes}</strong></div></div>}</article>)}</div> : <EmptyModule title="No contacts yet" text="Add contractors, agents, lenders and other people tied to this property." action="Add contact" onClick={() => setShowContactForm(true)} />}</section>}
+
+        {activeTab === 'Landlord' && selected.property_type === 'Rental Property' && <section className="workspaceContent moduleWorkspace"><div className="sectionHead workspaceHeading"><div><p className="eyebrow">LANDLORD CENTER</p><h2>Maintenance requests</h2><p>Owner-side tracking for tenant maintenance requests. Tenant accounts and messaging are coming in a future milestone.</p></div><button className="primary" onClick={() => setShowRequestForm(true)}>+ Log request</button></div><div className="financialStats landlordStats"><div className="financialStat"><span>Open requests</span><strong>{openRequests.length}</strong></div><div className="financialStat"><span>Completed requests</span><strong>{completedRequests.length}</strong></div></div>{selectedRequests.length ? <div className="maintenanceList">{selectedRequests.map((req) => <article className="maintenanceRow requestRow" key={req.id}><div className="maintenanceDate"><strong>{new Date(req.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(req.created_at).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div><span className={`statusPill priority${req.priority}`}>{req.priority}</span><h3>{req.title}</h3><p>{req.tenant_name}{req.tenant_email ? ` · ${req.tenant_email}` : ''}</p></div></div>{req.description && <p className="requestDescription">{req.description}</p>}<div className="maintenanceActions"><select aria-label={`Status for ${req.title}`} value={req.status} onChange={(e) => void updateRequestStatus(req.id, e.target.value)}>{requestStatuses.map((s) => <option key={s}>{s}</option>)}</select><button className="dangerLink" onClick={() => void removeRequest(req.id)}>Remove</button></div></div></article>)}</div> : <EmptyModule title="No maintenance requests yet" text="Log tenant requests as they come in by phone, email or in person." action="Log request" onClick={() => setShowRequestForm(true)} />}</section>}
+
         {showModuleForm && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowModuleForm(null)}><div className="modal moduleModal"><div className="modalTop"><div><p className="eyebrow">{showModuleForm.toUpperCase()}</p><h2>Add {showModuleForm.toLowerCase()}</h2></div><button className="iconButton" onClick={() => setShowModuleForm(null)}>×</button></div>
           {showModuleForm === 'Lease' && <div className="formGrid"><label>Tenant name<input value={leaseDraft.tenantName} onChange={e=>setLeaseDraft({...leaseDraft,tenantName:e.target.value})} /></label><label>Tenant email<input type="email" value={leaseDraft.tenantEmail} onChange={e=>setLeaseDraft({...leaseDraft,tenantEmail:e.target.value})} /></label><label>Monthly rent<input inputMode="decimal" value={leaseDraft.monthlyRent} onChange={e=>setLeaseDraft({...leaseDraft,monthlyRent:e.target.value})} /></label><label>Security deposit<input inputMode="decimal" value={leaseDraft.securityDeposit} onChange={e=>setLeaseDraft({...leaseDraft,securityDeposit:e.target.value})} /></label><label>Start date<input type="date" value={leaseDraft.startDate} onChange={e=>setLeaseDraft({...leaseDraft,startDate:e.target.value})} /></label><label>End date<input type="date" value={leaseDraft.endDate} onChange={e=>setLeaseDraft({...leaseDraft,endDate:e.target.value})} /></label><label>Lease status<select value={leaseDraft.renewalStatus} onChange={e=>setLeaseDraft({...leaseDraft,renewalStatus:e.target.value})}><option>Active</option><option>Renewal pending</option><option>Month-to-month</option><option>Ended</option></select></label><label>Signed lease<select value={leaseDraft.documentId} onChange={e=>setLeaseDraft({...leaseDraft,documentId:e.target.value})}><option value="">No attachment</option>{selectedDocs.filter(d=>d.category==='Lease'||d.category==='Other').map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><label className="fullField">Notes<input value={leaseDraft.notes} onChange={e=>setLeaseDraft({...leaseDraft,notes:e.target.value})} /></label></div>}
           {showModuleForm === 'Mortgage' && <div className="formGrid"><label>Lender<input value={mortgageDraft.lender} onChange={e=>setMortgageDraft({...mortgageDraft,lender:e.target.value})} /></label><label>Loan number<input value={mortgageDraft.loanNumber} onChange={e=>setMortgageDraft({...mortgageDraft,loanNumber:e.target.value})} /></label><label>Original balance<input inputMode="decimal" value={mortgageDraft.originalBalance} onChange={e=>setMortgageDraft({...mortgageDraft,originalBalance:e.target.value})} /></label><label>Current balance<input inputMode="decimal" value={mortgageDraft.currentBalance} onChange={e=>setMortgageDraft({...mortgageDraft,currentBalance:e.target.value})} /></label><label>Interest rate %<input inputMode="decimal" value={mortgageDraft.interestRate} onChange={e=>setMortgageDraft({...mortgageDraft,interestRate:e.target.value})} /></label><label>Monthly payment<input inputMode="decimal" value={mortgageDraft.monthlyPayment} onChange={e=>setMortgageDraft({...mortgageDraft,monthlyPayment:e.target.value})} /></label><label>Escrow / month<input inputMode="decimal" value={mortgageDraft.escrowAmount} onChange={e=>setMortgageDraft({...mortgageDraft,escrowAmount:e.target.value})} /></label><label>Loan term (years)<input inputMode="numeric" value={mortgageDraft.loanTermYears} onChange={e=>setMortgageDraft({...mortgageDraft,loanTermYears:e.target.value})} /></label><label>Maturity date<input type="date" value={mortgageDraft.maturityDate} onChange={e=>setMortgageDraft({...mortgageDraft,maturityDate:e.target.value})} /></label><label>Loan document<select value={mortgageDraft.documentId} onChange={e=>setMortgageDraft({...mortgageDraft,documentId:e.target.value})}><option value="">No attachment</option>{selectedDocs.filter(d=>d.category==='Mortgage'||d.category==='Closing'||d.category==='Other').map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label></div>}
@@ -764,9 +837,13 @@ export default function Home() {
           {showModuleForm === 'Maintenance' && <div className="formGrid"><label>Service date<input type="date" value={maintenanceDraft.serviceDate} onChange={e=>setMaintenanceDraft({...maintenanceDraft,serviceDate:e.target.value})} /></label><label>Status<select value={maintenanceDraft.status} onChange={e=>setMaintenanceDraft({...maintenanceDraft,status:e.target.value})}><option>Completed</option><option>Scheduled</option><option>In progress</option><option>Needs follow-up</option></select></label><label>Category<select value={maintenanceDraft.category} onChange={e=>setMaintenanceDraft({...maintenanceDraft,category:e.target.value})}><option>Repair</option><option>Preventative</option><option>Inspection</option><option>Renovation</option><option>Landscaping</option><option>HVAC</option><option>Plumbing</option><option>Electrical</option><option>Other</option></select></label><label>Vendor<input value={maintenanceDraft.vendor} onChange={e=>setMaintenanceDraft({...maintenanceDraft,vendor:e.target.value})} /></label><label>Cost<input inputMode="decimal" value={maintenanceDraft.cost} onChange={e=>setMaintenanceDraft({...maintenanceDraft,cost:e.target.value})} /></label><label>Receipt / invoice<select value={maintenanceDraft.documentId} onChange={e=>setMaintenanceDraft({...maintenanceDraft,documentId:e.target.value})}><option value="">No attachment</option>{selectedDocs.filter(d=>['Receipts','Warranties','Other'].includes(d.category)).map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><label className="fullField">Description<input value={maintenanceDraft.description} onChange={e=>setMaintenanceDraft({...maintenanceDraft,description:e.target.value})} placeholder="HVAC repair, annual service, roof inspection…" /></label><label className="recurringCheck fullField"><input type="checkbox" checked={maintenanceDraft.addToFinancials} onChange={e=>setMaintenanceDraft({...maintenanceDraft,addToFinancials:e.target.checked})} /><span>Add this cost to Financials</span><small>PropPrepped creates a linked Maintenance expense so you only enter the cost once.</small></label></div>}
           <div className="modalActions"><button className="secondary" onClick={() => setShowModuleForm(null)}>Cancel</button><button className="primary" disabled={busy} onClick={() => void (showModuleForm==='Lease'?saveLease():showModuleForm==='Mortgage'?saveMortgage():showModuleForm==='Insurance'?saveInsurance():saveMaintenance())}>{busy?'Saving…':'Save'}</button></div></div></div>}
 
+        {showContactForm && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowContactForm(false)}><div className="modal moduleModal"><div className="modalTop"><div><p className="eyebrow">CONTACTS</p><h2>Add contact</h2></div><button className="iconButton" onClick={() => setShowContactForm(false)}>×</button></div><div className="formGrid"><label>Name<input value={contactDraft.name} onChange={e=>setContactDraft({...contactDraft,name:e.target.value})} placeholder="Jordan Rivera" /></label><label>Business name<input value={contactDraft.businessName} onChange={e=>setContactDraft({...contactDraft,businessName:e.target.value})} placeholder="Rivera Plumbing Co." /></label><label>Role<select value={contactDraft.role} onChange={e=>setContactDraft({...contactDraft,role:e.target.value})}>{contactRoles.map(r=><option key={r}>{r}</option>)}</select></label><label>Phone<input type="tel" value={contactDraft.phone} onChange={e=>setContactDraft({...contactDraft,phone:e.target.value})} placeholder="(555) 010-0100" /></label><label>Email<input type="email" value={contactDraft.email} onChange={e=>setContactDraft({...contactDraft,email:e.target.value})} placeholder="name@example.com" /></label><label>Website<input value={contactDraft.website} onChange={e=>setContactDraft({...contactDraft,website:e.target.value})} placeholder="example.com" /></label><label className="fullField">Private notes<input value={contactDraft.notes} onChange={e=>setContactDraft({...contactDraft,notes:e.target.value})} placeholder="Only visible to you" /></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowContactForm(false)}>Cancel</button><button className="primary" disabled={busy || !contactDraft.name.trim()} onClick={() => void saveContact()}>{busy?'Saving…':'Save contact'}</button></div></div></div>}
+
+        {showRequestForm && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowRequestForm(false)}><div className="modal moduleModal"><div className="modalTop"><div><p className="eyebrow">LANDLORD CENTER</p><h2>Log maintenance request</h2></div><button className="iconButton" onClick={() => setShowRequestForm(false)}>×</button></div><div className="formGrid"><label>Tenant name<input value={requestDraft.tenantName} onChange={e=>setRequestDraft({...requestDraft,tenantName:e.target.value})} placeholder="Taylor Morgan" /></label><label>Tenant email<input type="email" value={requestDraft.tenantEmail} onChange={e=>setRequestDraft({...requestDraft,tenantEmail:e.target.value})} placeholder="tenant@example.com" /></label><label>Priority<select value={requestDraft.priority} onChange={e=>setRequestDraft({...requestDraft,priority:e.target.value})}>{requestPriorities.map(p=><option key={p}>{p}</option>)}</select></label><label>Status<select value={requestDraft.status} onChange={e=>setRequestDraft({...requestDraft,status:e.target.value})}>{requestStatuses.map(s=><option key={s}>{s}</option>)}</select></label><label className="fullField">Issue / title<input value={requestDraft.title} onChange={e=>setRequestDraft({...requestDraft,title:e.target.value})} placeholder="Leaking kitchen faucet" /></label><label className="fullField">Description<input value={requestDraft.description} onChange={e=>setRequestDraft({...requestDraft,description:e.target.value})} placeholder="Details the tenant shared…" /></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowRequestForm(false)}>Cancel</button><button className="primary" disabled={busy || !requestDraft.tenantName.trim() || !requestDraft.title.trim()} onClick={() => void saveRequest()}>{busy?'Saving…':'Save request'}</button></div></div></div>}
+
         {showEdit && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowEdit(false)}><div className="modal"><div className="modalTop"><div><p className="eyebrow">PROPERTY SETTINGS</p><h2>Edit property</h2></div><button className="iconButton" onClick={() => setShowEdit(false)}>×</button></div><div className="formGrid"><label>Street address<input value={editDraft.address} onChange={(e) => setEditDraft({ ...editDraft, address: e.target.value })} placeholder="123 Example Street" /></label><label>City, state & ZIP<input value={editDraft.city} onChange={(e) => setEditDraft({ ...editDraft, city: e.target.value })} placeholder="Example City, FL 12345" /></label><label>Property type<select value={editDraft.type} onChange={(e) => setEditDraft({ ...editDraft, type: e.target.value })}><option>Rental Property</option><option>Primary Residence</option><option>Vacation Home</option><option>Commercial</option><option>Land</option><option>Other</option></select></label><label>Purchase price<input inputMode="decimal" value={editDraft.purchasePrice} onChange={(e) => setEditDraft({ ...editDraft, purchasePrice: e.target.value })} placeholder="390000" /></label><label>Estimated value<input inputMode="decimal" value={editDraft.value} onChange={(e) => setEditDraft({ ...editDraft, value: e.target.value })} placeholder="520000" /></label><label>Mortgage balance<input inputMode="decimal" value={editDraft.mortgage} onChange={(e) => setEditDraft({ ...editDraft, mortgage: e.target.value })} placeholder="310000" /></label><label>Monthly rent<input inputMode="decimal" value={editDraft.rent} onChange={(e) => setEditDraft({ ...editDraft, rent: e.target.value })} placeholder="2950" /></label><label>Monthly property expenses<input inputMode="decimal" value={editDraft.monthlyExpenses} onChange={(e) => setEditDraft({ ...editDraft, monthlyExpenses: e.target.value })} placeholder="1925" /></label></div><div className="editPropertyFooter"><button className="dangerButton" onClick={() => setShowDeleteConfirm(true)}>Delete Property</button><div className="modalActions compactActions"><button className="secondary" onClick={() => setShowEdit(false)}>Cancel</button><button className="primary" disabled={busy || !editDraft.address.trim() || !editDraft.city.trim()} onClick={() => void updateProperty()}>{busy ? 'Saving…' : 'Save Changes'}</button></div></div></div></div>}
 
-        {showDeleteConfirm && <div className="overlay deleteOverlay" onMouseDown={(e) => e.target === e.currentTarget && setShowDeleteConfirm(false)}><div className="modal deleteModal"><div className="modalTop"><div><p className="eyebrow dangerEyebrow">PERMANENT ACTION</p><h2>Delete this property?</h2></div><button className="iconButton" onClick={() => setShowDeleteConfirm(false)}>×</button></div><p className="deleteWarning">This permanently removes <strong>{selected.address}</strong> and its associated documents, photos, financial transactions, lease, mortgage, insurance, and maintenance records. This cannot be undone.</p><div className="modalActions"><button className="secondary" onClick={() => setShowDeleteConfirm(false)}>Keep Property</button><button className="dangerButton solidDanger" disabled={busy} onClick={() => void deleteProperty()}>{busy ? 'Deleting…' : 'Delete Permanently'}</button></div></div></div>}
+        {showDeleteConfirm && <div className="overlay deleteOverlay" onMouseDown={(e) => e.target === e.currentTarget && setShowDeleteConfirm(false)}><div className="modal deleteModal"><div className="modalTop"><div><p className="eyebrow dangerEyebrow">PERMANENT ACTION</p><h2>Delete this property?</h2></div><button className="iconButton" onClick={() => setShowDeleteConfirm(false)}>×</button></div><p className="deleteWarning">This permanently removes <strong>{selected.address}</strong> and its associated documents, photos, financial transactions, lease, mortgage, insurance, maintenance records, contacts, and maintenance requests. This cannot be undone.</p><div className="modalActions"><button className="secondary" onClick={() => setShowDeleteConfirm(false)}>Keep Property</button><button className="dangerButton solidDanger" disabled={busy} onClick={() => void deleteProperty()}>{busy ? 'Deleting…' : 'Delete Permanently'}</button></div></div></div>}
 
         {showTransaction && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowTransaction(false)}><div className="modal transactionModal"><div className="modalTop"><div><p className="eyebrow">FINANCIALS</p><h2>Add transaction</h2></div><button className="iconButton" onClick={() => setShowTransaction(false)}>×</button></div><div className="formGrid transactionGrid"><label>Date<input type="date" value={transactionDraft.date} onChange={(e) => setTransactionDraft({ ...transactionDraft, date: e.target.value })} /></label><label>Type<select value={transactionDraft.type} onChange={(e) => setTransactionDraft({ ...transactionDraft, type: e.target.value as 'Income' | 'Expense', category: e.target.value === 'Income' ? 'Rent' : 'Repairs' })}><option>Income</option><option>Expense</option></select></label><label>Category<select value={transactionDraft.category} onChange={(e) => setTransactionDraft({ ...transactionDraft, category: e.target.value })}>{financialCategories.map((category) => <option key={category}>{category}</option>)}</select></label><label>Amount<input inputMode="decimal" value={transactionDraft.amount} onChange={(e) => setTransactionDraft({ ...transactionDraft, amount: e.target.value })} placeholder="1250.00" /></label><label>Vendor / payer<input value={transactionDraft.vendor} onChange={(e) => setTransactionDraft({ ...transactionDraft, vendor: e.target.value })} placeholder={transactionDraft.type === 'Income' ? 'Tenant name' : 'Vendor or company'} /></label><label>Attach document<select value={transactionDraft.documentId} onChange={(e) => setTransactionDraft({ ...transactionDraft, documentId: e.target.value })}><option value="">No attachment</option>{selectedDocs.map((doc) => <option value={doc.id} key={doc.id}>{doc.name}</option>)}</select></label><label className="fullField">Description<input value={transactionDraft.description} onChange={(e) => setTransactionDraft({ ...transactionDraft, description: e.target.value })} placeholder="August rent, HVAC repair, property tax…" /></label><label className="recurringCheck fullField"><input type="checkbox" checked={transactionDraft.recurring} onChange={(e) => setTransactionDraft({ ...transactionDraft, recurring: e.target.checked })} /><span>Mark as recurring monthly</span><small>This labels the transaction as recurring; automatic future posting can be enabled in a later milestone.</small></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowTransaction(false)}>Cancel</button><button className="primary" disabled={busy || !transactionDraft.description.trim() || Number(transactionDraft.amount) <= 0} onClick={() => void addTransaction()}>{busy ? 'Saving…' : 'Save transaction'}</button></div></div></div>}
       </main>

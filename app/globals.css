@@ -328,3 +328,17 @@ h2, h3, p { margin-top: 0; }
 .deleteWarning strong { color: var(--text); }
 .dangerEyebrow { color: #8a3d35; }
 @media (max-width: 620px) { .editPropertyFooter { align-items: stretch; flex-direction: column-reverse; } .compactActions { width: 100%; } .compactActions button, .editPropertyFooter > .dangerButton { width: 100%; } }
+
+/* Milestone 6: Property Network (contacts + landlord center) */
+.contactLinks { display: flex; flex-direction: column; gap: 8px; padding: 16px 0; }
+.contactLinks a { color: var(--brand); font-size: 13px; text-decoration: underline; text-underline-offset: 2px; word-break: break-word; }
+.contactCard .recordRows { border-top: 1px solid var(--line); padding-top: 14px; }
+.landlordStats { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 22px; }
+.requestRow .maintenanceActions select { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: white; color: var(--text); font-size: 12px; }
+.requestDescription { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 6px 0 0; }
+.statusPill.priorityLow { background: #eef2ef; color: var(--muted); }
+.statusPill.priorityNormal { background: var(--brand-soft); color: var(--brand); }
+.statusPill.priorityHigh { background: #fff5dc; color: #805f12; }
+.statusPill.priorityUrgent { background: #fdeceb; color: #8a3d35; }
+@media (max-width: 800px) { .contactGrid { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .landlordStats { grid-template-columns: 1fr 1fr; } }
