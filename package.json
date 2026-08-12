@@ -12,7 +12,9 @@
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "@supabase/supabase-js": "latest"
+    "@supabase/supabase-js": "latest",
+    "@anthropic-ai/sdk": "latest",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "typescript": "latest",
