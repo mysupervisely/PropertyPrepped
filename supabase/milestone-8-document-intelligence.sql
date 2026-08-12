@@ -17,6 +17,31 @@ alter table public.property_documents
 
 create index if not exists property_documents_analysis_status_idx on public.property_documents(analysis_status);
 
+-- Hardening (pre-production review): the original property_documents
+-- insert/update policies (from Milestone 3) only checked
+-- `owner_id = auth.uid()` — they never confirmed that `property_id` also
+-- belongs to that same owner. The M8 API route relies on an RLS-scoped
+-- lookup of property_documents to prove "this document belongs to the
+-- caller," and everything above (document_analyses, ai_usage_events) in
+-- turn relies on property_documents.property_id being trustworthy — so a
+-- document whose property_id could be pointed at another user's property
+-- would undermine that whole chain. Replace both policies (select/delete
+-- are unchanged and already correct) so property_id ownership is verified
+-- the same way as everywhere else in this migration.
+drop policy if exists "documents_insert_own" on public.property_documents;
+create policy "documents_insert_own" on public.property_documents for insert to authenticated with check (
+  (select auth.uid()) = owner_id
+  and exists (select 1 from public.properties p where p.id = property_id and p.owner_id = (select auth.uid()))
+);
+
+drop policy if exists "documents_update_own" on public.property_documents;
+create policy "documents_update_own" on public.property_documents for update to authenticated
+using ((select auth.uid()) = owner_id)
+with check (
+  (select auth.uid()) = owner_id
+  and exists (select 1 from public.properties p where p.id = property_id and p.owner_id = (select auth.uid()))
+);
+
 -- Each row is one AI analysis run. Re-analyzing a document INSERTs a new
 -- row (never updates an old one) so prior analyses stay intact for audit —
 -- see analysis_version. The UI defaults to showing the latest version.
@@ -53,10 +78,57 @@ create index if not exists document_analyses_owner_idx on public.document_analys
 alter table public.document_analyses enable row level security;
 drop policy if exists "document_analyses_select_own" on public.document_analyses;
 create policy "document_analyses_select_own" on public.document_analyses for select to authenticated using ((select auth.uid()) = owner_id);
+
+-- INSERT/UPDATE are intentionally stricter than a bare owner_id check: a
+-- malicious authenticated client could otherwise set owner_id = their own
+-- uid while pointing document_id/property_id at another user's rows (if
+-- those UUIDs were ever discovered — e.g. leaked in a log, guessed, shared
+-- accidentally). Every write must prove, inside the database, that:
+--   1. owner_id is the caller
+--   2. document_id is a property_documents row the caller owns
+--   3. property_id is a properties row the caller owns
+--   4. that document's own property_id matches the property_id on this row
+-- All four checks resolve via primary-key lookups (property_documents.id,
+-- properties.id) so they stay O(1) regardless of table size — no new
+-- indexes are needed beyond the existing primary keys.
 drop policy if exists "document_analyses_insert_own" on public.document_analyses;
-create policy "document_analyses_insert_own" on public.document_analyses for insert to authenticated with check ((select auth.uid()) = owner_id);
+create policy "document_analyses_insert_own" on public.document_analyses for insert to authenticated with check (
+  (select auth.uid()) = owner_id
+  and exists (
+    select 1 from public.property_documents pd
+    where pd.id = document_id
+      and pd.owner_id = (select auth.uid())
+      and pd.property_id = property_id
+  )
+  and exists (
+    select 1 from public.properties p
+    where p.id = property_id
+      and p.owner_id = (select auth.uid())
+  )
+);
+
+-- UPDATE: `using` gates which existing rows the caller may touch at all
+-- (must already be theirs); `with check` re-validates the resulting row
+-- with the same four-part proof as INSERT, so an update can never
+-- reassign document_id/property_id/owner_id onto another user's resources.
 drop policy if exists "document_analyses_update_own" on public.document_analyses;
-create policy "document_analyses_update_own" on public.document_analyses for update to authenticated using ((select auth.uid()) = owner_id) with check ((select auth.uid()) = owner_id);
+create policy "document_analyses_update_own" on public.document_analyses for update to authenticated
+using ((select auth.uid()) = owner_id)
+with check (
+  (select auth.uid()) = owner_id
+  and exists (
+    select 1 from public.property_documents pd
+    where pd.id = document_id
+      and pd.owner_id = (select auth.uid())
+      and pd.property_id = property_id
+  )
+  and exists (
+    select 1 from public.properties p
+    where p.id = property_id
+      and p.owner_id = (select auth.uid())
+  )
+);
+
 drop policy if exists "document_analyses_delete_own" on public.document_analyses;
 create policy "document_analyses_delete_own" on public.document_analyses for delete to authenticated using ((select auth.uid()) = owner_id);
 
@@ -96,7 +168,30 @@ create index if not exists ai_usage_events_owner_created_idx on public.ai_usage_
 alter table public.ai_usage_events enable row level security;
 drop policy if exists "ai_usage_events_select_own" on public.ai_usage_events;
 create policy "ai_usage_events_select_own" on public.ai_usage_events for select to authenticated using ((select auth.uid()) = owner_id);
+
+-- document_id/analysis_id are nullable (both are `on delete set null`), so
+-- each is only checked when present — but when present, it must belong to
+-- the caller, closing the same "reference someone else's row while owner_id
+-- = me" gap as document_analyses above.
 drop policy if exists "ai_usage_events_insert_own" on public.ai_usage_events;
-create policy "ai_usage_events_insert_own" on public.ai_usage_events for insert to authenticated with check ((select auth.uid()) = owner_id);
+create policy "ai_usage_events_insert_own" on public.ai_usage_events for insert to authenticated with check (
+  (select auth.uid()) = owner_id
+  and (
+    document_id is null
+    or exists (select 1 from public.property_documents pd where pd.id = document_id and pd.owner_id = (select auth.uid()))
+  )
+  and (
+    analysis_id is null
+    or exists (select 1 from public.document_analyses da where da.id = analysis_id and da.owner_id = (select auth.uid()))
+  )
+);
+
+-- No UPDATE policy: usage events are an append-only audit trail (this was
+-- already true before this hardening pass — there was never an UPDATE
+-- policy here). No DELETE policy either, by deliberate decision: these rows
+-- exist to support future plan-limit enforcement ("N analyses per month"),
+-- and letting a client delete its own usage history would let it hide
+-- consumption from that future check. There is no product feature today
+-- that deletes a usage event, so RLS denies DELETE entirely for the
+-- `authenticated` role (the safe default once no DELETE policy exists).
 drop policy if exists "ai_usage_events_delete_own" on public.ai_usage_events;
-create policy "ai_usage_events_delete_own" on public.ai_usage_events for delete to authenticated using ((select auth.uid()) = owner_id);

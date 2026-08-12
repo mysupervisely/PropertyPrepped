@@ -19,15 +19,29 @@
 import { z } from 'zod/v4'
 import { CONFIDENCE_LEVELS, DOCUMENT_TYPES } from './types'
 
-/** One extracted fact, always carrying a confidence level and a source pointer (Sections L, M). */
+/**
+ * One extracted fact, always carrying a confidence level and a source
+ * pointer (Sections L, M).
+ *
+ * Source traceability note: sourcePage/sourceSnippet are the model's own
+ * self-reported recall of where it saw a value in the uploaded PDF — a
+ * prompted best-effort pointer (see prompts.ts), NOT Anthropic's built-in
+ * citations feature. This provider uses structured outputs
+ * (output_config.format) for the whole extraction shape, which is not
+ * currently combinable with citations grounding — see the design note atop
+ * providers/anthropic.ts for why, and for the future path if citations are
+ * ever added. Treat these fields everywhere downstream (API responses, DB
+ * storage, UI) as "AI-extracted references to verify against the source
+ * document," never as guaranteed/audited citations.
+ */
 export const ExtractedFieldSchema = z.object({
   label: z.string(),
   /** Display-ready text, e.g. "$425,000" or "Not identified in the uploaded document". Never omitted. */
   value: z.string(),
   confidence: z.enum(CONFIDENCE_LEVELS).nullable(),
-  /** 1-indexed page number, only when the model is confident which page it came from. Never fabricated. */
+  /** 1-indexed page number, only when the model is confident which page it came from. Self-reported by the model — never fabricated, but also never independently verified. Always show as a reference to check, not a guaranteed citation. */
   sourcePage: z.number().int().nullable(),
-  /** A short verbatim-ish snippet supporting the value, when practical to include. */
+  /** A short verbatim-ish snippet supporting the value, when practical to include. Same caveat as sourcePage — an aid for manual verification, not a proven quote. */
   sourceSnippet: z.string().nullable(),
 })
 

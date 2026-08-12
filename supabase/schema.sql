@@ -63,10 +63,21 @@ create policy "properties_delete_own" on public.properties for delete to authent
 
 drop policy if exists "documents_select_own" on public.property_documents;
 create policy "documents_select_own" on public.property_documents for select to authenticated using ((select auth.uid()) = owner_id);
+-- Insert/update also verify property_id belongs to the same owner (not just
+-- owner_id itself) — see the Milestone 8 hardening notes below, which this
+-- table's write policies now match.
 drop policy if exists "documents_insert_own" on public.property_documents;
-create policy "documents_insert_own" on public.property_documents for insert to authenticated with check ((select auth.uid()) = owner_id);
+create policy "documents_insert_own" on public.property_documents for insert to authenticated with check (
+  (select auth.uid()) = owner_id
+  and exists (select 1 from public.properties p where p.id = property_id and p.owner_id = (select auth.uid()))
+);
 drop policy if exists "documents_update_own" on public.property_documents;
-create policy "documents_update_own" on public.property_documents for update to authenticated using ((select auth.uid()) = owner_id) with check ((select auth.uid()) = owner_id);
+create policy "documents_update_own" on public.property_documents for update to authenticated
+using ((select auth.uid()) = owner_id)
+with check (
+  (select auth.uid()) = owner_id
+  and exists (select 1 from public.properties p where p.id = property_id and p.owner_id = (select auth.uid()))
+);
 drop policy if exists "documents_delete_own" on public.property_documents;
 create policy "documents_delete_own" on public.property_documents for delete to authenticated using ((select auth.uid()) = owner_id);
 
@@ -417,10 +428,41 @@ create index if not exists document_analyses_owner_idx on public.document_analys
 alter table public.document_analyses enable row level security;
 drop policy if exists "document_analyses_select_own" on public.document_analyses;
 create policy "document_analyses_select_own" on public.document_analyses for select to authenticated using ((select auth.uid()) = owner_id);
+-- INSERT/UPDATE verify owner_id, that document_id/property_id belong to the
+-- caller, and that the referenced document's own property_id matches — see
+-- supabase/milestone-8-document-intelligence.sql for the full rationale.
 drop policy if exists "document_analyses_insert_own" on public.document_analyses;
-create policy "document_analyses_insert_own" on public.document_analyses for insert to authenticated with check ((select auth.uid()) = owner_id);
+create policy "document_analyses_insert_own" on public.document_analyses for insert to authenticated with check (
+  (select auth.uid()) = owner_id
+  and exists (
+    select 1 from public.property_documents pd
+    where pd.id = document_id
+      and pd.owner_id = (select auth.uid())
+      and pd.property_id = property_id
+  )
+  and exists (
+    select 1 from public.properties p
+    where p.id = property_id
+      and p.owner_id = (select auth.uid())
+  )
+);
 drop policy if exists "document_analyses_update_own" on public.document_analyses;
-create policy "document_analyses_update_own" on public.document_analyses for update to authenticated using ((select auth.uid()) = owner_id) with check ((select auth.uid()) = owner_id);
+create policy "document_analyses_update_own" on public.document_analyses for update to authenticated
+using ((select auth.uid()) = owner_id)
+with check (
+  (select auth.uid()) = owner_id
+  and exists (
+    select 1 from public.property_documents pd
+    where pd.id = document_id
+      and pd.owner_id = (select auth.uid())
+      and pd.property_id = property_id
+  )
+  and exists (
+    select 1 from public.properties p
+    where p.id = property_id
+      and p.owner_id = (select auth.uid())
+  )
+);
 drop policy if exists "document_analyses_delete_own" on public.document_analyses;
 create policy "document_analyses_delete_own" on public.document_analyses for delete to authenticated using ((select auth.uid()) = owner_id);
 
@@ -454,7 +496,21 @@ create index if not exists ai_usage_events_owner_created_idx on public.ai_usage_
 alter table public.ai_usage_events enable row level security;
 drop policy if exists "ai_usage_events_select_own" on public.ai_usage_events;
 create policy "ai_usage_events_select_own" on public.ai_usage_events for select to authenticated using ((select auth.uid()) = owner_id);
+-- document_id/analysis_id are nullable; when present they must belong to
+-- the caller too.
 drop policy if exists "ai_usage_events_insert_own" on public.ai_usage_events;
-create policy "ai_usage_events_insert_own" on public.ai_usage_events for insert to authenticated with check ((select auth.uid()) = owner_id);
+create policy "ai_usage_events_insert_own" on public.ai_usage_events for insert to authenticated with check (
+  (select auth.uid()) = owner_id
+  and (
+    document_id is null
+    or exists (select 1 from public.property_documents pd where pd.id = document_id and pd.owner_id = (select auth.uid()))
+  )
+  and (
+    analysis_id is null
+    or exists (select 1 from public.document_analyses da where da.id = analysis_id and da.owner_id = (select auth.uid()))
+  )
+);
+-- No UPDATE or DELETE policy: usage events are an append-only audit trail
+-- kept for future plan-limit enforcement, so clients cannot alter or erase
+-- their own usage history. RLS denies both by default with no policy present.
 drop policy if exists "ai_usage_events_delete_own" on public.ai_usage_events;
-create policy "ai_usage_events_delete_own" on public.ai_usage_events for delete to authenticated using ((select auth.uid()) = owner_id);

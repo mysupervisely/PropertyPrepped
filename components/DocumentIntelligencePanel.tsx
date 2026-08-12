@@ -65,8 +65,12 @@ function FieldRow({ field }: { field: ExtractedField }) {
       </div>
       <div className="docFieldValue">{field.value}</div>
       {(field.sourcePage || field.sourceSnippet) && (
-        <div className="docFieldSource">
-          {field.sourcePage && <span>Source: Page {field.sourcePage}</span>}
+        // "Source: Page N" is the AI's own best-effort read of where it saw
+        // this value — an extracted reference to help you verify against
+        // the original file, not a guaranteed/verified citation. See the
+        // "Source References" section below for the full disclosure.
+        <div className="docFieldSource" title="AI-extracted reference — verify against the original document. Not a guaranteed citation.">
+          {field.sourcePage && <span>AI-cited: Page {field.sourcePage}</span>}
           {field.sourceSnippet && <span className="docFieldSnippet">&ldquo;{field.sourceSnippet}&rdquo;</span>}
         </div>
       )}
@@ -260,6 +264,16 @@ export default function DocumentIntelligencePanel({
             {latest.source_references.length > 0 && (
               <section className="docIntelSection">
                 <p className="eyebrow">SOURCE REFERENCES</p>
+                {/* These page numbers/snippets are the AI's own best-effort
+                    pointers into the uploaded PDF, not Anthropic's
+                    citations feature (which is incompatible with the
+                    structured-output extraction this panel relies on — see
+                    providers/anthropic.ts). Always say so explicitly: they
+                    are extracted references to speed up manual verification,
+                    never a guaranteed/audited citation. */}
+                <p className="ledgerNote">
+                  AI-extracted references, not guaranteed citations — always verify against the original document before relying on a value.
+                </p>
                 <ul className="docList docSourceList">
                   {latest.source_references.map((r, i) => <li key={i}><strong>{r.label}</strong>{r.page ? ` — Page ${r.page}` : ''}{r.confidence ? ` · ${r.confidence} confidence` : ''}</li>)}
                 </ul>

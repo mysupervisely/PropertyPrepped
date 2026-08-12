@@ -14,6 +14,7 @@ function fakeDoc(overrides: Partial<PropertyDocumentRow> = {}): PropertyDocument
     mime_type: 'application/pdf',
     document_type: 'Insurance Policy',
     classification_source: 'User',
+    analysis_status: 'Not Analyzed',
     ...overrides,
   }
 }
@@ -42,6 +43,7 @@ function baseDeps(overrides: Partial<AnalyzeRequestDeps> = {}): AnalyzeRequestDe
   return {
     isAiConfigured: vi.fn().mockReturnValue(true),
     getDocument: vi.fn().mockResolvedValue(fakeDoc()),
+    claimProcessing: vi.fn().mockResolvedValue(true),
     updateDocumentStatus: vi.fn().mockResolvedValue(undefined),
     createSignedUrl: vi.fn().mockResolvedValue('https://example.com/signed'),
     fetchFileBytes: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
@@ -91,10 +93,53 @@ describe('handleAnalyzeRequest — 10. unsupported file', () => {
   })
 
   it('rejects a file over the size limit with 413', async () => {
-    const deps = baseDeps({ getDocument: vi.fn().mockResolvedValue(fakeDoc({ size_bytes: 40 * 1024 * 1024 })) })
+    const deps = baseDeps({ getDocument: vi.fn().mockResolvedValue(fakeDoc({ size_bytes: 25 * 1024 * 1024 })) })
     const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
     expect(result.status).toBe(413)
     expect(deps.analyze).not.toHaveBeenCalled()
+    expect(deps.claimProcessing).not.toHaveBeenCalled()
+  })
+
+  it('rejects an empty (0-byte) file with 400 rather than silently skipping the size check', async () => {
+    const deps = baseDeps({ getDocument: vi.fn().mockResolvedValue(fakeDoc({ size_bytes: 0 })) })
+    const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
+    expect(result.status).toBe(400)
+    expect(result.body.error).toMatch(/empty/i)
+    expect(deps.claimProcessing).not.toHaveBeenCalled()
+    expect(deps.analyze).not.toHaveBeenCalled()
+  })
+
+  it('fails closed if the downloaded bytes are empty even though size_bytes looked fine', async () => {
+    const deps = baseDeps({ fetchFileBytes: vi.fn().mockResolvedValue(new ArrayBuffer(0)) })
+    const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
+    expect(result.status).toBe(400)
+    expect(result.body.error).toMatch(/empty/i)
+    expect(deps.analyze).not.toHaveBeenCalled()
+  })
+})
+
+describe('handleAnalyzeRequest — usage/cost protection: duplicate analysis guard', () => {
+  it('returns 409 and never calls analyze when claimProcessing reports the document is already Processing', async () => {
+    const deps = baseDeps({ claimProcessing: vi.fn().mockResolvedValue(false) })
+    const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
+    expect(result.status).toBe(409)
+    expect(result.body.error).toMatch(/already being analyzed/i)
+    expect(deps.analyze).not.toHaveBeenCalled()
+    expect(deps.saveAnalysis).not.toHaveBeenCalled()
+  })
+
+  it('proceeds normally when claimProcessing succeeds (no concurrent run)', async () => {
+    const deps = baseDeps()
+    const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
+    expect(deps.claimProcessing).toHaveBeenCalledWith('doc-1')
+    expect(result.status).toBe(200)
+  })
+
+  it('deliberate re-analysis still works once the prior run has finished (claim succeeds again)', async () => {
+    const deps = baseDeps({ getNextVersion: vi.fn().mockResolvedValue(2) })
+    const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
+    expect(result.status).toBe(200)
+    expect(result.body.analysisVersion).toBe(2)
   })
 })
 
@@ -125,7 +170,7 @@ describe('handleAnalyzeRequest — happy path', () => {
     const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
 
     expect(result.status).toBe(200)
-    expect(deps.updateDocumentStatus).toHaveBeenCalledWith('doc-1', expect.objectContaining({ analysis_status: 'Processing' }))
+    expect(deps.claimProcessing).toHaveBeenCalledWith('doc-1')
     expect(deps.saveAnalysis).toHaveBeenCalledWith(expect.objectContaining({ document_id: 'doc-1', analysis_version: 1 }))
     expect(deps.recordUsage).toHaveBeenCalledWith(expect.objectContaining({ analysis_id: 'analysis-1', input_tokens: 100, output_tokens: 50 }))
     expect(deps.updateDocumentStatus).toHaveBeenCalledWith('doc-1', expect.objectContaining({ analysis_status: 'Completed' }))
@@ -145,6 +190,44 @@ describe('handleAnalyzeRequest — happy path', () => {
     const completedCall = (deps.updateDocumentStatus as any).mock.calls.find((c: any[]) => c[1]?.analysis_status === 'Completed')
     expect(completedCall[1].document_type).toBe('Insurance Policy')
     expect(completedCall[1].classification_source).toBe('AI')
+  })
+})
+
+describe('handleAnalyzeRequest — defense in depth: document_id/property_id/owner_id are never taken from client input', () => {
+  it('always saves the analysis using the property_id resolved server-side from the RLS-scoped document lookup, ignoring any smuggled input fields', async () => {
+    const deps = baseDeps({ getDocument: vi.fn().mockResolvedValue(fakeDoc({ property_id: 'trusted-prop-1' })) })
+    // A malicious client could stuff extra fields into the JSON body hoping
+    // a naive route handler spreads `input` straight into the insert. The
+    // handler's input type only recognizes documentId/documentType, so
+    // these extra fields must have zero effect on what gets saved.
+    const maliciousInput = {
+      documentId: 'doc-1',
+      property_id: 'attacker-prop-999',
+      owner_id: 'attacker-uid',
+      document_id: 'attacker-doc-999',
+    } as unknown as { documentId?: unknown; documentType?: unknown }
+
+    const result = await handleAnalyzeRequest(maliciousInput, deps)
+
+    expect(result.status).toBe(200)
+    expect(deps.saveAnalysis).toHaveBeenCalledWith(
+      expect.objectContaining({ document_id: 'doc-1', property_id: 'trusted-prop-1' }),
+    )
+    // saveAnalysis's row never carries an owner_id at all — the real route
+    // handler (app/api/document-intelligence/analyze/route.ts) adds it from
+    // the authenticated session token, never from the request body.
+    const savedRow = (deps.saveAnalysis as any).mock.calls[0][0]
+    expect(savedRow).not.toHaveProperty('owner_id')
+  })
+
+  it('recordUsage is likewise keyed off the server-resolved documentId, not any client-supplied id', async () => {
+    const deps = baseDeps({ getDocument: vi.fn().mockResolvedValue(fakeDoc({ property_id: 'trusted-prop-1' })) })
+    const maliciousInput = { documentId: 'doc-1', document_id: 'attacker-doc-999' } as unknown as {
+      documentId?: unknown
+      documentType?: unknown
+    }
+    await handleAnalyzeRequest(maliciousInput, deps)
+    expect(deps.recordUsage).toHaveBeenCalledWith(expect.objectContaining({ document_id: 'doc-1' }))
   })
 })
 

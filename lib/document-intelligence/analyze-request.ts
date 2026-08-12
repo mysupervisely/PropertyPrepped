@@ -23,12 +23,21 @@ export type PropertyDocumentRow = {
   mime_type: string | null
   document_type: string | null
   classification_source: string | null
+  analysis_status: string | null
 }
 
 export type AnalyzeRequestDeps = {
   isAiConfigured: () => boolean
   /** Must be scoped so it can only ever return a document the caller owns. */
   getDocument: (documentId: string) => Promise<PropertyDocumentRow | null>
+  /**
+   * Atomically transitions the document to "Processing" — implemented as a
+   * single conditional UPDATE (`WHERE analysis_status != 'Processing'`) so
+   * two near-simultaneous requests (double-click, two tabs) can't both win
+   * the race and trigger two paid AI calls for the same document. Returns
+   * false when another request already claimed it.
+   */
+  claimProcessing: (documentId: string) => Promise<boolean>
   updateDocumentStatus: (documentId: string, patch: Record<string, unknown>) => Promise<void>
   createSignedUrl: (storagePath: string) => Promise<string | null>
   fetchFileBytes: (url: string) => Promise<ArrayBuffer>
@@ -40,14 +49,20 @@ export type AnalyzeRequestDeps = {
 
 export type AnalyzeRequestResult = { status: number; body: Record<string, unknown> }
 
-const MAX_FILE_BYTES = 28 * 1024 * 1024 // safety margin under Claude's 32MB PDF request limit
+// Anthropic's PDF request-size limit is 32MB for the whole request, and the
+// file travels to Anthropic as base64 (~1.33x the raw byte count) alongside
+// the system/user prompt text. Capping the raw file at 20MB keeps the
+// base64 payload (~26.7MB) comfortably under that ceiling with headroom for
+// prompt overhead — 28MB raw would have produced a base64 payload
+// (~37.3MB) that already exceeds the limit before any prompt text is added.
+const MAX_FILE_BYTES = 20 * 1024 * 1024
 
 export async function handleAnalyzeRequest(
   input: { documentId?: unknown; documentType?: unknown },
   deps: AnalyzeRequestDeps,
 ): Promise<AnalyzeRequestResult> {
   const documentId = typeof input.documentId === 'string' ? input.documentId : ''
-  if (!documentId) return { status: 400, body: { error: 'A documentId is required.' } }
+  if (!documentId || documentId.length > 200) return { status: 400, body: { error: 'A documentId is required.' } }
 
   // Never accept an arbitrary storage path from the browser — only a document
   // ID, resolved server-side through an RLS-scoped lookup (Section Q).
@@ -62,15 +77,24 @@ export async function handleAnalyzeRequest(
   if (!isPdf) {
     return { status: 415, body: { error: 'AI analysis currently supports PDF documents only.' } }
   }
-  if (doc.size_bytes && doc.size_bytes > MAX_FILE_BYTES) {
-    return { status: 413, body: { error: 'This file is too large for AI analysis (28MB max).' } }
+  // Explicit server-side limits — never rely on the browser having validated
+  // this. `size_bytes` is a bigint column; 0/undefined must fail closed
+  // rather than silently bypassing the upper-bound check below.
+  if (!doc.size_bytes || doc.size_bytes <= 0) {
+    return { status: 400, body: { error: 'This file appears to be empty and cannot be analyzed.' } }
+  }
+  if (doc.size_bytes > MAX_FILE_BYTES) {
+    return { status: 413, body: { error: `This file is too large for AI analysis (${MAX_FILE_BYTES / (1024 * 1024)}MB max).` } }
   }
 
-  await deps.updateDocumentStatus(documentId, {
-    analysis_status: 'Processing',
-    analysis_requested_at: new Date().toISOString(),
-    analysis_error: null,
-  })
+  // Cost/usage protection: refuse to start a second analysis while one is
+  // already running for this document. Atomic at the database level (see
+  // claimProcessing's contract) — this is not merely a client-side disabled
+  // button, it holds even across two tabs or a retried request.
+  const claimed = await deps.claimProcessing(documentId)
+  if (!claimed) {
+    return { status: 409, body: { error: 'This document is already being analyzed. Please wait for it to finish.' } }
+  }
 
   const signedUrl = await deps.createSignedUrl(doc.storage_path)
   if (!signedUrl) {
@@ -85,6 +109,16 @@ export async function handleAnalyzeRequest(
     await deps.updateDocumentStatus(documentId, { analysis_status: 'Failed', analysis_error: 'Could not download the file for analysis.' })
     return { status: 502, body: { error: 'Could not download the file for analysis.' } }
   }
+  if (fileBuffer.byteLength === 0) {
+    // Defense in depth: the size_bytes column could be stale even though we
+    // already rejected a 0-byte record above — check the bytes we actually got.
+    await deps.updateDocumentStatus(documentId, { analysis_status: 'Failed', analysis_error: 'The stored file is empty.' })
+    return { status: 400, body: { error: 'The stored file is empty and cannot be analyzed.' } }
+  }
+  if (fileBuffer.byteLength > MAX_FILE_BYTES) {
+    await deps.updateDocumentStatus(documentId, { analysis_status: 'Failed', analysis_error: 'The stored file exceeds the size limit.' })
+    return { status: 413, body: { error: `This file is too large for AI analysis (${MAX_FILE_BYTES / (1024 * 1024)}MB max).` } }
+  }
 
   const requestedType: DocumentType = isDocumentType(input.documentType)
     ? input.documentType
@@ -96,7 +130,8 @@ export async function handleAnalyzeRequest(
   try {
     result = await deps.analyze({ documentType: requestedType, fileBuffer, fileName: doc.name })
   } catch {
-    // Never surface the raw provider error (could contain request internals) to the client.
+    // Never surface the raw provider error (could contain request internals,
+    // or an UnverifiedModelError naming an internal config value) to the client.
     const reason = 'AI analysis failed. Your document and existing data are unchanged — you can retry.'
     await deps.updateDocumentStatus(documentId, { analysis_status: 'Failed', analysis_error: reason })
     return { status: 502, body: { error: reason } }
@@ -104,6 +139,12 @@ export async function handleAnalyzeRequest(
 
   const nextVersion = await deps.getNextVersion(documentId)
 
+  // sourcePage/sourceSnippet are the AI's own best-effort read of the
+  // document, not the Messages API's citation feature (which requires
+  // dropping structured outputs — see providers/anthropic.ts) — they are
+  // reference pointers to verify against the original file, not guaranteed
+  // citations. That framing is preserved verbatim into what gets stored and
+  // shown; see DocumentIntelligencePanel.tsx for the UI-facing wording.
   const sourceReferences = result.output.groups.flatMap((group) =>
     group.fields
       .filter((f) => f.sourcePage !== null || f.sourceSnippet !== null)

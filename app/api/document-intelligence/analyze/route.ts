@@ -44,7 +44,12 @@ export async function POST(req: NextRequest) {
 
     const payload = (await req.json().catch(() => ({}))) as { documentId?: unknown; documentType?: unknown }
     const configured = isDocumentIntelligenceConfigured()
-    const provider = configured ? getDocumentIntelligenceProvider() : null
+    // Constructed lazily, only if we actually reach the AI call — a 404
+    // (unauthorized document), 415/413/400 (file rejection), or 409
+    // (already processing) should never pay the cost of building the
+    // provider, and a bad DOCUMENT_INTELLIGENCE_MODEL should only surface
+    // once we're genuinely about to analyze something.
+    let provider: ReturnType<typeof getDocumentIntelligenceProvider> | null = null
 
     const result = await handleAnalyzeRequest(payload, {
       isAiConfigured: () => configured,
@@ -54,6 +59,20 @@ export async function POST(req: NextRequest) {
         // does not come back here, indistinguishable from "doesn't exist".
         const { data } = await supabase.from('property_documents').select('*').eq('id', documentId).single()
         return data || null
+      },
+      claimProcessing: async (documentId) => {
+        // Atomic conditional UPDATE: only succeeds (returns a row) when the
+        // document isn't already Processing. Two concurrent requests race
+        // on this single statement at the database level — Postgres row
+        // locking guarantees only one can win, closing the
+        // check-then-write gap a separate SELECT-then-UPDATE would leave open.
+        const { data } = await supabase
+          .from('property_documents')
+          .update({ analysis_status: 'Processing', analysis_requested_at: new Date().toISOString(), analysis_error: null })
+          .eq('id', documentId)
+          .neq('analysis_status', 'Processing')
+          .select('id')
+        return Boolean(data && data.length > 0)
       },
       updateDocumentStatus: async (documentId, patch) => {
         await supabase.from('property_documents').update(patch).eq('id', documentId)
@@ -69,7 +88,8 @@ export async function POST(req: NextRequest) {
         return resp.arrayBuffer()
       },
       analyze: async (analyzeInput) => {
-        if (!provider) throw new Error('AI provider not configured.')
+        if (!configured) throw new Error('AI provider not configured.')
+        if (!provider) provider = getDocumentIntelligenceProvider()
         return analyzeDocument(analyzeInput, provider)
       },
       getNextVersion: async (documentId) => {
