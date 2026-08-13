@@ -29,6 +29,10 @@ describe('isPurchasablePlanId — the browser may only ever name a plan, never a
     expect(isPurchasablePlanId('free')).toBe(false)
   })
 
+  it('7/9. rejects "owner" — the internal plan has no Stripe product and can never be Checkout\'s target', () => {
+    expect(isPurchasablePlanId('owner')).toBe(false)
+  })
+
   it('rejects an arbitrary Stripe Price id submitted where a plan identifier is expected', () => {
     expect(isPurchasablePlanId('price_1AbCdEfGhIjKlMnO')).toBe(false)
   })

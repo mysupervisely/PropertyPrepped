@@ -205,3 +205,36 @@ create trigger properties_enforce_limit
 -- (Section 5: never lock existing data), and downgrading a plan below
 -- the account's current property count only blocks *creating* another
 -- property, exactly as specified.
+
+-- ==================================================================
+-- Internal owner entitlement (INTERNAL ONLY — never sold, never shown
+-- on /pricing, no Stripe product exists for it).
+--
+-- Widens the `plan` check constraints on plan_limits and
+-- user_subscriptions to also allow 'owner', and adds a plan_limits row
+-- for it with an effectively-unlimited ceiling. This is the entire
+-- change: enforce_property_limit() above is NOT modified — it already
+-- looks up max_properties generically for whatever plan the caller is
+-- on, so a very large ceiling here makes its existing
+-- "v_count >= v_max" check never realistically trip for an owner
+-- account, with zero new code paths to review. Same "smallest safe
+-- change" reasoning as the rest of this migration.
+--
+-- Still governed by the SAME RLS as every other plan: user_subscriptions
+-- has no insert/update/delete policy for `authenticated` at all (see
+-- above), so this constraint change alone grants nobody anything — a
+-- normal authenticated user still cannot write 'owner' (or any other
+-- value) into their own row. The ONLY way a row gets plan = 'owner' is
+-- the manual, owner-run SQL statement documented in the M9 completion
+-- report (never committed to this repo, never runnable by a client).
+-- ==================================================================
+alter table public.plan_limits drop constraint if exists plan_limits_plan_check;
+alter table public.plan_limits add constraint plan_limits_plan_check
+  check (plan in ('free', 'investor', 'portfolio', 'portfolio_pro', 'owner'));
+
+alter table public.user_subscriptions drop constraint if exists user_subscriptions_plan_check;
+alter table public.user_subscriptions add constraint user_subscriptions_plan_check
+  check (plan in ('free', 'investor', 'portfolio', 'portfolio_pro', 'owner'));
+
+insert into public.plan_limits (plan, max_properties) values ('owner', 1000000000)
+on conflict (plan) do update set max_properties = excluded.max_properties;

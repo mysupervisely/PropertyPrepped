@@ -17,6 +17,13 @@ const REACHED_LIMIT_COPY: Record<PlanId, string> = {
   investor: `You've reached your Investor plan limit (${PLANS.investor.maxProperties} properties).`,
   portfolio: `You've reached your Portfolio plan limit (${PLANS.portfolio.maxProperties} properties).`,
   portfolio_pro: `You've reached your Portfolio Pro plan limit (${PLANS.portfolio_pro.maxProperties} properties).`,
+  // Unreachable in practice: an owner account's maxProperties is
+  // Infinity, so the canCreateProperty() gate that triggers this modal
+  // (app/page.tsx's openAddProperty, the property evaluator's
+  // openConvert) never returns false for 'owner' — this modal simply
+  // never opens for an owner account. Present only so this record stays
+  // total over PlanId.
+  owner: "You have unlimited access on the internal owner account.",
 }
 
 // Placeholder contact address — replace with your real sales/support inbox

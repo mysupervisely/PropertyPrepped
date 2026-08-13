@@ -62,6 +62,13 @@ export function resolveEffectivePlan(sub: SubscriptionRow): PlanId {
   return 'free'
 }
 
+// Note on the internal 'owner' plan: it needs no special-casing anywhere
+// in this file. resolveEffectivePlan already returns 'owner' generically
+// once it's a real key in PLANS with an entitled status ('active'); this
+// function then reads PLANS.owner.maxProperties (Infinity), and
+// canCreateProperty below is trivially always true against Infinity — so
+// "unlimited properties" and "no upgrade prompts" both fall out of the
+// existing generic logic rather than a new code path.
 export function maxPropertiesFor(plan: PlanId): number {
   return PLANS[plan].maxProperties
 }
