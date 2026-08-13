@@ -16,6 +16,7 @@ import { useAuthUser } from '../../../lib/useAuthUser'
 import { useSubscription } from '../../../lib/useSubscription'
 import { PLANS } from '../../../lib/billing/plans'
 import { openBillingPortal } from '../../../lib/billing/client'
+import { PricingNavLink } from '../../../components/PricingNavLink'
 
 const STATUS_LABEL: Record<string, string> = {
   active: 'Active',
@@ -111,6 +112,7 @@ export default function BillingPage() {
         <Link href="/" className="brandButton"><span className="brand">PropRoster</span><span className="tagline">Your real estate portfolio, all in one place.</span></Link>
         <div className="accountActions">
           <span>{user.email}</span>
+          <PricingNavLink />
           <Link className="secondary" href="/">Back to Portfolio</Link>
         </div>
       </header>

@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { isSupabaseConfigured, supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
+import { PricingNavLink } from '../../components/PricingNavLink'
 
 type SavedAnalysis = {
   id: string
@@ -62,7 +63,7 @@ export default function InvestmentToolsHub() {
     <main className="shell investmentShell">
       <header className="topbar">
         <Link href="/" className="brandButton"><span className="brand">PropRoster</span><span className="tagline">Your real estate portfolio, all in one place.</span></Link>
-        <div className="accountActions">{ready && user && <span>{user.email}</span>}<Link href="/" className="secondary">← All Properties</Link></div>
+        <div className="accountActions">{ready && user && <span>{user.email}</span>}<PricingNavLink /><Link href="/" className="secondary">← All Properties</Link></div>
       </header>
 
       <section className="intro">

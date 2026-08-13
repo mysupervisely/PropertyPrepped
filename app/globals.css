@@ -18,9 +18,9 @@ button { cursor: pointer; }
 .topbar { min-height: 86px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); }
 .brand { font-size: 25px; font-weight: 750; letter-spacing: -0.7px; display: block; }
 .tagline { color: var(--muted); font-size: 13px; margin-top: 2px; display: block; }
-.brandButton { border: 0; padding: 0; background: transparent; color: inherit; text-align: left; }
-.primary { border: 0; background: var(--brand); color: white; padding: 12px 17px; border-radius: 10px; font-weight: 650; }
-.secondary { border: 1px solid var(--line); background: white; color: var(--text); padding: 11px 16px; border-radius: 10px; font-weight: 650; }
+.brandButton { border: 0; padding: 0; background: transparent; color: inherit; text-align: left; text-decoration: none; }
+.primary { border: 0; background: var(--brand); color: white; padding: 12px 17px; border-radius: 10px; font-weight: 650; text-decoration: none; }
+.secondary { border: 1px solid var(--line); background: white; color: var(--text); padding: 11px 16px; border-radius: 10px; font-weight: 650; text-decoration: none; }
 .intro { padding: 44px 0 28px; max-width: 760px; }
 .eyebrow { margin: 0 0 8px; color: var(--brand); font-size: 12px; font-weight: 800; letter-spacing: 1.4px; }
 h1 { font-size: clamp(34px, 5vw, 55px); line-height: 1.02; margin: 0; letter-spacing: -2px; }
@@ -187,6 +187,12 @@ h2, h3, p { margin-top: 0; }
   .topbar .secondary { padding: 9px 11px; font-size: 12px; }
   .photoUploader { grid-template-columns: 36px minmax(0, 1fr); justify-content: start; }
 }
+
+/* Shared "Pricing" nav item (components/PricingNavLink.tsx) — same
+   .secondary sizing as its sibling nav actions, with a brand-tinted
+   "current section" look on /pricing itself, matching the .tabs
+   button.active convention used elsewhere in the app. */
+.navCurrent { background: var(--brand-soft); color: var(--brand); border-color: transparent; cursor: default; }
 
 /* Milestone 3: authentication + persistent backend states */
 .accountActions { display: flex; align-items: center; justify-content: flex-end; gap: 9px; flex-wrap: wrap; }

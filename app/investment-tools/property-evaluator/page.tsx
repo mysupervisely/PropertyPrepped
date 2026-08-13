@@ -17,6 +17,7 @@ import { useAuthUser } from '../../../lib/useAuthUser'
 import { useSubscription } from '../../../lib/useSubscription'
 import { canCreateProperty } from '../../../lib/billing/entitlements'
 import { UpgradePrompt } from '../../../components/UpgradePrompt'
+import { PricingNavLink } from '../../../components/PricingNavLink'
 import {
   buildAnalysis,
   buildDealIndicators,
@@ -484,6 +485,7 @@ function PropertyEvaluator() {
         <Link href="/investment-tools" className="brandButton"><span className="brand">PropRoster</span><span className="tagline">Investment Tools</span></Link>
         <div className="accountActions">
           {user ? <span>{user.email}</span> : isSupabaseConfigured && <Link href="/" className="secondary">Sign in to save</Link>}
+          <PricingNavLink />
           <Link href="/investment-tools" className="secondary">← Investment Tools</Link>
         </div>
       </header>

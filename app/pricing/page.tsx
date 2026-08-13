@@ -14,6 +14,7 @@ import { useAuthUser } from '../../lib/useAuthUser'
 import { useSubscription } from '../../lib/useSubscription'
 import { CONTACT_TIER, EARLY_ACCESS_PRICING, PLANS, type PlanId, type PurchasablePlanId } from '../../lib/billing/plans'
 import { startCheckout } from '../../lib/billing/client'
+import { PricingNavLink } from '../../components/PricingNavLink'
 
 const PLAN_ORDER: PlanId[] = ['free', 'investor', 'portfolio', 'portfolio_pro']
 
@@ -39,6 +40,7 @@ export default function PricingPage() {
       <header className="topbar">
         <Link href="/" className="brandButton"><span className="brand">PropRoster</span><span className="tagline">Your real estate portfolio, all in one place.</span></Link>
         <div className="accountActions">
+          <PricingNavLink />
           {ready && user ? <Link className="secondary" href="/account/billing">Account &amp; Billing</Link> : null}
           {ready && !user ? <Link className="primary" href="/">Sign In</Link> : null}
         </div>
