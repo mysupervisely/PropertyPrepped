@@ -61,7 +61,7 @@ export default function InvestmentToolsHub() {
   return (
     <main className="shell investmentShell">
       <header className="topbar">
-        <Link href="/" className="brandButton"><span className="brand">PropPrepped</span><span className="tagline">Your properties. Organized.</span></Link>
+        <Link href="/" className="brandButton"><span className="brand">PropRoster</span><span className="tagline">Your real estate portfolio, all in one place.</span></Link>
         <div className="accountActions">{ready && user && <span>{user.email}</span>}<Link href="/" className="secondary">← All Properties</Link></div>
       </header>
 
@@ -90,7 +90,7 @@ export default function InvestmentToolsHub() {
         {!user ? (
           <div className="emptyState">
             <strong>No saved analyses yet</strong>
-            <span>Sign in from the PropPrepped home page, then save an analysis from the Property Evaluator to see it here.</span>
+            <span>Sign in from the PropRoster home page, then save an analysis from the Property Evaluator to see it here.</span>
           </div>
         ) : analyses.length ? (
           <div className="analysisList">

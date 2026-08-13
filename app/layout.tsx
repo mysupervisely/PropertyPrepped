@@ -1,8 +1,8 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'PropPrepped',
-  description: 'Your properties. Organized.'
+  title: 'PropRoster',
+  description: 'Your real estate portfolio, all in one place.'
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -1,6 +1,6 @@
-# PropPrepped — Milestone 5
+# PropRoster — Milestone 5
 
-PropPrepped is a private property organization workspace for photos, documents, finances, leases, maintenance, mortgage and insurance records.
+PropRoster is a private property organization workspace for photos, documents, finances, leases, maintenance, mortgage and insurance records.
 
 ## What Milestone 5 includes
 
@@ -27,7 +27,7 @@ Do not put a Supabase service-role/secret key in this frontend project.
 
 ## 2. Database setup
 
-### Fresh PropPrepped project
+### Fresh PropRoster project
 
 Run the entire file in Supabase SQL Editor:
 
@@ -53,7 +53,7 @@ This adds:
 - `maintenance_records`
 - per-user RLS policies and indexes for each new table
 
-## 3. Run PropPrepped
+## 3. Run PropRoster
 
 ```bash
 npm install

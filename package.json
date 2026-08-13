@@ -9,16 +9,17 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@supabase/supabase-js": "latest",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "@supabase/supabase-js": "latest"
+    "stripe": "^22.5.0"
   },
   "devDependencies": {
-    "typescript": "latest",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "typescript": "latest",
     "vitest": "^3.2.4"
   }
 }
