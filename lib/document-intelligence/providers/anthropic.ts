@@ -12,6 +12,7 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { DocumentAnalysisSchema, type DocumentAnalysisOutput } from '../schemas'
 import { buildSystemPrompt, buildUserPrompt } from '../prompts'
 import { resolveDocumentIntelligenceModel } from '../model-config'
+import { logProviderError } from '../provider-logging'
 import type { AnalyzeProviderInput, AnalyzeProviderResult, DocumentIntelligenceProvider } from '../provider'
 
 export class AnthropicDocumentIntelligenceProvider implements DocumentIntelligenceProvider {
@@ -49,45 +50,64 @@ export class AnthropicDocumentIntelligenceProvider implements DocumentIntelligen
   // `citations: { enabled: true }` can be set per document block — a larger
   // change deliberately out of scope for this hardening pass.
   async analyzeDocument(input: AnalyzeProviderInput): Promise<AnalyzeProviderResult> {
-    const base64 = Buffer.from(input.fileBuffer).toString('base64')
+    // Diagnostics pass: everything from the API call through parsing is
+    // wrapped in one try/catch so EVERY failure mode this provider can hit
+    // (auth/billing/rate-limit/model errors from Anthropic, a content
+    // refusal, or a structured-output parse failure) gets the same safe
+    // server-side log line before propagating unchanged to the caller.
+    // analyze-request.ts's own catch block (which converts any error here
+    // into the generic client-facing message) is completely untouched —
+    // this only ADDS a log line, it never changes what gets thrown or what
+    // the client ultimately sees.
+    try {
+      const base64 = Buffer.from(input.fileBuffer).toString('base64')
 
-    const response = await this.client.messages.parse({
-      model: this.model,
-      max_tokens: 8000,
-      thinking: { type: 'adaptive' },
-      system: buildSystemPrompt(),
-      output_config: {
-        format: zodOutputFormat(DocumentAnalysisSchema),
-        effort: 'medium',
-      },
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'document',
-              source: { type: 'base64', media_type: 'application/pdf', data: base64 },
-            },
-            { type: 'text', text: buildUserPrompt(input.documentType, input.fileName) },
-          ],
+      const response = await this.client.messages.parse({
+        model: this.model,
+        max_tokens: 8000,
+        thinking: { type: 'adaptive' },
+        system: buildSystemPrompt(),
+        output_config: {
+          format: zodOutputFormat(DocumentAnalysisSchema),
+          effort: 'medium',
         },
-      ],
-    })
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'document',
+                source: { type: 'base64', media_type: 'application/pdf', data: base64 },
+              },
+              { type: 'text', text: buildUserPrompt(input.documentType, input.fileName) },
+            ],
+          },
+        ],
+      })
 
-    if (response.stop_reason === 'refusal') {
-      throw new Error('The AI declined to analyze this document.')
-    }
-    if (!response.parsed_output) {
-      throw new Error('The AI response could not be parsed into the expected structure.')
-    }
+      if (response.stop_reason === 'refusal') {
+        throw new Error('The AI declined to analyze this document.')
+      }
+      if (!response.parsed_output) {
+        throw new Error('The AI response could not be parsed into the expected structure.')
+      }
 
-    return {
-      output: response.parsed_output as DocumentAnalysisOutput,
-      modelName: response.model,
-      usage: {
-        inputTokens: response.usage?.input_tokens ?? 0,
-        outputTokens: response.usage?.output_tokens ?? 0,
-      },
+      return {
+        output: response.parsed_output as DocumentAnalysisOutput,
+        modelName: response.model,
+        usage: {
+          inputTokens: response.usage?.input_tokens ?? 0,
+          outputTokens: response.usage?.output_tokens ?? 0,
+        },
+      }
+    } catch (err) {
+      logProviderError(err, {
+        provider: this.name,
+        model: this.model,
+        apiKeyConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
+        documentByteSize: input.fileBuffer.byteLength,
+      })
+      throw err
     }
   }
 }
