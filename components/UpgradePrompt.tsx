@@ -21,7 +21,7 @@ const REACHED_LIMIT_COPY: Record<PlanId, string> = {
 
 // Placeholder contact address — replace with your real sales/support inbox
 // before launch (see the M9 completion report's Known Limitations).
-const CONTACT_EMAIL = 'sales@propprepped.com'
+const CONTACT_EMAIL = 'sales@proproster.com'
 
 export function UpgradePrompt({
   supabase,
@@ -62,7 +62,7 @@ export function UpgradePrompt({
           </p>
         ) : (
           <p className="muted">
-            PropPrepped&rsquo;s largest self-serve plan covers up to {PLANS.portfolio_pro.maxProperties} properties. For a larger portfolio, let&rsquo;s talk about what you need.
+            PropRoster&rsquo;s largest self-serve plan covers up to {PLANS.portfolio_pro.maxProperties} properties. For a larger portfolio, let&rsquo;s talk about what you need.
           </p>
         )}
         {error && <div className="statusMessage errorMessage">{error}</div>}
@@ -73,7 +73,7 @@ export function UpgradePrompt({
               {busy ? 'Redirecting…' : `Upgrade to ${PLANS[nextPlanId].name}`}
             </button>
           ) : (
-            <a className="primary" href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('PropPrepped — 21+ properties')}`}>
+            <a className="primary" href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('PropRoster — 21+ properties')}`}>
               Contact Us
             </a>
           )}

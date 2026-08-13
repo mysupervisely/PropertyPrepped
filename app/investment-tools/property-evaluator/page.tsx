@@ -481,7 +481,7 @@ function PropertyEvaluator() {
   return (
     <main className="shell investmentShell">
       <header className="topbar">
-        <Link href="/investment-tools" className="brandButton"><span className="brand">PropPrepped</span><span className="tagline">Investment Tools</span></Link>
+        <Link href="/investment-tools" className="brandButton"><span className="brand">PropRoster</span><span className="tagline">Investment Tools</span></Link>
         <div className="accountActions">
           {user ? <span>{user.email}</span> : isSupabaseConfigured && <Link href="/" className="secondary">Sign in to save</Link>}
           <Link href="/investment-tools" className="secondary">← Investment Tools</Link>

@@ -187,7 +187,7 @@ begin
     -- security boundary; the client-side check is UX only).
     raise exception 'PROPERTY_LIMIT_REACHED'
       using detail = format('plan=%s;max=%s;current=%s', v_plan, v_max, v_count),
-            hint = 'Upgrade your PropPrepped plan to add more properties.';
+            hint = 'Upgrade your PropRoster plan to add more properties.';
   end if;
 
   return new;

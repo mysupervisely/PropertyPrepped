@@ -37,7 +37,7 @@ export default function PricingPage() {
   return (
     <main className="shell investmentShell">
       <header className="topbar">
-        <Link href="/" className="brandButton"><span className="brand">PropPrepped</span><span className="tagline">Your properties. Organized.</span></Link>
+        <Link href="/" className="brandButton"><span className="brand">PropRoster</span><span className="tagline">Your real estate portfolio, all in one place.</span></Link>
         <div className="accountActions">
           {ready && user ? <Link className="secondary" href="/account/billing">Account &amp; Billing</Link> : null}
           {ready && !user ? <Link className="primary" href="/">Sign In</Link> : null}
@@ -91,7 +91,7 @@ export default function PricingPage() {
           <h2>{CONTACT_TIER.label}</h2>
           <p className="pricingTagline">{CONTACT_TIER.tagline}</p>
           <p className="pricingLimit">Managing more than 20 properties? Let&rsquo;s build a plan for your portfolio.</p>
-          <a className="primary" href="mailto:sales@propprepped.com?subject=PropPrepped%20%E2%80%94%2021%2B%20properties">Contact Us</a>
+          <a className="primary" href="mailto:sales@proproster.com?subject=PropRoster%20%E2%80%94%2021%2B%20properties">Contact Us</a>
         </article>
       </div>
 

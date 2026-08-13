@@ -108,7 +108,7 @@ export default function BillingPage() {
   return (
     <main className="shell investmentShell">
       <header className="topbar">
-        <Link href="/" className="brandButton"><span className="brand">PropPrepped</span><span className="tagline">Your properties. Organized.</span></Link>
+        <Link href="/" className="brandButton"><span className="brand">PropRoster</span><span className="tagline">Your real estate portfolio, all in one place.</span></Link>
         <div className="accountActions">
           <span>{user.email}</span>
           <Link className="secondary" href="/">Back to Portfolio</Link>
