@@ -115,19 +115,25 @@ export const CONTACT_TIER = {
   tagline: 'Let’s Talk.',
 } as const
 
-// Milestone 10: Tenant Connect pricing-page copy only — NOT the
-// entitlement itself (see lib/billing/entitlements.ts's `tenantConnect`
-// boolean for what's actually enforced). Investor deliberately reads
-// "optional add-on (Coming soon)" rather than included/excluded: it is
-// not sold yet (no Stripe add-on product exists — see Milestone 10
-// completion report), so it must never be advertised as live. Free has no
-// entry here — Free simply doesn't mention Tenant Connect on the pricing
-// card, matching entitlementsFor('free').tenantConnect === false with no
-// "coming soon" promise attached to it.
+// Milestone 10 (production-hardening pass): Tenant Connect pricing-page
+// copy only — NOT the entitlement itself (see lib/billing/entitlements.ts's
+// `tenantConnect` boolean for what's actually enforced, at both the UI
+// and — as of this pass — the database layer).
+//
+// Every plan reads "Coming soon" here, even Portfolio/Portfolio Pro,
+// where entitlementsFor(plan).tenantConnect is already `true` internally.
+// That internal flag exists so the owner-side foundation (invite a
+// tenant, create conversations, exchange messages) can be built and
+// tested now — but there is no tenant-facing UI yet (no way for a real
+// tenant to sign in and see/use a communication portal), so advertising
+// it as a live, included feature on the public pricing page would be
+// false. Flip these strings to "included"/omit only once a real tenant
+// experience ships — do not do it based on the internal flag alone.
+// Free has no entry here at all — Free never mentions Tenant Connect.
 export const TENANT_CONNECT_PRICING_NOTE: Partial<Record<PlanId, string>> = {
-  investor: 'Tenant Connect — Optional add-on (Coming soon)',
-  portfolio: 'Tenant Connect included',
-  portfolio_pro: 'Tenant Connect included',
+  investor: 'Tenant Connect — Coming soon',
+  portfolio: 'Tenant Connect — Coming soon',
+  portfolio_pro: 'Tenant Connect — Coming soon',
 }
 
 /**

@@ -25,6 +25,45 @@
 --   conversation by guessing/forging a foreign key value.
 
 -- ==================================================================
+-- owner_has_tenant_connect(uuid) — the ONE place the tenantConnect plan
+-- check lives (production-hardening pass). Mirrors
+-- lib/billing/entitlements.ts's resolveEffectivePlan()/TENANT_CONNECT_ENABLED
+-- exactly: a plan only counts if the subscription status is currently
+-- entitled ('active', 'trialing', 'past_due' — same set as
+-- ENTITLED_STATUSES), and only 'portfolio', 'portfolio_pro', and the
+-- internal 'owner' plan grant Tenant Connect. No row at all (a brand-new
+-- Free account that has never touched Stripe) correctly evaluates to
+-- false, same as every other plan check in this codebase.
+--
+-- SECURITY DEFINER is required here for a real reason, not convenience:
+-- this function is called from tenant-side policies too (a tenant
+-- replying needs the OWNER's plan checked, not their own — see the
+-- completion report), and user_subscriptions' own RLS only lets a caller
+-- see their OWN row (owner_id = auth.uid()). Without SECURITY DEFINER, a
+-- tenant's query would never be able to evaluate their landlord's plan at
+-- all. The function only ever returns a boolean — never a row, a plan
+-- name, or a status — so this elevated read can't leak anything beyond
+-- "does this specific owner_id currently have Tenant Connect."
+--
+-- This is the single reusable helper referenced by every Tenant Connect
+-- CREATE policy below, rather than duplicating this plan/status logic
+-- five separate times.
+create or replace function public.owner_has_tenant_connect(p_owner_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.user_subscriptions us
+    where us.owner_id = p_owner_id
+      and us.status in ('active', 'trialing', 'past_due')
+      and us.plan in ('portfolio', 'portfolio_pro', 'owner')
+  );
+$$;
+
+-- ==================================================================
 -- tenant_property_access — the tenant/property relationship.
 -- ==================================================================
 create table if not exists public.tenant_property_access (
@@ -69,15 +108,22 @@ create policy "tenant_access_select" on public.tenant_property_access for select
   or (status = 'Invited' and lower(tenant_email) = lower((select auth.jwt() ->> 'email')))
 );
 
--- INSERT: only an owner, only for a property they own, and only as a
--- fresh Invited row (tenant_user_id must be null — the only path to
--- Active is accept_tenant_invite() below, never a direct client insert).
+-- INSERT: only an owner, only for a property they own, only as a fresh
+-- Invited row (tenant_user_id must be null — the only path to Active is
+-- accept_tenant_invite() below, never a direct client insert), and only
+-- when the OWNER's own current plan includes Tenant Connect
+-- (production-hardening pass — see owner_has_tenant_connect() above).
+-- This is a Free/Investor owner's only Tenant Connect touchpoint (they
+-- can never even create the access row), so gating it here is enough to
+-- keep them out of the feature entirely — everything downstream
+-- (conversations, messages) additionally re-checks the same plan anyway.
 drop policy if exists "tenant_access_insert_owner" on public.tenant_property_access;
 create policy "tenant_access_insert_owner" on public.tenant_property_access for insert to authenticated with check (
   (select auth.uid()) = owner_id
   and exists (select 1 from public.properties p where p.id = property_id and p.owner_id = (select auth.uid()))
   and status = 'Invited'
   and tenant_user_id is null
+  and public.owner_has_tenant_connect(owner_id)
 );
 
 -- UPDATE: owner only (e.g. revoking access: status='Revoked', revoked_at
@@ -96,6 +142,30 @@ with check ((select auth.uid()) = owner_id);
 -- write (which no client-facing UPDATE policy allows, deliberately —
 -- see above); it still fully re-checks identity itself before writing
 -- anything, so the elevated privilege never becomes a bypass.
+--
+-- Production-hardening pass: the acceptance write is now a SINGLE atomic
+-- `update ... where id = ... and status = 'Invited' and lower(email) =
+-- lower(...)`, not a separate SELECT-then-UPDATE. The original two-step
+-- version had a real (if narrow) TOCTOU race: two concurrent calls could
+-- both pass the initial SELECT-based check before either committed its
+-- UPDATE, and since that UPDATE's WHERE clause didn't re-verify status,
+-- a second, already-superseded call could silently overwrite
+-- tenant_user_id right after a legitimate first acceptance. Baking the
+-- status/email condition directly into the UPDATE's WHERE clause closes
+-- that gap the same way M8's duplicate-analysis protection does
+-- (property_documents.analysis_status conditional UPDATE) — only one
+-- concurrent caller can ever match and win the row lock.
+--
+-- Error messages are deliberately generic and never echo back
+-- tenant_email, owner_id, or property_id — calling this with someone
+-- else's access id, a revoked id, or a bogus id all fail the same way a
+-- legitimate-but-already-claimed id does ("not available to accept"),
+-- so no response here distinguishes "this id exists but isn't yours"
+-- from "this id doesn't exist" from "this id was already claimed" in any
+-- way that discloses another user's email address. Access ids are
+-- random v4 UUIDs (122 bits), never sequential or guessable, and this
+-- function only ever accepts an id — never a raw email — so there is no
+-- path through it to test "does tenant X have a pending invite."
 create or replace function public.accept_tenant_invite(p_access_id uuid)
 returns public.tenant_property_access
 language plpgsql
@@ -111,21 +181,16 @@ begin
     raise exception 'Not authenticated.';
   end if;
 
-  select * into v_row from public.tenant_property_access where id = p_access_id;
-  if v_row.id is null then
-    raise exception 'Invite not found.';
-  end if;
-  if v_row.status <> 'Invited' then
-    raise exception 'This invite is no longer pending.';
-  end if;
-  if lower(v_row.tenant_email) <> lower(v_email) then
-    raise exception 'This invite was not addressed to your account.';
-  end if;
-
   update public.tenant_property_access
   set tenant_user_id = auth.uid(), status = 'Active', accepted_at = now()
   where id = p_access_id
+    and status = 'Invited'
+    and lower(tenant_email) = lower(v_email)
   returning * into v_row;
+
+  if v_row.id is null then
+    raise exception 'This invite is not available to accept.';
+  end if;
 
   return v_row;
 end;
@@ -177,11 +242,18 @@ create policy "property_conversations_select" on public.property_conversations f
 -- their own tenant_property_access rows on that same property), or the
 -- active tenant on that access row (starting a conversation themselves —
 -- Section D: "tenant can submit issue"). Either way owner_id must equal
--- the access row's real owner_id, never a value the caller invents.
+-- the access row's real owner_id, never a value the caller invents, AND
+-- (production-hardening pass) the OWNER's own current plan must include
+-- Tenant Connect — checked identically whether the OWNER or the TENANT
+-- is the one creating the conversation. This is the "entitlement belongs
+-- to the landlord account, not the tenant" rule from the completion
+-- report: a tenant's own plan is never consulted (tenants don't have a
+-- Tenant Connect plan of their own to check), only the property owner's.
 drop policy if exists "property_conversations_insert" on public.property_conversations;
 create policy "property_conversations_insert" on public.property_conversations for insert to authenticated with check (
   owner_id = (select tpa.owner_id from public.tenant_property_access tpa where tpa.id = tenant_access_id)
   and property_id = (select tpa.property_id from public.tenant_property_access tpa where tpa.id = tenant_access_id)
+  and public.owner_has_tenant_connect(owner_id)
   and (
     (select auth.uid()) = owner_id
     or exists (
@@ -254,12 +326,22 @@ create policy "property_messages_select" on public.property_messages for select 
 -- INSERT trigger) has already forced sender_user_id/sender_role to the
 -- correct, non-spoofable values by the time this with-check evaluates,
 -- so this is only re-verifying the caller belongs to the conversation at
--- all, same rule as the select policy.
+-- all, same rule as the select policy — PLUS (production-hardening pass)
+-- that the conversation's OWNER still currently has Tenant Connect. This
+-- is deliberately checked on every message, not just at conversation
+-- creation time: if an owner's plan is later downgraded, new messages
+-- (from either side) stop being creatable in their existing
+-- conversations too, even though those conversations/messages remain
+-- readable (this policy only gates INSERT, never SELECT — existing data
+-- is never hidden by a downgrade, same convention as every other plan
+-- check in this codebase). A tenant's OWN plan is never consulted here —
+-- exactly the "entitlement belongs to the landlord account" rule.
 drop policy if exists "property_messages_insert" on public.property_messages;
 create policy "property_messages_insert" on public.property_messages for insert to authenticated with check (
   exists (
     select 1 from public.property_conversations pc
     where pc.id = conversation_id
+      and public.owner_has_tenant_connect(pc.owner_id)
       and (
         pc.owner_id = (select auth.uid())
         or exists (
@@ -358,12 +440,22 @@ create policy "property_message_attachments_select" on public.property_message_a
 -- INSERT additionally requires the attaching message to actually belong
 -- to the caller (sender_user_id = auth.uid()) — you can only attach a
 -- file to a message you yourself just sent, not retroactively attach to
--- someone else's message in a conversation you're a member of.
+-- someone else's message in a conversation you're a member of. Also
+-- requires (production-hardening pass) the message's conversation's
+-- owner to currently have Tenant Connect — since sender_user_id already
+-- proves the caller is a legitimate member (the message row could only
+-- have been created under property_messages_insert's own entitlement
+-- check above), this is mostly defense-in-depth against a plan
+-- downgrade landing between the message insert and the attachment
+-- insert in the same request.
 drop policy if exists "property_message_attachments_insert" on public.property_message_attachments;
 create policy "property_message_attachments_insert" on public.property_message_attachments for insert to authenticated with check (
   exists (
     select 1 from public.property_messages pm
-    where pm.id = message_id and pm.sender_user_id = (select auth.uid())
+    join public.property_conversations pc on pc.id = pm.conversation_id
+    where pm.id = message_id
+      and pm.sender_user_id = (select auth.uid())
+      and public.owner_has_tenant_connect(pc.owner_id)
   )
 );
 -- No UPDATE/DELETE policy — attachments are immutable once posted, same as messages.
@@ -452,6 +544,11 @@ using (
   )
 );
 
+-- Upload additionally requires (production-hardening pass) the target
+-- conversation's owner to currently have Tenant Connect — this is the
+-- actual upload gate (the DB row insert above is necessary but the
+-- browser talks to Storage directly for the file bytes, so the same
+-- check must be re-enforced here, not just on property_message_attachments).
 drop policy if exists "tenant_connect_attachments_insert" on storage.objects;
 create policy "tenant_connect_attachments_insert" on storage.objects for insert to authenticated
 with check (
@@ -459,6 +556,7 @@ with check (
   and exists (
     select 1 from public.property_conversations pc
     where pc.id::text = (storage.foldername(name))[1]
+      and public.owner_has_tenant_connect(pc.owner_id)
       and (
         pc.owner_id = (select auth.uid())
         or exists (
