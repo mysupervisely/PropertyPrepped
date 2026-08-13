@@ -122,3 +122,111 @@ export type ExtractedField = z.infer<typeof ExtractedFieldSchema>
 export type FieldGroup = z.infer<typeof FieldGroupSchema>
 export type ApplyFields = z.infer<typeof ApplyFieldsSchema>
 export type DocumentAnalysisOutput = z.infer<typeof DocumentAnalysisSchema>
+
+// ============================================================================
+// Provider-facing schema (production-hardening pass, Section: schema/union
+// limit). NOT a new data shape — a differently-ENCODED version of the exact
+// same information, used only for the Anthropic structured-output request.
+// Everything above this line is unchanged and remains the shape stored in
+// the database, returned from the API route, and rendered by the UI.
+//
+// Root cause this fixes: Anthropic's structured-output feature caps a
+// schema at 16 "parameters with union types" (nullable fields are encoded
+// as `anyOf: [{type: X}, {type: "null"}]`, which counts as a union). The
+// schema above has 36 — the 33 flat nullable fields on ApplyFieldsSchema
+// plus confidence/sourcePage/sourceSnippet (3) on ExtractedFieldSchema —
+// confirmed by generating the actual JSON Schema this app sends
+// (zodOutputFormat(DocumentAnalysisSchema)) and counting real `anyOf`
+// occurrences: exactly 36, matching Anthropic's reported count exactly.
+//
+// The fix is a pure encoding change, not a data-model change:
+// `.nullable()` (value present, possibly `null`) becomes `.optional()`
+// (key may be absent entirely) on every field that was nullable.
+// Empirically verified (against the exact zodOutputFormat()/z.toJSONSchema()
+// pipeline this codebase uses) that `.optional()` alone — without
+// `.nullable()` — produces a plain `{"type": "..."}` schema with NO `anyOf`
+// and the key simply omitted from `required`; it does not count toward
+// Anthropic's union limit at all. Applying this below takes the count from
+// 36 to 0 — full headroom under the limit of 16, not a bare pass.
+//
+// This is why a normalization step exists (normalize-analysis.ts): the
+// model may now OMIT a key instead of sending it as explicit `null`, so the
+// raw parsed output is not yet a valid DocumentAnalysisOutput — it's
+// converted (missing key -> null) and then re-validated against the
+// strict schemas above before this provider ever returns it. Runtime
+// validation is not weakened by any of this: the exact same
+// DocumentAnalysisSchema.parse() that would have run before still runs,
+// just after normalization instead of directly on the raw model output.
+// ============================================================================
+
+/** Provider-facing mirror of ExtractedFieldSchema — 0 unions instead of 3. */
+export const ProviderExtractedFieldSchema = z.object({
+  label: z.string(),
+  value: z.string(),
+  confidence: z.enum(CONFIDENCE_LEVELS).optional(),
+  sourcePage: z.number().int().optional(),
+  sourceSnippet: z.string().optional(),
+})
+
+/** Provider-facing mirror of FieldGroupSchema. */
+export const ProviderFieldGroupSchema = z.object({
+  title: z.string(),
+  fields: z.array(ProviderExtractedFieldSchema),
+})
+
+/** Provider-facing mirror of ApplyFieldsSchema — 0 unions instead of 33. */
+export const ProviderApplyFieldsSchema = z.object({
+  carrier: z.string().optional(),
+  policyNumber: z.string().optional(),
+  annualPremium: z.string().optional(),
+  deductible: z.string().optional(),
+  effectiveDate: z.string().optional(),
+  expirationDate: z.string().optional(),
+  lender: z.string().optional(),
+  loanNumber: z.string().optional(),
+  originalBalance: z.string().optional(),
+  currentBalance: z.string().optional(),
+  interestRate: z.string().optional(),
+  monthlyPayment: z.string().optional(),
+  escrowAmount: z.string().optional(),
+  loanTermYears: z.string().optional(),
+  maturityDate: z.string().optional(),
+  tenantName: z.string().optional(),
+  tenantEmail: z.string().optional(),
+  monthlyRent: z.string().optional(),
+  securityDeposit: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  vendor: z.string().optional(),
+  description: z.string().optional(),
+  cost: z.string().optional(),
+  amount: z.string().optional(),
+  date: z.string().optional(),
+  category: z.string().optional(),
+  name: z.string().optional(),
+  businessName: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  website: z.string().optional(),
+  estimatedValue: z.string().optional(),
+})
+
+/** Provider-facing mirror of DocumentAnalysisSchema — 0 total unions (was 36). */
+export const ProviderDocumentAnalysisSchema = z.object({
+  classification: z.object({
+    documentType: z.enum(DOCUMENT_TYPES),
+    confidence: z.enum(CONFIDENCE_LEVELS),
+  }),
+  overview: z.string(),
+  summary: z.string(),
+  groups: z.array(ProviderFieldGroupSchema),
+  itemsToReview: z.array(z.string()),
+  missingOrUnclear: z.array(z.string()),
+  sourceTraceabilityNote: z.string(),
+  applyFields: ProviderApplyFieldsSchema,
+})
+
+export type ProviderExtractedField = z.infer<typeof ProviderExtractedFieldSchema>
+export type ProviderFieldGroup = z.infer<typeof ProviderFieldGroupSchema>
+export type ProviderApplyFields = z.infer<typeof ProviderApplyFieldsSchema>
+export type ProviderDocumentAnalysisOutput = z.infer<typeof ProviderDocumentAnalysisSchema>

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { ApplyFieldsSchema, DocumentAnalysisSchema } from './schemas'
+import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
+import {
+  ApplyFieldsSchema,
+  DocumentAnalysisSchema,
+  ExtractedFieldSchema,
+  ProviderApplyFieldsSchema,
+  ProviderDocumentAnalysisSchema,
+  ProviderExtractedFieldSchema,
+} from './schemas'
 
 function baseApplyFields() {
   const keys: (keyof typeof ApplyFieldsSchema.shape)[] = Object.keys(ApplyFieldsSchema.shape) as any
@@ -136,5 +144,45 @@ describe('DocumentAnalysisSchema — malformed AI response shapes', () => {
   it('rejects plain prose instead of the structured shape', () => {
     const result = DocumentAnalysisSchema.safeParse('This document is a homeowners insurance policy with $425,000 in dwelling coverage.')
     expect(result.success).toBe(false)
+  })
+})
+
+describe('Production-hardening pass — Anthropic union-parameter limit (schema/union-limit fix)', () => {
+  // Regression test for the actual production incident: Anthropic rejected
+  // the request with "36 parameters with type arrays or anyOf... limit: 16
+  // parameters with unions." This counts the REAL JSON Schema this app
+  // sends (the exact zodOutputFormat() pipeline providers/anthropic.ts
+  // uses), the same way that number was originally confirmed.
+  function countAnyOf(schema: unknown): number {
+    return (JSON.stringify(schema).match(/"anyOf"/g) || []).length
+  }
+
+  it('the OLD internal-shaped request would have produced exactly 36 union parameters (documents the root cause, does not regress it — this schema is never sent to Anthropic directly anymore)', () => {
+    const format = zodOutputFormat(DocumentAnalysisSchema)
+    expect(countAnyOf(format.schema)).toBe(36)
+  })
+
+  it('the provider-facing schema actually sent to Anthropic produces ZERO union parameters — well under the 16 limit', () => {
+    const format = zodOutputFormat(ProviderDocumentAnalysisSchema)
+    expect(countAnyOf(format.schema)).toBe(0)
+  })
+
+  it('ProviderApplyFieldsSchema has exactly the same keys as ApplyFieldsSchema (no field silently dropped/added by the provider-facing mirror)', () => {
+    expect(Object.keys(ProviderApplyFieldsSchema.shape).sort()).toEqual(Object.keys(ApplyFieldsSchema.shape).sort())
+  })
+
+  it('ProviderExtractedFieldSchema has exactly the same keys as ExtractedFieldSchema', () => {
+    expect(Object.keys(ProviderExtractedFieldSchema.shape).sort()).toEqual(Object.keys(ExtractedFieldSchema.shape).sort())
+  })
+
+  it('every field that is nullable on the internal schema is optional (not nullable) on the provider-facing mirror — this is the actual mechanism that eliminates the unions', () => {
+    for (const [key, fieldSchema] of Object.entries(ApplyFieldsSchema.shape)) {
+      const providerFieldSchema = ProviderApplyFieldsSchema.shape[key as keyof typeof ProviderApplyFieldsSchema.shape]
+      // Internal: value can be null. Provider-facing: the same field must
+      // accept undefined (optional) so it compiles to a plain type with no
+      // anyOf, per the empirical zod v4 behavior this fix relies on.
+      expect(fieldSchema.safeParse(null).success, `${key} should be nullable on the internal schema`).toBe(true)
+      expect(providerFieldSchema.safeParse(undefined).success, `${key} should be optional on the provider-facing schema`).toBe(true)
+    }
   })
 })
