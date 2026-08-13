@@ -141,3 +141,16 @@ describe('entitlementsFor — future capability stubs', () => {
     expect(free.tenantPortal).toBe(pro.tenantPortal)
   })
 })
+
+describe('entitlementsFor — Milestone 10 tenantConnect launch intent', () => {
+  it('matches the exact launch intent: Free/Investor false, Portfolio/Portfolio Pro/Owner true', () => {
+    expect(entitlementsFor('free').tenantConnect).toBe(false)
+    // Investor stays false deliberately — the long-term intent is a paid
+    // add-on, but no Stripe add-on product exists yet, so it must not be
+    // enabled as if it were already sold.
+    expect(entitlementsFor('investor').tenantConnect).toBe(false)
+    expect(entitlementsFor('portfolio').tenantConnect).toBe(true)
+    expect(entitlementsFor('portfolio_pro').tenantConnect).toBe(true)
+    expect(entitlementsFor('owner').tenantConnect).toBe(true)
+  })
+})

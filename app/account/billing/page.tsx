@@ -17,6 +17,7 @@ import { useSubscription } from '../../../lib/useSubscription'
 import { PLANS } from '../../../lib/billing/plans'
 import { openBillingPortal } from '../../../lib/billing/client'
 import { PricingNavLink } from '../../../components/PricingNavLink'
+import { Wordmark } from '../../../components/Wordmark'
 
 const STATUS_LABEL: Record<string, string> = {
   active: 'Active',
@@ -109,7 +110,7 @@ export default function BillingPage() {
   return (
     <main className="shell investmentShell">
       <header className="topbar">
-        <Link href="/" className="brandButton"><span className="brand">PropRoster</span><span className="tagline">Your real estate portfolio, all in one place.</span></Link>
+        <Link href="/" className="brandButton"><span className="brand"><Wordmark /></span><span className="tagline">Your real estate portfolio, all in one place.</span></Link>
         <div className="accountActions">
           <span>{user.email}</span>
           <PricingNavLink />

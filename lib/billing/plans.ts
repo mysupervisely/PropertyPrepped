@@ -61,14 +61,14 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   investor: {
     id: 'investor',
     name: 'Investor',
-    priceMonthly: 14.99,
+    priceMonthly: 19.99,
     maxProperties: 4,
     tagline: 'Build your portfolio.',
   },
   portfolio: {
     id: 'portfolio',
     name: 'Portfolio',
-    priceMonthly: 29.99,
+    priceMonthly: 39.99,
     maxProperties: 9,
     tagline: 'Run your growing portfolio.',
     mostPopular: true,
@@ -76,7 +76,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   portfolio_pro: {
     id: 'portfolio_pro',
     name: 'Portfolio Pro',
-    priceMonthly: 49.99,
+    priceMonthly: 59.99,
     maxProperties: 20,
     tagline: 'Scale your operation.',
   },
@@ -114,6 +114,27 @@ export const CONTACT_TIER = {
   label: '21+ Properties',
   tagline: 'Let’s Talk.',
 } as const
+
+// Milestone 10 (production-hardening pass): Tenant Connect pricing-page
+// copy only — NOT the entitlement itself (see lib/billing/entitlements.ts's
+// `tenantConnect` boolean for what's actually enforced, at both the UI
+// and — as of this pass — the database layer).
+//
+// Every plan reads "Coming soon" here, even Portfolio/Portfolio Pro,
+// where entitlementsFor(plan).tenantConnect is already `true` internally.
+// That internal flag exists so the owner-side foundation (invite a
+// tenant, create conversations, exchange messages) can be built and
+// tested now — but there is no tenant-facing UI yet (no way for a real
+// tenant to sign in and see/use a communication portal), so advertising
+// it as a live, included feature on the public pricing page would be
+// false. Flip these strings to "included"/omit only once a real tenant
+// experience ships — do not do it based on the internal flag alone.
+// Free has no entry here at all — Free never mentions Tenant Connect.
+export const TENANT_CONNECT_PRICING_NOTE: Partial<Record<PlanId, string>> = {
+  investor: 'Tenant Connect — Coming soon',
+  portfolio: 'Tenant Connect — Coming soon',
+  portfolio_pro: 'Tenant Connect — Coming soon',
+}
 
 /**
  * Ordered upgrade path used for boundary messaging (Section 8/6). `null`
