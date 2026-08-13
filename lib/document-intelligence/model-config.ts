@@ -33,6 +33,24 @@
 // failed" response) rather than being sent to the API unexamined. This
 // satisfies "do not invent a model identifier" for both the default AND any
 // operator override.
+//
+// Re-verified during the M8 production-diagnostics pass (live analysis was
+// failing with a generic error and no server-side trace): "claude-sonnet-5"
+// is still present in the installed SDK's Model union (still 0.116.0 — see
+// package.json), and is independently listed as a current, real model id in
+// this assistant's own runtime context (separate from the SDK's own
+// self-reported types). NOT changed here without live evidence — being
+// present in a TypeScript union has never guaranteed callability for a
+// specific API key/account (billing/credits, revoked keys, and
+// account-level model access restrictions are all real failure modes a
+// type check can't catch), and swapping the model without a confirmed
+// signal would be a guess. lib/document-intelligence/provider-logging.ts
+// (added in that same pass) now logs the model name alongside Anthropic's
+// own error type/status on every failure, so the NEXT production attempt
+// will show definitively whether the model itself is the problem (e.g. a
+// 404/not_found_error naming this model) versus something else entirely
+// (401 = bad key, 400 mentioning credits = billing not enabled, 429 = rate
+// limited). See the diagnostics report for the exact next test to run.
 
 export const DEFAULT_MODEL = 'claude-sonnet-5'
 
