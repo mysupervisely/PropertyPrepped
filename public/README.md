@@ -1,21 +1,14 @@
-# public/hero-property.jpg (or .webp / .png)
+# hero-property.jpg
 
-Drop a real, licensed hero photo here using exactly this filename (any
-supported raster format works — update the extension in
-`app/globals.css`'s `.landingHeroBg` rule if you use something other than
-`.jpg`) and the signed-out landing page (`/`) picks it up automatically —
-no code change required. Until a file exists here, the hero renders a
-warm gradient fallback instead.
+The signed-out landing page's (`/`) hero background. Referenced via CSS
+`background-image` in `app/globals.css`'s `.landingHeroBg` rule, layered
+over a warm gradient fallback — if this file is ever removed, the page
+still renders correctly (just the gradient, no broken-image state).
 
-Guidance for the photo (from the landing-page design brief):
-
-- Contemporary, upscale-but-attainable single-family home or rental
-  property — not a mansion.
-- Warm natural light / golden-hour feel preferred.
-- Professional real-estate photography quality.
-- No visible people.
-- No identifiable real property address (crop or choose a shot that
-  doesn't read as a specific, findable address).
-- Recommended: landscape orientation, at least ~1600px wide, optimized/
-  compressed (a multi-megabyte unoptimized file will hurt page load —
-  run it through an image compressor first).
+Current file: a warm, dusk-lit, contemporary single-family home — no
+people, no identifiable street address, optimized to ~220KB (resized to
+1536px wide, progressive JPEG, quality 78 via `sharp`) from a larger
+source. If you replace it, keep it in the same rough size/quality range
+(a multi-megabyte unoptimized image will hurt page load) and keep the
+filename `hero-property.jpg`, or update the path in
+`.landingHeroBg` if you use a different filename/format.
