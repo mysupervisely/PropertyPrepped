@@ -22,6 +22,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../lib/supabase'
+import { Wordmark } from './Wordmark'
 
 function HouseIcon() {
   return (
@@ -162,7 +163,7 @@ export default function LandingPage() {
         <div className="landingBrand">
           <HouseIcon />
           <span className="landingBrandText">
-            <span className="brand">PropRoster</span>
+            <span className="brand"><Wordmark /></span>
             <span className="tagline">Your properties. Organized.</span>
           </span>
         </div>
@@ -201,7 +202,7 @@ export default function LandingPage() {
               {VALUE_PROPS.map((item) => (
                 <li key={item.text}>
                   <IconBadge>{item.icon}</IconBadge>
-                  <span>{item.text}</span>
+                  <span className="landingValuePropText">{item.text}</span>
                 </li>
               ))}
             </ul>

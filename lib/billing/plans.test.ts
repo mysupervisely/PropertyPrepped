@@ -14,6 +14,22 @@ describe('internal owner plan — catalog shape', () => {
   })
 })
 
+describe('Milestone 10 pricing update — prices changed, property limits did not', () => {
+  it('matches the new displayed monthly pricing exactly', () => {
+    expect(PLANS.free.priceMonthly).toBe(0)
+    expect(PLANS.investor.priceMonthly).toBe(19.99)
+    expect(PLANS.portfolio.priceMonthly).toBe(39.99)
+    expect(PLANS.portfolio_pro.priceMonthly).toBe(59.99)
+  })
+
+  it('leaves property limits exactly as they were — 1 / 4 / 9 / 20', () => {
+    expect(PLANS.free.maxProperties).toBe(1)
+    expect(PLANS.investor.maxProperties).toBe(4)
+    expect(PLANS.portfolio.maxProperties).toBe(9)
+    expect(PLANS.portfolio_pro.maxProperties).toBe(20)
+  })
+})
+
 describe('9. Owner does not appear as a public pricing option', () => {
   it('PUBLIC_PLAN_ORDER (what /pricing renders) never includes owner', () => {
     expect(PUBLIC_PLAN_ORDER).not.toContain('owner')

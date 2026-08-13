@@ -61,14 +61,14 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   investor: {
     id: 'investor',
     name: 'Investor',
-    priceMonthly: 14.99,
+    priceMonthly: 19.99,
     maxProperties: 4,
     tagline: 'Build your portfolio.',
   },
   portfolio: {
     id: 'portfolio',
     name: 'Portfolio',
-    priceMonthly: 29.99,
+    priceMonthly: 39.99,
     maxProperties: 9,
     tagline: 'Run your growing portfolio.',
     mostPopular: true,
@@ -76,7 +76,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   portfolio_pro: {
     id: 'portfolio_pro',
     name: 'Portfolio Pro',
-    priceMonthly: 49.99,
+    priceMonthly: 59.99,
     maxProperties: 20,
     tagline: 'Scale your operation.',
   },
@@ -114,6 +114,21 @@ export const CONTACT_TIER = {
   label: '21+ Properties',
   tagline: 'Let’s Talk.',
 } as const
+
+// Milestone 10: Tenant Connect pricing-page copy only — NOT the
+// entitlement itself (see lib/billing/entitlements.ts's `tenantConnect`
+// boolean for what's actually enforced). Investor deliberately reads
+// "optional add-on (Coming soon)" rather than included/excluded: it is
+// not sold yet (no Stripe add-on product exists — see Milestone 10
+// completion report), so it must never be advertised as live. Free has no
+// entry here — Free simply doesn't mention Tenant Connect on the pricing
+// card, matching entitlementsFor('free').tenantConnect === false with no
+// "coming soon" promise attached to it.
+export const TENANT_CONNECT_PRICING_NOTE: Partial<Record<PlanId, string>> = {
+  investor: 'Tenant Connect — Optional add-on (Coming soon)',
+  portfolio: 'Tenant Connect included',
+  portfolio_pro: 'Tenant Connect included',
+}
 
 /**
  * Ordered upgrade path used for boundary messaging (Section 8/6). `null`

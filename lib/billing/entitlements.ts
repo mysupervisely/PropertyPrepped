@@ -77,6 +77,25 @@ export function canCreateProperty(plan: PlanId, currentPropertyCount: number): b
   return currentPropertyCount < maxPropertiesFor(plan)
 }
 
+// Milestone 10: Tenant Connect launch intent. Unlike the other stub
+// fields below (monthlyAIAnalyses, tenantPortal, etc. — all deliberately
+// unmeasured/false for every plan because no real limit exists yet),
+// tenantConnect IS a real, currently-enforced value per plan: Portfolio
+// and Portfolio Pro get it today, Free does not, and Owner (internal,
+// unlimited) always does. Investor is the deliberate exception — the
+// long-term intent is an optional paid add-on, but since no Stripe add-on
+// product exists yet and nothing may be sold that isn't live, Investor
+// stays `false` here exactly like Free until that billing path is built.
+// This map is the ONLY place that distinction is made; entitlementsFor
+// below just reads it, same as every other field in this file.
+const TENANT_CONNECT_ENABLED: Record<PlanId, boolean> = {
+  free: false,
+  investor: false,
+  portfolio: true,
+  portfolio_pro: true,
+  owner: true,
+}
+
 // Central hook point for future entitlements (Section 4/18). Each key
 // returns a safe "not available" default until a real limit is measured
 // and enforced — none of these are checked anywhere yet. Adding real
@@ -91,6 +110,8 @@ export type Entitlements = {
   advancedReports: boolean
   teamMembers: number | null
   prioritySupport: boolean
+  /** Milestone 10: gates the owner-side Tenant Connect UI. See TENANT_CONNECT_ENABLED above for the per-plan launch intent. */
+  tenantConnect: boolean
 }
 
 export function entitlementsFor(plan: PlanId): Entitlements {
@@ -102,5 +123,6 @@ export function entitlementsFor(plan: PlanId): Entitlements {
     advancedReports: false,
     teamMembers: null,
     prioritySupport: false,
+    tenantConnect: TENANT_CONNECT_ENABLED[plan],
   }
 }

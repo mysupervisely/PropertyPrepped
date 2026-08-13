@@ -12,9 +12,10 @@ import Link from 'next/link'
 import { isSupabaseConfigured, supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { useSubscription } from '../../lib/useSubscription'
-import { CONTACT_TIER, EARLY_ACCESS_PRICING, PLANS, PUBLIC_PLAN_ORDER, type PurchasablePlanId } from '../../lib/billing/plans'
+import { CONTACT_TIER, EARLY_ACCESS_PRICING, PLANS, PUBLIC_PLAN_ORDER, TENANT_CONNECT_PRICING_NOTE, type PurchasablePlanId } from '../../lib/billing/plans'
 import { startCheckout } from '../../lib/billing/client'
 import { PricingNavLink } from '../../components/PricingNavLink'
+import { Wordmark } from '../../components/Wordmark'
 
 export default function PricingPage() {
   const { user, ready } = useAuthUser()
@@ -36,7 +37,7 @@ export default function PricingPage() {
   return (
     <main className="shell investmentShell">
       <header className="topbar">
-        <Link href="/" className="brandButton"><span className="brand">PropRoster</span><span className="tagline">Your real estate portfolio, all in one place.</span></Link>
+        <Link href="/" className="brandButton"><span className="brand"><Wordmark /></span><span className="tagline">Your real estate portfolio, all in one place.</span></Link>
         <div className="accountActions">
           <PricingNavLink />
           {ready && user ? <Link className="secondary" href="/account/billing">Account &amp; Billing</Link> : null}
@@ -73,23 +74,30 @@ export default function PricingPage() {
               </div>
               {isPaid && EARLY_ACCESS_PRICING && <span className="statusPill pricingEarlyAccess">Early Access Pricing</span>}
               <p className="pricingLimit">Up to <strong>{def.maxProperties}</strong> propert{def.maxProperties === 1 ? 'y' : 'ies'}</p>
-              {isOwner ? (
-                <span className="muted pricingFreeNote">Included in your account.</span>
-              ) : isCurrent ? (
-                <button className="secondary" disabled>Current Plan</button>
-              ) : !ready ? (
-                <button className="primary" disabled>Loading…</button>
-              ) : !user ? (
-                <Link className="primary" href="/">{isPaid ? 'Sign In to Upgrade' : 'Get Started Free'}</Link>
-              ) : planId === 'free' ? (
-                <span className="muted pricingFreeNote">Your account starts here.</span>
-              ) : !isSupabaseConfigured ? (
-                <button className="primary" disabled>Billing is not configured yet.</button>
-              ) : (
-                <button className="primary" disabled={busyPlan === planId} onClick={() => void handleUpgrade(planId as PurchasablePlanId)}>
-                  {busyPlan === planId ? 'Redirecting…' : `Upgrade to ${def.name}`}
-                </button>
-              )}
+              {TENANT_CONNECT_PRICING_NOTE[planId] && <p className="pricingTenantConnectNote">{TENANT_CONNECT_PRICING_NOTE[planId]}</p>}
+              {/* Pushed to the bottom of the flex-column card via margin-top:auto
+                  (app/globals.css .pricingCardCta) regardless of how much copy
+                  sits above it on this card vs. its siblings — this is what
+                  keeps all four CTAs on one horizontal baseline on desktop. */}
+              <div className="pricingCardCta">
+                {isOwner ? (
+                  <span className="muted pricingFreeNote">Included in your account.</span>
+                ) : isCurrent ? (
+                  <button className="secondary" disabled>Current Plan</button>
+                ) : !ready ? (
+                  <button className="primary" disabled>Loading…</button>
+                ) : !user ? (
+                  <Link className="primary" href="/">{isPaid ? 'Sign In to Upgrade' : 'Get Started Free'}</Link>
+                ) : planId === 'free' ? (
+                  <span className="muted pricingFreeNote">Your account starts here.</span>
+                ) : !isSupabaseConfigured ? (
+                  <button className="primary" disabled>Billing is not configured yet.</button>
+                ) : (
+                  <button className="primary" disabled={busyPlan === planId} onClick={() => void handleUpgrade(planId as PurchasablePlanId)}>
+                    {busyPlan === planId ? 'Redirecting…' : `Upgrade to ${def.name}`}
+                  </button>
+                )}
+              </div>
             </article>
           )
         })}
