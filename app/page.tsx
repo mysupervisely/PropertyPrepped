@@ -1,6 +1,7 @@
 'use client'
 
 import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import type { User } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 
@@ -712,9 +713,9 @@ export default function Home() {
     return (
       <main className="authShell">
         <section className="authCard setupCard">
-          <p className="eyebrow">PROPPREPPED MILESTONE 6</p>
+          <p className="eyebrow">PROPPREPPED MILESTONE 7</p>
           <h1>Connect Supabase</h1>
-          <p>PropPrepped is ready for persistent accounts, properties and private uploads. Add your project values to <code>.env.local</code>, then run the included <code>supabase/schema.sql</code> for a fresh project, or the <code>supabase/milestone-5-property-records.sql</code> and <code>supabase/milestone-6-property-network.sql</code> upgrade files if you already have an earlier milestone installed.</p>
+          <p>PropPrepped is ready for persistent accounts, properties and private uploads. Add your project values to <code>.env.local</code>, then run the included <code>supabase/schema.sql</code> for a fresh project, or the <code>supabase/milestone-5-property-records.sql</code>, <code>supabase/milestone-6-property-network.sql</code> and <code>supabase/milestone-7-investment-tools.sql</code> upgrade files if you already have an earlier milestone installed.</p>
           <div className="setupCode">NEXT_PUBLIC_SUPABASE_URL=...<br />NEXT_PUBLIC_SUPABASE_ANON_KEY=...</div>
           <p className="muted">A ready-to-copy <code>.env.example</code> is included in the project.</p>
         </section>
@@ -742,6 +743,7 @@ export default function Home() {
           <button className="authSwitch" onClick={() => { setAuthMode(authMode === 'signin' ? 'signup' : 'signin'); setError(''); setAuthMessage('') }}>
             {authMode === 'signin' ? 'New to PropPrepped? Create an account' : 'Already have an account? Sign in'}
           </button>
+          <Link href="/investment-tools/property-evaluator" className="authSwitch tryEvaluatorLink">Just want to run the numbers? Try the free Property Evaluator →</Link>
         </section>
       </main>
     )
@@ -755,7 +757,7 @@ export default function Home() {
       <main className="shell workspaceShell">
         <header className="topbar">
           <button className="brandButton" onClick={() => setSelectedId(null)}><span className="brand">PropPrepped</span><span className="tagline">Your properties. Organized.</span></button>
-          <div className="accountActions"><span>{user.email}</span><button className="secondary" onClick={() => openEditProperty(selected)}>Edit Property</button><button className="secondary" onClick={() => setSelectedId(null)}>← All Properties</button><button className="secondary" onClick={() => void signOut()}>Log out</button></div>
+          <div className="accountActions"><span>{user.email}</span><Link className="secondary" href={`/investment-tools/property-evaluator?propertyId=${selected.id}`}>Investment Analysis</Link><button className="secondary" onClick={() => openEditProperty(selected)}>Edit Property</button><button className="secondary" onClick={() => setSelectedId(null)}>← All Properties</button><button className="secondary" onClick={() => void signOut()}>Log out</button></div>
         </header>
         {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
 
@@ -852,7 +854,7 @@ export default function Home() {
 
   return (
     <main className="shell">
-      <header className="topbar"><div><span className="brand">PropPrepped</span><span className="tagline">Your properties. Organized.</span></div><div className="accountActions"><span>{user.email}</span><button className="primary" onClick={() => setShowAdd(true)}>+ Add Property</button><button className="secondary" onClick={() => void signOut()}>Log out</button></div></header>
+      <header className="topbar"><div><span className="brand">PropPrepped</span><span className="tagline">Your properties. Organized.</span></div><div className="accountActions"><span>{user.email}</span><Link className="secondary" href="/investment-tools">Investment Tools</Link><button className="primary" onClick={() => setShowAdd(true)}>+ Add Property</button><button className="secondary" onClick={() => void signOut()}>Log out</button></div></header>
       {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
       <section className="intro"><p className="eyebrow">MY PORTFOLIO</p><h1>Everything about your properties, in one place.</h1><p>Photos, documents, finances and important records organized by property — and now saved securely to your account.</p></section>
       <section className="stats portfolioStats"><div className="stat"><span>Portfolio value</span><strong>{money(totals.value)}</strong></div><div className="stat"><span>Mortgage debt</span><strong>{money(totals.debt)}</strong></div><div className="stat"><span>Estimated equity</span><strong>{money(totals.equity)}</strong></div><div className="stat"><span>Monthly rent</span><strong>{money(totals.rent)}</strong></div><div className="stat financialRollup"><span>YTD income</span><strong>{money(totals.income)}</strong></div><div className="stat financialRollup"><span>YTD expenses</span><strong>{money(totals.expenses)}</strong></div><div className="stat financialRollup"><span>YTD cash flow</span><strong>{money(totals.cashFlow)}</strong></div></section>
