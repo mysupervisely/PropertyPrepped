@@ -7,6 +7,7 @@ import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { useSubscription } from '../lib/useSubscription'
 import { canCreateProperty } from '../lib/billing/entitlements'
 import { UpgradePrompt } from '../components/UpgradePrompt'
+import LandingPage from '../components/LandingPage'
 
 type Property = {
   id: string
@@ -117,10 +118,6 @@ function EmptyModule({ title, text, action, onClick }: { title: string; text: st
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
   const [authReady, setAuthReady] = useState(false)
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [authMessage, setAuthMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -264,22 +261,6 @@ export default function Home() {
     setMaintenanceRecords((maintenanceRows || []) as MaintenanceRecord[])
     setContacts((contactRows || []) as PropertyContact[])
     setMaintenanceRequests((requestRows || []) as MaintenanceRequest[])
-    setBusy(false)
-  }
-
-  async function submitAuth() {
-    if (!supabase || !email.trim() || password.length < 6) return
-    setBusy(true)
-    setAuthMessage('')
-    setError('')
-    if (authMode === 'signin') {
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
-      if (signInError) setError(signInError.message)
-    } else {
-      const { data, error: signUpError } = await supabase.auth.signUp({ email: email.trim(), password })
-      if (signUpError) setError(signUpError.message)
-      else if (!data.session) setAuthMessage('Account created. Check your email to confirm your address, then sign in.')
-    }
     setBusy(false)
   }
 
@@ -758,25 +739,7 @@ export default function Home() {
   }
 
   if (!user) {
-    return (
-      <main className="authShell">
-        <section className="authCard">
-          <div className="authBrand"><span className="brand">PropRoster</span><span className="tagline">Your real estate portfolio, all in one place.</span></div>
-          <p className="eyebrow">{authMode === 'signin' ? 'WELCOME BACK' : 'CREATE YOUR ACCOUNT'}</p>
-          <h1>{authMode === 'signin' ? 'Sign in' : 'Get started'}</h1>
-          <p className="authIntro">Your property records, documents and photos stay organized in one private workspace.</p>
-          <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
-          <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={authMode === 'signin' ? 'current-password' : 'new-password'} onKeyDown={(e) => e.key === 'Enter' && void submitAuth()} /></label>
-          {error && <div className="statusMessage errorMessage">{error}</div>}
-          {authMessage && <div className="statusMessage successMessage">{authMessage}</div>}
-          <button className="primary authSubmit" disabled={busy} onClick={() => void submitAuth()}>{busy ? 'Working…' : authMode === 'signin' ? 'Sign in' : 'Create account'}</button>
-          <button className="authSwitch" onClick={() => { setAuthMode(authMode === 'signin' ? 'signup' : 'signin'); setError(''); setAuthMessage('') }}>
-            {authMode === 'signin' ? 'New to PropRoster? Create an account' : 'Already have an account? Sign in'}
-          </button>
-          <Link href="/investment-tools/property-evaluator" className="authSwitch tryEvaluatorLink">Just want to run the numbers? Try the free Property Evaluator →</Link>
-        </section>
-      </main>
-    )
+    return <LandingPage />
   }
 
   if (selected) {
