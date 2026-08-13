@@ -9,6 +9,7 @@ import { canCreateProperty } from '../lib/billing/entitlements'
 import { UpgradePrompt } from '../components/UpgradePrompt'
 import LandingPage from '../components/LandingPage'
 import { PricingNavLink } from '../components/PricingNavLink'
+import DocumentIntelligencePanel, { type ApplyAction } from '../components/DocumentIntelligencePanel'
 
 type Property = {
   id: string
@@ -35,6 +36,11 @@ type PropertyDocument = {
   size_bytes: number
   mime_type: string | null
   created_at: string
+  document_type: string | null
+  classification_confidence: string | null
+  classification_source: string | null
+  analysis_status: string
+  analysis_error: string | null
 }
 
 type PropertyPhoto = {
@@ -138,6 +144,7 @@ export default function Home() {
   const [showModuleForm, setShowModuleForm] = useState<'Lease'|'Mortgage'|'Insurance'|'Maintenance'|null>(null)
   const [showContactForm, setShowContactForm] = useState(false)
   const [showRequestForm, setShowRequestForm] = useState(false)
+  const [showDocIntelId, setShowDocIntelId] = useState<string | null>(null)
   const [leaseDraft, setLeaseDraft] = useState({ tenantName:'', tenantEmail:'', monthlyRent:'', securityDeposit:'', startDate:new Date().toISOString().slice(0,10), endDate:'', renewalStatus:'Active', documentId:'', notes:'' })
   const [mortgageDraft, setMortgageDraft] = useState({ lender:'', loanNumber:'', originalBalance:'', currentBalance:'', interestRate:'', monthlyPayment:'', escrowAmount:'', loanTermYears:'30', maturityDate:'', documentId:'' })
   const [insuranceDraft, setInsuranceDraft] = useState({ carrier:'', policyNumber:'', annualPremium:'', deductible:'', effectiveDate:'', expirationDate:'', documentId:'' })
@@ -499,6 +506,21 @@ export default function Home() {
     setBusy(false)
   }
 
+  // Milestone 8: hands extracted values from a document analysis to the
+  // existing, already-trusted Add-record forms — pre-filled but never saved
+  // automatically. The user still reviews the normal form and clicks Save,
+  // so AI extraction never silently modifies a property record.
+  function applyExtractedToModule(action: ApplyAction, values: Record<string, string>) {
+    setShowDocIntelId(null)
+    if (action === 'Insurance') { setInsuranceDraft((d) => ({ ...d, ...values })); setShowModuleForm('Insurance'); setActiveTab('Insurance') }
+    else if (action === 'Mortgage') { setMortgageDraft((d) => ({ ...d, ...values })); setShowModuleForm('Mortgage'); setActiveTab('Mortgage') }
+    else if (action === 'Lease') { setLeaseDraft((d) => ({ ...d, ...values })); setShowModuleForm('Lease'); setActiveTab('Lease') }
+    else if (action === 'Maintenance') { setMaintenanceDraft((d) => ({ ...d, ...values })); setShowModuleForm('Maintenance'); setActiveTab('Maintenance') }
+    else if (action === 'FinancialExpense') { setTransactionDraft((d) => ({ ...d, ...values })); setShowTransaction(true); setActiveTab('Financials') }
+    else if (action === 'Contact') { setContactDraft((d) => ({ ...d, ...values })); setShowContactForm(true); setActiveTab('Contacts') }
+    else if (action === 'EstimatedValue' && selected) { openEditProperty(selected); setEditDraft((d) => ({ ...d, value: values.value || d.value })) }
+  }
+
   async function setCover(photo: PropertyPhoto) {
     if (!supabase || !selectedId) return
     setBusy(true)
@@ -725,9 +747,9 @@ export default function Home() {
     return (
       <main className="authShell">
         <section className="authCard setupCard">
-          <p className="eyebrow">PROPROSTER MILESTONE 7</p>
+          <p className="eyebrow">PROPROSTER</p>
           <h1>Connect Supabase</h1>
-          <p>PropRoster is ready for persistent accounts, properties and private uploads. Add your project values to <code>.env.local</code>, then run the included <code>supabase/schema.sql</code> for a fresh project, or the <code>supabase/milestone-5-property-records.sql</code>, <code>supabase/milestone-6-property-network.sql</code> and <code>supabase/milestone-7-investment-tools.sql</code> upgrade files if you already have an earlier milestone installed.</p>
+          <p>PropRoster is ready for persistent accounts, properties and private uploads. Add your project values to <code>.env.local</code>, then run the included <code>supabase/schema.sql</code> for a fresh project, or the <code>supabase/milestone-5-property-records.sql</code>, <code>supabase/milestone-6-property-network.sql</code>, <code>supabase/milestone-7-investment-tools.sql</code>, <code>supabase/milestone-8-document-intelligence.sql</code> and <code>supabase/milestone-9-subscriptions.sql</code> upgrade files if you already have an earlier milestone installed. AI document analysis also needs a server-side <code>ANTHROPIC_API_KEY</code> — see <code>.env.example</code>.</p>
           <div className="setupCode">NEXT_PUBLIC_SUPABASE_URL=...<br />NEXT_PUBLIC_SUPABASE_ANON_KEY=...</div>
           <p className="muted">A ready-to-copy <code>.env.example</code> is included in the project.</p>
         </section>
@@ -785,7 +807,7 @@ export default function Home() {
                 <label className={`dropZone ${isDragging ? 'dragging' : ''}`} onDragEnter={(e) => { e.preventDefault(); setIsDragging(true) }} onDragOver={(e) => e.preventDefault()} onDragLeave={() => setIsDragging(false)} onDrop={(e: DragEvent<HTMLLabelElement>) => { e.preventDefault(); setIsDragging(false); void addDocumentFiles(e.dataTransfer.files) }}><span className="uploadIcon">↑</span><strong>{busy ? 'Uploading…' : 'Drop documents here or choose files'}</strong><small>PDF, spreadsheets, receipts, contracts and more · up to 50 MB each</small><input type="file" multiple disabled={busy} onChange={(e) => e.target.files && void addDocumentFiles(e.target.files)} /></label>
               </div>
               <div className="documentHeader"><h3>{docCategory === 'All' ? 'All documents' : docCategory}</h3><span>{filteredDocs.length} file{filteredDocs.length === 1 ? '' : 's'}</span></div>
-              <div className="documentList">{filteredDocs.length ? filteredDocs.map((doc) => <div className="documentRow" key={doc.id}><div className="fileIcon">{doc.name.split('.').pop()?.toUpperCase().slice(0, 4) || 'FILE'}</div><div className="fileName"><strong>{doc.name}</strong><span>{doc.category} · {formatSize(doc.size_bytes)} · {new Date(doc.created_at).toLocaleDateString()}</span></div><div className="rowActions"><button onClick={() => void openDocument(doc)}>Open</button><button onClick={() => void removeDocument(doc)}>Remove</button></div></div>) : <div className="emptyState"><strong>No documents here yet</strong><span>Upload a file above and PropRoster will keep it with this property.</span></div>}</div>
+              <div className="documentList">{filteredDocs.length ? filteredDocs.map((doc) => <div className="documentRow" key={doc.id}><div className="fileIcon">{doc.name.split('.').pop()?.toUpperCase().slice(0, 4) || 'FILE'}</div><div className="fileName"><strong>{doc.name}</strong><span>{doc.category} · {formatSize(doc.size_bytes)} · {new Date(doc.created_at).toLocaleDateString()}{doc.document_type ? ` · ${doc.document_type}` : ''}{doc.analysis_status && doc.analysis_status !== 'Not Analyzed' && <span className={`aiStatusPill ${doc.analysis_status === 'Completed' ? 'pillGood' : doc.analysis_status === 'Failed' ? 'pillBad' : 'pillWarn'}`}>{doc.analysis_status === 'Completed' ? 'AI Analyzed' : doc.analysis_status}</span>}</span></div><div className="rowActions"><button onClick={() => void openDocument(doc)}>Open</button><button className="aiButton" onClick={() => setShowDocIntelId(doc.id)}>{doc.analysis_status === 'Completed' ? 'View AI Analysis' : 'Analyze with PropRoster AI'}</button><button onClick={() => void removeDocument(doc)}>Remove</button></div></div>) : <div className="emptyState"><strong>No documents here yet</strong><span>Upload a file above and PropRoster will keep it with this property.</span></div>}</div>
             </div>
           </div>
         </section>}
@@ -842,6 +864,28 @@ export default function Home() {
         {showDeleteConfirm && <div className="overlay deleteOverlay" onMouseDown={(e) => e.target === e.currentTarget && setShowDeleteConfirm(false)}><div className="modal deleteModal"><div className="modalTop"><div><p className="eyebrow dangerEyebrow">PERMANENT ACTION</p><h2>Delete this property?</h2></div><button className="iconButton" onClick={() => setShowDeleteConfirm(false)}>×</button></div><p className="deleteWarning">This permanently removes <strong>{selected.address}</strong> and its associated documents, photos, financial transactions, lease, mortgage, insurance, maintenance records, contacts, and maintenance requests. This cannot be undone.</p><div className="modalActions"><button className="secondary" onClick={() => setShowDeleteConfirm(false)}>Keep Property</button><button className="dangerButton solidDanger" disabled={busy} onClick={() => void deleteProperty()}>{busy ? 'Deleting…' : 'Delete Permanently'}</button></div></div></div>}
 
         {showTransaction && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowTransaction(false)}><div className="modal transactionModal"><div className="modalTop"><div><p className="eyebrow">FINANCIALS</p><h2>Add transaction</h2></div><button className="iconButton" onClick={() => setShowTransaction(false)}>×</button></div><div className="formGrid transactionGrid"><label>Date<input type="date" value={transactionDraft.date} onChange={(e) => setTransactionDraft({ ...transactionDraft, date: e.target.value })} /></label><label>Type<select value={transactionDraft.type} onChange={(e) => setTransactionDraft({ ...transactionDraft, type: e.target.value as 'Income' | 'Expense', category: e.target.value === 'Income' ? 'Rent' : 'Repairs' })}><option>Income</option><option>Expense</option></select></label><label>Category<select value={transactionDraft.category} onChange={(e) => setTransactionDraft({ ...transactionDraft, category: e.target.value })}>{financialCategories.map((category) => <option key={category}>{category}</option>)}</select></label><label>Amount<input inputMode="decimal" value={transactionDraft.amount} onChange={(e) => setTransactionDraft({ ...transactionDraft, amount: e.target.value })} placeholder="1250.00" /></label><label>Vendor / payer<input value={transactionDraft.vendor} onChange={(e) => setTransactionDraft({ ...transactionDraft, vendor: e.target.value })} placeholder={transactionDraft.type === 'Income' ? 'Tenant name' : 'Vendor or company'} /></label><label>Attach document<select value={transactionDraft.documentId} onChange={(e) => setTransactionDraft({ ...transactionDraft, documentId: e.target.value })}><option value="">No attachment</option>{selectedDocs.map((doc) => <option value={doc.id} key={doc.id}>{doc.name}</option>)}</select></label><label className="fullField">Description<input value={transactionDraft.description} onChange={(e) => setTransactionDraft({ ...transactionDraft, description: e.target.value })} placeholder="August rent, HVAC repair, property tax…" /></label><label className="recurringCheck fullField"><input type="checkbox" checked={transactionDraft.recurring} onChange={(e) => setTransactionDraft({ ...transactionDraft, recurring: e.target.checked })} /><span>Mark as recurring monthly</span><small>This labels the transaction as recurring; automatic future posting can be enabled in a later milestone.</small></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowTransaction(false)}>Cancel</button><button className="primary" disabled={busy || !transactionDraft.description.trim() || Number(transactionDraft.amount) <= 0} onClick={() => void addTransaction()}>{busy ? 'Saving…' : 'Save transaction'}</button></div></div></div>}
+
+        {showDocIntelId && (() => {
+          const activeDoc = selectedDocs.find((d) => d.id === showDocIntelId)
+          if (!activeDoc) return null
+          const latestInsurance = selectedInsurance[0]
+          const latestMortgage = selectedMortgages[0]
+          const latestLease = selectedLeases[0]
+          return (
+            <DocumentIntelligencePanel
+              document={activeDoc}
+              contacts={selectedContacts}
+              currentInsurancePremium={latestInsurance ? Number(latestInsurance.annual_premium) : null}
+              currentMortgageBalance={latestMortgage ? Number(latestMortgage.current_balance) : null}
+              currentMonthlyRent={latestLease ? Number(latestLease.monthly_rent) : Number(selected.monthly_rent)}
+              currentEstimatedValue={Number(selected.estimated_value)}
+              onClose={() => setShowDocIntelId(null)}
+              onOpenDocument={() => void openDocument(activeDoc)}
+              onRefresh={() => void loadPortfolio()}
+              onApply={applyExtractedToModule}
+            />
+          )
+        })()}
       </main>
     )
   }

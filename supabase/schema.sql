@@ -63,10 +63,21 @@ create policy "properties_delete_own" on public.properties for delete to authent
 
 drop policy if exists "documents_select_own" on public.property_documents;
 create policy "documents_select_own" on public.property_documents for select to authenticated using ((select auth.uid()) = owner_id);
+-- Insert/update also verify property_id belongs to the same owner (not just
+-- owner_id itself) — see the Milestone 8 hardening notes below, which this
+-- table's write policies now match.
 drop policy if exists "documents_insert_own" on public.property_documents;
-create policy "documents_insert_own" on public.property_documents for insert to authenticated with check ((select auth.uid()) = owner_id);
+create policy "documents_insert_own" on public.property_documents for insert to authenticated with check (
+  (select auth.uid()) = owner_id
+  and exists (select 1 from public.properties p where p.id = property_id and p.owner_id = (select auth.uid()))
+);
 drop policy if exists "documents_update_own" on public.property_documents;
-create policy "documents_update_own" on public.property_documents for update to authenticated using ((select auth.uid()) = owner_id) with check ((select auth.uid()) = owner_id);
+create policy "documents_update_own" on public.property_documents for update to authenticated
+using ((select auth.uid()) = owner_id)
+with check (
+  (select auth.uid()) = owner_id
+  and exists (select 1 from public.properties p where p.id = property_id and p.owner_id = (select auth.uid()))
+);
 drop policy if exists "documents_delete_own" on public.property_documents;
 create policy "documents_delete_own" on public.property_documents for delete to authenticated using ((select auth.uid()) = owner_id);
 
@@ -436,6 +447,7 @@ begin
   return new;
 end;
 $$;
+
 drop trigger if exists user_subscriptions_touch_updated_at on public.user_subscriptions;
 create trigger user_subscriptions_touch_updated_at
   before update on public.user_subscriptions
@@ -516,3 +528,127 @@ alter table public.user_subscriptions add constraint user_subscriptions_plan_che
 
 insert into public.plan_limits (plan, max_properties) values ('owner', 1000000000)
 on conflict (plan) do update set max_properties = excluded.max_properties;
+
+-- ============================================================
+-- Milestone 8: AI Document Intelligence
+-- (mirrors supabase/milestone-8-document-intelligence.sql exactly)
+-- ============================================================
+alter table public.property_documents
+  add column if not exists document_type text,
+  add column if not exists classification_confidence text check (classification_confidence in ('High', 'Medium', 'Low')),
+  add column if not exists classification_source text check (classification_source in ('User', 'AI')),
+  add column if not exists analysis_status text not null default 'Not Analyzed'
+    check (analysis_status in ('Not Analyzed', 'Queued', 'Processing', 'Completed', 'Failed')),
+  add column if not exists analysis_requested_at timestamptz,
+  add column if not exists analysis_completed_at timestamptz,
+  add column if not exists analysis_error text;
+create index if not exists property_documents_analysis_status_idx on public.property_documents(analysis_status);
+
+create table if not exists public.document_analyses (
+  id uuid primary key default gen_random_uuid(),
+  document_id uuid not null references public.property_documents(id) on delete cascade,
+  property_id uuid not null references public.properties(id) on delete cascade,
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  document_type text not null,
+  summary text not null default '',
+  structured_data jsonb not null default '{}'::jsonb,
+  source_references jsonb not null default '[]'::jsonb,
+  model_provider text not null,
+  model_name text not null,
+  analysis_version integer not null default 1,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists document_analyses_document_idx on public.document_analyses(document_id, analysis_version desc);
+create index if not exists document_analyses_property_idx on public.document_analyses(property_id);
+create index if not exists document_analyses_owner_idx on public.document_analyses(owner_id);
+alter table public.document_analyses enable row level security;
+drop policy if exists "document_analyses_select_own" on public.document_analyses;
+create policy "document_analyses_select_own" on public.document_analyses for select to authenticated using ((select auth.uid()) = owner_id);
+-- INSERT/UPDATE verify owner_id, that document_id/property_id belong to the
+-- caller, and that the referenced document's own property_id matches — see
+-- supabase/milestone-8-document-intelligence.sql for the full rationale.
+drop policy if exists "document_analyses_insert_own" on public.document_analyses;
+create policy "document_analyses_insert_own" on public.document_analyses for insert to authenticated with check (
+  (select auth.uid()) = owner_id
+  and exists (
+    select 1 from public.property_documents pd
+    where pd.id = document_id
+      and pd.owner_id = (select auth.uid())
+      and pd.property_id = property_id
+  )
+  and exists (
+    select 1 from public.properties p
+    where p.id = property_id
+      and p.owner_id = (select auth.uid())
+  )
+);
+drop policy if exists "document_analyses_update_own" on public.document_analyses;
+create policy "document_analyses_update_own" on public.document_analyses for update to authenticated
+using ((select auth.uid()) = owner_id)
+with check (
+  (select auth.uid()) = owner_id
+  and exists (
+    select 1 from public.property_documents pd
+    where pd.id = document_id
+      and pd.owner_id = (select auth.uid())
+      and pd.property_id = property_id
+  )
+  and exists (
+    select 1 from public.properties p
+    where p.id = property_id
+      and p.owner_id = (select auth.uid())
+  )
+);
+drop policy if exists "document_analyses_delete_own" on public.document_analyses;
+create policy "document_analyses_delete_own" on public.document_analyses for delete to authenticated using ((select auth.uid()) = owner_id);
+
+create or replace function public.document_analyses_set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists document_analyses_touch_updated_at on public.document_analyses;
+create trigger document_analyses_touch_updated_at
+  before update on public.document_analyses
+  for each row
+  execute function public.document_analyses_set_updated_at();
+
+create table if not exists public.ai_usage_events (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  document_id uuid references public.property_documents(id) on delete set null,
+  analysis_id uuid references public.document_analyses(id) on delete set null,
+  provider text not null,
+  model text not null,
+  input_tokens integer not null default 0,
+  output_tokens integer not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists ai_usage_events_owner_created_idx on public.ai_usage_events(owner_id, created_at desc);
+alter table public.ai_usage_events enable row level security;
+drop policy if exists "ai_usage_events_select_own" on public.ai_usage_events;
+create policy "ai_usage_events_select_own" on public.ai_usage_events for select to authenticated using ((select auth.uid()) = owner_id);
+-- document_id/analysis_id are nullable; when present they must belong to
+-- the caller too.
+drop policy if exists "ai_usage_events_insert_own" on public.ai_usage_events;
+create policy "ai_usage_events_insert_own" on public.ai_usage_events for insert to authenticated with check (
+  (select auth.uid()) = owner_id
+  and (
+    document_id is null
+    or exists (select 1 from public.property_documents pd where pd.id = document_id and pd.owner_id = (select auth.uid()))
+  )
+  and (
+    analysis_id is null
+    or exists (select 1 from public.document_analyses da where da.id = analysis_id and da.owner_id = (select auth.uid()))
+  )
+);
+-- No UPDATE or DELETE policy: usage events are an append-only audit trail
+-- kept for future plan-limit enforcement, so clients cannot alter or erase
+-- their own usage history. RLS denies both by default with no policy present.
+drop policy if exists "ai_usage_events_delete_own" on public.ai_usage_events;

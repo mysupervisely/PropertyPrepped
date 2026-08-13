@@ -13,7 +13,9 @@
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "stripe": "^22.5.0"
+    "stripe": "^22.5.0",
+    "@anthropic-ai/sdk": "latest",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "latest",
