@@ -6,7 +6,7 @@ import {
   maxPropertiesFor,
   resolveEffectivePlan,
 } from './entitlements'
-import { PLANS } from './plans'
+import { NEXT_PLAN, PLANS } from './plans'
 
 describe('resolveEffectivePlan', () => {
   it('defaults to free when there is no subscription row', () => {
@@ -41,6 +41,15 @@ describe('resolveEffectivePlan', () => {
   it('a free-plan row resolves to free regardless of status', () => {
     expect(resolveEffectivePlan({ plan: 'free', status: 'canceled' })).toBe('free')
     expect(resolveEffectivePlan({ plan: 'free', status: 'active' })).toBe('free')
+  })
+
+  it('7. Owner requires no Stripe subscription — resolves from plan+status alone, no Stripe identifiers involved at all', () => {
+    // SubscriptionRow (the type this function accepts) only ever has
+    // `plan`/`status` — there is no stripe_customer_id/subscription_id/
+    // price_id field anywhere in this resolution path, so an owner row
+    // resolving correctly here is proof by construction that no Stripe
+    // data is read or required.
+    expect(resolveEffectivePlan({ plan: 'owner', status: 'active' })).toBe('owner')
   })
 })
 
@@ -85,6 +94,28 @@ describe('canCreateProperty — upgrade boundaries', () => {
     expect(canCreateProperty('free', -1)).toBe(true)
     expect(canCreateProperty('free', Number.NaN)).toBe(false)
     expect(canCreateProperty('free', Number.POSITIVE_INFINITY)).toBe(false)
+  })
+
+  it('5. Owner can exceed every paid tier, including Portfolio Pro\'s 20-property ceiling', () => {
+    expect(canCreateProperty('owner', 20)).toBe(true) // Portfolio Pro would reject this exact count
+    expect(canCreateProperty('owner', 100)).toBe(true)
+    expect(canCreateProperty('owner', 1_000_000)).toBe(true)
+  })
+
+  it('8. Owner never receives an upgrade prompt — the gate that would trigger one never returns false', () => {
+    // app/page.tsx's openAddProperty() and the property evaluator's
+    // openConvert() both call canCreateProperty(plan, count) and only
+    // show the upgrade modal when it returns false. Proving this is
+    // true for arbitrarily large counts is proving the modal can never
+    // open for an owner account, without needing component-rendering
+    // infrastructure to exercise the JSX directly.
+    for (const count of [0, 1, 20, 21, 1000, Number.MAX_SAFE_INTEGER]) {
+      expect(canCreateProperty('owner', count)).toBe(true)
+    }
+    // Belt-and-suspenders: even if that gate were ever bypassed, the
+    // modal's own "what's next" lookup for owner is null (see
+    // lib/billing/plans.ts NEXT_PLAN) — there is no plan to upsell.
+    expect(NEXT_PLAN.owner).toBeNull()
   })
 })
 

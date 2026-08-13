@@ -137,9 +137,13 @@ export default function BillingPage() {
             <h3>{def.name} plan</h3>
             <p>{loading ? 'Loading your subscription…' : def.tagline}</p>
           </div>
+          {/* Internal owner accounts have no Stripe customer at all — no
+              Upgrade CTA (nothing to upgrade to) and no Manage Subscription
+              button (there is no subscription to manage; clicking it would
+              just 404 against the portal route). */}
           {plan === 'free' ? (
             <Link className="primary" href="/pricing">Upgrade</Link>
-          ) : (
+          ) : plan === 'owner' ? null : (
             <button className="secondary" disabled={portalBusy} onClick={() => void handleManageSubscription()}>
               {portalBusy ? 'Opening…' : 'Manage Subscription'}
             </button>
@@ -147,12 +151,13 @@ export default function BillingPage() {
         </div>
 
         <div className="recordMetrics">
-          <div><span>Properties used</span><strong>{propertyCount === null ? '—' : `${usedProperties} of ${maxProperties}`}</strong></div>
+          <div><span>Properties used</span><strong>{propertyCount === null ? '—' : maxProperties === Infinity ? 'Unlimited' : `${usedProperties} of ${maxProperties}`}</strong></div>
           <div><span>Monthly price</span><strong>${def.priceMonthly.toFixed(2)}</strong></div>
           <div><span>Status</span><strong>{details?.status ? (STATUS_LABEL[details.status] || details.status) : plan === 'free' ? 'Free' : '—'}</strong></div>
         </div>
 
-        {plan !== 'free' && (
+        {/* Free and owner accounts never have real Stripe subscription data — no renewal/cancellation row for either. */}
+        {plan !== 'free' && plan !== 'owner' && (
           <div className="recordRows">
             <div><span>Renews / current period ends</span><strong>{formatDate(details?.current_period_end ?? null)}</strong></div>
             <div><span>Cancel at period end</span><strong>{details?.cancel_at_period_end ? 'Yes — access continues until the date above' : 'No'}</strong></div>

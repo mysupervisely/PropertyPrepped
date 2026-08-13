@@ -498,3 +498,21 @@ create trigger properties_enforce_limit
   execute function public.enforce_property_limit();
 -- See supabase/milestone-9-subscriptions.sql for the full commented
 -- version of every statement above (identical logic, extended rationale).
+
+-- Internal owner entitlement (INTERNAL ONLY — see
+-- supabase/milestone-9-subscriptions.sql for full rationale). Widens the
+-- plan check constraints to also allow 'owner' and gives it an
+-- effectively-unlimited plan_limits ceiling; enforce_property_limit()
+-- itself is unchanged. Still governed by the same RLS as every other
+-- plan — no insert/update/delete policy exists for `authenticated` on
+-- user_subscriptions, so this alone grants nobody anything.
+alter table public.plan_limits drop constraint if exists plan_limits_plan_check;
+alter table public.plan_limits add constraint plan_limits_plan_check
+  check (plan in ('free', 'investor', 'portfolio', 'portfolio_pro', 'owner'));
+
+alter table public.user_subscriptions drop constraint if exists user_subscriptions_plan_check;
+alter table public.user_subscriptions add constraint user_subscriptions_plan_check
+  check (plan in ('free', 'investor', 'portfolio', 'portfolio_pro', 'owner'));
+
+insert into public.plan_limits (plan, max_properties) values ('owner', 1000000000)
+on conflict (plan) do update set max_properties = excluded.max_properties;

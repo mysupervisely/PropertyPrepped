@@ -257,6 +257,75 @@ begin
   end;
 end $$;
 
+-- ==================================================================
+-- Internal owner entitlement (INTERNAL ONLY — never sold, never on
+-- /pricing). Same threat model as the rest of this file: prove the
+-- bypass exists ONLY for a row that already has plan='owner' (which no
+-- client can ever create — see the RLS assertions below), and that
+-- every other plan's enforcement is completely unaffected by owner
+-- existing at all.
+-- ==================================================================
+reset role;
+insert into auth.users (id) values
+  ('77777777-7777-7777-7777-777777777777'), -- the internal owner account (granted the same way the admin SQL does, below)
+  ('88888888-8888-8888-8888-888888888888'); -- a normal authenticated attacker
+
+insert into public.user_subscriptions (owner_id, plan, status) values
+  ('77777777-7777-7777-7777-777777777777', 'owner', 'active');
+
+set local role authenticated;
+
+-- ===== Owner can exceed every paid tier's limit =====
+select set_config('request.jwt.claim.sub', '77777777-7777-7777-7777-777777777777', true);
+do $$
+begin
+  for i in 1..25 loop
+    insert into public.properties (owner_id, address, city) values ('77777777-7777-7777-7777-777777777777', 'Owner St ' || i, 'Town');
+  end loop;
+  raise notice 'PASS: owner created 25 properties (exceeds Portfolio Pro''s 20-property ceiling) with no rejection';
+end $$;
+
+-- ===== A normal authenticated user cannot assign themselves 'owner' via INSERT =====
+select set_config('request.jwt.claim.sub', '88888888-8888-8888-8888-888888888888', true);
+do $$
+begin
+  begin
+    insert into public.user_subscriptions (owner_id, plan, status) values ('88888888-8888-8888-8888-888888888888', 'owner', 'active');
+    raise exception 'REGRESSION: authenticated client was able to self-assign the owner plan (INSERT)';
+  exception
+    when insufficient_privilege then
+      raise notice 'PASS: authenticated client cannot INSERT a user_subscriptions row for themselves with plan=owner';
+  end;
+end $$;
+
+-- ===== ...nor can they UPDATE an existing row to 'owner' =====
+reset role;
+insert into public.user_subscriptions (owner_id, plan, status) values ('88888888-8888-8888-8888-888888888888', 'free', 'active');
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '88888888-8888-8888-8888-888888888888', true);
+do $$
+declare
+  affected integer;
+begin
+  update public.user_subscriptions set plan = 'owner' where owner_id = '88888888-8888-8888-8888-888888888888';
+  get diagnostics affected = row_count;
+  if affected > 0 then
+    raise exception 'REGRESSION: authenticated client was able to UPDATE their own row to plan=owner';
+  end if;
+  raise notice 'PASS: authenticated UPDATE toward plan=owner correctly affected 0 rows';
+end $$;
+reset role;
+do $$
+declare
+  plan_after text;
+begin
+  select plan into plan_after from public.user_subscriptions where owner_id = '88888888-8888-8888-8888-888888888888';
+  if plan_after <> 'free' then
+    raise exception 'REGRESSION: plan actually changed to % despite 0 rows reported affected', plan_after;
+  end if;
+  raise notice 'PASS: confirmed attacker''s plan is still free (unchanged) — owner is unreachable via any client write';
+end $$;
+
 rollback;
 
 -- To run against a fresh local Postgres instead of a real Supabase project,

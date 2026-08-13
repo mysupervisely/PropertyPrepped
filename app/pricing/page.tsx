@@ -12,11 +12,9 @@ import Link from 'next/link'
 import { isSupabaseConfigured, supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { useSubscription } from '../../lib/useSubscription'
-import { CONTACT_TIER, EARLY_ACCESS_PRICING, PLANS, type PlanId, type PurchasablePlanId } from '../../lib/billing/plans'
+import { CONTACT_TIER, EARLY_ACCESS_PRICING, PLANS, PUBLIC_PLAN_ORDER, type PurchasablePlanId } from '../../lib/billing/plans'
 import { startCheckout } from '../../lib/billing/client'
 import { PricingNavLink } from '../../components/PricingNavLink'
-
-const PLAN_ORDER: PlanId[] = ['free', 'investor', 'portfolio', 'portfolio_pro']
 
 export default function PricingPage() {
   const { user, ready } = useAuthUser()
@@ -55,9 +53,14 @@ export default function PricingPage() {
       {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
 
       <div className="pricingGrid">
-        {PLAN_ORDER.map((planId) => {
+        {PUBLIC_PLAN_ORDER.map((planId) => {
           const def = PLANS[planId]
           const isCurrent = ready && user && currentPlan === planId
+          // Internal owner accounts (never shown as a card here — see
+          // PUBLIC_PLAN_ORDER, which deliberately omits 'owner') already have
+          // full access and must never be offered a real Stripe Checkout
+          // for a lesser paid tier they don't need.
+          const isOwner = ready && user && currentPlan === 'owner'
           const isPaid = planId !== 'free'
           return (
             <article className={`pricingCard${def.mostPopular ? ' pricingCardPopular' : ''}`} key={planId}>
@@ -70,7 +73,9 @@ export default function PricingPage() {
               </div>
               {isPaid && EARLY_ACCESS_PRICING && <span className="statusPill pricingEarlyAccess">Early Access Pricing</span>}
               <p className="pricingLimit">Up to <strong>{def.maxProperties}</strong> propert{def.maxProperties === 1 ? 'y' : 'ies'}</p>
-              {isCurrent ? (
+              {isOwner ? (
+                <span className="muted pricingFreeNote">Included in your account.</span>
+              ) : isCurrent ? (
                 <button className="secondary" disabled>Current Plan</button>
               ) : !ready ? (
                 <button className="primary" disabled>Loading…</button>
