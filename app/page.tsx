@@ -4,6 +4,9 @@ import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import type { User } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
+import { useSubscription } from '../lib/useSubscription'
+import { canCreateProperty } from '../lib/billing/entitlements'
+import { UpgradePrompt } from '../components/UpgradePrompt'
 
 type Property = {
   id: string
@@ -121,6 +124,8 @@ export default function Home() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
+  const { plan } = useSubscription(user)
+  const [showUpgrade, setShowUpgrade] = useState(false)
   const [properties, setProperties] = useState<Property[]>([])
   const [documents, setDocuments] = useState<PropertyDocument[]>([])
   const [photos, setPhotos] = useState<PropertyPhoto[]>([])
@@ -292,6 +297,21 @@ export default function Home() {
     reader.readAsDataURL(file)
   }
 
+  // Section 8: check the plan boundary BEFORE opening the add-property
+  // form at all, so a user who's already at their limit sees the upgrade
+  // prompt instead of filling out a form that was always going to fail.
+  // This is UX only — the database trigger (enforce_property_limit) is
+  // what actually enforces the limit; see the PROPERTY_LIMIT_REACHED
+  // fallback in addProperty() below for what happens if this check was
+  // stale (e.g. a second tab already used up the last slot).
+  function openAddProperty() {
+    if (!canCreateProperty(plan, properties.length)) {
+      setShowUpgrade(true)
+      return
+    }
+    setShowAdd(true)
+  }
+
   async function addProperty() {
     if (!supabase || !user || !draft.address.trim() || !draft.city.trim()) return
     setBusy(true)
@@ -309,7 +329,17 @@ export default function Home() {
     }).select('*').single()
 
     if (insertError || !inserted) {
-      setError(insertError?.message || 'Unable to add property.')
+      // PROPERTY_LIMIT_REACHED is the trigger's distinguishable message
+      // (Section 6/8) — show the upgrade prompt instead of a raw database
+      // error. This is the real security boundary; it can fire even when
+      // openAddProperty()'s check above passed, if another tab/request
+      // used up the last slot in between.
+      if (insertError?.message === 'PROPERTY_LIMIT_REACHED') {
+        setShowAdd(false)
+        setShowUpgrade(true)
+      } else {
+        setError(insertError?.message || 'Unable to add property.')
+      }
       setBusy(false)
       return
     }
@@ -854,17 +884,19 @@ export default function Home() {
 
   return (
     <main className="shell">
-      <header className="topbar"><div><span className="brand">PropPrepped</span><span className="tagline">Your properties. Organized.</span></div><div className="accountActions"><span>{user.email}</span><Link className="secondary" href="/investment-tools">Investment Tools</Link><button className="primary" onClick={() => setShowAdd(true)}>+ Add Property</button><button className="secondary" onClick={() => void signOut()}>Log out</button></div></header>
+      <header className="topbar"><div><span className="brand">PropPrepped</span><span className="tagline">Your properties. Organized.</span></div><div className="accountActions"><span>{user.email}</span><Link className="secondary" href="/investment-tools">Investment Tools</Link><button className="primary" onClick={() => openAddProperty()}>+ Add Property</button><button className="secondary" onClick={() => void signOut()}>Log out</button></div></header>
       {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
       <section className="intro"><p className="eyebrow">MY PORTFOLIO</p><h1>Everything about your properties, in one place.</h1><p>Photos, documents, finances and important records organized by property — and now saved securely to your account.</p></section>
       <section className="stats portfolioStats"><div className="stat"><span>Portfolio value</span><strong>{money(totals.value)}</strong></div><div className="stat"><span>Mortgage debt</span><strong>{money(totals.debt)}</strong></div><div className="stat"><span>Estimated equity</span><strong>{money(totals.equity)}</strong></div><div className="stat"><span>Monthly rent</span><strong>{money(totals.rent)}</strong></div><div className="stat financialRollup"><span>YTD income</span><strong>{money(totals.income)}</strong></div><div className="stat financialRollup"><span>YTD expenses</span><strong>{money(totals.expenses)}</strong></div><div className="stat financialRollup"><span>YTD cash flow</span><strong>{money(totals.cashFlow)}</strong></div></section>
       <section><div className="sectionHead"><div><h2>My Properties</h2><p>{busy && !properties.length ? 'Loading your portfolio…' : `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} in your portfolio`}</p></div></div>
         <div className="grid">{properties.map((property) => <article className="propertyCard" key={property.id}><button className="cardOpen" onClick={() => openProperty(property.id)}><div className="photo">{property.coverUrl ? <img src={property.coverUrl} alt={property.address} /> : <div className="photoPlaceholder"><span>⌂</span><small>Add property photos</small></div>}<span className="badge">{property.property_type}</span></div></button><div className="cardBody"><button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button><div className="miniStats"><div><span>Value</span><strong>{money(property.estimated_value)}</strong></div><div><span>Equity</span><strong>{money(Number(property.estimated_value) - Number(property.mortgage_balance))}</strong></div><div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div></div><div className="cardActions"><button onClick={() => openProperty(property.id, 'Documents')}>Documents</button><button onClick={() => openProperty(property.id, 'Photos')}>Photos</button><button onClick={() => openProperty(property.id, 'Financials')}>Financials</button></div></div></article>)}
-          {!busy && properties.length === 0 && <button className="emptyPropertyCard" onClick={() => setShowAdd(true)}><strong>+ Add your first property</strong><span>Start building your organized property file.</span></button>}
+          {!busy && properties.length === 0 && <button className="emptyPropertyCard" onClick={() => openAddProperty()}><strong>+ Add your first property</strong><span>Start building your organized property file.</span></button>}
         </div>
       </section>
 
       {showAdd && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowAdd(false)}><div className="modal"><div className="modalTop"><h2>Add a property</h2><button className="iconButton" onClick={() => setShowAdd(false)}>×</button></div><label className="uploadBox">{imagePreview ? <img src={imagePreview} alt="Property preview" /> : <div><strong>Add a cover photo</strong><span>Choose a photo now or add one later</span></div>}<input type="file" accept="image/*" onChange={handleImage} /></label><div className="formGrid"><label>Street address<input value={draft.address} onChange={(e) => setDraft({ ...draft, address: e.target.value })} placeholder="123 Example Street" /></label><label>City, state & ZIP<input value={draft.city} onChange={(e) => setDraft({ ...draft, city: e.target.value })} placeholder="Example City, FL 12345" /></label><label>Property type<select value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })}><option>Rental Property</option><option>Primary Residence</option><option>Vacation Home</option><option>Commercial</option><option>Land</option><option>Other</option></select></label><label>Purchase price<input inputMode="decimal" value={draft.purchasePrice} onChange={(e) => setDraft({ ...draft, purchasePrice: e.target.value })} placeholder="390000" /></label><label>Estimated value<input inputMode="decimal" value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} placeholder="520000" /></label><label>Mortgage balance<input inputMode="decimal" value={draft.mortgage} onChange={(e) => setDraft({ ...draft, mortgage: e.target.value })} placeholder="310000" /></label><label>Monthly rent<input inputMode="decimal" value={draft.rent} onChange={(e) => setDraft({ ...draft, rent: e.target.value })} placeholder="2950" /></label><label>Monthly property expenses<input inputMode="decimal" value={draft.monthlyExpenses} onChange={(e) => setDraft({ ...draft, monthlyExpenses: e.target.value })} placeholder="1925" /></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowAdd(false)}>Cancel</button><button className="primary" disabled={busy} onClick={() => void addProperty()}>{busy ? 'Saving…' : 'Save Property'}</button></div></div></div>}
+
+      {showUpgrade && supabase && <UpgradePrompt supabase={supabase} currentPlan={plan} onClose={() => setShowUpgrade(false)} />}
     </main>
   )
 }

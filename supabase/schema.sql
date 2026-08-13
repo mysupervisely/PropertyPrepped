@@ -383,3 +383,118 @@ create trigger investment_analyses_touch_updated_at
   before update on public.investment_analyses
   for each row
   execute function public.investment_analyses_set_updated_at();
+
+-- ============================================================
+-- Milestone 9: SaaS plans, Stripe billing, entitlements
+-- (mirrors supabase/milestone-9-subscriptions.sql exactly)
+-- ============================================================
+create table if not exists public.plan_limits (
+  plan text primary key check (plan in ('free', 'investor', 'portfolio', 'portfolio_pro')),
+  max_properties integer not null check (max_properties > 0)
+);
+insert into public.plan_limits (plan, max_properties) values
+  ('free', 1),
+  ('investor', 4),
+  ('portfolio', 9),
+  ('portfolio_pro', 20)
+on conflict (plan) do update set max_properties = excluded.max_properties;
+alter table public.plan_limits enable row level security;
+drop policy if exists "plan_limits_select_all" on public.plan_limits;
+create policy "plan_limits_select_all" on public.plan_limits for select to authenticated using (true);
+
+create table if not exists public.user_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null unique references auth.users(id) on delete cascade,
+  stripe_customer_id text unique,
+  stripe_subscription_id text unique,
+  stripe_price_id text,
+  plan text not null default 'free' check (plan in ('free', 'investor', 'portfolio', 'portfolio_pro')),
+  status text not null default 'active' check (status in (
+    'active', 'trialing', 'past_due', 'unpaid', 'canceled',
+    'incomplete', 'incomplete_expired', 'paused'
+  )),
+  current_period_end timestamptz,
+  cancel_at_period_end boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists user_subscriptions_owner_idx on public.user_subscriptions(owner_id);
+create index if not exists user_subscriptions_stripe_customer_idx on public.user_subscriptions(stripe_customer_id);
+create index if not exists user_subscriptions_stripe_subscription_idx on public.user_subscriptions(stripe_subscription_id);
+alter table public.user_subscriptions enable row level security;
+drop policy if exists "user_subscriptions_select_own" on public.user_subscriptions;
+create policy "user_subscriptions_select_own" on public.user_subscriptions for select to authenticated using ((select auth.uid()) = owner_id);
+-- No insert/update/delete policy for `authenticated` — see
+-- milestone-9-subscriptions.sql for the full explanation. Every write to
+-- this table comes from the server (Stripe webhook handler) via the
+-- service-role key, never from a client request.
+
+create or replace function public.user_subscriptions_set_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+drop trigger if exists user_subscriptions_touch_updated_at on public.user_subscriptions;
+create trigger user_subscriptions_touch_updated_at
+  before update on public.user_subscriptions
+  for each row execute function public.user_subscriptions_set_updated_at();
+
+create table if not exists public.stripe_webhook_events (
+  id text primary key,
+  type text not null,
+  created_at timestamptz not null default now()
+);
+alter table public.stripe_webhook_events enable row level security;
+-- No policies — RLS enabled with zero policies denies all client access;
+-- only the service-role webhook handler touches this table.
+
+create or replace function public.enforce_property_limit()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_plan text;
+  v_status text;
+  v_max integer;
+  v_count integer;
+begin
+  if new.owner_id is distinct from (select auth.uid()) then
+    return new;
+  end if;
+
+  select plan, status into v_plan, v_status
+  from public.user_subscriptions
+  where owner_id = new.owner_id;
+
+  if v_plan is null or v_status is null or v_status not in ('active', 'past_due') then
+    v_plan := 'free';
+  end if;
+
+  select max_properties into v_max from public.plan_limits where plan = v_plan;
+  if v_max is null then
+    v_max := 1;
+  end if;
+
+  select count(*) into v_count from public.properties where owner_id = new.owner_id;
+
+  if v_count >= v_max then
+    raise exception 'PROPERTY_LIMIT_REACHED'
+      using detail = format('plan=%s;max=%s;current=%s', v_plan, v_max, v_count),
+            hint = 'Upgrade your PropPrepped plan to add more properties.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists properties_enforce_limit on public.properties;
+create trigger properties_enforce_limit
+  before insert on public.properties
+  for each row
+  execute function public.enforce_property_limit();
+-- See supabase/milestone-9-subscriptions.sql for the full commented
+-- version of every statement above (identical logic, extended rationale).

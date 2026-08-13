@@ -14,6 +14,9 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { isSupabaseConfigured, supabase } from '../../../lib/supabase'
 import { useAuthUser } from '../../../lib/useAuthUser'
+import { useSubscription } from '../../../lib/useSubscription'
+import { canCreateProperty } from '../../../lib/billing/entitlements'
+import { UpgradePrompt } from '../../../components/UpgradePrompt'
 import {
   buildAnalysis,
   buildDealIndicators,
@@ -222,6 +225,7 @@ export default function PropertyEvaluatorPage() {
 
 function PropertyEvaluator() {
   const { user } = useAuthUser()
+  const { plan } = useSubscription(user)
   const router = useRouter()
   const searchParams = useSearchParams()
   const propertyId = searchParams.get('propertyId')
@@ -236,7 +240,17 @@ function PropertyEvaluator() {
   const [saveMessage, setSaveMessage] = useState('')
   const [error, setError] = useState('')
   const [showConvert, setShowConvert] = useState(false)
+  const [showUpgrade, setShowUpgrade] = useState(false)
+  const [propertyCount, setPropertyCount] = useState<number | null>(null)
   const [convertDraft, setConvertDraft] = useState({ address: '', city: '', createMortgage: true, markPurchased: false })
+
+  // Section 6/8/16: the Property Evaluator itself is free on every plan —
+  // this count is only used to gate the "Save as Property" conversion
+  // step, the one place this page actually creates a properties row.
+  useEffect(() => {
+    if (!supabase || !user) { setPropertyCount(null); return }
+    supabase.from('properties').select('id', { count: 'exact', head: true }).then(({ count }) => setPropertyCount(count ?? 0))
+  }, [user?.id])
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }))
 
@@ -387,6 +401,15 @@ function PropertyEvaluator() {
   }
 
   function openConvert() {
+    // Section 8: same pre-flight check as the main workspace's Add
+    // Property button — don't open a form that was always going to be
+    // rejected. propertyCount === null means it hasn't loaded yet; fail
+    // open here (let the form open) since convertToProperty()'s
+    // PROPERTY_LIMIT_REACHED fallback below is the real backstop either way.
+    if (propertyCount !== null && !canCreateProperty(plan, propertyCount)) {
+      setShowUpgrade(true)
+      return
+    }
     const [addr, ...rest] = form.address.split(',')
     setConvertDraft({ address: (addr || form.address).trim(), city: rest.join(',').trim(), createMortgage: result.loanAmount > 0, markPurchased: false })
     setShowConvert(true)
@@ -411,7 +434,15 @@ function PropertyEvaluator() {
     }).select('*').single()
 
     if (insertError || !newProperty) {
-      setError(insertError?.message || 'Unable to create the property.')
+      // See app/page.tsx's addProperty() for why PROPERTY_LIMIT_REACHED
+      // gets its own branch — this is the real security boundary (the
+      // database trigger), not just the propertyCount check in openConvert().
+      if (insertError?.message === 'PROPERTY_LIMIT_REACHED') {
+        setShowConvert(false)
+        setShowUpgrade(true)
+      } else {
+        setError(insertError?.message || 'Unable to create the property.')
+      }
       setSaving(false)
       return
     }
@@ -657,6 +688,10 @@ function PropertyEvaluator() {
             <div className="modalActions"><button className="secondary" onClick={() => setShowConvert(false)}>Cancel</button><button className="primary" disabled={saving || !convertDraft.address.trim() || !convertDraft.city.trim()} onClick={() => void convertToProperty()}>{saving ? 'Creating…' : 'Create Property'}</button></div>
           </div>
         </div>
+      )}
+
+      {showUpgrade && supabase && (
+        <UpgradePrompt supabase={supabase} currentPlan={plan} onClose={() => setShowUpgrade(false)} />
       )}
     </main>
   )

@@ -478,3 +478,27 @@ h2, h3, p { margin-top: 0; }
 .statusPill.priorityUrgent { background: #fdeceb; color: #8a3d35; }
 @media (max-width: 800px) { .contactGrid { grid-template-columns: 1fr; } }
 @media (max-width: 560px) { .landlordStats { grid-template-columns: 1fr 1fr; } }
+
+/* Milestone 9: SaaS plans, Stripe billing, entitlements */
+.pricingGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 8px 0 28px; align-items: stretch; }
+.pricingCard { position: relative; display: flex; flex-direction: column; gap: 10px; background: white; border: 1px solid var(--line); border-radius: 16px; padding: 24px 20px; }
+.pricingCardPopular { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-soft); }
+.pricingCardContact { background: var(--brand-soft); border-color: #cadfd4; justify-content: center; }
+.pricingBadge { position: absolute; top: -12px; left: 20px; background: var(--brand); color: white; font-size: 11px; font-weight: 800; letter-spacing: .04em; padding: 5px 10px; border-radius: 999px; }
+.pricingCard h2 { font-size: 20px; margin-bottom: 0; }
+.pricingTagline { color: var(--muted); font-size: 13px; margin: 0; }
+.pricingPrice { display: flex; align-items: baseline; gap: 5px; margin: 4px 0; }
+.pricingPrice strong { font-size: 32px; letter-spacing: -1px; }
+.pricingPrice span { color: var(--muted); font-size: 13px; }
+.pricingEarlyAccess { align-self: flex-start; }
+.pricingLimit { font-size: 14px; margin: 4px 0 10px; }
+.pricingFreeNote { display: block; padding: 11px 0; }
+.pricingCard .primary, .pricingCard .secondary { width: 100%; text-align: center; text-decoration: none; }
+.pricingFooterNote { max-width: 720px; margin: 8px 0 40px; }
+
+.upgradeModal { width: min(480px, calc(100% - 30px)); }
+.upgradeLead { font-weight: 700; font-size: 16px; margin-bottom: 6px; }
+
+.billingCard { background: white; border: 1px solid var(--line); border-radius: 16px; padding: 22px; margin-bottom: 20px; }
+.billingLinksSection { margin-bottom: 40px; }
+@media (max-width: 620px) { .pricingGrid { grid-template-columns: 1fr; } }
