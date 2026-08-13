@@ -612,4 +612,54 @@ h2, h3, p { margin-top: 0; }
   .landingHeroHeadline h1 { letter-spacing: -1px; }
   .landingSignInCard { padding: 24px 18px; border-radius: 18px; }
   .landingNav { gap: 14px; }
+/* Milestone 8: AI Document Intelligence */
+.pillBad { background: #fdeceb; color: #8a3d35; }
+.aiButton { border-color: #cadfd4 !important; color: var(--brand); }
+.aiStatusPill { display: inline-block; margin-left: 8px; border-radius: 999px; padding: 3px 8px; font-size: 10px; font-weight: 750; vertical-align: middle; }
+.docIntelModal { width: min(760px, calc(100% - 24px)); max-height: 94vh; }
+.docIntelMeta { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; padding-bottom: 18px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+.docTypeSelect { font-size: 13px; font-weight: 650; min-width: 220px; }
+.docTypeSelect span { display: block; margin-bottom: 6px; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.docTypeSelect select { width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 10px 11px; background: white; color: var(--text); }
+.docIntelStatusBlock { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; text-align: right; }
+.docIntelStatusBlock small { color: var(--muted); font-size: 11px; }
+.docIntelPrompt { text-align: center; padding: 34px 18px; border: 1px dashed var(--line); border-radius: 14px; display: grid; gap: 14px; justify-items: center; }
+.docIntelPrompt p { color: var(--muted); max-width: 480px; margin: 0; }
+.docIntelPrompt.docIntelFailed { border-color: #eecbc5; background: #fff8f7; }
+.docIntelProcessing { display: flex; align-items: center; gap: 12px; padding: 30px 18px; color: var(--muted); justify-content: center; border: 1px dashed var(--line); border-radius: 14px; }
+.spinnerDot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--brand-soft); border-top-color: var(--brand); animation: docSpin .8s linear infinite; }
+@keyframes docSpin { to { transform: rotate(360deg); } }
+.docIntelResults { display: grid; gap: 22px; }
+.versionPicker { font-size: 12px; font-weight: 650; justify-self: end; }
+.versionPicker select { margin-left: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; background: white; }
+.docIntelSection { border-top: 1px solid var(--line); padding-top: 18px; }
+.docIntelSection:first-of-type { border-top: 0; padding-top: 0; }
+.docOverview { font-size: 16px; font-weight: 650; margin-bottom: 8px; }
+.docSummary { color: var(--text); line-height: 1.6; }
+.docGroup { margin-bottom: 6px; }
+.docGroup h4 { font-size: 13px; margin-bottom: 12px; }
+.docFieldGrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.docField { background: #f9fbfa; border: 1px solid var(--line); border-radius: 11px; padding: 12px 13px; }
+.docFieldLow { border-color: #f3d9a8; background: #fffaf0; }
+.docFieldHead { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 5px; }
+.docFieldLabel { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.confidenceBadge { border-radius: 999px; padding: 2px 7px; font-size: 9px; font-weight: 750; white-space: nowrap; }
+.confHigh { background: #e4f3ea; color: #1c6b40; }
+.confMedium { background: #fff5dc; color: #805f12; }
+.confLow { background: #fdeceb; color: #8a3d35; }
+.docFieldValue { font-size: 14px; font-weight: 650; line-height: 1.4; }
+.docFieldSource { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: 11px; }
+.docFieldSnippet { font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.docList { margin: 0; padding-left: 18px; display: grid; gap: 7px; color: var(--text); font-size: 13px; line-height: 1.5; }
+.docListWarn li::marker { color: #b58a2e; }
+.docSourceList { padding-left: 0; list-style: none; }
+.docSourceList li { border-bottom: 1px solid var(--line); padding-bottom: 7px; }
+.docSourceList li:last-child { border-bottom: 0; }
+.docActionRow { display: grid; gap: 10px; margin-top: 12px; }
+.docActionCard { background: var(--brand-soft); border-radius: 12px; padding: 14px; display: grid; gap: 8px; }
+.docCompare { font-size: 12px; color: var(--brand); margin: 0; }
+@media (max-width: 700px) {
+  .docFieldGrid { grid-template-columns: 1fr; }
+  .docIntelMeta { flex-direction: column; align-items: stretch; }
+  .docIntelStatusBlock { align-items: flex-start; text-align: left; }
 }
