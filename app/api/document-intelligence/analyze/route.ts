@@ -19,6 +19,14 @@ import { createRequestClient } from '../../../../lib/supabase-server'
 import { handleAnalyzeRequest } from '../../../../lib/document-intelligence/analyze-request'
 import { analyzeDocument } from '../../../../lib/document-intelligence/analyze-document'
 import { getDocumentIntelligenceProvider, isDocumentIntelligenceConfigured } from '../../../../lib/document-intelligence/provider'
+// TEMPORARY M8 DIAGNOSTIC (Netlify function-log outage) — remove these two
+// imports and the `diagnosticsAuthorized` block below once the new
+// production failure is diagnosed. resolveEffectivePlan/entitlements is
+// the SAME internal-'owner'-plan check already used elsewhere in this
+// codebase (e.g. Tenant Connect gating) — nothing about the plan's
+// semantics changes; this just adds one more consumer of the existing,
+// database-controlled, client-unwritable entitlement.
+import { resolveEffectivePlan } from '../../../../lib/billing/entitlements'
 
 export const runtime = 'nodejs'
 
@@ -41,6 +49,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 })
     }
     const ownerId = userData.user.id
+
+    // TEMPORARY M8 DIAGNOSTIC (Netlify function-log outage): resolved
+    // ONCE, here, from a fresh RLS-scoped read of the caller's OWN
+    // subscription row — never a client-supplied flag, never trusted from
+    // request input. Same resolveEffectivePlan() used everywhere else in
+    // this app (billing page, entitlement checks); 'owner' is an
+    // internal-only plan a client can never self-assign (see
+    // supabase/milestone-9-subscriptions.sql). This does not broaden what
+    // the 'owner' plan grants elsewhere — it only adds this one new,
+    // narrowly-scoped consumer of the same existing check.
+    const { data: subForDiagnostics } = await supabase.from('user_subscriptions').select('plan,status').eq('owner_id', ownerId).maybeSingle()
+    const diagnosticsAuthorized = resolveEffectivePlan(subForDiagnostics) === 'owner'
 
     const payload = (await req.json().catch(() => ({}))) as { documentId?: unknown; documentType?: unknown }
     const configured = isDocumentIntelligenceConfigured()
@@ -112,6 +132,8 @@ export async function POST(req: NextRequest) {
       recordUsage: async (row) => {
         await supabase.from('ai_usage_events').insert({ ...row, owner_id: ownerId })
       },
+      // TEMPORARY M8 DIAGNOSTIC — see the block above where this is resolved.
+      diagnosticsAuthorized,
     })
 
     return NextResponse.json(result.body, { status: result.status })
