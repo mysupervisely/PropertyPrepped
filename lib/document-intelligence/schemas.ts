@@ -17,7 +17,7 @@
 // everywhere in this file so the schema types line up with what the helper
 // expects — importing plain 'zod' here would be a type mismatch.
 import { z } from 'zod/v4'
-import { CONFIDENCE_LEVELS, DOCUMENT_TYPES } from './types'
+import { CONFIDENCE_LEVELS, DOCUMENT_TYPES, type DocumentType } from './types'
 
 /**
  * One extracted fact, always carrying a confidence level and a source
@@ -253,7 +253,31 @@ export const ProviderApplyFieldsSchema = z.object({
   estimatedValue: unknownableField(z.string()),
 })
 
-/** Provider-facing mirror of DocumentAnalysisSchema — 0 total unions (was 36). */
+/**
+ * Provider-facing mirror of DocumentAnalysisSchema — 0 total unions (was
+ * 36), 0 total optional parameters (was 36).
+ *
+ * ---- INCIDENT 3 (compiled grammar too large — why this is no longer sent) ----
+ * A real production request that reached Anthropic with THIS exact schema
+ * still failed: "The compiled grammar is too large... Simplify your tool
+ * schemas or reduce the number of strict tools." Measured directly against
+ * the real zodOutputFormat() pipeline (see schemas.test.ts): 8,008 bytes,
+ * 41 nested objects, 122 total properties, all stemming from one universal
+ * schema trying to hold every document type's fields (33 applyFields) PLUS
+ * an open-ended `groups` array whose items are themselves an array of rich
+ * 5-key objects (3 of them nested sentinel objects) — an unbounded array of
+ * unbounded arrays of complex objects is exactly the shape that makes a
+ * constrained-decoding grammar expensive to compile, independent of the
+ * union/optional counts that were already both 0.
+ *
+ * This schema (and the Provider*FieldGroup/ExtractedField/ApplyFields
+ * schemas above it) is kept defined ONLY as a regression anchor — proving
+ * Incidents 1 and 2 stay fixed if anyone ever re-measures it — and is
+ * asserted, by name, to no longer appear in providers/anthropic.ts's real
+ * request (see schemas.test.ts's "Incident 3" describe block). Production
+ * now sends one of the much smaller getProviderSchemaForDocumentType()
+ * schemas below instead — see that section for the actual fix.
+ */
 export const ProviderDocumentAnalysisSchema = z.object({
   classification: z.object({
     documentType: z.enum(DOCUMENT_TYPES),
@@ -272,3 +296,135 @@ export type ProviderExtractedField = z.infer<typeof ProviderExtractedFieldSchema
 export type ProviderFieldGroup = z.infer<typeof ProviderFieldGroupSchema>
 export type ProviderApplyFields = z.infer<typeof ProviderApplyFieldsSchema>
 export type ProviderDocumentAnalysisOutput = z.infer<typeof ProviderDocumentAnalysisSchema>
+
+// ============================================================================
+// Document-type-specific provider schemas (Incident 3 fix — the actual
+// architecture change). Instead of one universal schema with a slot for
+// every document type's fields plus an open-ended `groups` array, each
+// document type gets its OWN small schema containing only the fields that
+// type actually uses — selected once, before the Anthropic call, from the
+// document type PropRoster already knows (the user's chosen category, or
+// the document's previously-stored classification — see
+// analyze-request.ts's `requestedType`, unchanged by this fix). This is
+// the same value already flowing through AnalyzeProviderInput.documentType
+// today; no new plumbing was needed to reach it.
+//
+// Compactness choices, each directly targeting what made the universal
+// schema's compiled grammar expensive (see the comment on
+// ProviderDocumentAnalysisSchema above):
+//   - No `groups` array. A document type's extraction fields are fixed,
+//     named applyFields keys (a SUBSET of the existing 33 — reusing them,
+//     never inventing new internal fields) — never an open-ended
+//     model-authored array of arbitrary field objects.
+//   - `importantNotes` replaces free-form grouped commentary (renewal
+//     terms, coverage exclusions, inspection findings, HOA rules, etc.) as
+//     one bounded array of short strings — still expressive, far cheaper
+//     to compile than an array of rich objects.
+//   - ONE shared `extractionConfidence` (not per-field confidence) and ONE
+//     shared, bounded `sourceHighlights` array (not a wrapper object per
+//     field) — ".max()" bounds are applied to every array in this section,
+//     since an unbounded "repeat any number of times" is itself a real
+//     grammar-compilation cost, independent of how simple each item is.
+//   - Every "may be unknown" field still uses the SAME unknownableField()
+//     wrapper Incident 2 established (required {value, identified}) — the
+//     fix here is shrinking how many fields and how much array structure
+//     exist per request, never reintroducing a union or an optional
+//     parameter, both proven-safe mechanisms this deliberately keeps.
+// ============================================================================
+
+const APPLY_FIELD_KEYS = Object.keys(ApplyFieldsSchema.shape) as (keyof ApplyFields)[]
+
+/** Every applyFields value is a plain string internally, so one wrapped-string schema per key covers all 33 — built once, reused by whichever document types include that key. */
+const WRAPPED_APPLY_FIELD_SCHEMAS = Object.fromEntries(
+  APPLY_FIELD_KEYS.map((key) => [key, unknownableField(z.string())])
+) as Record<keyof ApplyFields, ReturnType<typeof unknownableField<z.ZodString>>>
+
+/** Human-readable label for each applyFields key, used only to build the internal `groups` display (see normalize-analysis.ts) — never sent to Anthropic. */
+export const APPLY_FIELD_LABELS: Record<keyof ApplyFields, string> = {
+  carrier: 'Carrier', policyNumber: 'Policy Number', annualPremium: 'Annual Premium', deductible: 'Deductible', effectiveDate: 'Effective Date', expirationDate: 'Expiration Date',
+  lender: 'Lender', loanNumber: 'Loan Number', originalBalance: 'Original Balance', currentBalance: 'Current Balance', interestRate: 'Interest Rate', monthlyPayment: 'Monthly Payment', escrowAmount: 'Escrow / Month', loanTermYears: 'Loan Term (years)', maturityDate: 'Maturity Date',
+  tenantName: 'Tenant Name', tenantEmail: 'Tenant Email', monthlyRent: 'Monthly Rent', securityDeposit: 'Security Deposit', startDate: 'Start Date', endDate: 'End Date',
+  vendor: 'Vendor', description: 'Description', cost: 'Cost', amount: 'Amount', date: 'Date', category: 'Category',
+  name: 'Contact Name', businessName: 'Business Name', phone: 'Phone', email: 'Email', website: 'Website',
+  estimatedValue: 'Estimated Value',
+}
+
+/**
+ * Which of the 33 existing applyFields keys are relevant to each document
+ * type — reused directly from the field partitioning already documented on
+ * ApplyFieldsSchema above (Insurance/Mortgage/Lease/Invoice/Contact/
+ * Appraisal groupings). Types with an empty list here never filled
+ * applyFields before this fix either (Closing Disclosure, Inspection
+ * Report, Property Tax Document, HOA Document, Other) — their content
+ * lives in `importantNotes` instead, exactly as it did in the internal
+ * `groups` free text before.
+ */
+export const DOCUMENT_TYPE_APPLY_FIELDS: Record<DocumentType, (keyof ApplyFields)[]> = {
+  'Insurance Policy': ['carrier', 'policyNumber', 'annualPremium', 'deductible', 'effectiveDate', 'expirationDate'],
+  Lease: ['tenantName', 'tenantEmail', 'monthlyRent', 'securityDeposit', 'startDate', 'endDate'],
+  'Mortgage / Loan Statement': ['lender', 'loanNumber', 'originalBalance', 'currentBalance', 'interestRate', 'monthlyPayment', 'escrowAmount', 'loanTermYears', 'maturityDate'],
+  'Closing Disclosure / Settlement Statement': [],
+  'Inspection Report': [],
+  Appraisal: ['estimatedValue', 'effectiveDate'],
+  'Contractor Invoice / Receipt': ['vendor', 'description', 'cost', 'amount', 'date', 'category', 'name', 'businessName', 'phone', 'email', 'website'],
+  'Property Tax Document': [],
+  'HOA Document': [],
+  Other: [],
+}
+
+const MAX_NOTES = 8
+const MAX_REVIEW_ITEMS = 6
+const MAX_SOURCE_HIGHLIGHTS = 8
+
+function buildDocumentTypeProviderSchema(type: DocumentType) {
+  const applyKeys = DOCUMENT_TYPE_APPLY_FIELDS[type]
+  const applyFieldsShape = Object.fromEntries(applyKeys.map((key) => [key, WRAPPED_APPLY_FIELD_SCHEMAS[key]]))
+  // 'general' is always a valid highlight target (a note not tied to a
+  // specific named field) even for types with no applyFields at all —
+  // z.enum requires at least one value, so this also guarantees that.
+  const highlightFieldKeys = [...applyKeys, 'general'] as unknown as [string, ...string[]]
+
+  return z.object({
+    classification: z.object({
+      documentType: z.enum(DOCUMENT_TYPES),
+      confidence: z.enum(CONFIDENCE_LEVELS),
+    }),
+    overview: z.string(),
+    summary: z.string(),
+    /** One shared confidence for every extracted field/note in this analysis — see the file comment above for why this replaces per-field confidence. */
+    extractionConfidence: z.enum(CONFIDENCE_LEVELS),
+    /** Short, concise points not already captured by a named field — renewal terms, coverage exclusions, inspection findings, HOA rules, tax due dates, etc., depending on document type (see prompts.ts's per-type guidance). */
+    importantNotes: z.array(z.string()).max(MAX_NOTES),
+    itemsToReview: z.array(z.string()).max(MAX_REVIEW_ITEMS),
+    missingOrUnclear: z.array(z.string()).max(MAX_REVIEW_ITEMS),
+    sourceTraceabilityNote: z.string(),
+    applyFields: z.object(applyFieldsShape),
+    /** Bounded, optional-in-practice-but-required-in-schema page/snippet pointers, matched back to a named field (or 'general') by exact key — never fuzzy value matching. */
+    sourceHighlights: z.array(
+      z.object({
+        field: z.enum(highlightFieldKeys),
+        page: unknownableField(z.number().int()),
+        snippet: unknownableField(z.string()),
+      })
+    ).max(MAX_SOURCE_HIGHLIGHTS),
+  })
+}
+
+const PROVIDER_SCHEMA_BY_TYPE = Object.fromEntries(
+  DOCUMENT_TYPES.map((type) => [type, buildDocumentTypeProviderSchema(type)])
+) as Record<DocumentType, ReturnType<typeof buildDocumentTypeProviderSchema>>
+
+/**
+ * The ONE place that decides which small, document-type-specific schema
+ * goes to Anthropic (Part 3 — "do not scatter switch statements
+ * throughout the codebase"). Falls back to the 'Other' schema for any
+ * unrecognized type rather than throwing — callers already resolve a
+ * valid DocumentType before this point (analyze-request.ts's
+ * `requestedType` defaults to 'Other'), so this fallback is defense in
+ * depth, not the primary mechanism.
+ */
+export function getProviderSchemaForDocumentType(type: DocumentType) {
+  return PROVIDER_SCHEMA_BY_TYPE[type] ?? PROVIDER_SCHEMA_BY_TYPE.Other
+}
+
+export type ProviderTypeSpecificOutput = z.infer<ReturnType<typeof buildDocumentTypeProviderSchema>>

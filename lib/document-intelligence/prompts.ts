@@ -4,6 +4,19 @@
 // instructions (Section R — prompt injection defense), and (2) extracted
 // information is presented as "appears to show", never as fact the user
 // should treat as certain (Section E/M — cautious wording, confidence).
+//
+// Incident 3 note: the schema the model fills in is now document-type-
+// specific (schemas.ts's getProviderSchemaForDocumentType()) — a small set
+// of named fields per type, plus one shared `importantNotes` array for
+// anything not covered by a named field, rather than the old open-ended
+// `groups` array the model used to author freely. The guidance below was
+// rewritten to match: "group fields under sections" is gone (grouping is
+// now built deterministically in normalize-analysis.ts, not by the model);
+// "fill applyFields with X, Y, Z" stays, since those are still the exact
+// fields the schema for that type provides; anything that used to go in a
+// free-form group with no applyFields counterpart (coverage exclusions,
+// renewal terms, inspection findings, HOA rules, etc.) now explicitly goes
+// in importantNotes.
 
 import type { DocumentType } from './types'
 
@@ -17,66 +30,63 @@ Accuracy and honesty rules:
 - Never invent a value that is not in the document. If something is not stated, say so plainly (e.g. "Not identified in the uploaded document") rather than guessing or estimating.
 - Use cautious, hedged language for anything you extracted or inferred: "appears to", "is identified as", "the document states". Do not use definitive language like "you are not covered" or "this is guaranteed" unless the document explicitly and unambiguously states that fact.
 - Never give legal, tax, insurance, or investment advice. You summarize what a document says; you do not advise the reader on what to do about it.
-- Several fields in the schema (sourcePage, sourceSnippet, confidence, and every field inside applyFields) use a {"value": ..., "identified": true/false} shape instead of a plain value. When you found the real value, set identified to true and value to that real value. When you did NOT find it in the document, set identified to false — value is then ignored entirely, so leave it as any placeholder (an empty string, or 0 for a number) rather than spending effort on it. NEVER set identified to true with a guessed or fabricated value just to fill the field in — identified:false is the correct, honest answer whenever something is not in the document, even for fields where a real value might normally be 0 or empty (e.g. a genuinely 0% rate is identified:true, value:"0" — only "I don't know" is identified:false).
-- Only report a page number in "sourcePage" when you can clearly tell which page of the uploaded document a fact came from — set identified:false rather than guessing a page number.
-- Assign a confidence level (High, Medium, Low) to every extracted field based on how clearly and unambiguously the document states it. If a field is not found in the document at all, set its display "value" text to "Not identified in the uploaded document" and set the confidence field's identified to false.
+- Every field inside "applyFields", and the "page"/"snippet" fields inside "sourceHighlights", use a {"value": ..., "identified": true/false} shape instead of a plain value. When you found the real value, set identified to true and value to that real value. When you did NOT find it in the document, set identified to false — value is then ignored entirely, so leave it as any placeholder (an empty string, or 0 for a number) rather than spending effort on it. NEVER set identified to true with a guessed or fabricated value just to fill the field in — identified:false is the correct, honest answer whenever something is not in the document, even for fields where a real value might normally be 0 or empty (e.g. a genuinely 0% rate is identified:true, value:"0" — only "I don't know" is identified:false).
+- "extractionConfidence" is ONE overall confidence level (High/Medium/Low) for how clearly and unambiguously the document states the fields you found — not a separate confidence per field.
+- "sourceHighlights" is a short list (at most a handful) of page/snippet pointers for the fields you're most confident about — each entry's "field" must exactly match one of the applyFields keys this document type uses, or the literal string "general" for a pointer that supports an importantNotes entry rather than a specific named field. Only include a highlight when you can clearly tell which page it came from; omit it (don't guess a page number) otherwise.
 - Do not estimate remaining useful life, repair costs, or engineering conclusions unless the document explicitly states them — report only what is written.
 - Write the "summary" for a normal property owner, not an insurance/legal/real-estate professional — plain language, no unexplained jargon.
+- "importantNotes" is a short list of concise, individually useful points not already captured by a named applyFields value — see the document-type guidance below for what belongs there. Keep each note to one clear sentence; do not pad the list to fill it.
 
 You must respond only with the structured output described by the provided schema — do not add commentary outside of it.`
 }
 
 const FIELD_GUIDANCE: Record<DocumentType, string> = {
-  'Insurance Policy': `This is an insurance policy or declarations page. Attempt to extract: carrier, agency, agent name, agent phone, agent email, policy number, named insured, property address, policy effective date, policy expiration date, annual premium, dwelling coverage, other structures coverage, personal property coverage, loss of use coverage, liability coverage, medical payments coverage, deductible, wind deductible, hurricane deductible, whether flood coverage is indicated, whether replacement cost coverage is indicated, major endorsements, major exclusions or limitations, mortgagee if shown, and important renewal information.
-Group fields under sections such as "Key Details", "Coverage", "Deductibles", "Important Dates", and "Endorsements & Exclusions".
+  'Insurance Policy': `This is an insurance policy or declarations page.
 Fill applyFields with: carrier, policyNumber, annualPremium, deductible, effectiveDate, expirationDate (dates as YYYY-MM-DD, amounts as plain digits with no "$" or ",").
-Example of the tone to use: "Your policy appears to provide $425,000 in dwelling coverage and has a 2% hurricane deductible. Flood coverage was not identified in the uploaded document."`,
+Put anything else worth knowing in importantNotes — dwelling/other-structures/personal-property/loss-of-use/liability/medical-payments coverage amounts, wind/hurricane deductible, whether flood coverage or replacement cost coverage is indicated, major endorsements or exclusions, mortgagee if shown, and renewal information.
+Example of the tone to use in a note: "Dwelling coverage appears to be $425,000, with a 2% hurricane deductible. Flood coverage was not identified in the uploaded document."`,
 
-  Lease: `This is a lease agreement. Attempt to extract: tenant name(s), landlord name, property address, lease start date, lease end date, monthly rent, security deposit, rent due date, late fee, grace period, renewal terms, notice requirement, utilities responsibility, pet provisions, maintenance responsibilities, early termination provisions, important restrictions, and other unusual clauses.
-Group fields under sections such as "Lease Snapshot", "Important Dates", "Financial Terms", "Responsibilities", and "Clauses Worth Reviewing".
-Include a clear statement in missingOrUnclear or itemsToReview reminding the reader that this summary does not replace reviewing the full signed lease.
-Fill applyFields with: tenantName, tenantEmail (only if shown), monthlyRent, securityDeposit, startDate, endDate (dates as YYYY-MM-DD, amounts as plain digits).`,
+  Lease: `This is a lease agreement.
+Fill applyFields with: tenantName, tenantEmail (only if shown), monthlyRent, securityDeposit, startDate, endDate (dates as YYYY-MM-DD, amounts as plain digits).
+Put anything else worth knowing in importantNotes — landlord name, rent due date, late fee, grace period, renewal terms, notice requirement, utilities responsibility, pet provisions, maintenance responsibilities, early termination provisions, and other unusual clauses.
+Include one note or itemsToReview entry reminding the reader that this summary does not replace reviewing the full signed lease.`,
 
-  'Mortgage / Loan Statement': `This is a mortgage or loan statement/document. Attempt to extract: lender, loan number (if appropriate to record — see below), original loan amount, current balance if shown, interest rate, whether the rate is fixed or adjustable, loan term, monthly principal and interest, escrow amount, taxes and insurance portions if broken out, total monthly payment, maturity date, next payment date if relevant, any prepayment penalty indication, and ARM adjustment information if applicable.
-Do not include a loan number's full digits in any field labeled for display if more than the last 4 digits are visible — mask earlier digits (e.g. "••••1234") in "value" fields shown to the user, but the applyFields.loanNumber may retain the masked form as well; never surface a fully unmasked account/loan number in the summary or overview text.
-Group fields under sections such as "Key Details", "Loan Terms", "Financial Information", and "Important Dates".
-Fill applyFields with: lender, loanNumber (masked), originalBalance, currentBalance, interestRate, monthlyPayment, escrowAmount, loanTermYears, maturityDate.`,
+  'Mortgage / Loan Statement': `This is a mortgage or loan statement/document.
+Fill applyFields with: lender, loanNumber, originalBalance, currentBalance, interestRate, monthlyPayment, escrowAmount, loanTermYears, maturityDate.
+Do not include a loan number's full digits anywhere — mask earlier digits (e.g. "••••1234") in applyFields.loanNumber and never surface a fully unmasked account/loan number in the summary, overview, or any note.
+Put anything else worth knowing in importantNotes — whether the rate is fixed or adjustable and any ARM adjustment information, taxes/insurance portions if broken out separately from principal and interest, next payment date, and any prepayment penalty indication.`,
 
-  'Closing Disclosure / Settlement Statement': `This is a closing disclosure or settlement statement. Attempt to extract: property address, buyer, seller, closing date, purchase price, loan amount, down payment, earnest money, closing costs, lender credits, seller credits, property taxes (prorated amount if shown), recording fees, title costs, prepaid insurance, cash to close, and other major transaction costs.
-Group fields under sections such as "Transaction Summary", "Financial Information", and "Important Dates".
+  'Closing Disclosure / Settlement Statement': `This is a closing disclosure or settlement statement. This document type has no applyFields to fill (leave applyFields values all not-identified) — put everything in importantNotes: property address, buyer, seller, closing date, purchase price, loan amount, down payment, earnest money, closing costs, lender/seller credits, prorated property taxes if shown, recording fees, title costs, prepaid insurance, cash to close, and other major transaction costs.
 This is for organizing records only — do not calculate or state a tax basis, and do not give tax advice; note in missingOrUnclear that basis calculations are outside this summary's scope if relevant.`,
 
-  'Inspection Report': `This is a home/property inspection report. Attempt to extract: inspection date, inspector name, inspection company, the major systems reviewed, high-priority issues, safety concerns, water/moisture issues, roof issues, HVAC issues, electrical issues, plumbing issues, foundation/structural observations, items requiring monitoring, and recommended specialist follow-ups.
-Only include an "estimated remaining life" figure if the report explicitly states one — never estimate this yourself.
-Do not turn the inspector's observations into definitive engineering conclusions or repair-cost estimates; report what the inspector wrote, using their own qualifiers (e.g. "appears", "recommend further evaluation").
-Group fields under sections such as "Overview", "High-Priority Issues", "Systems Reviewed", and "Recommended Follow-Ups".`,
+  'Inspection Report': `This is a home/property inspection report. This document type has no applyFields to fill — put everything in importantNotes: inspection date, inspector name, inspection company, major systems reviewed, high-priority issues, safety concerns, water/moisture/roof/HVAC/electrical/plumbing/foundation observations, items requiring monitoring, and recommended specialist follow-ups.
+Only include an "estimated remaining life" figure if the report explicitly states one — never estimate this yourself. Do not turn the inspector's observations into definitive engineering conclusions or repair-cost estimates; report what the inspector wrote, using their own qualifiers (e.g. "appears", "recommend further evaluation").`,
 
-  Appraisal: `This is a property appraisal. Attempt to extract: appraised value, effective date, property address, property type, square footage, lot size, bedrooms, bathrooms, year built, a brief description of comparable sales if listed, adjustments if practical to summarize, appraiser name, appraisal company, and important valuation notes or conditions.
-Group fields under sections such as "Valuation Summary", "Property Details", and "Comparable Sales".
-Fill applyFields with: estimatedValue (plain digits, no "$" or ",") and effectiveDate.`,
+  Appraisal: `This is a property appraisal.
+Fill applyFields with: estimatedValue (plain digits, no "$" or ",") and effectiveDate.
+Put anything else worth knowing in importantNotes — property address, property type, square footage, lot size, bedrooms, bathrooms, year built, a brief description of comparable sales if listed, appraiser name/company, and important valuation notes or conditions.`,
 
-  'Contractor Invoice / Receipt': `This is a contractor invoice or receipt. Attempt to extract: vendor/business name, phone, email, website if present, invoice number, invoice date, property/service address, work performed, a category for the work (e.g. Plumbing, Electrical, HVAC, Roofing, Landscaping, General Repair), a breakdown of labor/materials/tax if shown, the total amount, warranty information, and any recommended follow-up work mentioned.
-Group fields under sections such as "Vendor", "Work Performed", and "Financial Information".
-Fill applyFields with: vendor, phone, email, website, description (a short description of the work), category, cost, amount (same value as cost), date (invoice date, YYYY-MM-DD), name (vendor contact name if different from business), businessName.`,
+  'Contractor Invoice / Receipt': `This is a contractor invoice or receipt.
+Fill applyFields with: vendor, phone, email, website, description (a short description of the work), category (e.g. Plumbing, Electrical, HVAC, Roofing, Landscaping, General Repair), cost, amount (same value as cost), date (invoice date, YYYY-MM-DD), name (vendor contact name if different from business), businessName.
+Put anything else worth knowing in importantNotes — invoice number, property/service address, a breakdown of labor/materials/tax if shown, warranty information, and any recommended follow-up work mentioned.`,
 
-  'Property Tax Document': `This is a property tax document. Attempt to extract: property address, tax year, assessed value if shown, tax amount, due date(s), any exemptions listed, and the taxing authority.
-Group fields under sections such as "Key Details", "Financial Information", and "Important Dates". This is for record-keeping only — do not give tax advice.`,
+  'Property Tax Document': `This is a property tax document. This document type has no applyFields to fill — put everything in importantNotes: property address, tax year, assessed value if shown, tax amount, due date(s), any exemptions listed, and the taxing authority.
+This is for record-keeping only — do not give tax advice.`,
 
-  'HOA Document': `This is an HOA (homeowners association) document. Attempt to extract: HOA name, property address, dues amount and frequency, special assessments if mentioned, key rules or restrictions, and important dates (meetings, due dates, deadlines).
-Group fields under sections such as "Key Details", "Financial Information", and "Rules & Restrictions".`,
+  'HOA Document': `This is an HOA (homeowners association) document. This document type has no applyFields to fill — put everything in importantNotes: HOA name, property address, dues amount and frequency, special assessments if mentioned, key rules or restrictions, and important dates (meetings, due dates, deadlines).`,
 
-  Other: `This document doesn't map to one of PropRoster's specific document types. Read it carefully and extract whatever structured, factual information a property owner would want to keep — key parties, key dates, financial amounts, and anything unusual worth reviewing. Group fields under sections that fit the document's actual content (e.g. "Key Details", "Financial Information", "Important Dates"). If you can tell it actually IS one of PropRoster's other supported types, say so in the classification.`,
+  Other: `This document doesn't map to one of PropRoster's specific document types. This document type has no applyFields to fill — put everything in importantNotes: key parties, key dates, financial amounts, and anything unusual worth reviewing, based on the document's actual content. If you can tell it actually IS one of PropRoster's other supported types, say so in the classification (your classification is not limited by which schema you were given).`,
 }
 
 export function buildUserPrompt(documentType: DocumentType, fileName: string): string {
   const guidance = FIELD_GUIDANCE[documentType] || FIELD_GUIDANCE.Other
   return `The uploaded file is named "${fileName}". The user has currently categorized it as: ${documentType}.
 
-First, classify the document yourself (confirm or correct the user's categorization) and report your classification with a confidence level — do not simply repeat the user's label without checking it against the actual content.
+First, classify the document yourself (confirm or correct the user's categorization) and report your classification with a confidence level — do not simply repeat the user's label without checking it against the actual content. Report your best-guess classification even if it differs from ${documentType}; the fields available to fill in this response are still based on ${documentType} since that's what this request was prepared for, but an honest classification helps the reader understand what they actually uploaded.
 
-Then extract information appropriate to whichever document type you determine this to be, following this guidance:
+Then extract information appropriate to a ${documentType}, following this guidance:
 
 ${guidance}
 
-Always populate every top-level field in the schema, even when a section has little to report (use an empty array rather than omitting it). Every field's "value" must be a display-ready string — never leave it blank; use "Not identified in the uploaded document" when something is not found. Write "overview" as one or two sentences a busy property owner could read in five seconds. Write "summary" as a few short paragraphs in plain English. Populate "sourceTraceabilityNote" honestly: say when page references are available and when they are not.`
+Always populate every top-level field in the schema, even when there is little to report (use an empty array for importantNotes/itemsToReview/missingOrUnclear/sourceHighlights rather than omitting them — an empty array is a valid, honest answer). Write "overview" as one or two sentences a busy property owner could read in five seconds. Write "summary" as a few short paragraphs in plain English. Populate "sourceTraceabilityNote" honestly: say when page references are available and when they are not.`
 }

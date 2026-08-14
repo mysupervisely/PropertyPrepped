@@ -9,8 +9,8 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
-import { DocumentAnalysisSchema, ProviderDocumentAnalysisSchema } from '../schemas'
-import { normalizeProviderAnalysis } from '../normalize-analysis'
+import { DocumentAnalysisSchema, getProviderSchemaForDocumentType } from '../schemas'
+import { normalizeDocumentTypeAnalysis } from '../normalize-analysis'
 import { buildSystemPrompt, buildUserPrompt } from '../prompts'
 import { resolveDocumentIntelligenceModel } from '../model-config'
 import { logProviderError } from '../provider-logging'
@@ -58,21 +58,22 @@ export class AnthropicDocumentIntelligenceProvider implements DocumentIntelligen
   // `citations: { enabled: true }` can be set per document block — a larger
   // change deliberately out of scope for this hardening pass.
   //
-  // Schema/parameter-limit note (two production incidents — full history
-  // in schemas.ts's "Provider-facing schema" comment): Anthropic's
-  // structured outputs separately cap a schema's UNION-typed parameters
-  // and its OPTIONAL (non-required) parameters. The full internal
-  // DocumentAnalysisSchema (imported for the final strict re-validation
-  // below, and used everywhere else in this app) has 36 nullable fields —
-  // first fixed by making them optional (0 unions, but then 36 optional
-  // parameters — confirmed against a real production request), now fixed
-  // by wrapping each in a REQUIRED `{value, identified}` object (0 unions
-  // AND 0 optional parameters, both empirically verified against the real
-  // zodOutputFormat()/z.toJSONSchema() pipeline in schemas.test.ts). The
-  // REQUEST below uses ProviderDocumentAnalysisSchema (that wrapped
-  // mirror); the RESPONSE is converted back to the internal shape by
-  // normalizeProviderAnalysis() and then re-validated against the exact
-  // same strict DocumentAnalysisSchema every caller has always received.
+  // Schema architecture note (three production incidents — full history in
+  // schemas.ts's provider-schema comments): Anthropic's structured outputs
+  // separately cap a schema's UNION-typed parameters, its OPTIONAL
+  // (non-required) parameters, AND the overall compiled-grammar complexity
+  // of the schema as a whole. The internal DocumentAnalysisSchema (imported
+  // for the final strict re-validation below, and used everywhere else in
+  // this app) has 36 nullable fields and an open-ended `groups` array — a
+  // single universal request schema built from it hit all three limits in
+  // turn as each was fixed. The REQUEST below now uses
+  // getProviderSchemaForDocumentType(input.documentType) — a small schema
+  // containing only the fields THIS document type actually needs, decided
+  // once, before the call, from the document type PropRoster already knows
+  // (no second Anthropic call to classify first). The RESPONSE is
+  // converted back to the internal shape by normalizeDocumentTypeAnalysis()
+  // and then re-validated against the exact same strict
+  // DocumentAnalysisSchema every caller has always received.
   async analyzeDocument(input: AnalyzeProviderInput): Promise<AnalyzeProviderResult> {
     // Diagnostics pass: everything from the API call through parsing is
     // wrapped in one try/catch so EVERY failure mode this provider can hit
@@ -86,13 +87,19 @@ export class AnthropicDocumentIntelligenceProvider implements DocumentIntelligen
     try {
       const base64 = Buffer.from(input.fileBuffer).toString('base64')
 
+      // The ONE schema-selection decision, made once, before the (single)
+      // Anthropic call — from the document type PropRoster already knows.
+      // See schemas.ts's getProviderSchemaForDocumentType() for why this is
+      // centralized here rather than scattered.
+      const providerSchema = getProviderSchemaForDocumentType(input.documentType)
+
       const response = await this.client.messages.parse({
         model: this.model,
         max_tokens: 8000,
         thinking: { type: 'adaptive' },
         system: buildSystemPrompt(),
         output_config: {
-          format: zodOutputFormat(ProviderDocumentAnalysisSchema),
+          format: zodOutputFormat(providerSchema),
           effort: 'medium',
         },
         messages: [
@@ -116,15 +123,17 @@ export class AnthropicDocumentIntelligenceProvider implements DocumentIntelligen
         throw new Error('The AI response could not be parsed into the expected structure.')
       }
 
-      // response.parsed_output is already Zod-validated against
-      // ProviderDocumentAnalysisSchema by the SDK's own zodOutputFormat()
-      // parse step — but that's the provider-facing shape (fields may be
-      // omitted). normalizeProviderAnalysis() converts it to the internal
-      // shape, and DocumentAnalysisSchema.parse() then re-validates the
-      // result against the SAME strict schema every caller has always
-      // gotten — this never trusts the model's output (or this file's own
-      // normalization) as final without that second, independent check.
-      const output = DocumentAnalysisSchema.parse(normalizeProviderAnalysis(response.parsed_output))
+      // response.parsed_output is already Zod-validated against the
+      // document-type-specific provider schema by the SDK's own
+      // zodOutputFormat() parse step — but that's still the provider-facing
+      // shape (only the fields this document type's schema included, plus
+      // {value,identified} wrappers). normalizeDocumentTypeAnalysis()
+      // converts it to the internal universal shape, and
+      // DocumentAnalysisSchema.parse() then re-validates the result against
+      // the SAME strict schema every caller has always gotten — this never
+      // trusts the model's output (or this file's own normalization) as
+      // final without that second, independent check.
+      const output = DocumentAnalysisSchema.parse(normalizeDocumentTypeAnalysis(input.documentType, response.parsed_output))
 
       return {
         output,
