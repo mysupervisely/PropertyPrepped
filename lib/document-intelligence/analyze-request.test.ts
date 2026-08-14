@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { handleAnalyzeRequest, type AnalyzeRequestDeps, type PropertyDocumentRow } from './analyze-request'
 import type { AnalyzeDocumentResult } from './analyze-document'
 import type { DocumentAnalysisOutput } from './schemas'
+// TEMPORARY M8 DIAGNOSTIC — remove this import and the describe block that
+// uses it once temp-diagnostics.ts is removed.
+import { TempProviderDiagnosticError } from './temp-diagnostics'
 
 function fakeDoc(overrides: Partial<PropertyDocumentRow> = {}): PropertyDocumentRow {
   return {
@@ -161,6 +164,70 @@ describe('handleAnalyzeRequest — 11. failed analysis', () => {
     const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
     expect(result.status).toBe(500)
     expect(deps.saveAnalysis).not.toHaveBeenCalled()
+  })
+})
+
+describe('handleAnalyzeRequest — TEMPORARY M8 diagnostic (remove this block when temp-diagnostics.ts is removed)', () => {
+  it('an unauthorized (or omitted diagnosticsAuthorized) caller gets the exact same generic body as before this feature existed — no diagnostics key at all', async () => {
+    const deps = baseDeps({ analyze: vi.fn().mockRejectedValue(new TempProviderDiagnosticError(new Error('boom'), { provider: 'anthropic', model: 'claude-sonnet-5', httpStatus: 500, anthropicErrorType: 'api_error', errorClass: 'InternalServerError', requestId: 'req_123', safeMessage: 'Internal server error' })) })
+    const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
+    expect(result.status).toBe(502)
+    expect(result.body).toEqual({ error: 'AI analysis failed. Your document and existing data are unchanged — you can retry.' })
+    expect('diagnostics' in result.body).toBe(false)
+  })
+
+  it('an explicitly-false diagnosticsAuthorized caller also gets no diagnostics key', async () => {
+    const diagError = new TempProviderDiagnosticError(new Error('boom'), {
+      provider: 'anthropic', model: 'claude-sonnet-5', httpStatus: 429, anthropicErrorType: 'rate_limit_error', errorClass: 'RateLimitError', requestId: 'req_456', safeMessage: 'Rate limited',
+    })
+    const deps = baseDeps({ analyze: vi.fn().mockRejectedValue(diagError), diagnosticsAuthorized: false })
+    const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
+    expect('diagnostics' in result.body).toBe(false)
+  })
+
+  it('an authorized caller gets the sanitized diagnostics object attached, alongside the unchanged generic error message', async () => {
+    const diagnostics = {
+      provider: 'anthropic',
+      model: 'claude-sonnet-5',
+      httpStatus: 401,
+      anthropicErrorType: 'authentication_error',
+      errorClass: 'AuthenticationError',
+      requestId: 'req_789',
+      safeMessage: 'invalid x-api-key',
+    }
+    const deps = baseDeps({ analyze: vi.fn().mockRejectedValue(new TempProviderDiagnosticError(new Error('boom'), diagnostics)), diagnosticsAuthorized: true })
+    const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
+    expect(result.status).toBe(502)
+    expect(result.body.error).toBe('AI analysis failed. Your document and existing data are unchanged — you can retry.')
+    expect(result.body.diagnostics).toEqual(diagnostics)
+  })
+
+  it('an authorized caller analyzing successfully never sees a diagnostics field — this only ever activates on failure', async () => {
+    const deps = baseDeps({ diagnosticsAuthorized: true })
+    const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
+    expect(result.status).toBe(200)
+    expect('diagnostics' in result.body).toBe(false)
+  })
+
+  it('an authorized caller still gets no diagnostics if the failure was not a TempProviderDiagnosticError (e.g. a plain thrown Error) — never fabricates diagnostics out of nothing', async () => {
+    const deps = baseDeps({ analyze: vi.fn().mockRejectedValue(new Error('some other failure')), diagnosticsAuthorized: true })
+    const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
+    expect('diagnostics' in result.body).toBe(false)
+  })
+
+  it('the diagnostics object never contains secret-looking substrings even when the underlying error message does', async () => {
+    // buildTempProviderDiagnostics is exercised directly in temp-diagnostics.test.ts;
+    // this asserts the same guarantee holds end-to-end through handleAnalyzeRequest.
+    const diagnostics = {
+      provider: 'anthropic', model: 'claude-sonnet-5', httpStatus: 400, anthropicErrorType: 'invalid_request_error',
+      errorClass: 'BadRequestError', requestId: 'req_abc', safeMessage: 'Schema contains too many parameters',
+    }
+    const deps = baseDeps({ analyze: vi.fn().mockRejectedValue(new TempProviderDiagnosticError(new Error('boom'), diagnostics)), diagnosticsAuthorized: true })
+    const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
+    const serialized = JSON.stringify(result.body).toLowerCase()
+    for (const forbidden of ['sk-ant-', 'authorization', 'bearer ', 'service_role', 'signed', '%pdf', 'base64']) {
+      expect(serialized.includes(forbidden)).toBe(false)
+    }
   })
 })
 

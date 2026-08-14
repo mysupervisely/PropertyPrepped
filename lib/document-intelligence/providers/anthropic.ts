@@ -14,6 +14,13 @@ import { normalizeProviderAnalysis } from '../normalize-analysis'
 import { buildSystemPrompt, buildUserPrompt } from '../prompts'
 import { resolveDocumentIntelligenceModel } from '../model-config'
 import { logProviderError } from '../provider-logging'
+// TEMPORARY M8 DIAGNOSTIC (Netlify function-log outage) — remove this
+// import and the throw it enables below once the new production failure
+// is diagnosed. See lib/document-intelligence/temp-diagnostics.ts for the
+// full rationale; this never adds a second Anthropic call or a second
+// error inspection, it only carries the SAME logProviderError() context
+// forward so an authorized caller can see it without server log access.
+import { TempProviderDiagnosticError, buildTempProviderDiagnostics } from '../temp-diagnostics'
 import type { AnalyzeProviderInput, AnalyzeProviderResult, DocumentIntelligenceProvider } from '../provider'
 
 export class AnthropicDocumentIntelligenceProvider implements DocumentIntelligenceProvider {
@@ -127,13 +134,21 @@ export class AnthropicDocumentIntelligenceProvider implements DocumentIntelligen
         },
       }
     } catch (err) {
+      // Existing M8 diagnostics-pass logging — UNCHANGED. Still the
+      // permanent record of every provider failure in server logs.
       logProviderError(err, {
         provider: this.name,
         model: this.model,
         apiKeyConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
         documentByteSize: input.fileBuffer.byteLength,
       })
-      throw err
+      // TEMPORARY M8 DIAGNOSTIC: wrap (never replace the underlying cause)
+      // so analyze-request.ts can, for an authorized caller only, return
+      // the exact same sanitized fields already computed above — no
+      // second Anthropic call, no second parse of `err`. Remove this
+      // throw (revert to `throw err`) once the new production failure is
+      // diagnosed.
+      throw new TempProviderDiagnosticError(err, buildTempProviderDiagnostics(err, { provider: this.name, model: this.model }))
     }
   }
 }

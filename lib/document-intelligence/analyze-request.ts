@@ -12,6 +12,11 @@
 
 import { DOCUMENT_TYPES, isDocumentType, type DocumentType } from './types'
 import type { AnalyzeDocumentResult } from './analyze-document'
+// TEMPORARY M8 DIAGNOSTIC (Netlify function-log outage) — remove this
+// import, the `diagnosticsAuthorized` dep field, and the `if` block in the
+// catch below once the new production failure is diagnosed. See
+// lib/document-intelligence/temp-diagnostics.ts for the full rationale.
+import { TempProviderDiagnosticError } from './temp-diagnostics'
 
 export type PropertyDocumentRow = {
   id: string
@@ -45,6 +50,19 @@ export type AnalyzeRequestDeps = {
   getNextVersion: (documentId: string) => Promise<number>
   saveAnalysis: (row: Record<string, unknown>) => Promise<{ id: string } | null>
   recordUsage: (row: Record<string, unknown>) => Promise<void>
+  /**
+   * TEMPORARY M8 DIAGNOSTIC (Netlify function-log outage). Resolved
+   * server-side by the route, ONCE, via a fresh RLS-scoped read of the
+   * caller's own subscription row — never a client-supplied flag. When
+   * true (and only then), a failed analysis's response body additionally
+   * carries a `diagnostics` object with sanitized provider-error fields;
+   * every other caller (including when this is omitted/false) gets
+   * exactly the existing generic message, unchanged. Optional so every
+   * existing caller/test of this function is unaffected. Remove this
+   * field (and its one call site below) once the new production failure
+   * is diagnosed.
+   */
+  diagnosticsAuthorized?: boolean
 }
 
 export type AnalyzeRequestResult = { status: number; body: Record<string, unknown> }
@@ -129,12 +147,23 @@ export async function handleAnalyzeRequest(
   let result: AnalyzeDocumentResult
   try {
     result = await deps.analyze({ documentType: requestedType, fileBuffer, fileName: doc.name })
-  } catch {
+  } catch (err) {
     // Never surface the raw provider error (could contain request internals,
     // or an UnverifiedModelError naming an internal config value) to the client.
     const reason = 'AI analysis failed. Your document and existing data are unchanged — you can retry.'
     await deps.updateDocumentStatus(documentId, { analysis_status: 'Failed', analysis_error: reason })
-    return { status: 502, body: { error: reason } }
+    const body: Record<string, unknown> = { error: reason }
+    // TEMPORARY M8 DIAGNOSTIC (Netlify function-log outage): the generic
+    // `error` message above is unchanged and always present — this only
+    // ADDS a `diagnostics` field, and only when the caller was already
+    // proven authorized server-side before this function was ever called.
+    // Every normal customer (unauthorized, or diagnosticsAuthorized
+    // omitted) gets exactly `{ error: reason }`, byte-for-byte identical
+    // to this endpoint's behavior before this diagnostic existed.
+    if (deps.diagnosticsAuthorized && err instanceof TempProviderDiagnosticError) {
+      body.diagnostics = err.diagnostics
+    }
+    return { status: 502, body }
   }
 
   const nextVersion = await deps.getNextVersion(documentId)
