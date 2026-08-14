@@ -27,6 +27,12 @@ import { getDocumentIntelligenceProvider, isDocumentIntelligenceConfigured } fro
 // semantics changes; this just adds one more consumer of the existing,
 // database-controlled, client-unwritable entitlement.
 import { resolveEffectivePlan } from '../../../../lib/billing/entitlements'
+// Milestone 11 (Property Watch), Section 12/17: "run after Document
+// Intelligence completes." A best-effort side effect only — see the
+// try/catch around its call below; a Property Watch hiccup must never
+// turn a successful document analysis into a failed API response.
+import { refreshPropertyWatchFromDocumentAnalysis } from '../../../../lib/property-watch/engine'
+import type { DocumentConfidence } from '../../../../lib/property-watch/generators/document-intelligence'
 
 export const runtime = 'nodejs'
 
@@ -70,6 +76,13 @@ export async function POST(req: NextRequest) {
     // provider, and a bad DOCUMENT_INTELLIGENCE_MODEL should only surface
     // once we're genuinely about to analyze something.
     let provider: ReturnType<typeof getDocumentIntelligenceProvider> | null = null
+    // Milestone 11: captured by saveAnalysis below, consumed once
+    // handleAnalyzeRequest returns successfully (see the try/catch after
+    // it). An object holder (not a bare `let`) — TypeScript's control-flow
+    // narrowing doesn't track reassignments made inside a nested closure
+    // for a plain `let` binding, which would otherwise narrow this to
+    // `never` at the read site below even though the closure does run.
+    const watchCapture: { value: { documentId: string; propertyId: string; analysisId: string; structuredData: unknown } | null } = { value: null }
 
     const result = await handleAnalyzeRequest(payload, {
       isAiConfigured: () => configured,
@@ -127,6 +140,7 @@ export async function POST(req: NextRequest) {
           .insert({ ...row, owner_id: ownerId })
           .select('id')
           .single()
+        if (data) watchCapture.value = { documentId: String(row.document_id), propertyId: String(row.property_id), analysisId: data.id, structuredData: row.structured_data }
         return data || null
       },
       recordUsage: async (row) => {
@@ -135,6 +149,35 @@ export async function POST(req: NextRequest) {
       // TEMPORARY M8 DIAGNOSTIC — see the block above where this is resolved.
       diagnosticsAuthorized,
     })
+
+    // Milestone 11 (Property Watch), Section 12/17: best-effort refresh —
+    // wrapped so any failure here (a network hiccup, an RLS edge case)
+    // never turns a successful analysis into a failed response to the user.
+    if (watchCapture.value) {
+      const watchInfo = watchCapture.value
+      try {
+        const structured = watchInfo.structuredData as { classification?: { confidence?: string }; applyFields?: Record<string, unknown> } | null
+        const confidence = structured?.classification?.confidence
+        if (confidence === 'High' || confidence === 'Medium' || confidence === 'Low') {
+          const { data: propertyRow } = await supabase.from('properties').select('id, owner_id, address').eq('id', watchInfo.propertyId).single()
+          if (propertyRow) {
+            const applyFields = (structured?.applyFields ?? {}) as Record<string, unknown>
+            await refreshPropertyWatchFromDocumentAnalysis(supabase, propertyRow, {
+              analysisId: watchInfo.analysisId,
+              documentId: watchInfo.documentId,
+              classificationConfidence: confidence as DocumentConfidence,
+              applyFields: {
+                endDate: typeof applyFields.endDate === 'string' ? applyFields.endDate : null,
+                expirationDate: typeof applyFields.expirationDate === 'string' ? applyFields.expirationDate : null,
+                maturityDate: typeof applyFields.maturityDate === 'string' ? applyFields.maturityDate : null,
+              },
+            })
+          }
+        }
+      } catch (watchErr) {
+        console.error('property-watch refresh after document analysis failed (non-fatal)', watchErr)
+      }
+    }
 
     return NextResponse.json(result.body, { status: result.status })
   } catch (err) {

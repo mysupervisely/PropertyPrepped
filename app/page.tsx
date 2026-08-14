@@ -14,6 +14,9 @@ import { Wordmark } from '../components/Wordmark'
 import DocumentIntelligencePanel, { type ApplyAction } from '../components/DocumentIntelligencePanel'
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
 import type { NormalizedAddress } from '../lib/address/types'
+import { addManualWatchItem, refreshPropertyWatch, setWatchItemStatus } from '../lib/property-watch/engine'
+import { selectHomepageAttentionItems, groupWatchItemsForPropertyPage } from '../lib/property-watch/views'
+import type { PersistedPropertyWatchItem, WatchCategory } from '../lib/property-watch/types'
 
 // Investment Tools 2.0 (Part 2): splits a resolved NormalizedAddress into
 // this app's existing two-field address/city shape (properties.address,
@@ -113,9 +116,10 @@ type MaintenanceRequest = {
   id: string; property_id: string; owner_id: string; tenant_name: string; tenant_email: string | null; title: string; description: string; priority: string; status: string; created_at: string
 }
 
-type Tab = 'Overview' | 'Documents' | 'Photos' | 'Financials' | 'Lease' | 'Maintenance' | 'Mortgage' | 'Insurance' | 'Contacts' | 'Landlord'
+type Tab = 'Overview' | 'Documents' | 'Photos' | 'Financials' | 'Lease' | 'Maintenance' | 'Mortgage' | 'Insurance' | 'Contacts' | 'Landlord' | 'Watch'
 
-const tabs: Tab[] = ['Overview', 'Documents', 'Photos', 'Financials', 'Lease', 'Maintenance', 'Mortgage', 'Insurance', 'Contacts', 'Landlord']
+const tabs: Tab[] = ['Overview', 'Documents', 'Photos', 'Financials', 'Lease', 'Maintenance', 'Mortgage', 'Insurance', 'Contacts', 'Landlord', 'Watch']
+const manualWatchCategories: WatchCategory[] = ['Warranty', 'Inspection', 'License', 'Permit', 'Utility', 'Other']
 const docCategories = ['All', 'Closing', 'Mortgage', 'Insurance', 'Lease', 'Tax', 'Inspection', 'Receipts', 'Warranties', 'Other']
 const financialCategories = ['Rent', 'Other Income', 'Mortgage', 'Taxes', 'Insurance', 'HOA', 'Utilities', 'Repairs', 'Maintenance', 'CapEx', 'Management', 'Legal & Professional', 'Supplies', 'Other']
 const contactRoles = ['Contractor', 'HVAC', 'Plumber', 'Electrician', 'Roofer', 'Realtor', 'Insurance Agent', 'Lender', 'Property Manager', 'Attorney', 'CPA', 'Inspector', 'Other']
@@ -168,6 +172,66 @@ function EmptyModule({ title, text, action, onClick }: { title: string; text: st
   return <div className="emptyModule"><strong>{title}</strong><span>{text}</span><button className="primary" onClick={onClick}>+ {action}</button></div>
 }
 
+// Milestone 11 (Property Watch) — presentation helpers. Which existing tab
+// a "Review" click should jump to, per category — Property Watch never
+// gets its own separate record forms; it always points back at the module
+// that already owns the real data (Section 16).
+const watchReviewTab: Record<string, Tab> = {
+  Lease: 'Lease', Insurance: 'Insurance', Mortgage: 'Mortgage', Maintenance: 'Maintenance',
+  'Property Tax': 'Financials', HOA: 'Financials', Document: 'Documents',
+  Warranty: 'Overview', Inspection: 'Overview', License: 'Overview', Permit: 'Overview', Utility: 'Overview', Other: 'Overview',
+}
+
+const watchPriorityTone: Record<string, string> = { Urgent: 'priorityUrgent', High: 'priorityHigh', Normal: 'priorityNormal', Low: 'priorityLow' }
+
+function watchDaysLabel(item: PersistedPropertyWatchItem): string {
+  if (!item.event_date) return ''
+  const days = Number(item.metadata?.daysRemaining)
+  if (Number.isFinite(days)) return days < 0 ? `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} overdue` : `${days} day${days === 1 ? '' : 's'} remaining`
+  return new Date(`${item.event_date}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function WatchItemCard({ item, propertyAddress, onReview, onComplete, onDismiss, onReopen, onRenew, onMarket }: {
+  item: PersistedPropertyWatchItem
+  propertyAddress?: string
+  onReview: (item: PersistedPropertyWatchItem) => void
+  onComplete: (item: PersistedPropertyWatchItem) => void
+  onDismiss: (item: PersistedPropertyWatchItem) => void
+  onReopen?: (item: PersistedPropertyWatchItem) => void
+  onRenew?: (item: PersistedPropertyWatchItem) => void
+  onMarket?: (item: PersistedPropertyWatchItem) => void
+}) {
+  const resolved = item.status === 'Completed' || item.status === 'Dismissed'
+  const needsConfirmation = Boolean(item.metadata?.needsConfirmation)
+  return (
+    <article className={`watchItemCard ${watchPriorityTone[item.priority] || ''}`}>
+      <div className="watchItemTop">
+        <span className="statusPill">{item.category}</span>
+        {needsConfirmation && <span className="statusPill watchUnconfirmed">Unconfirmed — from AI</span>}
+        <span className={`watchPriorityDot ${watchPriorityTone[item.priority] || ''}`} aria-hidden="true" />
+      </div>
+      <h3>{item.title}</h3>
+      {propertyAddress && <p className="watchItemProperty">{propertyAddress}</p>}
+      <p className="watchItemDescription">{item.description}</p>
+      {item.event_date && <p className="watchItemDays">{watchDaysLabel(item)}</p>}
+      {!resolved ? (
+        <div className="watchItemActions">
+          <button className="secondary" onClick={() => onReview(item)}>{item.action_type === 'Confirm' ? 'Confirm & Review' : item.action_type}</button>
+          {item.category === 'Lease' && onRenew && <button className="secondary" onClick={() => onRenew(item)}>Prepare Renewal</button>}
+          {item.category === 'Lease' && onMarket && <button className="secondary" onClick={() => onMarket(item)}>Prepare for Marketing</button>}
+          <button className="dangerLink" onClick={() => onComplete(item)}>Mark Complete</button>
+          <button className="dangerLink" onClick={() => onDismiss(item)}>Dismiss</button>
+        </div>
+      ) : (
+        <div className="watchItemActions">
+          <span className="watchResolvedNote">{item.status}</span>
+          {onReopen && <button className="secondary" onClick={() => onReopen(item)}>Re-open</button>}
+        </div>
+      )}
+    </article>
+  )
+}
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
   const [authReady, setAuthReady] = useState(false)
@@ -211,6 +275,13 @@ export default function Home() {
   const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>([])
   const [contacts, setContacts] = useState<PropertyContact[]>([])
   const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([])
+  // Milestone 11 (Property Watch): every lease/insurance/mortgage/tax/HOA/
+  // maintenance/document/manual reminder across the whole portfolio, one
+  // flat list — the homepage and property-page views both derive from it
+  // via lib/property-watch/views.ts, never a second query shape.
+  const [watchItems, setWatchItems] = useState<PersistedPropertyWatchItem[]>([])
+  const [showManualWatchForm, setShowManualWatchForm] = useState(false)
+  const [manualWatchDraft, setManualWatchDraft] = useState({ category: 'Other' as WatchCategory, title: '', eventDate: '', warningDays: '30' })
   const [showTransaction, setShowTransaction] = useState(false)
   const [showModuleForm, setShowModuleForm] = useState<'Lease'|'Mortgage'|'Insurance'|'Maintenance'|null>(null)
   const [showContactForm, setShowContactForm] = useState(false)
@@ -270,6 +341,7 @@ export default function Home() {
       setMaintenanceRecords([])
       setContacts([])
       setMaintenanceRequests([])
+      setWatchItems([])
     }
   }, [user?.id])
 
@@ -299,6 +371,9 @@ export default function Home() {
   const selectedMortgages = mortgages.filter((row) => row.property_id === selectedId)
   const selectedInsurance = insurancePolicies.filter((row) => row.property_id === selectedId)
   const selectedMaintenance = maintenanceRecords.filter((row) => row.property_id === selectedId)
+  const selectedWatchItems = watchItems.filter((row) => row.property_id === selectedId)
+  const selectedWatchColumns = groupWatchItemsForPropertyPage(selectedWatchItems)
+  const homepageAttentionItems = selectHomepageAttentionItems(watchItems)
   const selectedContacts = contacts.filter((row) => row.property_id === selectedId)
   const selectedRequests = maintenanceRequests.filter((row) => row.property_id === selectedId)
   const openRequests = selectedRequests.filter((row) => row.status !== 'Completed')
@@ -345,6 +420,91 @@ export default function Home() {
     setMaintenanceRecords((maintenanceRows || []) as MaintenanceRecord[])
     setContacts((contactRows || []) as PropertyContact[])
     setMaintenanceRequests((requestRows || []) as MaintenanceRequest[])
+    setBusy(false)
+
+    // Milestone 11 (Property Watch), Section 17: a full refresh is safe to
+    // run on every portfolio load — identity.ts's deterministic keys plus
+    // reconcile.ts's "leave resolved items alone" rule mean this can never
+    // duplicate a reminder or resurrect one the owner dismissed, no matter
+    // how many times it runs. Fired after the rest of the page has already
+    // rendered from the state above, so Property Watch never blocks the
+    // initial paint.
+    void refreshAndSyncWatchItems(rawProperties, (leaseRows || []) as LeaseRecord[], (mortgageRows || []) as MortgageRecord[], (insuranceRows || []) as InsuranceRecord[], (maintenanceRows || []) as MaintenanceRecord[], (transactionRows || []) as FinancialTransaction[])
+  }
+
+  async function refreshAndSyncWatchItems(
+    propertiesList: Property[],
+    leaseRows: LeaseRecord[],
+    mortgageRows: MortgageRecord[],
+    insuranceRows: InsuranceRecord[],
+    maintenanceRows: MaintenanceRecord[],
+    transactionRows: FinancialTransaction[]
+  ) {
+    if (!supabase) return
+    const client = supabase
+    await Promise.all(propertiesList.map((property) => refreshPropertyWatch(client, {
+      property,
+      leases: leaseRows.filter((l) => l.property_id === property.id),
+      mortgages: mortgageRows.filter((m) => m.property_id === property.id),
+      insurancePolicies: insuranceRows.filter((i) => i.property_id === property.id),
+      maintenanceRecords: maintenanceRows.filter((m) => m.property_id === property.id),
+      transactions: transactionRows.filter((t) => t.property_id === property.id),
+    })))
+    const { data } = await client.from('property_watch_items').select('*').order('created_at', { ascending: false })
+    setWatchItems((data || []) as PersistedPropertyWatchItem[])
+  }
+
+  async function updateWatchItemStatus(id: string, status: PersistedPropertyWatchItem['status']) {
+    if (!supabase) return
+    const { error: statusError } = await setWatchItemStatus(supabase, id, status)
+    if (statusError) { setError(statusError); return }
+    setWatchItems((rows) => rows.map((row) => (row.id === id ? { ...row, status } : row)))
+  }
+
+  // Section 16: "Review" always jumps to the existing tab/module that owns
+  // the real record — Property Watch never duplicates that data entry.
+  function reviewWatchItem(item: PersistedPropertyWatchItem) {
+    if (item.property_id !== selectedId) openProperty(item.property_id, watchReviewTab[item.category] || 'Overview')
+    else setActiveTab(watchReviewTab[item.category] || 'Overview')
+  }
+
+  // Section 4 (Lease Decision Support): neither action here decides
+  // anything for the owner or fabricates a market-rent number. "Renew"
+  // sets the lease's EXISTING renewal_status to an EXISTING valid value
+  // ('Renewal pending' — already offered in the Lease form's own status
+  // dropdown); "Prepare for Marketing" only tags this Watch item's own
+  // metadata — a non-destructive placeholder, exactly as specified — and
+  // never lists, markets, or changes anything else.
+  async function recordLeaseDecision(item: PersistedPropertyWatchItem, decision: 'renew' | 'marketing') {
+    if (!supabase) return
+    const nextMetadata = { ...item.metadata, leaseDecision: decision }
+    const { error: metaError } = await supabase.from('property_watch_items').update({ metadata: nextMetadata }).eq('id', item.id)
+    if (metaError) { setError(metaError.message); return }
+    setWatchItems((rows) => rows.map((row) => (row.id === item.id ? { ...row, metadata: nextMetadata } : row)))
+    if (decision === 'renew' && item.source_type === 'lease' && item.source_id) {
+      await supabase.from('leases').update({ renewal_status: 'Renewal pending' }).eq('id', item.source_id)
+      await loadPortfolio()
+    }
+  }
+
+  async function saveManualWatchItem() {
+    if (!supabase || !user || !selectedId || !manualWatchDraft.title.trim()) return
+    setBusy(true)
+    const { error: manualError } = await addManualWatchItem(supabase, {
+      ownerId: user.id,
+      propertyId: selectedId,
+      category: manualWatchDraft.category,
+      title: manualWatchDraft.title,
+      eventDate: manualWatchDraft.eventDate || null,
+      warningDays: Number(manualWatchDraft.warningDays) || 30,
+    })
+    if (manualError) setError(manualError)
+    else {
+      setShowManualWatchForm(false)
+      setManualWatchDraft({ category: 'Other', title: '', eventDate: '', warningDays: '30' })
+      const { data } = await supabase.from('property_watch_items').select('*').order('created_at', { ascending: false })
+      setWatchItems((data || []) as PersistedPropertyWatchItem[])
+    }
     setBusy(false)
   }
 
@@ -926,6 +1086,34 @@ export default function Home() {
           <TenantConnectPanel propertyId={selected.id} ownerId={user.id} tenantConnectEnabled={entitlementsFor(plan).tenantConnect} />
         </section>}
 
+        {activeTab === 'Watch' && <section className="workspaceContent moduleWorkspace watchWorkspace">
+          <div className="sectionHead workspaceHeading">
+            <div><p className="eyebrow">PROPERTY WATCH</p><h2>Dates, renewals and things worth reviewing</h2><p>Automatically tracked from your leases, insurance, mortgage, taxes, HOA and maintenance history — plus anything you add yourself.</p></div>
+            <button className="primary" onClick={() => setShowManualWatchForm(true)}>+ Add reminder</button>
+          </div>
+
+          <div className="watchColumns">
+            <div className="watchColumn">
+              <h3>Needs Attention <span className="watchColumnCount">{selectedWatchColumns.needsAttention.length}</span></h3>
+              {selectedWatchColumns.needsAttention.length ? selectedWatchColumns.needsAttention.map((item) => (
+                <WatchItemCard key={item.id} item={item} onReview={reviewWatchItem} onComplete={(i) => void updateWatchItemStatus(i.id, 'Completed')} onDismiss={(i) => void updateWatchItemStatus(i.id, 'Dismissed')} onRenew={(i) => void recordLeaseDecision(i, 'renew')} onMarket={(i) => void recordLeaseDecision(i, 'marketing')} />
+              )) : <p className="muted watchEmptyNote">Nothing needs attention right now.</p>}
+            </div>
+            <div className="watchColumn">
+              <h3>Upcoming <span className="watchColumnCount">{selectedWatchColumns.upcoming.length}</span></h3>
+              {selectedWatchColumns.upcoming.length ? selectedWatchColumns.upcoming.map((item) => (
+                <WatchItemCard key={item.id} item={item} onReview={reviewWatchItem} onComplete={(i) => void updateWatchItemStatus(i.id, 'Completed')} onDismiss={(i) => void updateWatchItemStatus(i.id, 'Dismissed')} onRenew={(i) => void recordLeaseDecision(i, 'renew')} onMarket={(i) => void recordLeaseDecision(i, 'marketing')} />
+              )) : <p className="muted watchEmptyNote">Nothing upcoming yet.</p>}
+            </div>
+            <div className="watchColumn">
+              <h3>Completed <span className="watchColumnCount">{selectedWatchColumns.completed.length}</span></h3>
+              {selectedWatchColumns.completed.length ? selectedWatchColumns.completed.map((item) => (
+                <WatchItemCard key={item.id} item={item} onReview={reviewWatchItem} onComplete={() => {}} onDismiss={() => {}} onReopen={(i) => void updateWatchItemStatus(i.id, 'Upcoming')} />
+              )) : <p className="muted watchEmptyNote">Nothing resolved yet.</p>}
+            </div>
+          </div>
+        </section>}
+
         {showModuleForm && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowModuleForm(null)}><div className="modal moduleModal"><div className="modalTop"><div><p className="eyebrow">{showModuleForm.toUpperCase()}</p><h2>Add {showModuleForm.toLowerCase()}</h2></div><button className="iconButton" onClick={() => setShowModuleForm(null)}>×</button></div>
           {showModuleForm === 'Lease' && <div className="formGrid"><label>Tenant name<input value={leaseDraft.tenantName} onChange={e=>setLeaseDraft({...leaseDraft,tenantName:e.target.value})} /></label><label>Tenant email<input type="email" value={leaseDraft.tenantEmail} onChange={e=>setLeaseDraft({...leaseDraft,tenantEmail:e.target.value})} /></label><label>Monthly rent<input inputMode="decimal" value={leaseDraft.monthlyRent} onChange={e=>setLeaseDraft({...leaseDraft,monthlyRent:e.target.value})} /></label><label>Security deposit<input inputMode="decimal" value={leaseDraft.securityDeposit} onChange={e=>setLeaseDraft({...leaseDraft,securityDeposit:e.target.value})} /></label><label>Start date<input type="date" value={leaseDraft.startDate} onChange={e=>setLeaseDraft({...leaseDraft,startDate:e.target.value})} /></label><label>End date<input type="date" value={leaseDraft.endDate} onChange={e=>setLeaseDraft({...leaseDraft,endDate:e.target.value})} /></label><label>Lease status<select value={leaseDraft.renewalStatus} onChange={e=>setLeaseDraft({...leaseDraft,renewalStatus:e.target.value})}><option>Active</option><option>Renewal pending</option><option>Month-to-month</option><option>Ended</option></select></label><label>Signed lease<select value={leaseDraft.documentId} onChange={e=>setLeaseDraft({...leaseDraft,documentId:e.target.value})}><option value="">No attachment</option>{selectedDocs.filter(d=>d.category==='Lease'||d.category==='Other').map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><label className="fullField">Notes<input value={leaseDraft.notes} onChange={e=>setLeaseDraft({...leaseDraft,notes:e.target.value})} /></label></div>}
           {showModuleForm === 'Mortgage' && <div className="formGrid"><label>Lender<input value={mortgageDraft.lender} onChange={e=>setMortgageDraft({...mortgageDraft,lender:e.target.value})} /></label><label>Loan number<input value={mortgageDraft.loanNumber} onChange={e=>setMortgageDraft({...mortgageDraft,loanNumber:e.target.value})} /></label><label>Original balance<input inputMode="decimal" value={mortgageDraft.originalBalance} onChange={e=>setMortgageDraft({...mortgageDraft,originalBalance:e.target.value})} /></label><label>Current balance<input inputMode="decimal" value={mortgageDraft.currentBalance} onChange={e=>setMortgageDraft({...mortgageDraft,currentBalance:e.target.value})} /></label><label>Interest rate %<input inputMode="decimal" value={mortgageDraft.interestRate} onChange={e=>setMortgageDraft({...mortgageDraft,interestRate:e.target.value})} /></label><label>Monthly payment<input inputMode="decimal" value={mortgageDraft.monthlyPayment} onChange={e=>setMortgageDraft({...mortgageDraft,monthlyPayment:e.target.value})} /></label><label>Escrow / month<input inputMode="decimal" value={mortgageDraft.escrowAmount} onChange={e=>setMortgageDraft({...mortgageDraft,escrowAmount:e.target.value})} /></label><label>Loan term (years)<input inputMode="numeric" value={mortgageDraft.loanTermYears} onChange={e=>setMortgageDraft({...mortgageDraft,loanTermYears:e.target.value})} /></label><label>Maturity date<input type="date" value={mortgageDraft.maturityDate} onChange={e=>setMortgageDraft({...mortgageDraft,maturityDate:e.target.value})} /></label><label>Loan document<select value={mortgageDraft.documentId} onChange={e=>setMortgageDraft({...mortgageDraft,documentId:e.target.value})}><option value="">No attachment</option>{selectedDocs.filter(d=>d.category==='Mortgage'||d.category==='Closing'||d.category==='Other').map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label></div>}
@@ -936,6 +1124,8 @@ export default function Home() {
         {showContactForm && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowContactForm(false)}><div className="modal moduleModal"><div className="modalTop"><div><p className="eyebrow">CONTACTS</p><h2>Add contact</h2></div><button className="iconButton" onClick={() => setShowContactForm(false)}>×</button></div><div className="formGrid"><label>Name<input value={contactDraft.name} onChange={e=>setContactDraft({...contactDraft,name:e.target.value})} placeholder="Jordan Rivera" /></label><label>Business name<input value={contactDraft.businessName} onChange={e=>setContactDraft({...contactDraft,businessName:e.target.value})} placeholder="Rivera Plumbing Co." /></label><label>Role<select value={contactDraft.role} onChange={e=>setContactDraft({...contactDraft,role:e.target.value})}>{contactRoles.map(r=><option key={r}>{r}</option>)}</select></label><label>Phone<input type="tel" value={contactDraft.phone} onChange={e=>setContactDraft({...contactDraft,phone:e.target.value})} placeholder="(555) 010-0100" /></label><label>Email<input type="email" value={contactDraft.email} onChange={e=>setContactDraft({...contactDraft,email:e.target.value})} placeholder="name@example.com" /></label><label>Website<input value={contactDraft.website} onChange={e=>setContactDraft({...contactDraft,website:e.target.value})} placeholder="example.com" /></label><label className="fullField">Private notes<input value={contactDraft.notes} onChange={e=>setContactDraft({...contactDraft,notes:e.target.value})} placeholder="Only visible to you" /></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowContactForm(false)}>Cancel</button><button className="primary" disabled={busy || !contactDraft.name.trim()} onClick={() => void saveContact()}>{busy?'Saving…':'Save contact'}</button></div></div></div>}
 
         {showRequestForm && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowRequestForm(false)}><div className="modal moduleModal"><div className="modalTop"><div><p className="eyebrow">LANDLORD CENTER</p><h2>Log maintenance request</h2></div><button className="iconButton" onClick={() => setShowRequestForm(false)}>×</button></div><div className="formGrid"><label>Tenant name<input value={requestDraft.tenantName} onChange={e=>setRequestDraft({...requestDraft,tenantName:e.target.value})} placeholder="Taylor Morgan" /></label><label>Tenant email<input type="email" value={requestDraft.tenantEmail} onChange={e=>setRequestDraft({...requestDraft,tenantEmail:e.target.value})} placeholder="tenant@example.com" /></label><label>Priority<select value={requestDraft.priority} onChange={e=>setRequestDraft({...requestDraft,priority:e.target.value})}>{requestPriorities.map(p=><option key={p}>{p}</option>)}</select></label><label>Status<select value={requestDraft.status} onChange={e=>setRequestDraft({...requestDraft,status:e.target.value})}>{requestStatuses.map(s=><option key={s}>{s}</option>)}</select></label><label className="fullField">Issue / title<input value={requestDraft.title} onChange={e=>setRequestDraft({...requestDraft,title:e.target.value})} placeholder="Leaking kitchen faucet" /></label><label className="fullField">Description<input value={requestDraft.description} onChange={e=>setRequestDraft({...requestDraft,description:e.target.value})} placeholder="Details the tenant shared…" /></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowRequestForm(false)}>Cancel</button><button className="primary" disabled={busy || !requestDraft.tenantName.trim() || !requestDraft.title.trim()} onClick={() => void saveRequest()}>{busy?'Saving…':'Save request'}</button></div></div></div>}
+
+        {showManualWatchForm && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowManualWatchForm(false)}><div className="modal moduleModal"><div className="modalTop"><div><p className="eyebrow">PROPERTY WATCH</p><h2>Add a reminder</h2></div><button className="iconButton" onClick={() => setShowManualWatchForm(false)}>×</button></div><div className="formGrid"><label className="fullField">Title<input value={manualWatchDraft.title} onChange={(e) => setManualWatchDraft({ ...manualWatchDraft, title: e.target.value })} placeholder="Pool inspection" /></label><label>Category<select value={manualWatchDraft.category} onChange={(e) => setManualWatchDraft({ ...manualWatchDraft, category: e.target.value as WatchCategory })}>{manualWatchCategories.map((c) => <option key={c}>{c}</option>)}</select></label><label>Date<input type="date" value={manualWatchDraft.eventDate} onChange={(e) => setManualWatchDraft({ ...manualWatchDraft, eventDate: e.target.value })} /></label><label>Remind me (days before)<input inputMode="numeric" value={manualWatchDraft.warningDays} onChange={(e) => setManualWatchDraft({ ...manualWatchDraft, warningDays: e.target.value })} placeholder="30" /></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowManualWatchForm(false)}>Cancel</button><button className="primary" disabled={busy || !manualWatchDraft.title.trim()} onClick={() => void saveManualWatchItem()}>{busy ? 'Saving…' : 'Add reminder'}</button></div></div></div>}
 
         {showEdit && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowEdit(false)}><div className="modal"><div className="modalTop"><div><p className="eyebrow">PROPERTY SETTINGS</p><h2>Edit property</h2></div><button className="iconButton" onClick={() => setShowEdit(false)}>×</button></div><div className="formGrid"><label>Street address<AddressAutocomplete value={editDraft.address} onTextChange={(v) => setEditDraft({ ...editDraft, address: v })} onSelect={(addr) => setEditDraft((d) => ({ ...d, ...applyNormalizedAddress(addr, d.address) }))} placeholder="123 Example Street" /></label><label>City, state & ZIP<input value={editDraft.city} onChange={(e) => setEditDraft({ ...editDraft, city: e.target.value })} placeholder="Example City, FL 12345" /></label><label>Property type<select value={editDraft.type} onChange={(e) => setEditDraft({ ...editDraft, type: e.target.value })}><option>Rental Property</option><option>Primary Residence</option><option>Vacation Home</option><option>Commercial</option><option>Land</option><option>Other</option></select></label><label>Purchase price<input inputMode="decimal" value={editDraft.purchasePrice} onChange={(e) => setEditDraft({ ...editDraft, purchasePrice: e.target.value })} placeholder="390000" /></label><label>Estimated value<input inputMode="decimal" value={editDraft.value} onChange={(e) => setEditDraft({ ...editDraft, value: e.target.value })} placeholder="520000" /></label><label>Mortgage balance<input inputMode="decimal" value={editDraft.mortgage} onChange={(e) => setEditDraft({ ...editDraft, mortgage: e.target.value })} placeholder="310000" /></label><label>Monthly rent<input inputMode="decimal" value={editDraft.rent} onChange={(e) => setEditDraft({ ...editDraft, rent: e.target.value })} placeholder="2950" /></label><label>Monthly property expenses<input inputMode="decimal" value={editDraft.monthlyExpenses} onChange={(e) => setEditDraft({ ...editDraft, monthlyExpenses: e.target.value })} placeholder="1925" /></label></div><div className="editPropertyFooter"><button className="dangerButton" onClick={() => setShowDeleteConfirm(true)}>Delete Property</button><div className="modalActions compactActions"><button className="secondary" onClick={() => setShowEdit(false)}>Cancel</button><button className="primary" disabled={busy || !editDraft.address.trim() || !editDraft.city.trim()} onClick={() => void updateProperty()}>{busy ? 'Saving…' : 'Save Changes'}</button></div></div></div></div>}
 
@@ -991,11 +1181,32 @@ export default function Home() {
         )}
       </section>
 
-      {/* Reserved layout space for a future compact "Needs Your Attention"
-          (Property Watch) section — intentionally not built in this pass.
-          It would slot in here as its own <section>, between the snapshot
-          above and "My Properties" below, using the same section spacing
-          already established by .intro/.portfolioSnapshot/.sectionHead. */}
+      {/* Milestone 11 (Property Watch), Section 14: the section reserved
+          above the property grid. Section 14 also requires this to only
+          ever appear when there's something relevant — homepageAttentionItems
+          is already filtered to status === 'Needs Attention' only
+          (lib/property-watch/views.ts), so an empty array here means
+          nothing needs the owner's attention right now, not that the
+          feature failed to load. */}
+      {homepageAttentionItems.length > 0 && (
+        <section className="needsAttentionSection">
+          <div className="sectionHead"><div><h2>Needs Your Attention</h2><p>{homepageAttentionItems.length} item{homepageAttentionItems.length === 1 ? '' : 's'}</p></div></div>
+          <div className="needsAttentionGrid">
+            {homepageAttentionItems.map((item) => (
+              <WatchItemCard
+                key={item.id}
+                item={item}
+                propertyAddress={properties.find((p) => p.id === item.property_id)?.address}
+                onReview={reviewWatchItem}
+                onComplete={(i) => void updateWatchItemStatus(i.id, 'Completed')}
+                onDismiss={(i) => void updateWatchItemStatus(i.id, 'Dismissed')}
+                onRenew={(i) => void recordLeaseDecision(i, 'renew')}
+                onMarket={(i) => void recordLeaseDecision(i, 'marketing')}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       <section><div className="sectionHead"><div><h2>My Properties</h2><p>{busy && !properties.length ? 'Loading your portfolio…' : `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} in your portfolio`}</p></div></div>
         <div className="grid">{properties.map((property) => <article className="propertyCard" key={property.id}><button className="cardOpen" onClick={() => openProperty(property.id)}><div className="photo">{property.coverUrl ? <img src={property.coverUrl} alt={property.address} /> : <div className="photoPlaceholder"><span>⌂</span><small>Add property photos</small></div>}<span className="badge">{property.property_type}</span></div></button><div className="cardBody"><button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button><div className="miniStats"><div><span>Value</span><strong>{money(property.estimated_value)}</strong></div><div><span>Equity</span><strong>{money(Number(property.estimated_value) - Number(property.mortgage_balance))}</strong></div><div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div></div><div className="cardActions"><button onClick={() => openProperty(property.id, 'Documents')}>Documents</button><button onClick={() => openProperty(property.id, 'Photos')}>Photos</button><button onClick={() => openProperty(property.id, 'Financials')}>Financials</button></div></div></article>)}

@@ -833,3 +833,40 @@ h2, h3, p { margin-top: 0; }
   .compRow { grid-template-columns: 1fr; text-align: left; }
   .compPrice { font-size: 18px; }
 }
+
+/* Milestone 11: Property Watch. */
+.needsAttentionSection { margin-bottom: 32px; }
+.needsAttentionGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.watchColumns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; align-items: start; }
+.watchColumn h3 { display: flex; align-items: center; gap: 8px; font-size: 15px; margin-bottom: 12px; }
+.watchColumnCount { background: var(--brand-soft); color: var(--brand); border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 700; }
+.watchColumn { display: flex; flex-direction: column; gap: 12px; }
+.watchEmptyNote { font-size: 13px; padding: 10px 0; }
+
+.watchItemCard { background: white; border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 13px; padding: 15px; display: flex; flex-direction: column; gap: 6px; }
+.watchItemCard.priorityLow { border-left-color: #c7cfca; }
+.watchItemCard.priorityNormal { border-left-color: var(--brand); }
+.watchItemCard.priorityHigh { border-left-color: #c98f1f; }
+.watchItemCard.priorityUrgent { border-left-color: #b1493e; }
+.watchItemTop { display: flex; align-items: center; gap: 8px; }
+.watchPriorityDot { width: 8px; height: 8px; border-radius: 50%; margin-left: auto; background: #c7cfca; }
+.watchPriorityDot.priorityLow { background: #c7cfca; }
+.watchPriorityDot.priorityNormal { background: var(--brand); }
+.watchPriorityDot.priorityHigh { background: #c98f1f; }
+.watchPriorityDot.priorityUrgent { background: #b1493e; }
+.watchUnconfirmed { background: #fff5dc; color: #805f12; }
+.watchItemCard h3 { font-size: 15px; margin: 0; }
+.watchItemProperty { color: var(--muted); font-size: 12px; margin: 0; }
+.watchItemDescription { font-size: 13px; line-height: 1.5; margin: 0; color: var(--text); }
+.watchItemDays { font-size: 12px; font-weight: 700; color: var(--brand); margin: 0; }
+.watchItemActions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.watchItemActions .secondary { font-size: 12px; padding: 7px 11px; }
+.watchItemActions .dangerLink { font-size: 12px; }
+.watchResolvedNote { color: var(--muted); font-size: 12px; font-weight: 700; }
+
+@media (max-width: 900px) {
+  .watchColumns { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .needsAttentionGrid { grid-template-columns: 1fr; }
+}
