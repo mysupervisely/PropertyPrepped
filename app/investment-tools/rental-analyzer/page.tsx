@@ -153,6 +153,23 @@ function NumberField({ label, value, onChange, placeholder, suffix, hint }: { la
   )
 }
 
+// Bug-fix follow-up ("ADDITIONAL REQUIRED FIX — TEXT KEYBOARD + ADDRESS
+// AUTOCOMPLETE", item 1): a free-text label like "Analysis Name" was
+// previously rendered with NumberField, whose input hardcodes
+// inputMode="decimal" — that's what forced the numeric keypad on mobile.
+// TextField is the plain-text counterpart: a real text input, no suffix,
+// no decimal inputMode, for any free-text field (names, labels, notes).
+function TextField({ label, value, onChange, placeholder, hint }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; hint?: string }) {
+  return (
+    <label className="evalField">
+      <span>{label}{hint && <small>{hint}</small>}</span>
+      <div className="evalInputWrap">
+        <input type="text" inputMode="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+      </div>
+    </label>
+  )
+}
+
 function ModeField({ label, mode, onModeChange, percentValue, onPercentChange, amountValue, onAmountChange, hint }: { label: string; mode: Mode; onModeChange: (m: Mode) => void; percentValue: string; onPercentChange: (v: string) => void; amountValue: string; onAmountChange: (v: string) => void; hint?: string }) {
   return (
     <label className="evalField">
@@ -534,11 +551,11 @@ function PropertyEvaluator() {
 
         <div className="evaluatorInputs">
           <Section title="Property" description="What you're evaluating.">
-            <NumberField label="Analysis name" value={form.name} onChange={(v) => set('name', v)} placeholder="e.g. Maple Street Duplex" />
+            <TextField label="Analysis Name" value={form.name} onChange={(v) => set('name', v)} placeholder="e.g. Tampa Rental Deal" hint="Optional — your own label for this analysis." />
             <label className="evalField">
-              <span>Address or property name</span>
+              <span>Property Address</span>
               <div className="evalInputWrap">
-                <AddressAutocomplete value={form.address} onTextChange={(v) => set('address', v)} onSelect={(addr) => set('address', addr.formattedAddress)} placeholder="123 Example Street, Example City, FL" />
+                <AddressAutocomplete value={form.address} onTextChange={(v) => set('address', v)} onSelect={(addr) => set('address', addr.formattedAddress)} placeholder="12109 Rustic River Way, Tampa, FL 33635" />
               </div>
             </label>
             <label className="evalField"><span>Property type</span><select value={form.propertyType} onChange={(e) => set('propertyType', e.target.value)}>{propertyTypeOptions.map((t) => <option key={t}>{t}</option>)}</select></label>
