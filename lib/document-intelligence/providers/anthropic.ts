@@ -58,20 +58,21 @@ export class AnthropicDocumentIntelligenceProvider implements DocumentIntelligen
   // `citations: { enabled: true }` can be set per document block — a larger
   // change deliberately out of scope for this hardening pass.
   //
-  // Schema/union-limit note (production-hardening pass): Anthropic's
-  // structured outputs cap a schema at 16 "parameters with union types."
-  // The full internal DocumentAnalysisSchema (imported for the final
-  // strict re-validation below, and used everywhere else in this app) has
-  // 36 nullable fields, each of which compiles to a union — confirmed by
-  // generating its real JSON Schema and counting `anyOf` occurrences, an
-  // exact match for the count Anthropic reported. The REQUEST below uses
-  // ProviderDocumentAnalysisSchema instead — an identically-shaped mirror
-  // with every nullable field changed to optional (0 unions) — and the
-  // RESPONSE is converted back to the internal shape by
+  // Schema/parameter-limit note (two production incidents — full history
+  // in schemas.ts's "Provider-facing schema" comment): Anthropic's
+  // structured outputs separately cap a schema's UNION-typed parameters
+  // and its OPTIONAL (non-required) parameters. The full internal
+  // DocumentAnalysisSchema (imported for the final strict re-validation
+  // below, and used everywhere else in this app) has 36 nullable fields —
+  // first fixed by making them optional (0 unions, but then 36 optional
+  // parameters — confirmed against a real production request), now fixed
+  // by wrapping each in a REQUIRED `{value, identified}` object (0 unions
+  // AND 0 optional parameters, both empirically verified against the real
+  // zodOutputFormat()/z.toJSONSchema() pipeline in schemas.test.ts). The
+  // REQUEST below uses ProviderDocumentAnalysisSchema (that wrapped
+  // mirror); the RESPONSE is converted back to the internal shape by
   // normalizeProviderAnalysis() and then re-validated against the exact
   // same strict DocumentAnalysisSchema every caller has always received.
-  // See schemas.ts's "Provider-facing schema" section for the full
-  // rationale and the empirical verification.
   async analyzeDocument(input: AnalyzeProviderInput): Promise<AnalyzeProviderResult> {
     // Diagnostics pass: everything from the API call through parsing is
     // wrapped in one try/catch so EVERY failure mode this provider can hit

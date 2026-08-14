@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
+import { z } from 'zod/v4'
 import {
   ApplyFieldsSchema,
   DocumentAnalysisSchema,
@@ -147,24 +148,71 @@ describe('DocumentAnalysisSchema — malformed AI response shapes', () => {
   })
 })
 
-describe('Production-hardening pass — Anthropic union-parameter limit (schema/union-limit fix)', () => {
-  // Regression test for the actual production incident: Anthropic rejected
-  // the request with "36 parameters with type arrays or anyOf... limit: 16
-  // parameters with unions." This counts the REAL JSON Schema this app
-  // sends (the exact zodOutputFormat() pipeline providers/anthropic.ts
-  // uses), the same way that number was originally confirmed.
+// Regression tests for BOTH real production incidents (see schemas.ts's
+// "Provider-facing schema" comment for the full history):
+//   1. "36 parameters with type arrays or anyOf... limit: 16 parameters
+//      with unions" — fixed by nullable -> optional. This eliminated the
+//      unions, but:
+//   2. A subsequent real production request then hit "Schemas contains
+//      too many optional parameters (36)" — a SEPARATE Anthropic limit
+//      that the optional-only fix didn't address. Fixed by wrapping every
+//      "may be unknown" field in a REQUIRED {value, identified} object.
+// These tests count the REAL JSON Schema this app sends (the exact
+// zodOutputFormat() pipeline providers/anthropic.ts uses) for BOTH the
+// union count and the optional-parameter count, so a future schema change
+// can't silently regress either incident.
+describe('Production-hardening pass — Anthropic union AND optional-parameter limits', () => {
   function countAnyOf(schema: unknown): number {
     return (JSON.stringify(schema).match(/"anyOf"/g) || []).length
   }
 
-  it('the OLD internal-shaped request would have produced exactly 36 union parameters (documents the root cause, does not regress it — this schema is never sent to Anthropic directly anymore)', () => {
+  /** Recursively counts object properties absent from their parent's `required` array — the exact thing Anthropic's "too many optional parameters" error counts. */
+  function countOptionalParameters(schema: unknown): number {
+    let count = 0
+    function walk(node: unknown): void {
+      if (!node || typeof node !== 'object') return
+      const obj = node as Record<string, unknown>
+      if (obj.type === 'object' && obj.properties && typeof obj.properties === 'object') {
+        const required = new Set((obj.required as string[] | undefined) ?? [])
+        for (const [key, propSchema] of Object.entries(obj.properties as Record<string, unknown>)) {
+          if (!required.has(key)) count++
+          walk(propSchema)
+        }
+      }
+      if (obj.items) walk(obj.items)
+      if (obj.$defs && typeof obj.$defs === 'object') for (const v of Object.values(obj.$defs as Record<string, unknown>)) walk(v)
+      if (Array.isArray(obj.anyOf)) for (const v of obj.anyOf) walk(v)
+    }
+    walk(schema)
+    return count
+  }
+
+  it('the OLD internal-shaped request would have produced exactly 36 union parameters (documents Incident 1\'s root cause, does not regress it — this schema is never sent to Anthropic directly anymore)', () => {
     const format = zodOutputFormat(DocumentAnalysisSchema)
     expect(countAnyOf(format.schema)).toBe(36)
   })
 
-  it('the provider-facing schema actually sent to Anthropic produces ZERO union parameters — well under the 16 limit', () => {
+  it('the provider-facing schema actually sent to Anthropic produces ZERO union parameters (Incident 1 stays fixed)', () => {
     const format = zodOutputFormat(ProviderDocumentAnalysisSchema)
     expect(countAnyOf(format.schema)).toBe(0)
+  })
+
+  it('a schema with 36 fields made merely .optional() (not wrapped) would reproduce exactly Incident 2\'s reported count of 36 optional parameters — documents why that first fix attempt was insufficient, without reintroducing it into the real provider schema', () => {
+    // A minimal standalone reproduction — NOT ProviderDocumentAnalysisSchema
+    // (which no longer does this) — of the exact shape Incident 1's fix
+    // produced, to prove the "optional parameters" count really is a
+    // distinct, separate thing from the union count.
+    const wouldHaveShipped = z.object(
+      Object.fromEntries(Array.from({ length: 36 }, (_, i) => [`field${i}`, z.string().optional()])),
+    )
+    const format = zodOutputFormat(wouldHaveShipped)
+    expect(countAnyOf(format.schema)).toBe(0) // no unions — this is exactly why Incident 1's fix looked complete
+    expect(countOptionalParameters(format.schema)).toBe(36) // but Anthropic's separate optional-parameter cap still rejects it
+  })
+
+  it('the provider-facing schema actually sent to Anthropic produces ZERO optional parameters (Incident 2 is fixed)', () => {
+    const format = zodOutputFormat(ProviderDocumentAnalysisSchema)
+    expect(countOptionalParameters(format.schema)).toBe(0)
   })
 
   it('ProviderApplyFieldsSchema has exactly the same keys as ApplyFieldsSchema (no field silently dropped/added by the provider-facing mirror)', () => {
@@ -175,14 +223,26 @@ describe('Production-hardening pass — Anthropic union-parameter limit (schema/
     expect(Object.keys(ProviderExtractedFieldSchema.shape).sort()).toEqual(Object.keys(ExtractedFieldSchema.shape).sort())
   })
 
-  it('every field that is nullable on the internal schema is optional (not nullable) on the provider-facing mirror — this is the actual mechanism that eliminates the unions', () => {
+  it('every field that is nullable on the internal schema is a REQUIRED {value, identified} object on the provider-facing mirror — the actual mechanism that eliminates both the unions AND the optional parameters', () => {
     for (const [key, fieldSchema] of Object.entries(ApplyFieldsSchema.shape)) {
       const providerFieldSchema = ProviderApplyFieldsSchema.shape[key as keyof typeof ProviderApplyFieldsSchema.shape]
-      // Internal: value can be null. Provider-facing: the same field must
-      // accept undefined (optional) so it compiles to a plain type with no
-      // anyOf, per the empirical zod v4 behavior this fix relies on.
+      // Internal: value can be null.
       expect(fieldSchema.safeParse(null).success, `${key} should be nullable on the internal schema`).toBe(true)
-      expect(providerFieldSchema.safeParse(undefined).success, `${key} should be optional on the provider-facing schema`).toBe(true)
+      // Provider-facing: the wrapper object itself is REQUIRED (rejects undefined/omission)...
+      expect(providerFieldSchema.safeParse(undefined).success, `${key} should be a required object on the provider-facing schema, not optional`).toBe(false)
+      // ...and both its own keys are required too.
+      expect(providerFieldSchema.safeParse({ value: 'x' }).success, `${key}'s wrapper must require "identified"`).toBe(false)
+      expect(providerFieldSchema.safeParse({ identified: true }).success, `${key}'s wrapper must require "value"`).toBe(false)
+      expect(providerFieldSchema.safeParse({ value: 'x', identified: true }).success, `${key}'s wrapper should accept a fully-populated object`).toBe(true)
+    }
+  })
+
+  it('a real zero-like value with identified:true is distinguishable from identified:false — never confused as "unknown"', () => {
+    const zeroButIdentified = ProviderApplyFieldsSchema.shape.interestRate.safeParse({ value: '0', identified: true })
+    expect(zeroButIdentified.success).toBe(true)
+    if (zeroButIdentified.success) {
+      expect(zeroButIdentified.data.identified).toBe(true)
+      expect(zeroButIdentified.data.value).toBe('0')
     }
   })
 })
