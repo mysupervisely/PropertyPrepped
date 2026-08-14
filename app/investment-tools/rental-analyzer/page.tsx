@@ -498,11 +498,35 @@ function PropertyEvaluator() {
     setSaveMessage(`Created "${newProperty.address}" — the analysis stays saved and is now linked to it.`)
   }
 
-  const summaryTiles: { label: string; value: string; hint?: string }[] = [
-    { label: 'Monthly Cash Flow', value: money(result.monthlyCashFlow) },
+  // Live Results dashboard (4 columns × 2 rows on desktop): every value here
+  // is read directly off the existing AnalysisResult / YearProjection
+  // objects from lib/investment-calculations.ts — no new math, no
+  // formulas added or changed. 5-Year/10-Year Cash Flow reuse the same
+  // `cumulativeCashFlow` figures already shown in the projection table
+  // further down the page.
+  const year5Projection = result.projections.find((row) => row.year === 5)
+  const year10Projection = result.projections.find((row) => row.year === 10)
+  const cashFlowTone = (n: number) => (n >= 0 ? 'positiveValue' : 'negativeValue')
+
+  const summaryTiles: { label: string; value: string; hint?: string; toneClass?: string }[] = [
+    { label: 'Monthly Cash Flow', value: money(result.monthlyCashFlow), toneClass: cashFlowTone(result.monthlyCashFlow) },
     { label: 'Cap Rate', value: pct(result.capRatePercent) },
-    { label: 'Cash-on-Cash', value: pct(result.cashOnCashReturnPercent) },
+    { label: 'Cash-on-Cash Return', value: pct(result.cashOnCashReturnPercent) },
     { label: 'DSCR', value: ratioText(result.dscr) },
+    { label: 'Total Cash Required', value: money(result.totalCashRequired), hint: 'Down payment + closing costs + points' },
+    { label: 'Break-Even Occupancy', value: pct(result.breakEvenOccupancyPercent), hint: 'Occupancy needed to break even' },
+    {
+      label: '5-Year Cash Flow',
+      value: year5Projection ? money(year5Projection.cumulativeCashFlow) : 'N/A',
+      toneClass: year5Projection ? cashFlowTone(year5Projection.cumulativeCashFlow) : undefined,
+      hint: 'Cumulative, 5 years',
+    },
+    {
+      label: '10-Year Cash Flow',
+      value: year10Projection ? money(year10Projection.cumulativeCashFlow) : 'N/A',
+      toneClass: year10Projection ? cashFlowTone(year10Projection.cumulativeCashFlow) : undefined,
+      hint: 'Cumulative, 10 years',
+    },
   ]
 
   return (
@@ -532,7 +556,13 @@ function PropertyEvaluator() {
           <div className="resultsSummaryCard">
             <p className="eyebrow">LIVE RESULTS</p>
             <div className="summaryTileGrid">
-              {summaryTiles.map((tile) => <div key={tile.label} className="summaryTile"><span>{tile.label}</span><strong className={tile.label === 'Monthly Cash Flow' ? (result.monthlyCashFlow >= 0 ? 'positiveValue' : 'negativeValue') : ''}>{tile.value}</strong></div>)}
+              {summaryTiles.map((tile) => (
+                <div key={tile.label} className="summaryTile">
+                  <span>{tile.label}</span>
+                  <strong className={tile.toneClass || ''}>{tile.value}</strong>
+                  {tile.hint && <small>{tile.hint}</small>}
+                </div>
+              ))}
             </div>
             <a href="#fullMetrics" className="summaryLink">See full breakdown ↓</a>
             <div className="saveActions">

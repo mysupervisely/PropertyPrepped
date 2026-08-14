@@ -401,10 +401,14 @@ h2, h3, p { margin-top: 0; }
 .evaluatorResults { position: sticky; top: 14px; }
 .resultsSummaryCard { background: var(--brand); color: white; border-radius: 18px; padding: 22px; }
 .resultsSummaryCard .eyebrow { color: #cfe1d9; }
-.summaryTileGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0 16px; }
-.summaryTile { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18); border-radius: 12px; padding: 12px; }
+/* Live Results dashboard: 4 columns × 2 rows on desktop (8 metrics), 2
+   columns on tablet/mobile — see the @media rules below. Each tile's own
+   border doubles as the "subtle divider" between metrics. */
+.summaryTileGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 14px 0 16px; }
+.summaryTile { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18); border-radius: 12px; padding: 12px; min-width: 0; }
 .summaryTile span { display: block; color: #cfe1d9; font-size: 11px; margin-bottom: 6px; }
-.summaryTile strong { font-size: 18px; letter-spacing: -.3px; }
+.summaryTile strong { display: block; font-size: 18px; letter-spacing: -.3px; overflow-wrap: break-word; }
+.summaryTile small { display: block; color: #cfe1d9; opacity: .8; font-size: 10px; margin-top: 4px; line-height: 1.35; }
 .summaryLink { display: block; color: white; font-size: 12px; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; margin-bottom: 16px; }
 .saveActions { display: flex; flex-direction: column; gap: 9px; border-top: 1px solid rgba(255,255,255,.2); padding-top: 16px; }
 .saveActions .primary { background: white; color: var(--brand); }
@@ -489,6 +493,8 @@ h2, h3, p { margin-top: 0; }
   .evaluatorResults { position: static; order: -1; }
   .fullMetricsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .metricEmphasis { grid-column: span 2; }
+  /* Tablet: Live Results drops from 4 columns to 2 (still 8 tiles, 4 rows). */
+  .summaryTileGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 760px) {
   .evalGrid { grid-template-columns: 1fr; }
