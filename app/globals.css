@@ -743,3 +743,21 @@ h2, h3, p { margin-top: 0; }
   .tenantConnectThread { max-height: 38vh; }
   .tenantConnectBubble { max-width: 92%; }
 }
+
+/* Milestone 11: Privacy-First Admin Analytics */
+.adminNav { display: flex; gap: 8px; flex-wrap: wrap; margin: 24px 0 8px; }
+.adminNav a { border: 1px solid var(--line); background: white; color: var(--text); padding: 8px 14px; border-radius: 999px; font-size: 13px; font-weight: 650; text-decoration: none; }
+.adminSection { margin: 40px 0; }
+.adminSection h2 { font-size: 20px; margin-bottom: 4px; }
+.adminSection > p.muted { margin-bottom: 18px; }
+.adminGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.adminTable { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.adminTable th, .adminTable td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.adminTable th { color: var(--muted); font-weight: 650; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+.adminTable tr:last-child td { border-bottom: 0; }
+.barRow { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+.barRow .barLabel { width: 130px; flex-shrink: 0; font-size: 13px; color: var(--muted); }
+.barRow .barTrack { flex: 1; background: var(--brand-soft); border-radius: 999px; height: 12px; overflow: hidden; }
+.barRow .barFill { background: var(--brand); height: 100%; border-radius: 999px; }
+.barRow .barValue { width: 70px; flex-shrink: 0; text-align: right; font-size: 13px; font-weight: 650; }
+.adminNotice { background: var(--warm); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; font-size: 13px; color: var(--text); margin-bottom: 20px; }

@@ -82,3 +82,40 @@ The frontend uses only the public publishable/anon key. Supabase Auth + Postgres
 ## Suggested next milestone
 
 Milestone 6 should focus on portfolio intelligence and SaaS readiness: upcoming lease/insurance deadlines, maintenance reminders, dashboard alerts, recurring obligations, multi-property reports, subscription tiers and account/organization structure.
+
+## Privacy (Milestone 11: Admin Analytics)
+
+**Customer portfolio contents are private by default and are not exposed in
+PropRoster's admin analytics.** Property addresses, property values,
+mortgages, leases, tenants, private documents, financial transactions,
+maintenance details, insurance details, and Tenant Connect messages are
+never readable through the internal `/admin` analytics page or its
+supporting API (`/api/admin/analytics`) — that surface returns only
+platform-level aggregates (counts, sums, averages) needed to operate the
+SaaS business: user growth, subscription mix, feature adoption, AI usage
+and estimated cost, and basic platform activity. It is intentionally not a
+customer-support or portfolio-browsing tool — there is no "view user
+portfolio" action, no document viewer, no tenant-message viewer, and no
+impersonation of any kind.
+
+Accurate language, not overclaiming:
+
+- Access to admin analytics is **restricted by authorization** — a
+  server/database-controlled `admin_roles` table, checked on every request
+  via a `SECURITY DEFINER` `is_admin()` function — never a client-supplied
+  flag, an email domain, or the internal `owner` subscription entitlement
+  (which is a separate, purely billing concept and never implies admin
+  access on its own). Normal users have no path to grant themselves this
+  role.
+- **Portfolio data is not exposed in admin analytics** — every aggregate
+  RPC behind `/admin` re-authorizes its own caller and returns only
+  pre-aggregated numbers, never a raw customer row.
+- **Aggregate usage analytics may be collected to operate and improve the
+  service** — platform-level metrics (not individual customer data) help
+  PropRoster staff run the business responsibly.
+- Every admin action that views this data is recorded in an append-only
+  `admin_audit_events` log (who, what, when — never portfolio contents),
+  itself only readable by other admins.
+
+See `supabase/milestone-11-admin-analytics.sql` for the full database
+design and `lib/admin/` for the aggregation logic.
