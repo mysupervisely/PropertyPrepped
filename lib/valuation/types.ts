@@ -18,6 +18,30 @@ export type ComparableSale = {
   squareFeet: number | null
   /** salePrice / squareFeet, computed here — null when squareFeet is unusable, never divided by zero. */
   pricePerSqft: number | null
+
+  // Property Value & Comps UI Redesign — additional fields the provider
+  // already returns in the SAME single valuation request (no extra
+  // RentCast calls added to populate any of these; see rentcast.ts's
+  // header comment and the redesign completion report's cost-control
+  // section for exactly which fields were and were not available without
+  // a second, per-comp request).
+  propertyType: string | null
+  yearBuilt: number | null
+  lotSizeSqft: number | null
+  /** RentCast's 0–1 "correlation" similarity score for this comp, when supplied. Null (not 0) when the provider gives no basis to judge similarity — never guessed. See match-quality.ts for the deterministic label thresholds built on this. */
+  matchScore: number | null
+  /** e.g. RentCast's "listingType" (Standard, New Construction, ...) — provider-reported, never inferred. */
+  listingStatus: string | null
+  daysOnMarket: number | null
+  /**
+   * A real photo URL for this comparable property. RentCast's AVM/comps
+   * response does not include one today (see rentcast.ts) — this is
+   * always null in production right now, and the UI renders a PropRoster
+   * placeholder whenever it is. The field exists so a future provider (or
+   * a future RentCast endpoint) can populate a real photo without any
+   * component change — see components/PropertyPhoto.tsx.
+   */
+  imageUrl: string | null
 }
 
 export type PropertyFacts = {

@@ -37,6 +37,13 @@ describe('normalizeRentCastResponse — RentCast raw AVM response -> PropertyVal
       baths: 2,
       squareFeet: 1850,
       pricePerSqft: 470000 / 1850,
+      propertyType: null,
+      yearBuilt: null,
+      lotSizeSqft: null,
+      matchScore: null,
+      listingStatus: null,
+      daysOnMarket: null,
+      imageUrl: null,
     })
   })
 
@@ -44,6 +51,26 @@ describe('normalizeRentCastResponse — RentCast raw AVM response -> PropertyVal
     const result = normalizeRentCastResponse({ price: 480000, comparables: [{ formattedAddress: '1 A St', salePrice: 400000 }] }, subject)
     expect(result.comparables[0].pricePerSqft).toBeNull()
     expect(result.comparables[0].squareFeet).toBeNull()
+  })
+
+  it('maps propertyType/yearBuilt/lotSize/correlation/listingType/daysOnMarket straight through when the provider supplies them — all at zero extra request cost (same AVM response)', () => {
+    const result = normalizeRentCastResponse({
+      price: 480000,
+      comparables: [{
+        formattedAddress: '1 A St', salePrice: 400000,
+        propertyType: 'Single Family', yearBuilt: 1998, lotSize: 6500,
+        correlation: 0.93, listingType: 'Standard', daysOnMarket: 12,
+      }],
+    }, subject)
+    expect(result.comparables[0]).toMatchObject({
+      propertyType: 'Single Family', yearBuilt: 1998, lotSizeSqft: 6500,
+      matchScore: 0.93, listingStatus: 'Standard', daysOnMarket: 12,
+    })
+  })
+
+  it('imageUrl is always null — RentCast\'s AVM response never supplies a photo, and this provider never fabricates or scrapes one', () => {
+    const result = normalizeRentCastResponse({ price: 480000, comparables: [{ formattedAddress: '1 A St', salePrice: 400000 }] }, subject)
+    expect(result.comparables[0].imageUrl).toBeNull()
   })
 
   it('returns an empty comparables array (never fabricated comps) when the provider gives none', () => {
