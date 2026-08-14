@@ -119,6 +119,34 @@ const safeName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_')
 
 const normalizeUrl = (url: string) => /^https?:\/\//i.test(url) ? url : `https://${url}`
 
+// Homepage snapshot cleanup: presentation-only helpers, no business logic.
+// Compact currency for the snapshot row (e.g. "$1.82M" instead of
+// "$1,820,000") — money() above (full precision) is still used everywhere
+// else (property cards, financials, etc.) and is unchanged.
+const compactMoney = (n: number) => {
+  const value = n || 0
+  const abs = Math.abs(value)
+  if (abs >= 1_000_000) return `${value < 0 ? '-' : ''}$${(abs / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 2)}M`
+  if (abs >= 10_000) return `${value < 0 ? '-' : ''}$${Math.round(abs / 1000)}K`
+  return money(value)
+}
+
+// Time-of-day greeting — no persisted "name" field exists anywhere in this
+// app's user model (Supabase Auth gives only email/id here); reusing the
+// same `user.email` the topbar already displays, deriving a display name
+// from its local part rather than hardcoding or inventing a name field.
+const greetingTimeOfDay = (hour = new Date().getHours()) => (hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening')
+const displayNameFromEmail = (email: string | null | undefined) => {
+  const local = (email || '').split('@')[0]
+  const first = local.split(/[._-]+/).find(Boolean)
+  return first ? first.charAt(0).toUpperCase() + first.slice(1) : 'there'
+}
+
+// Portfolio Snapshot expand/collapse preference (Section 4): a lightweight,
+// non-sensitive UI preference — no database migration for this alone (no
+// existing user-preferences table to hang it on), just localStorage.
+const SNAPSHOT_EXPANDED_STORAGE_KEY = 'proproster:portfolioSnapshotExpanded'
+
 
 function EmptyModule({ title, text, action, onClick }: { title: string; text: string; action: string; onClick: () => void }) {
   return <div className="emptyModule"><strong>{title}</strong><span>{text}</span><button className="primary" onClick={onClick}>+ {action}</button></div>
@@ -132,6 +160,31 @@ export default function Home() {
 
   const { plan } = useSubscription(user)
   const [showUpgrade, setShowUpgrade] = useState(false)
+  // Portfolio Snapshot expand/collapse (Section 3/4) — defaults expanded;
+  // corrected from localStorage on mount (client-only, so this can't run
+  // during server rendering). Presentation preference only, never sent to
+  // the server, never affects what data loads.
+  const [snapshotExpanded, setSnapshotExpanded] = useState(true)
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(SNAPSHOT_EXPANDED_STORAGE_KEY)
+      if (stored !== null) setSnapshotExpanded(stored !== 'false')
+    } catch {
+      // Storage unavailable (private browsing, disabled storage, etc.) —
+      // fall back to the default expanded state, never throw.
+    }
+  }, [])
+  function toggleSnapshotExpanded() {
+    setSnapshotExpanded((prev) => {
+      const next = !prev
+      try {
+        window.localStorage.setItem(SNAPSHOT_EXPANDED_STORAGE_KEY, String(next))
+      } catch {
+        // Best-effort persistence only — the toggle still works this session either way.
+      }
+      return next
+    })
+  }
   const [properties, setProperties] = useState<Property[]>([])
   const [documents, setDocuments] = useState<PropertyDocument[]>([])
   const [photos, setPhotos] = useState<PropertyPhoto[]>([])
@@ -208,11 +261,16 @@ export default function Home() {
     const value = properties.reduce((sum, p) => sum + Number(p.estimated_value), 0)
     const debt = properties.reduce((sum, p) => sum + Number(p.mortgage_balance), 0)
     const rent = properties.reduce((sum, p) => sum + Number(p.monthly_rent), 0)
+    // Homepage snapshot cleanup: same reduce pattern as `rent` directly
+    // above, over the same already-loaded property field
+    // (property.monthly_expenses) — a display aggregate only, not a new
+    // calculation used anywhere else.
+    const monthlyExpenses = properties.reduce((sum, p) => sum + Number(p.monthly_expenses), 0)
     const year = String(new Date().getFullYear())
     const ytd = transactions.filter((tx) => tx.transaction_date.startsWith(year))
     const income = ytd.filter((tx) => tx.transaction_type === 'Income').reduce((sum, tx) => sum + Number(tx.amount), 0)
     const expenses = ytd.filter((tx) => tx.transaction_type === 'Expense').reduce((sum, tx) => sum + Number(tx.amount), 0)
-    return { value, debt, equity: value - debt, rent, income, expenses, cashFlow: income - expenses }
+    return { value, debt, equity: value - debt, rent, monthlyExpenses, income, expenses, cashFlow: income - expenses }
   }, [properties, transactions])
 
   const selected = properties.find((property) => property.id === selectedId) || null
@@ -898,8 +956,31 @@ export default function Home() {
     <main className="shell">
       <header className="topbar"><div><span className="brand"><Wordmark /></span><span className="tagline">Your real estate portfolio, all in one place.</span></div><div className="accountActions"><span>{user.email}</span><PricingNavLink /><Link className="secondary" href="/investment-tools">Investment Tools</Link><button className="primary" onClick={() => openAddProperty()}>+ Add Property</button><button className="secondary" onClick={() => void signOut()}>Log out</button></div></header>
       {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
-      <section className="intro"><p className="eyebrow">MY PORTFOLIO</p><h1>Everything about your properties, in one place.</h1><p>Photos, documents, finances and important records organized by property — and now saved securely to your account.</p></section>
-      <section className="stats portfolioStats"><div className="stat"><span>Portfolio value</span><strong>{money(totals.value)}</strong></div><div className="stat"><span>Mortgage debt</span><strong>{money(totals.debt)}</strong></div><div className="stat"><span>Estimated equity</span><strong>{money(totals.equity)}</strong></div><div className="stat"><span>Monthly rent</span><strong>{money(totals.rent)}</strong></div><div className="stat financialRollup"><span>YTD income</span><strong>{money(totals.income)}</strong></div><div className="stat financialRollup"><span>YTD expenses</span><strong>{money(totals.expenses)}</strong></div><div className="stat financialRollup"><span>YTD cash flow</span><strong>{money(totals.cashFlow)}</strong></div></section>
+      <section className="intro welcomeIntro"><h1>Good {greetingTimeOfDay()}, {displayNameFromEmail(user.email)}.</h1><p>Here&apos;s your portfolio at a glance.</p></section>
+
+      <section className="portfolioSnapshot">
+        <div className="portfolioSnapshotHead">
+          <h2>Portfolio Snapshot</h2>
+          <button className="snapshotToggle" onClick={toggleSnapshotExpanded} aria-expanded={snapshotExpanded}>{snapshotExpanded ? 'Hide' : 'Show'}</button>
+        </div>
+        {snapshotExpanded ? (
+          <div className="snapshotMetrics">
+            <div className="snapshotMetric"><strong>{properties.length}</strong><span>{properties.length === 1 ? 'Property' : 'Properties'}</span></div>
+            <div className="snapshotMetric"><strong>{compactMoney(totals.value)}</strong><span>Est. Value</span></div>
+            <div className="snapshotMetric"><strong>{compactMoney(totals.rent)}</strong><span>Monthly Income</span></div>
+            <div className="snapshotMetric"><strong>{compactMoney(totals.monthlyExpenses)}</strong><span>Monthly Expenses</span></div>
+          </div>
+        ) : (
+          <p className="snapshotCollapsedSummary">{properties.length} propert{properties.length === 1 ? 'y' : 'ies'}</p>
+        )}
+      </section>
+
+      {/* Reserved layout space for a future compact "Needs Your Attention"
+          (Property Watch) section — intentionally not built in this pass.
+          It would slot in here as its own <section>, between the snapshot
+          above and "My Properties" below, using the same section spacing
+          already established by .intro/.portfolioSnapshot/.sectionHead. */}
+
       <section><div className="sectionHead"><div><h2>My Properties</h2><p>{busy && !properties.length ? 'Loading your portfolio…' : `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} in your portfolio`}</p></div></div>
         <div className="grid">{properties.map((property) => <article className="propertyCard" key={property.id}><button className="cardOpen" onClick={() => openProperty(property.id)}><div className="photo">{property.coverUrl ? <img src={property.coverUrl} alt={property.address} /> : <div className="photoPlaceholder"><span>⌂</span><small>Add property photos</small></div>}<span className="badge">{property.property_type}</span></div></button><div className="cardBody"><button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button><div className="miniStats"><div><span>Value</span><strong>{money(property.estimated_value)}</strong></div><div><span>Equity</span><strong>{money(Number(property.estimated_value) - Number(property.mortgage_balance))}</strong></div><div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div></div><div className="cardActions"><button onClick={() => openProperty(property.id, 'Documents')}>Documents</button><button onClick={() => openProperty(property.id, 'Photos')}>Photos</button><button onClick={() => openProperty(property.id, 'Financials')}>Financials</button></div></div></article>)}
           {!busy && properties.length === 0 && <button className="emptyPropertyCard" onClick={() => openAddProperty()}><strong>+ Add your first property</strong><span>Start building your organized property file.</span></button>}

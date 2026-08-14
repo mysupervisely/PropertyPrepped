@@ -32,6 +32,12 @@ button { cursor: pointer; }
 h1 { font-size: clamp(34px, 5vw, 55px); line-height: 1.02; margin: 0; letter-spacing: -2px; }
 h2, h3, p { margin-top: 0; }
 .intro > p:last-child { color: var(--muted); font-size: 17px; line-height: 1.6; max-width: 700px; }
+/* Homepage welcome area (Section 5) — a quieter greeting than the
+   marketing-style intro headline elsewhere, and slightly shorter so the
+   whole welcome area stays compact. */
+.welcomeIntro { padding: 30px 0 14px; }
+.welcomeIntro h1 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -0.6px; }
+.welcomeIntro > p:last-child { font-size: 15px; margin-top: 4px; }
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 44px; }
 .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
 .stat span, .miniStats span, .heroMetrics span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 7px; }
@@ -284,10 +290,32 @@ h2, h3, p { margin-top: 0; }
   .financialActions { width: 100%; }
   .financialActions .primary, .financialActions .secondary, .financialActions .csvButton { flex: 1 1 auto; justify-content: center; text-align: center; }
 }
-.portfolioStats { grid-template-columns: repeat(4, minmax(0,1fr)); }
-.portfolioStats .financialRollup { background: #fbfcfb; }
-@media (max-width: 900px) { .portfolioStats { grid-template-columns: repeat(2, minmax(0,1fr)); } }
-@media (max-width: 520px) { .portfolioStats { grid-template-columns: 1fr; } }
+/* Portfolio Snapshot — compact homepage summary (replaces the old
+   .portfolioStats grid of 7 individually-carded stats, which felt heavy
+   and competed with the property portfolio below it). One light card,
+   one horizontal row of metrics on desktop, wraps to a clean 2x2 on
+   tablet/mobile. Deliberately no per-metric card/border/icon — a quick
+   glance, not the primary content. */
+.portfolioSnapshot { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 20px 16px; margin: 18px 0 30px; }
+.portfolioSnapshotHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.portfolioSnapshotHead h2 { margin: 0; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+.snapshotToggle { flex-shrink: 0; border: 1px solid var(--line); background: white; color: var(--text); font-size: 12px; font-weight: 650; padding: 6px 14px; border-radius: 999px; }
+.snapshotToggle:hover { border-color: var(--brand); color: var(--brand); }
+.snapshotCollapsedSummary { margin: 4px 0 0; color: var(--text); font-size: 14px; font-weight: 650; }
+.snapshotMetrics { display: flex; flex-wrap: wrap; margin-top: 12px; }
+.snapshotMetric { flex: 1 1 auto; min-width: 120px; padding: 0 18px; border-left: 1px solid var(--line); }
+.snapshotMetric:first-child { border-left: 0; padding-left: 0; }
+.snapshotMetric strong { display: block; font-size: 20px; font-weight: 700; letter-spacing: -0.4px; line-height: 1.25; white-space: nowrap; }
+.snapshotMetric span { display: block; font-size: 12px; color: var(--muted); margin-top: 1px; }
+@media (max-width: 760px) {
+  .snapshotMetric { flex: 1 1 45%; min-width: 0; border-left: 0; padding: 10px 0 0; margin-top: 10px; border-top: 1px solid var(--line); }
+  .snapshotMetric:nth-child(-n+2) { padding-top: 0; margin-top: 0; border-top: 0; }
+  .snapshotMetric strong { white-space: normal; font-size: 18px; }
+}
+@media (max-width: 460px) {
+  .portfolioSnapshot { padding: 13px 16px 15px; }
+  .snapshotMetric strong { font-size: 17px; }
+}
 
 /* Milestone 5: leases, mortgage, insurance & maintenance */
 .moduleWorkspace { padding-bottom: 44px; }
