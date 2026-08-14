@@ -613,12 +613,18 @@ h2, h3, p { margin-top: 0; }
   align-items: start;
 }
 .landingHeroHeadline { grid-area: headline; align-self: end; max-width: 460px; }
-.landingHeroHeadline h1 { font-size: clamp(34px, 4.4vw, 54px); line-height: 1.06; letter-spacing: -1.4px; margin: 0 0 18px; }
+.landingHeroHeadline h1 { font-size: clamp(34px, 4.4vw, 54px); line-height: 1.06; letter-spacing: -1.4px; margin: 0 0 12px; }
+.landingHeroTagline { color: var(--brand); font-weight: 700; font-size: 16px; margin: 0 0 14px; }
 .landingHeroSub { color: var(--text); opacity: .82; font-size: 17px; line-height: 1.6; margin: 0; }
+.landingHeroCtas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+.landingCtaPrimary { padding: 13px 22px; font-size: 15px; }
+.landingCtaSecondary { display: inline-flex; align-items: center; padding: 13px 22px; font-size: 15px; text-decoration: none; background: white; }
 
 .landingValueProps { grid-area: values; align-self: start; max-width: 460px; }
 .landingValueProps ul { list-style: none; margin: 0 0 20px; padding: 0; display: grid; gap: 16px; }
 .landingValueProps li { display: flex; align-items: flex-start; gap: 13px; font-size: 15px; line-height: 1.5; }
+.landingValuePropText strong { display: block; font-size: 13px; letter-spacing: .2px; margin-bottom: 2px; }
+.landingValuePropText > span { display: block; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
 /* Nudges only the TEXT next to the icon down slightly, so its first line
    lines up with the icon's visual center instead of its own top edge (the
    li is align-items:flex-start since the text can wrap to 2 lines). Scoped
@@ -650,6 +656,19 @@ h2, h3, p { margin-top: 0; }
 .landingEvaluatorCtaText strong { color: var(--text); font-size: 13.5px; font-style: normal; }
 .landingEvaluatorCtaText em { color: var(--brand); font-weight: 700; font-size: 13.5px; font-style: normal; margin-top: 2px; }
 
+/* Section 6: "What is PropRoster?" — lightweight, three cards, one screen's worth. */
+.landingWhatIs { max-width: 1320px; margin: 0 auto; padding: 54px 28px 10px; text-align: center; }
+.landingWhatIs h2 { font-size: clamp(22px, 2.6vw, 30px); letter-spacing: -.5px; margin: 0 0 30px; }
+.landingWhatIsGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; text-align: left; }
+.landingWhatIsCard { background: white; border: 1px solid var(--line); border-radius: 16px; padding: 22px; }
+.landingWhatIsCard h3 { font-size: 15px; margin: 14px 0 8px; }
+.landingWhatIsCard p { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin: 0; }
+
+/* Section 7: privacy/trust note. */
+.landingPrivacyNote { max-width: 1320px; margin: 30px auto 60px; padding: 0 28px; display: flex; align-items: flex-start; gap: 14px; }
+.landingPrivacyNote h3 { font-size: 15px; margin: 0 0 4px; }
+.landingPrivacyNote p { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin: 0; max-width: 640px; }
+
 @media (max-width: 980px) {
   .landingHero { min-height: 0; }
   .landingHeroScrim { background: linear-gradient(180deg, var(--bg) 0%, var(--bg) 62%, rgba(245,247,249,0.75) 78%, rgba(245,247,249,0.35) 100%); }
@@ -662,13 +681,19 @@ h2, h3, p { margin-top: 0; }
   }
   .landingHeroHeadline { align-self: auto; }
   .landingSignInCard { padding: 28px 22px; }
+  .landingWhatIsGrid { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 560px) {
   .landingHeader { padding: 16px 16px; }
   .landingHeroContent { padding: 22px 16px 260px; }
   .landingHeroHeadline h1 { letter-spacing: -1px; }
+  .landingHeroCtas { flex-direction: column; }
+  .landingCtaPrimary, .landingCtaSecondary { width: 100%; justify-content: center; text-align: center; }
   .landingSignInCard { padding: 24px 18px; border-radius: 18px; }
+  .landingWhatIs { padding: 40px 18px 6px; }
+  .landingWhatIsGrid { grid-template-columns: 1fr; }
+  .landingPrivacyNote { padding: 0 18px; }
   .landingNav { gap: 14px; }
 /* Milestone 8: AI Document Intelligence */
 .pillBad { background: #fdeceb; color: #8a3d35; }

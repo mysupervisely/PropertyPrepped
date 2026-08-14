@@ -19,7 +19,7 @@
 // exist. Per this milestone's explicit instruction, faking either was
 // ruled out; they're left out rather than built as dead UI.
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../lib/supabase'
 import { Wordmark } from './Wordmark'
@@ -76,6 +76,15 @@ function ShieldIcon() {
   )
 }
 
+function CompassIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
+      <circle cx="10" cy="10" r="7.5" stroke="#204b3b" strokeWidth="1.5" />
+      <path d="M13.2 6.8l-2 4.4-4.4 2 2-4.4 4.4-2z" stroke="#204b3b" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 function EvaluatorIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
@@ -120,10 +129,22 @@ function EyeIcon({ off }: { off: boolean }) {
   )
 }
 
-const VALUE_PROPS: { icon: React.ReactNode; text: string }[] = [
-  { icon: <DocumentIcon />, text: 'Keep all your property records and documents in one secure place.' },
-  { icon: <DollarIcon />, text: 'Track income, expenses, and profitability with ease.' },
-  { icon: <ChecklistIcon />, text: 'Stay on top of tasks, deadlines, and important milestones.' },
+// Section 3: four clear benefit areas. STAY AHEAD deliberately uses "Built
+// to help you stay ahead of..." rather than a present-tense "Track" —
+// proactive deadline monitoring is still evolving and must never be
+// presented as a fully-live feature here (Section 3's explicit instruction).
+const VALUE_PROPS: { icon: React.ReactNode; heading: string; text: string }[] = [
+  { icon: <ChecklistIcon />, heading: 'Organize Your Portfolio', text: 'Keep properties, leases, documents, expenses, maintenance and records organized in one place.' },
+  { icon: <EvaluatorIcon />, heading: 'Analyze Opportunities', text: "Evaluate rental properties, understand home-purchase costs, and use PropRoster's investment tools when considering your next property." },
+  { icon: <CompassIcon />, heading: 'Stay Ahead', text: 'Built to help you stay ahead of lease renewals, insurance renewals, taxes and other upcoming deadlines.' },
+  { icon: <DocumentIcon />, heading: 'Understand Your Property Data', text: 'Use PropRoster AI to help organize and understand uploaded property documents where AI analysis is available.' },
+]
+
+// Section 6: "What is PropRoster?" — one short section below the hero, not a marketing site.
+const WHAT_IS_PROPROSTER: { icon: React.ReactNode; heading: string; text: string }[] = [
+  { icon: <DocumentIcon />, heading: 'Portfolio Management', text: 'Organize property information, documents, leases, maintenance and finances.' },
+  { icon: <EvaluatorIcon />, heading: 'Investment Tools', text: 'Evaluate rental properties, calculate home-purchase costs and prepare for property-value/comparable analysis.' },
+  { icon: <DollarIcon />, heading: 'Smarter Property Management', text: 'Use document intelligence and evolving monitoring tools to reduce missed deadlines and make property information easier to act on.' },
 ]
 
 export default function LandingPage() {
@@ -134,6 +155,7 @@ export default function LandingPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [authMessage, setAuthMessage] = useState('')
+  const signInCardRef = useRef<HTMLDivElement>(null)
 
   async function submitAuth() {
     if (!supabase || !email.trim() || password.length < 6) return
@@ -155,6 +177,14 @@ export default function LandingPage() {
     setAuthMode(mode)
     setError('')
     setAuthMessage('')
+  }
+
+  // Section 4's primary CTA: puts the (already-existing) sign-in card into
+  // signup mode and brings it into view — no separate signup page/route
+  // exists or is created here, per Section 5 ("do not alter signup logic").
+  function startSignup() {
+    switchMode('signup')
+    signInCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   return (
@@ -193,26 +223,34 @@ export default function LandingPage() {
 
         <div className="landingHeroContent">
           <div className="landingHeroHeadline">
-            <h1>Your properties.<br />Organized.</h1>
-            <p className="landingHeroSub">PropRoster helps real estate investors track properties, tenants, documents, finances, and tasks — all in one place.</p>
+            <h1>Your real estate portfolio, all in one place.</h1>
+            <p className="landingHeroTagline">Organize it. Analyze it. Stay ahead of it.</p>
+            <p className="landingHeroSub">PropRoster helps property owners and real estate investors organize properties, track finances, analyze opportunities, manage documents, monitor important dates, and stay ahead of what needs attention.</p>
+            <div className="landingHeroCtas">
+              <button type="button" className="primary landingCtaPrimary" onClick={startSignup}>Create Free Account</button>
+              <Link href="/investment-tools/rental-analyzer" className="secondary landingCtaSecondary">Try Rental Property Analyzer</Link>
+            </div>
           </div>
 
           <div className="landingValueProps">
             <ul>
               {VALUE_PROPS.map((item) => (
-                <li key={item.text}>
+                <li key={item.heading}>
                   <IconBadge>{item.icon}</IconBadge>
-                  <span className="landingValuePropText">{item.text}</span>
+                  <span className="landingValuePropText">
+                    <strong>{item.heading}</strong>
+                    <span>{item.text}</span>
+                  </span>
                 </li>
               ))}
             </ul>
             <p className="landingTrustLine"><IconBadge><ShieldIcon /></IconBadge> Secure. Private. Built for investors.</p>
           </div>
 
-          <div className="landingSignInCard">
+          <div className="landingSignInCard" ref={signInCardRef}>
             <p className="eyebrow">{authMode === 'signin' ? 'WELCOME BACK' : 'CREATE YOUR ACCOUNT'}</p>
             <h2>{authMode === 'signin' ? 'Sign in to PropRoster' : 'Create your PropRoster account'}</h2>
-            <p className="landingCardSub">Access your properties, documents, and financials.</p>
+            <p className="landingCardSub">{authMode === 'signin' ? 'Access your properties, documents, financials and investment tools.' : 'Free to start — organize your first property in minutes.'}</p>
 
             <label htmlFor="landing-email">Email</label>
             <div className="landingInputField">
@@ -262,14 +300,41 @@ export default function LandingPage() {
 
             <div className="landingDivider"><span>or</span></div>
 
-            <Link href="/investment-tools/property-evaluator" className="landingEvaluatorCta">
+            <Link href="/investment-tools/rental-analyzer" className="landingEvaluatorCta">
               <IconBadge><EvaluatorIcon /></IconBadge>
               <span className="landingEvaluatorCtaText">
                 <strong>Just want to run the numbers?</strong>
-                <em>Try the free Property Evaluator →</em>
+                <em>Try the free Rental Property Analyzer →</em>
               </span>
             </Link>
           </div>
+        </div>
+      </section>
+
+      {/* Section 6: one short "What is PropRoster?" section, three concise
+          cards — not a marketing site. */}
+      <section className="landingWhatIs">
+        <h2>Everything about your properties, organized around you.</h2>
+        <div className="landingWhatIsGrid">
+          {WHAT_IS_PROPROSTER.map((item) => (
+            <div className="landingWhatIsCard" key={item.heading}>
+              <IconBadge>{item.icon}</IconBadge>
+              <h3>{item.heading}</h3>
+              <p>{item.text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Section 7: privacy/trust note. Accurate language only — no
+          encryption or zero-knowledge claims this codebase doesn't back up;
+          this describes the actual owner-scoped RLS architecture already in
+          place (every table is scoped to owner_id = auth.uid()). */}
+      <section className="landingPrivacyNote">
+        <IconBadge><ShieldIcon /></IconBadge>
+        <div>
+          <h3>Your portfolio is private.</h3>
+          <p>PropRoster is designed so your property, financial, tenant and document data remains tied to your account and is not displayed to other users.</p>
         </div>
       </section>
     </main>
