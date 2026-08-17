@@ -11,9 +11,18 @@ import { UpgradePrompt } from '../components/UpgradePrompt'
 import LandingPage from '../components/LandingPage'
 import { PricingNavLink } from '../components/PricingNavLink'
 import { Wordmark } from '../components/Wordmark'
+import { AuthNavMenu } from '../components/AuthNavMenu'
 import DocumentIntelligencePanel, { type ApplyAction } from '../components/DocumentIntelligencePanel'
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
+import { PropCrewPanel } from '../components/PropCrewPanel'
+import { PropertySystemsPanel, type PropertySystem } from '../components/property-profile/PropertySystemsPanel'
+import { PropertyNotesPanel, type PropertyNote } from '../components/property-profile/PropertyNotesPanel'
+import { PropertyOwnershipPanel, type PropertyOwnership } from '../components/property-profile/PropertyOwnershipPanel'
+import { PropertyTimelinePanel } from '../components/property-profile/PropertyTimelinePanel'
 import type { NormalizedAddress } from '../lib/address/types'
+import { deriveTimeline } from '../lib/property-timeline/derive-timeline'
+import { resolveGreetingName, greetingTimeOfDay } from '../lib/user-profile/greeting'
+import type { UserProfile } from '../lib/user-profile/types'
 
 // Investment Tools 2.0 (Part 2): splits a resolved NormalizedAddress into
 // this app's existing two-field address/city shape (properties.address,
@@ -42,6 +51,16 @@ type Property = {
   monthly_expenses: number
   cover_photo_path: string | null
   coverUrl?: string
+  // Property Profile 2.0, Section 5: additional Overview fields — all
+  // nullable, all optional, never fabricated when absent.
+  beds: number | null
+  baths: number | null
+  square_feet: number | null
+  year_built: number | null
+  lot_size_sqft: number | null
+  purchase_date: string | null
+  property_tax_annual: number | null
+  hoa_monthly: number | null
 }
 
 type PropertyDocument = {
@@ -103,6 +122,12 @@ type InsuranceRecord = {
 
 type MaintenanceRecord = {
   id: string; property_id: string; owner_id: string; service_date: string; status: string; category: string; vendor: string | null; description: string; cost: number; document_id: string | null; financial_transaction_id: string | null; created_at: string
+  // Property Profile 2.0: real links added by milestone-11 — which system
+  // this serviced (feeds the Timeline's system-serviced source) and which
+  // PropCrew provider did it (feeds PropCrew's real, never-fuzzy-matched
+  // service history — see PropCrewPanel.tsx).
+  system_id: string | null
+  propcrew_contact_id: string | null
 }
 
 type PropertyContact = {
@@ -111,14 +136,29 @@ type PropertyContact = {
 
 type MaintenanceRequest = {
   id: string; property_id: string; owner_id: string; tenant_name: string; tenant_email: string | null; title: string; description: string; priority: string; status: string; created_at: string
+  assigned_contact_id: string | null
 }
 
-type Tab = 'Overview' | 'Documents' | 'Photos' | 'Financials' | 'Lease' | 'Maintenance' | 'Mortgage' | 'Insurance' | 'Contacts' | 'Landlord'
+// Property Profile 2.0, Section 4: consolidated from 10 top-level tabs
+// down to 5 ("Avoid creating 15+ top-level tabs... Overview / Financials
+// / Property / People / Documents") — Lease/Mortgage/Insurance/
+// Maintenance/Systems now live as sub-sections of "Property"; Contacts
+// (now PropCrew)/Landlord/Tenant Connect live as sub-sections of
+// "People"; Photos now lives as a sub-section of "Documents". Nothing
+// was removed — every previous tab's content is still reachable, just
+// regrouped.
+type Tab = 'Overview' | 'Financials' | 'Property' | 'People' | 'Documents'
+type PropertySubTab = 'Lease' | 'Mortgage' | 'Insurance' | 'Maintenance' | 'Systems'
+// TenantConnectPanel stays bundled inside the Landlord sub-tab, exactly
+// where it already rendered before this reorganization — not a separate
+// sub-tab of its own.
+type PeopleSubTab = 'PropCrew' | 'Landlord'
+type DocumentsSubTab = 'Documents' | 'Photos'
 
-const tabs: Tab[] = ['Overview', 'Documents', 'Photos', 'Financials', 'Lease', 'Maintenance', 'Mortgage', 'Insurance', 'Contacts', 'Landlord']
+const tabs: Tab[] = ['Overview', 'Financials', 'Property', 'People', 'Documents']
+const propertySubTabs: PropertySubTab[] = ['Lease', 'Mortgage', 'Insurance', 'Maintenance', 'Systems']
 const docCategories = ['All', 'Closing', 'Mortgage', 'Insurance', 'Lease', 'Tax', 'Inspection', 'Receipts', 'Warranties', 'Other']
 const financialCategories = ['Rent', 'Other Income', 'Mortgage', 'Taxes', 'Insurance', 'HOA', 'Utilities', 'Repairs', 'Maintenance', 'CapEx', 'Management', 'Legal & Professional', 'Supplies', 'Other']
-const contactRoles = ['Contractor', 'HVAC', 'Plumber', 'Electrician', 'Roofer', 'Realtor', 'Insurance Agent', 'Lender', 'Property Manager', 'Attorney', 'CPA', 'Inspector', 'Other']
 const requestPriorities = ['Low', 'Normal', 'High', 'Urgent']
 const requestStatuses = ['Submitted', 'Scheduled', 'In Progress', 'Completed']
 
@@ -133,8 +173,6 @@ const formatSize = (bytes: number) => {
 
 const safeName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_')
 
-const normalizeUrl = (url: string) => /^https?:\/\//i.test(url) ? url : `https://${url}`
-
 // Homepage snapshot cleanup: presentation-only helpers, no business logic.
 // Compact currency for the snapshot row (e.g. "$1.82M" instead of
 // "$1,820,000") — money() above (full precision) is still used everywhere
@@ -147,16 +185,10 @@ const compactMoney = (n: number) => {
   return money(value)
 }
 
-// Time-of-day greeting — no persisted "name" field exists anywhere in this
-// app's user model (Supabase Auth gives only email/id here); reusing the
-// same `user.email` the topbar already displays, deriving a display name
-// from its local part rather than hardcoding or inventing a name field.
-const greetingTimeOfDay = (hour = new Date().getHours()) => (hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening')
-const displayNameFromEmail = (email: string | null | undefined) => {
-  const local = (email || '').split('@')[0]
-  const first = local.split(/[._-]+/).find(Boolean)
-  return first ? first.charAt(0).toUpperCase() + first.slice(1) : 'there'
-}
+// Property Profile 2.0, Section 1: the greeting now reads from a real
+// user_profiles row (see lib/user-profile/greeting.ts's fallback chain —
+// display name -> first name -> email prefix -> "there"), not email
+// directly. greetingTimeOfDay/resolveGreetingName are imported above.
 
 // Portfolio Snapshot expand/collapse preference (Section 4): a lightweight,
 // non-sensitive UI preference — no database migration for this alone (no
@@ -211,16 +243,23 @@ export default function Home() {
   const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>([])
   const [contacts, setContacts] = useState<PropertyContact[]>([])
   const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([])
+  // Property Profile 2.0
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [propertySystems, setPropertySystems] = useState<PropertySystem[]>([])
+  const [propertyNotes, setPropertyNotes] = useState<PropertyNote[]>([])
+  const [propertyOwnership, setPropertyOwnership] = useState<PropertyOwnership[]>([])
+  const [propertySubTab, setPropertySubTab] = useState<PropertySubTab>('Lease')
+  const [peopleSubTab, setPeopleSubTab] = useState<PeopleSubTab>('PropCrew')
+  const [documentsSubTab, setDocumentsSubTab] = useState<DocumentsSubTab>('Documents')
+  const [propCrewPrefill, setPropCrewPrefill] = useState<{ name: string; businessName?: string; phone?: string; email?: string; website?: string } | null>(null)
   const [showTransaction, setShowTransaction] = useState(false)
   const [showModuleForm, setShowModuleForm] = useState<'Lease'|'Mortgage'|'Insurance'|'Maintenance'|null>(null)
-  const [showContactForm, setShowContactForm] = useState(false)
   const [showRequestForm, setShowRequestForm] = useState(false)
   const [showDocIntelId, setShowDocIntelId] = useState<string | null>(null)
   const [leaseDraft, setLeaseDraft] = useState({ tenantName:'', tenantEmail:'', monthlyRent:'', securityDeposit:'', startDate:new Date().toISOString().slice(0,10), endDate:'', renewalStatus:'Active', documentId:'', notes:'' })
   const [mortgageDraft, setMortgageDraft] = useState({ lender:'', loanNumber:'', originalBalance:'', currentBalance:'', interestRate:'', monthlyPayment:'', escrowAmount:'', loanTermYears:'30', maturityDate:'', documentId:'' })
   const [insuranceDraft, setInsuranceDraft] = useState({ carrier:'', policyNumber:'', annualPremium:'', deductible:'', effectiveDate:'', expirationDate:'', documentId:'' })
   const [maintenanceDraft, setMaintenanceDraft] = useState({ serviceDate:new Date().toISOString().slice(0,10), status:'Completed', category:'Repair', vendor:'', description:'', cost:'', documentId:'', addToFinancials:true })
-  const [contactDraft, setContactDraft] = useState({ name:'', businessName:'', role:'Contractor', phone:'', email:'', website:'', notes:'' })
   const [requestDraft, setRequestDraft] = useState({ tenantName:'', tenantEmail:'', title:'', description:'', priority:'Normal', status:'Submitted' })
   const [financialYear, setFinancialYear] = useState(String(new Date().getFullYear()))
   const [transactionDraft, setTransactionDraft] = useState({ date: new Date().toISOString().slice(0, 10), type: 'Expense' as 'Income' | 'Expense', category: 'Repairs', vendor: '', description: '', amount: '', documentId: '', recurring: false })
@@ -239,6 +278,7 @@ export default function Home() {
   })
   const [editDraft, setEditDraft] = useState({
     address: '', city: '', type: 'Rental Property', value: '', mortgage: '', rent: '', purchasePrice: '', monthlyExpenses: '',
+    beds: '', baths: '', squareFeet: '', yearBuilt: '', lotSizeSqft: '', purchaseDate: '', propertyTaxAnnual: '', hoaMonthly: '',
   })
 
   useEffect(() => {
@@ -270,6 +310,10 @@ export default function Home() {
       setMaintenanceRecords([])
       setContacts([])
       setMaintenanceRequests([])
+      setUserProfile(null)
+      setPropertySystems([])
+      setPropertyNotes([])
+      setPropertyOwnership([])
     }
   }, [user?.id])
 
@@ -303,13 +347,32 @@ export default function Home() {
   const selectedRequests = maintenanceRequests.filter((row) => row.property_id === selectedId)
   const openRequests = selectedRequests.filter((row) => row.status !== 'Completed')
   const completedRequests = selectedRequests.filter((row) => row.status === 'Completed')
+  const selectedSystems = propertySystems.filter((row) => row.property_id === selectedId)
+  const selectedNotes = propertyNotes.filter((row) => row.property_id === selectedId)
+  const selectedOwnership = propertyOwnership.filter((row) => row.property_id === selectedId)
+  // Property Profile 2.0, Section 9: derived, not stored — see
+  // lib/property-timeline/derive-timeline.ts for the architecture note.
+  // Uses exactly the records already loaded above for this property, plus
+  // property_systems (also already loaded here) — no additional request.
+  const selectedTimeline = selected ? deriveTimeline({
+    property: { id: selected.id, address: selected.address, purchase_date: selected.purchase_date },
+    leases: selectedLeases, mortgages: selectedMortgages, insurancePolicies: selectedInsurance,
+    maintenanceRecords: selectedMaintenance, financialTransactions: selectedTransactions,
+    systems: selectedSystems, contacts: selectedContacts,
+  }) : []
 
   async function loadPortfolio() {
     if (!supabase || !user) return
     const client = supabase
     setBusy(true)
     setError('')
-    const [{ data: propertyRows, error: propertyError }, { data: docRows, error: docError }, { data: photoRows, error: photoError }, { data: transactionRows, error: transactionError }, { data: leaseRows, error: leaseError }, { data: mortgageRows, error: mortgageError }, { data: insuranceRows, error: insuranceError }, { data: maintenanceRows, error: maintenanceError }, { data: contactRows, error: contactError }, { data: requestRows, error: requestError }] = await Promise.all([
+    const [
+      { data: propertyRows, error: propertyError }, { data: docRows, error: docError }, { data: photoRows, error: photoError },
+      { data: transactionRows, error: transactionError }, { data: leaseRows, error: leaseError }, { data: mortgageRows, error: mortgageError },
+      { data: insuranceRows, error: insuranceError }, { data: maintenanceRows, error: maintenanceError }, { data: contactRows, error: contactError },
+      { data: requestRows, error: requestError }, { data: systemRows, error: systemError }, { data: noteRows, error: noteError },
+      { data: ownershipRows, error: ownershipError }, { data: profileRow },
+    ] = await Promise.all([
       client.from('properties').select('*').order('created_at', { ascending: true }),
       client.from('property_documents').select('*').order('created_at', { ascending: false }),
       client.from('property_photos').select('*').order('created_at', { ascending: false }),
@@ -320,8 +383,12 @@ export default function Home() {
       client.from('maintenance_records').select('*').order('service_date', { ascending: false }),
       client.from('property_contacts').select('*').order('created_at', { ascending: false }),
       client.from('maintenance_requests').select('*').order('created_at', { ascending: false }),
+      client.from('property_systems').select('*').order('created_at', { ascending: false }),
+      client.from('property_notes').select('*').order('is_pinned', { ascending: false }).order('created_at', { ascending: false }),
+      client.from('property_ownership').select('*').order('created_at', { ascending: true }),
+      client.from('user_profiles').select('*').eq('id', user.id).maybeSingle(),
     ])
-    const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError || contactError || requestError
+    const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError || contactError || requestError || systemError || noteError || ownershipError
     if (firstError) {
       setError(firstError.message)
       setBusy(false)
@@ -344,6 +411,10 @@ export default function Home() {
     setInsurancePolicies((insuranceRows || []) as InsuranceRecord[])
     setMaintenanceRecords((maintenanceRows || []) as MaintenanceRecord[])
     setContacts((contactRows || []) as PropertyContact[])
+    setPropertySystems((systemRows || []) as PropertySystem[])
+    setPropertyNotes((noteRows || []) as PropertyNote[])
+    setPropertyOwnership((ownershipRows || []) as PropertyOwnership[])
+    setUserProfile((profileRow || null) as UserProfile | null)
     setMaintenanceRequests((requestRows || []) as MaintenanceRequest[])
     setBusy(false)
   }
@@ -436,6 +507,14 @@ export default function Home() {
       rent: String(property.monthly_rent || ''),
       purchasePrice: String(property.purchase_price || ''),
       monthlyExpenses: String(property.monthly_expenses || ''),
+      beds: property.beds != null ? String(property.beds) : '',
+      baths: property.baths != null ? String(property.baths) : '',
+      squareFeet: property.square_feet != null ? String(property.square_feet) : '',
+      yearBuilt: property.year_built != null ? String(property.year_built) : '',
+      lotSizeSqft: property.lot_size_sqft != null ? String(property.lot_size_sqft) : '',
+      purchaseDate: property.purchase_date || '',
+      propertyTaxAnnual: property.property_tax_annual != null ? String(property.property_tax_annual) : '',
+      hoaMonthly: property.hoa_monthly != null ? String(property.hoa_monthly) : '',
     })
     setShowEdit(true)
     setShowDeleteConfirm(false)
@@ -455,6 +534,14 @@ export default function Home() {
       monthly_rent: Number(editDraft.rent || 0),
       purchase_price: Number(editDraft.purchasePrice || 0),
       monthly_expenses: Number(editDraft.monthlyExpenses || 0),
+      beds: editDraft.beds ? Number(editDraft.beds) : null,
+      baths: editDraft.baths ? Number(editDraft.baths) : null,
+      square_feet: editDraft.squareFeet ? Number(editDraft.squareFeet) : null,
+      year_built: editDraft.yearBuilt ? Number(editDraft.yearBuilt) : null,
+      lot_size_sqft: editDraft.lotSizeSqft ? Number(editDraft.lotSizeSqft) : null,
+      purchase_date: editDraft.purchaseDate || null,
+      property_tax_annual: editDraft.propertyTaxAnnual ? Number(editDraft.propertyTaxAnnual) : null,
+      hoa_monthly: editDraft.hoaMonthly ? Number(editDraft.hoaMonthly) : null,
     }).eq('id', selected.id).eq('owner_id', user.id)
 
     if (updateError) {
@@ -500,9 +587,10 @@ export default function Home() {
     setBusy(false)
   }
 
-  const openProperty = (id: string, tab: Tab = 'Overview') => {
+  const openProperty = (id: string, tab: Tab = 'Overview', docsSubTab?: DocumentsSubTab) => {
     setSelectedId(id)
     setActiveTab(tab)
+    if (docsSubTab) setDocumentsSubTab(docsSubTab)
     setDocCategory('All')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -588,12 +676,12 @@ export default function Home() {
   // so AI extraction never silently modifies a property record.
   function applyExtractedToModule(action: ApplyAction, values: Record<string, string>) {
     setShowDocIntelId(null)
-    if (action === 'Insurance') { setInsuranceDraft((d) => ({ ...d, ...values })); setShowModuleForm('Insurance'); setActiveTab('Insurance') }
-    else if (action === 'Mortgage') { setMortgageDraft((d) => ({ ...d, ...values })); setShowModuleForm('Mortgage'); setActiveTab('Mortgage') }
-    else if (action === 'Lease') { setLeaseDraft((d) => ({ ...d, ...values })); setShowModuleForm('Lease'); setActiveTab('Lease') }
-    else if (action === 'Maintenance') { setMaintenanceDraft((d) => ({ ...d, ...values })); setShowModuleForm('Maintenance'); setActiveTab('Maintenance') }
+    if (action === 'Insurance') { setInsuranceDraft((d) => ({ ...d, ...values })); setShowModuleForm('Insurance'); setActiveTab('Property'); setPropertySubTab('Insurance') }
+    else if (action === 'Mortgage') { setMortgageDraft((d) => ({ ...d, ...values })); setShowModuleForm('Mortgage'); setActiveTab('Property'); setPropertySubTab('Mortgage') }
+    else if (action === 'Lease') { setLeaseDraft((d) => ({ ...d, ...values })); setShowModuleForm('Lease'); setActiveTab('Property'); setPropertySubTab('Lease') }
+    else if (action === 'Maintenance') { setMaintenanceDraft((d) => ({ ...d, ...values })); setShowModuleForm('Maintenance'); setActiveTab('Property'); setPropertySubTab('Maintenance') }
     else if (action === 'FinancialExpense') { setTransactionDraft((d) => ({ ...d, ...values })); setShowTransaction(true); setActiveTab('Financials') }
-    else if (action === 'Contact') { setContactDraft((d) => ({ ...d, ...values })); setShowContactForm(true); setActiveTab('Contacts') }
+    else if (action === 'Contact') { setPropCrewPrefill({ name: values.name || values.businessName || 'New contact', businessName: values.businessName, phone: values.phone, email: values.email, website: values.website }); setActiveTab('People'); setPeopleSubTab('PropCrew') }
     else if (action === 'EstimatedValue' && selected) { openEditProperty(selected); setEditDraft((d) => ({ ...d, value: values.value || d.value })) }
   }
 
@@ -691,21 +779,11 @@ export default function Home() {
     setBusy(false)
   }
 
-  async function saveContact() {
-    if (!supabase || !user || !selectedId || !contactDraft.name.trim()) return
-    setBusy(true); setError('')
-    const { error: e } = await supabase.from('property_contacts').insert({ owner_id:user.id, property_id:selectedId, name:contactDraft.name.trim(), business_name:contactDraft.businessName.trim()||null, role:contactDraft.role, phone:contactDraft.phone.trim()||null, email:contactDraft.email.trim()||null, website:contactDraft.website.trim()||null, notes:contactDraft.notes.trim()||null })
-    if (e) setError(e.message); else { setShowContactForm(false); setContactDraft({ name:'', businessName:'', role:'Contractor', phone:'', email:'', website:'', notes:'' }); await loadPortfolio() }
-    setBusy(false)
-  }
-
-  async function removeContact(id: string) {
-    if (!supabase) return
-    setBusy(true); setError('')
-    const { error: e } = await supabase.from('property_contacts').delete().eq('id', id)
-    if (e) setError(e.message); else await loadPortfolio()
-    setBusy(false)
-  }
+  // Contact/PropCrew add-edit-delete now lives inside PropCrewPanel
+  // (components/PropCrewPanel.tsx) — it owns property_contacts writes
+  // directly; this component only refreshes ITS OWN copy of `contacts`
+  // (used by DocumentIntelligencePanel's vendor check and
+  // PropertySystemsPanel's provider dropdown) via onChanged={loadPortfolio}.
 
   async function saveRequest() {
     if (!supabase || !user || !selectedId || !requestDraft.tenantName.trim() || !requestDraft.title.trim()) return
@@ -825,7 +903,7 @@ export default function Home() {
         <section className="authCard setupCard">
           <p className="eyebrow">PROPROSTER</p>
           <h1>Connect Supabase</h1>
-          <p>PropRoster is ready for persistent accounts, properties and private uploads. Add your project values to <code>.env.local</code>, then run the included <code>supabase/schema.sql</code> for a fresh project, or the <code>supabase/milestone-5-property-records.sql</code>, <code>supabase/milestone-6-property-network.sql</code>, <code>supabase/milestone-7-investment-tools.sql</code>, <code>supabase/milestone-8-document-intelligence.sql</code> and <code>supabase/milestone-9-subscriptions.sql</code> upgrade files if you already have an earlier milestone installed. AI document analysis also needs a server-side <code>ANTHROPIC_API_KEY</code> — see <code>.env.example</code>.</p>
+          <p>PropRoster is ready for persistent accounts, properties and private uploads. Add your project values to <code>.env.local</code>, then run the included <code>supabase/schema.sql</code> for a fresh project, or the <code>supabase/milestone-5-property-records.sql</code>, <code>supabase/milestone-6-property-network.sql</code>, <code>supabase/milestone-7-investment-tools.sql</code>, <code>supabase/milestone-8-document-intelligence.sql</code>, <code>supabase/milestone-9-subscriptions.sql</code>, <code>supabase/milestone-10-tenant-connect.sql</code> and <code>supabase/milestone-11-property-profile-2.sql</code> upgrade files if you already have an earlier milestone installed. AI document analysis also needs a server-side <code>ANTHROPIC_API_KEY</code> — see <code>.env.example</code>.</p>
           <div className="setupCode">NEXT_PUBLIC_SUPABASE_URL=...<br />NEXT_PUBLIC_SUPABASE_ANON_KEY=...</div>
           <p className="muted">A ready-to-copy <code>.env.example</code> is included in the project.</p>
         </section>
@@ -848,7 +926,10 @@ export default function Home() {
     return (
       <main className="shell workspaceShell">
         <header className="topbar">
-          <button className="brandButton" onClick={() => setSelectedId(null)}><span className="brand"><Wordmark /></span><span className="tagline">Your real estate portfolio, all in one place.</span></button>
+          <div className="topbarBrandGroup">
+            <AuthNavMenu />
+            <button className="brandButton" onClick={() => setSelectedId(null)}><span className="brand"><Wordmark /></span><span className="tagline">Your real estate portfolio, all in one place.</span></button>
+          </div>
           <div className="accountActions"><span>{user.email}</span><PricingNavLink /><Link className="secondary" href={`/investment-tools/property-evaluator?propertyId=${selected.id}`}>Investment Analysis</Link><button className="secondary" onClick={() => openEditProperty(selected)}>Edit Property</button><button className="secondary" onClick={() => setSelectedId(null)}>← All Properties</button><button className="secondary" onClick={() => void signOut()}>Log out</button></div>
         </header>
         {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
@@ -861,20 +942,41 @@ export default function Home() {
           </div>
         </section>
 
-        <nav className="tabs" aria-label="Property sections">{tabs.filter((tab) => tab !== 'Landlord' || selected.property_type === 'Rental Property').map((tab) => <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
+        <nav className="tabs" aria-label="Property sections">{tabs.map((tab) => <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
 
         {activeTab === 'Overview' && <section className="workspaceContent">
-          <div className="sectionHead workspaceHeading"><div><p className="eyebrow">PROPERTY OVERVIEW</p><h2>At a glance</h2></div></div>
+          <div className="sectionHead workspaceHeading"><div><p className="eyebrow">PROPERTY OVERVIEW</p><h2>At a glance</h2></div><button className="secondary" onClick={() => openEditProperty(selected)}>Edit property facts</button></div>
           <div className="overviewGrid">
             <div className="overviewPanel"><h3>Financial snapshot</h3><div className="detailRows">
-              <div><span>Purchase price</span><strong>{money(selected.purchase_price)}</strong></div><div><span>Estimated value</span><strong>{money(selected.estimated_value)}</strong></div><div><span>Mortgage balance</span><strong>{money(selected.mortgage_balance)}</strong></div><div><span>Estimated equity</span><strong>{money(equity)}</strong></div><div><span>Monthly rent</span><strong>{money(selected.monthly_rent)}</strong></div><div><span>Monthly property expenses</span><strong>{money(selected.monthly_expenses)}</strong></div><div className="highlightRow"><span>Estimated cash flow</span><strong>{money(monthlyCashFlow)}/mo</strong></div>
+              <div><span>Purchase price</span><strong>{money(selected.purchase_price)}</strong></div><div><span>Estimated value</span><strong>{money(selected.estimated_value)}</strong></div><div><span>Mortgage balance</span><strong>{money(selected.mortgage_balance)}</strong></div><div><span>Estimated equity</span><strong>{money(equity)}</strong></div><div><span>Monthly rent</span><strong>{money(selected.monthly_rent)}</strong></div><div><span>Monthly property expenses</span><strong>{money(selected.monthly_expenses)}</strong></div>{selected.property_tax_annual != null && <div><span>Annual property tax</span><strong>{money(selected.property_tax_annual)}</strong></div>}{selected.hoa_monthly != null && <div><span>HOA / month</span><strong>{money(selected.hoa_monthly)}</strong></div>}<div className="highlightRow"><span>Estimated cash flow</span><strong>{money(monthlyCashFlow)}/mo</strong></div>
             </div></div>
-            <div className="overviewPanel"><h3>Property file</h3><div className="fileSummary"><button onClick={() => setActiveTab('Documents')}><strong>{selectedDocs.length}</strong><span>Documents</span><small>Closing, insurance, taxes and more</small></button><button onClick={() => setActiveTab('Photos')}><strong>{selectedPhotos.length}</strong><span>Photos</span><small>Property gallery and records</small></button><button onClick={() => setActiveTab('Maintenance')}><strong>{selectedMaintenance.length}</strong><span>Maintenance records</span><small>Repairs, vendors and warranties</small></button></div></div>
+            <div className="overviewPanel"><h3>Property facts</h3><div className="detailRows">
+              {selected.beds != null && <div><span>Beds</span><strong>{selected.beds}</strong></div>}
+              {selected.baths != null && <div><span>Baths</span><strong>{selected.baths}</strong></div>}
+              {selected.square_feet != null && <div><span>Square feet</span><strong>{selected.square_feet.toLocaleString()}</strong></div>}
+              {selected.year_built != null && <div><span>Year built</span><strong>{selected.year_built}</strong></div>}
+              {selected.lot_size_sqft != null && <div><span>Lot size</span><strong>{selected.lot_size_sqft.toLocaleString()} sqft</strong></div>}
+              {selected.purchase_date && <div><span>Purchase date</span><strong>{new Date(`${selected.purchase_date}T12:00:00`).toLocaleDateString()}</strong></div>}
+              {selected.beds == null && selected.baths == null && selected.square_feet == null && selected.year_built == null && selected.lot_size_sqft == null && !selected.purchase_date && <p className="muted">No property facts added yet — add beds, baths, square footage and more from Edit property facts.</p>}
+            </div></div>
           </div>
-          <div className="quickActions"><div><p className="eyebrow">QUICK ACTIONS</p><h3>Keep this property prepped.</h3></div><div className="quickActionButtons"><button onClick={() => setActiveTab('Documents')}>Upload document</button><button onClick={() => setActiveTab('Photos')}>Add photos</button><button onClick={() => setActiveTab('Financials')}>Add transaction</button></div></div>
+
+          <PropertyOwnershipPanel propertyId={selected.id} ownerId={user.id} records={selectedOwnership} onRefresh={() => void loadPortfolio()} />
+
+          <div className="overviewGrid">
+            <div className="overviewPanel"><h3>Notes</h3><PropertyNotesPanel propertyId={selected.id} ownerId={user.id} notes={selectedNotes} onRefresh={() => void loadPortfolio()} compact /></div>
+            <div className="overviewPanel"><h3>Timeline</h3><PropertyTimelinePanel events={selectedTimeline} limit={6} /></div>
+          </div>
+
+          <div className="overviewPanel"><h3>Property file</h3><div className="fileSummary"><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Documents') }}><strong>{selectedDocs.length}</strong><span>Documents</span><small>Closing, insurance, taxes and more</small></button><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Photos') }}><strong>{selectedPhotos.length}</strong><span>Photos</span><small>Property gallery and records</small></button><button onClick={() => { setActiveTab('Property'); setPropertySubTab('Maintenance') }}><strong>{selectedMaintenance.length}</strong><span>Maintenance records</span><small>Repairs, vendors and warranties</small></button></div></div>
+
+          <div className="quickActions"><div><p className="eyebrow">QUICK ACTIONS</p><h3>Keep this property prepped.</h3></div><div className="quickActionButtons"><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Documents') }}>Upload document</button><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Photos') }}>Add photos</button><button onClick={() => setActiveTab('Financials')}>Add transaction</button></div></div>
         </section>}
 
         {activeTab === 'Documents' && <section className="workspaceContent">
+          <div className="subTabs" role="tablist" aria-label="Documents sections">{(['Documents', 'Photos'] as DocumentsSubTab[]).map((sub) => <button key={sub} role="tab" aria-selected={documentsSubTab === sub} className={documentsSubTab === sub ? 'active' : ''} onClick={() => setDocumentsSubTab(sub)}>{sub}</button>)}</div>
+
+          {documentsSubTab === 'Documents' && <>
           <div className="sectionHead workspaceHeading"><div><p className="eyebrow">DOCUMENT CENTER</p><h2>Everything important, filed correctly</h2><p>Files are stored in a private Supabase bucket and opened with short-lived signed links.</p></div></div>
           <div className="documentLayout">
             <aside className="categoryPanel"><h3>Categories</h3>{docCategories.map((category) => <button key={category} className={docCategory === category ? 'active' : ''} onClick={() => setDocCategory(category)}><span>{category}</span><small>{category === 'All' ? selectedDocs.length : selectedDocs.filter((d) => d.category === category).length}</small></button>)}</aside>
@@ -886,12 +988,13 @@ export default function Home() {
               <div className="documentList">{filteredDocs.length ? filteredDocs.map((doc) => <div className="documentRow" key={doc.id}><div className="fileIcon">{doc.name.split('.').pop()?.toUpperCase().slice(0, 4) || 'FILE'}</div><div className="fileName"><strong>{doc.name}</strong><span>{doc.category} · {formatSize(doc.size_bytes)} · {new Date(doc.created_at).toLocaleDateString()}{doc.document_type ? ` · ${doc.document_type}` : ''}{doc.analysis_status && doc.analysis_status !== 'Not Analyzed' && <span className={`aiStatusPill ${doc.analysis_status === 'Completed' ? 'pillGood' : doc.analysis_status === 'Failed' ? 'pillBad' : 'pillWarn'}`}>{doc.analysis_status === 'Completed' ? 'AI Analyzed' : doc.analysis_status}</span>}</span></div><div className="rowActions"><button onClick={() => void openDocument(doc)}>Open</button><button className="aiButton" onClick={() => setShowDocIntelId(doc.id)}>{doc.analysis_status === 'Completed' ? 'View AI Analysis' : 'Analyze with PropRoster AI'}</button><button onClick={() => void removeDocument(doc)}>Remove</button></div></div>) : <div className="emptyState"><strong>No documents here yet</strong><span>Upload a file above and PropRoster will keep it with this property.</span></div>}</div>
             </div>
           </div>
-        </section>}
+          </>}
 
-        {activeTab === 'Photos' && <section className="workspaceContent">
+          {documentsSubTab === 'Photos' && <>
           <div className="sectionHead workspaceHeading"><div><p className="eyebrow">PROPERTY PHOTOS</p><h2>Visual record</h2><p>Keep listing photos, renovation progress, inspections and property-condition photos together.</p></div></div>
           <label className="photoUploader"><span>+</span><strong>{busy ? 'Uploading…' : 'Add property photos'}</strong><small>Select multiple images at once. The first photo becomes the cover if there is no cover yet.</small><input type="file" accept="image/*" multiple disabled={busy} onChange={(e) => e.target.files && void addPhotoFiles(e.target.files)} /></label>
           <div className="photoGallery">{selectedPhotos.length ? selectedPhotos.map((photo) => <div className={`galleryItem ${photo.is_cover ? 'coverItem' : ''}`} key={photo.id}>{photo.signedUrl ? <img src={photo.signedUrl} alt={photo.name} /> : <div className="heroPlaceholder">Photo unavailable</div>}<div className="galleryMeta"><span>{photo.name}</span><div className="galleryButtons">{!photo.is_cover && <button onClick={() => void setCover(photo)}>Set cover</button>}<button className="removePhoto" onClick={() => void removePhoto(photo)}>×</button></div></div></div>) : <div className="emptyGallery"><strong>No photos uploaded yet</strong><span>Add photos to build this property's visual history.</span></div>}</div>
+          </>}
         </section>}
 
         {activeTab === 'Financials' && (() => {
@@ -912,18 +1015,41 @@ export default function Home() {
           </section>
         })()}
 
-        {activeTab === 'Lease' && <section className="workspaceContent moduleWorkspace"><div className="sectionHead workspaceHeading"><div><p className="eyebrow">LEASES</p><h2>Tenants & lease terms</h2><p>Keep rent, deposits, renewal dates and the signed lease together.</p></div><button className="primary" onClick={() => setShowModuleForm('Lease')}>+ Add lease</button></div>{selectedLeases.length ? <div className="moduleGrid">{selectedLeases.map((lease) => { const doc=selectedDocs.find(d=>d.id===lease.document_id); return <article className="recordCard" key={lease.id}><div className="recordTop"><div><span className="statusPill">{lease.renewal_status}</span><h3>{lease.tenant_name}</h3><p>{lease.tenant_email || 'No email added'}</p></div><button className="recordDelete" onClick={() => void removeModuleRecord('leases', lease.id)}>×</button></div><div className="recordMetrics"><div><span>Monthly rent</span><strong>{money(lease.monthly_rent)}</strong></div><div><span>Deposit</span><strong>{money(lease.security_deposit)}</strong></div></div><div className="recordRows"><div><span>Lease term</span><strong>{new Date(`${lease.start_date}T12:00:00`).toLocaleDateString()} – {new Date(`${lease.end_date}T12:00:00`).toLocaleDateString()}</strong></div>{doc && <div><span>Signed lease</span><button onClick={() => void openDocument(doc)}>{doc.name}</button></div>}{lease.notes && <div><span>Notes</span><strong>{lease.notes}</strong></div>}</div></article>})}</div> : <EmptyModule title="No lease records yet" text="Add the tenant, rent, deposit, dates and signed lease." action="Add lease" onClick={() => setShowModuleForm('Lease')} />}</section>}
+        {activeTab === 'Property' && <section className="workspaceContent moduleWorkspace">
+          <div className="subTabs" role="tablist" aria-label="Property sections">{propertySubTabs.map((sub) => <button key={sub} role="tab" aria-selected={propertySubTab === sub} className={propertySubTab === sub ? 'active' : ''} onClick={() => setPropertySubTab(sub)}>{sub}</button>)}</div>
 
-        {activeTab === 'Mortgage' && <section className="workspaceContent moduleWorkspace"><div className="sectionHead workspaceHeading"><div><p className="eyebrow">MORTGAGE</p><h2>Loan details</h2><p>Track your lender, balance, rate, payment and loan documents.</p></div><button className="primary" onClick={() => setShowModuleForm('Mortgage')}>+ Add mortgage</button></div>{selectedMortgages.length ? <div className="moduleGrid">{selectedMortgages.map((loan) => { const doc=selectedDocs.find(d=>d.id===loan.document_id); return <article className="recordCard" key={loan.id}><div className="recordTop"><div><span className="statusPill">Mortgage</span><h3>{loan.lender}</h3><p>{loan.loan_number ? `Loan ••••${loan.loan_number.slice(-4)}` : 'Loan number not added'}</p></div><button className="recordDelete" onClick={() => void removeModuleRecord('mortgages', loan.id)}>×</button></div><div className="recordMetrics"><div><span>Current balance</span><strong>{money(loan.current_balance)}</strong></div><div><span>Monthly payment</span><strong>{money(loan.monthly_payment)}</strong></div><div><span>Rate</span><strong>{Number(loan.interest_rate).toFixed(3)}%</strong></div></div><div className="recordRows"><div><span>Original balance</span><strong>{money(loan.original_balance)}</strong></div><div><span>Escrow / month</span><strong>{money(loan.escrow_amount)}</strong></div>{loan.maturity_date && <div><span>Maturity</span><strong>{new Date(`${loan.maturity_date}T12:00:00`).toLocaleDateString()}</strong></div>}{doc && <div><span>Loan document</span><button onClick={() => void openDocument(doc)}>{doc.name}</button></div>}</div></article>})}</div> : <EmptyModule title="No mortgage details yet" text="Add the lender, balance, rate, monthly payment and loan document." action="Add mortgage" onClick={() => setShowModuleForm('Mortgage')} />}</section>}
+          {propertySubTab === 'Lease' && <><div className="sectionHead workspaceHeading"><div><p className="eyebrow">LEASES</p><h2>Tenants & lease terms</h2><p>Keep rent, deposits, renewal dates and the signed lease together.</p></div><button className="primary" onClick={() => setShowModuleForm('Lease')}>+ Add lease</button></div>{selectedLeases.length ? <div className="moduleGrid">{selectedLeases.map((lease) => { const doc=selectedDocs.find(d=>d.id===lease.document_id); return <article className="recordCard" key={lease.id}><div className="recordTop"><div><span className="statusPill">{lease.renewal_status}</span><h3>{lease.tenant_name}</h3><p>{lease.tenant_email || 'No email added'}</p></div><button className="recordDelete" onClick={() => void removeModuleRecord('leases', lease.id)}>×</button></div><div className="recordMetrics"><div><span>Monthly rent</span><strong>{money(lease.monthly_rent)}</strong></div><div><span>Deposit</span><strong>{money(lease.security_deposit)}</strong></div></div><div className="recordRows"><div><span>Lease term</span><strong>{new Date(`${lease.start_date}T12:00:00`).toLocaleDateString()} – {new Date(`${lease.end_date}T12:00:00`).toLocaleDateString()}</strong></div>{doc && <div><span>Signed lease</span><button onClick={() => void openDocument(doc)}>{doc.name}</button></div>}{lease.notes && <div><span>Notes</span><strong>{lease.notes}</strong></div>}</div></article>})}</div> : <EmptyModule title="No lease records yet" text="Add the tenant, rent, deposit, dates and signed lease." action="Add lease" onClick={() => setShowModuleForm('Lease')} />}</>}
 
-        {activeTab === 'Insurance' && <section className="workspaceContent moduleWorkspace"><div className="sectionHead workspaceHeading"><div><p className="eyebrow">INSURANCE</p><h2>Coverage records</h2><p>Keep policy details, premiums, deductibles and expiration dates visible.</p></div><button className="primary" onClick={() => setShowModuleForm('Insurance')}>+ Add policy</button></div>{selectedInsurance.length ? <div className="moduleGrid">{selectedInsurance.map((policy) => { const doc=selectedDocs.find(d=>d.id===policy.document_id); const days=policy.expiration_date ? Math.ceil((new Date(`${policy.expiration_date}T12:00:00`).getTime()-Date.now())/86400000) : null; return <article className="recordCard" key={policy.id}><div className="recordTop"><div><span className={`statusPill ${days !== null && days < 45 ? 'warning' : ''}`}>{days !== null && days < 0 ? 'Expired' : days !== null && days < 45 ? 'Renew soon' : 'Active'}</span><h3>{policy.carrier}</h3><p>{policy.policy_number || 'Policy number not added'}</p></div><button className="recordDelete" onClick={() => void removeModuleRecord('insurance_policies', policy.id)}>×</button></div><div className="recordMetrics"><div><span>Annual premium</span><strong>{money(policy.annual_premium)}</strong></div><div><span>Deductible</span><strong>{money(policy.deductible)}</strong></div></div><div className="recordRows">{policy.effective_date && <div><span>Effective</span><strong>{new Date(`${policy.effective_date}T12:00:00`).toLocaleDateString()}</strong></div>}{policy.expiration_date && <div><span>Expires</span><strong>{new Date(`${policy.expiration_date}T12:00:00`).toLocaleDateString()}</strong></div>}{doc && <div><span>Policy document</span><button onClick={() => void openDocument(doc)}>{doc.name}</button></div>}</div></article>})}</div> : <EmptyModule title="No insurance policies yet" text="Add your carrier, policy, premium, deductible and declaration page." action="Add policy" onClick={() => setShowModuleForm('Insurance')} />}</section>}
+          {propertySubTab === 'Mortgage' && <><div className="sectionHead workspaceHeading"><div><p className="eyebrow">MORTGAGE</p><h2>Loan details</h2><p>Track your lender, balance, rate, payment and loan documents.</p></div><button className="primary" onClick={() => setShowModuleForm('Mortgage')}>+ Add mortgage</button></div>{selectedMortgages.length ? <div className="moduleGrid">{selectedMortgages.map((loan) => { const doc=selectedDocs.find(d=>d.id===loan.document_id); return <article className="recordCard" key={loan.id}><div className="recordTop"><div><span className="statusPill">Mortgage</span><h3>{loan.lender}</h3><p>{loan.loan_number ? `Loan ••••${loan.loan_number.slice(-4)}` : 'Loan number not added'}</p></div><button className="recordDelete" onClick={() => void removeModuleRecord('mortgages', loan.id)}>×</button></div><div className="recordMetrics"><div><span>Current balance</span><strong>{money(loan.current_balance)}</strong></div><div><span>Monthly payment</span><strong>{money(loan.monthly_payment)}</strong></div><div><span>Rate</span><strong>{Number(loan.interest_rate).toFixed(3)}%</strong></div></div><div className="recordRows"><div><span>Original balance</span><strong>{money(loan.original_balance)}</strong></div><div><span>Escrow / month</span><strong>{money(loan.escrow_amount)}</strong></div>{loan.maturity_date && <div><span>Maturity</span><strong>{new Date(`${loan.maturity_date}T12:00:00`).toLocaleDateString()}</strong></div>}{doc && <div><span>Loan document</span><button onClick={() => void openDocument(doc)}>{doc.name}</button></div>}</div></article>})}</div> : <EmptyModule title="No mortgage details yet" text="Add the lender, balance, rate, monthly payment and loan document." action="Add mortgage" onClick={() => setShowModuleForm('Mortgage')} />}</>}
 
-        {activeTab === 'Maintenance' && <section className="workspaceContent moduleWorkspace"><div className="sectionHead workspaceHeading"><div><p className="eyebrow">MAINTENANCE</p><h2>Property service history</h2><p>Repairs, preventative work, vendors, costs and receipts in one timeline.</p></div><button className="primary" onClick={() => setShowModuleForm('Maintenance')}>+ Add maintenance</button></div>{selectedMaintenance.length ? <div className="maintenanceList">{selectedMaintenance.map((item) => { const doc=selectedDocs.find(d=>d.id===item.document_id); return <article className="maintenanceRow" key={item.id}><div className="maintenanceDate"><strong>{new Date(`${item.service_date}T12:00:00`).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(`${item.service_date}T12:00:00`).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div><span className="statusPill">{item.status}</span><h3>{item.description}</h3><p>{item.category}{item.vendor ? ` · ${item.vendor}` : ''}</p></div><strong>{money(item.cost)}</strong></div><div className="maintenanceActions">{doc && <button onClick={() => void openDocument(doc)}>Open {doc.name}</button>}{item.financial_transaction_id && <span>Linked to Financials</span>}<button className="dangerLink" onClick={() => void removeModuleRecord('maintenance_records', item.id, item.financial_transaction_id)}>Remove</button></div></div></article>})}</div> : <EmptyModule title="No maintenance records yet" text="Add repairs, service calls, vendors, costs and receipts as they happen." action="Add maintenance" onClick={() => setShowModuleForm('Maintenance')} />}</section>}
+          {propertySubTab === 'Insurance' && <><div className="sectionHead workspaceHeading"><div><p className="eyebrow">INSURANCE</p><h2>Coverage records</h2><p>Keep policy details, premiums, deductibles and expiration dates visible.</p></div><button className="primary" onClick={() => setShowModuleForm('Insurance')}>+ Add policy</button></div>{selectedInsurance.length ? <div className="moduleGrid">{selectedInsurance.map((policy) => { const doc=selectedDocs.find(d=>d.id===policy.document_id); const days=policy.expiration_date ? Math.ceil((new Date(`${policy.expiration_date}T12:00:00`).getTime()-Date.now())/86400000) : null; return <article className="recordCard" key={policy.id}><div className="recordTop"><div><span className={`statusPill ${days !== null && days < 45 ? 'warning' : ''}`}>{days !== null && days < 0 ? 'Expired' : days !== null && days < 45 ? 'Renew soon' : 'Active'}</span><h3>{policy.carrier}</h3><p>{policy.policy_number || 'Policy number not added'}</p></div><button className="recordDelete" onClick={() => void removeModuleRecord('insurance_policies', policy.id)}>×</button></div><div className="recordMetrics"><div><span>Annual premium</span><strong>{money(policy.annual_premium)}</strong></div><div><span>Deductible</span><strong>{money(policy.deductible)}</strong></div></div><div className="recordRows">{policy.effective_date && <div><span>Effective</span><strong>{new Date(`${policy.effective_date}T12:00:00`).toLocaleDateString()}</strong></div>}{policy.expiration_date && <div><span>Expires</span><strong>{new Date(`${policy.expiration_date}T12:00:00`).toLocaleDateString()}</strong></div>}{doc && <div><span>Policy document</span><button onClick={() => void openDocument(doc)}>{doc.name}</button></div>}</div></article>})}</div> : <EmptyModule title="No insurance policies yet" text="Add your carrier, policy, premium, deductible and declaration page." action="Add policy" onClick={() => setShowModuleForm('Insurance')} />}</>}
 
-        {activeTab === 'Contacts' && <section className="workspaceContent moduleWorkspace"><div className="sectionHead workspaceHeading"><div><p className="eyebrow">CONTACTS</p><h2>Property network</h2><p>Contractors, agents, lenders and every important number for this property, in one place.</p></div><button className="primary" onClick={() => setShowContactForm(true)}>+ Add contact</button></div>{selectedContacts.length ? <div className="moduleGrid contactGrid">{selectedContacts.map((contact) => <article className="recordCard contactCard" key={contact.id}><div className="recordTop"><div><span className="statusPill">{contact.role}</span><h3>{contact.name}</h3><p>{contact.business_name || 'No business name added'}</p></div><button className="recordDelete" onClick={() => void removeContact(contact.id)}>×</button></div><div className="contactLinks">{contact.phone && <a href={`tel:${contact.phone}`}>{contact.phone}</a>}{contact.email && <a href={`mailto:${contact.email}`}>{contact.email}</a>}{contact.website && <a href={normalizeUrl(contact.website)} target="_blank" rel="noopener noreferrer">{contact.website}</a>}{!contact.phone && !contact.email && !contact.website && <span className="muted">No contact details added</span>}</div>{contact.notes && <div className="recordRows"><div><span>Private notes</span><strong>{contact.notes}</strong></div></div>}</article>)}</div> : <EmptyModule title="No contacts yet" text="Add contractors, agents, lenders and other people tied to this property." action="Add contact" onClick={() => setShowContactForm(true)} />}</section>}
+          {propertySubTab === 'Maintenance' && <><div className="sectionHead workspaceHeading"><div><p className="eyebrow">MAINTENANCE</p><h2>Property service history</h2><p>Repairs, preventative work, vendors, costs and receipts in one timeline.</p></div><button className="primary" onClick={() => setShowModuleForm('Maintenance')}>+ Add maintenance</button></div>{selectedMaintenance.length ? <div className="maintenanceList">{selectedMaintenance.map((item) => { const doc=selectedDocs.find(d=>d.id===item.document_id); return <article className="maintenanceRow" key={item.id}><div className="maintenanceDate"><strong>{new Date(`${item.service_date}T12:00:00`).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(`${item.service_date}T12:00:00`).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div><span className="statusPill">{item.status}</span><h3>{item.description}</h3><p>{item.category}{item.vendor ? ` · ${item.vendor}` : ''}</p></div><strong>{money(item.cost)}</strong></div><div className="maintenanceActions">{doc && <button onClick={() => void openDocument(doc)}>Open {doc.name}</button>}{item.financial_transaction_id && <span>Linked to Financials</span>}<button className="dangerLink" onClick={() => void removeModuleRecord('maintenance_records', item.id, item.financial_transaction_id)}>Remove</button></div></div></article>})}</div> : <EmptyModule title="No maintenance records yet" text="Add repairs, service calls, vendors, costs and receipts as they happen." action="Add maintenance" onClick={() => setShowModuleForm('Maintenance')} />}</>}
 
-        {activeTab === 'Landlord' && selected.property_type === 'Rental Property' && <section className="workspaceContent moduleWorkspace"><div className="sectionHead workspaceHeading"><div><p className="eyebrow">LANDLORD CENTER</p><h2>Maintenance requests</h2><p>Owner-side tracking for tenant maintenance requests.</p></div><button className="primary" onClick={() => setShowRequestForm(true)}>+ Log request</button></div><div className="financialStats landlordStats"><div className="financialStat"><span>Open requests</span><strong>{openRequests.length}</strong></div><div className="financialStat"><span>Completed requests</span><strong>{completedRequests.length}</strong></div></div>{selectedRequests.length ? <div className="maintenanceList">{selectedRequests.map((req) => <article className="maintenanceRow requestRow" key={req.id}><div className="maintenanceDate"><strong>{new Date(req.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(req.created_at).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div><span className={`statusPill priority${req.priority}`}>{req.priority}</span><h3>{req.title}</h3><p>{req.tenant_name}{req.tenant_email ? ` · ${req.tenant_email}` : ''}</p></div></div>{req.description && <p className="requestDescription">{req.description}</p>}<div className="maintenanceActions"><select aria-label={`Status for ${req.title}`} value={req.status} onChange={(e) => void updateRequestStatus(req.id, e.target.value)}>{requestStatuses.map((s) => <option key={s}>{s}</option>)}</select><button className="dangerLink" onClick={() => void removeRequest(req.id)}>Remove</button></div></div></article>)}</div> : <EmptyModule title="No maintenance requests yet" text="Log tenant requests as they come in by phone, email or in person." action="Log request" onClick={() => setShowRequestForm(true)} />}
-          <TenantConnectPanel propertyId={selected.id} ownerId={user.id} tenantConnectEnabled={entitlementsFor(plan).tenantConnect} />
+          {propertySubTab === 'Systems' && <PropertySystemsPanel propertyId={selected.id} ownerId={user.id} systems={selectedSystems} contacts={selectedContacts} documents={selectedDocs} onRefresh={() => void loadPortfolio()} />}
+        </section>}
+
+        {activeTab === 'People' && <section className="workspaceContent moduleWorkspace">
+          <div className="subTabs" role="tablist" aria-label="People sections">
+            <button role="tab" aria-selected={peopleSubTab === 'PropCrew'} className={peopleSubTab === 'PropCrew' ? 'active' : ''} onClick={() => setPeopleSubTab('PropCrew')}>PropCrew</button>
+            {selected.property_type === 'Rental Property' && <button role="tab" aria-selected={peopleSubTab === 'Landlord'} className={peopleSubTab === 'Landlord' ? 'active' : ''} onClick={() => setPeopleSubTab('Landlord')}>Landlord</button>}
+          </div>
+
+          {peopleSubTab === 'PropCrew' && (
+            <PropCrewPanel
+              ownerId={user.id}
+              properties={properties.map((p) => ({ id: p.id, address: p.address, city: p.city }))}
+              scopePropertyId={selected.id}
+              onChanged={() => void loadPortfolio()}
+              prefill={propCrewPrefill}
+              onPrefillConsumed={() => setPropCrewPrefill(null)}
+            />
+          )}
+
+          {peopleSubTab === 'Landlord' && selected.property_type === 'Rental Property' && <>
+            <div className="sectionHead workspaceHeading"><div><p className="eyebrow">LANDLORD CENTER</p><h2>Maintenance requests</h2><p>Owner-side tracking for tenant maintenance requests.</p></div><button className="primary" onClick={() => setShowRequestForm(true)}>+ Log request</button></div><div className="financialStats landlordStats"><div className="financialStat"><span>Open requests</span><strong>{openRequests.length}</strong></div><div className="financialStat"><span>Completed requests</span><strong>{completedRequests.length}</strong></div></div>{selectedRequests.length ? <div className="maintenanceList">{selectedRequests.map((req) => <article className="maintenanceRow requestRow" key={req.id}><div className="maintenanceDate"><strong>{new Date(req.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(req.created_at).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div><span className={`statusPill priority${req.priority}`}>{req.priority}</span><h3>{req.title}</h3><p>{req.tenant_name}{req.tenant_email ? ` · ${req.tenant_email}` : ''}</p></div></div>{req.description && <p className="requestDescription">{req.description}</p>}<div className="maintenanceActions"><select aria-label={`Status for ${req.title}`} value={req.status} onChange={(e) => void updateRequestStatus(req.id, e.target.value)}>{requestStatuses.map((s) => <option key={s}>{s}</option>)}</select><button className="dangerLink" onClick={() => void removeRequest(req.id)}>Remove</button></div></div></article>)}</div> : <EmptyModule title="No maintenance requests yet" text="Log tenant requests as they come in by phone, email or in person." action="Log request" onClick={() => setShowRequestForm(true)} />}
+            <TenantConnectPanel propertyId={selected.id} ownerId={user.id} tenantConnectEnabled={entitlementsFor(plan).tenantConnect} />
+          </>}
         </section>}
 
         {showModuleForm && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowModuleForm(null)}><div className="modal moduleModal"><div className="modalTop"><div><p className="eyebrow">{showModuleForm.toUpperCase()}</p><h2>Add {showModuleForm.toLowerCase()}</h2></div><button className="iconButton" onClick={() => setShowModuleForm(null)}>×</button></div>
@@ -933,11 +1059,9 @@ export default function Home() {
           {showModuleForm === 'Maintenance' && <div className="formGrid"><label>Service date<input type="date" value={maintenanceDraft.serviceDate} onChange={e=>setMaintenanceDraft({...maintenanceDraft,serviceDate:e.target.value})} /></label><label>Status<select value={maintenanceDraft.status} onChange={e=>setMaintenanceDraft({...maintenanceDraft,status:e.target.value})}><option>Completed</option><option>Scheduled</option><option>In progress</option><option>Needs follow-up</option></select></label><label>Category<select value={maintenanceDraft.category} onChange={e=>setMaintenanceDraft({...maintenanceDraft,category:e.target.value})}><option>Repair</option><option>Preventative</option><option>Inspection</option><option>Renovation</option><option>Landscaping</option><option>HVAC</option><option>Plumbing</option><option>Electrical</option><option>Other</option></select></label><label>Vendor<input value={maintenanceDraft.vendor} onChange={e=>setMaintenanceDraft({...maintenanceDraft,vendor:e.target.value})} /></label><label>Cost<input inputMode="decimal" value={maintenanceDraft.cost} onChange={e=>setMaintenanceDraft({...maintenanceDraft,cost:e.target.value})} /></label><label>Receipt / invoice<select value={maintenanceDraft.documentId} onChange={e=>setMaintenanceDraft({...maintenanceDraft,documentId:e.target.value})}><option value="">No attachment</option>{selectedDocs.filter(d=>['Receipts','Warranties','Other'].includes(d.category)).map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><label className="fullField">Description<input value={maintenanceDraft.description} onChange={e=>setMaintenanceDraft({...maintenanceDraft,description:e.target.value})} placeholder="HVAC repair, annual service, roof inspection…" /></label><label className="recurringCheck fullField"><input type="checkbox" checked={maintenanceDraft.addToFinancials} onChange={e=>setMaintenanceDraft({...maintenanceDraft,addToFinancials:e.target.checked})} /><span>Add this cost to Financials</span><small>PropRoster creates a linked Maintenance expense so you only enter the cost once.</small></label></div>}
           <div className="modalActions"><button className="secondary" onClick={() => setShowModuleForm(null)}>Cancel</button><button className="primary" disabled={busy} onClick={() => void (showModuleForm==='Lease'?saveLease():showModuleForm==='Mortgage'?saveMortgage():showModuleForm==='Insurance'?saveInsurance():saveMaintenance())}>{busy?'Saving…':'Save'}</button></div></div></div>}
 
-        {showContactForm && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowContactForm(false)}><div className="modal moduleModal"><div className="modalTop"><div><p className="eyebrow">CONTACTS</p><h2>Add contact</h2></div><button className="iconButton" onClick={() => setShowContactForm(false)}>×</button></div><div className="formGrid"><label>Name<input value={contactDraft.name} onChange={e=>setContactDraft({...contactDraft,name:e.target.value})} placeholder="Jordan Rivera" /></label><label>Business name<input value={contactDraft.businessName} onChange={e=>setContactDraft({...contactDraft,businessName:e.target.value})} placeholder="Rivera Plumbing Co." /></label><label>Role<select value={contactDraft.role} onChange={e=>setContactDraft({...contactDraft,role:e.target.value})}>{contactRoles.map(r=><option key={r}>{r}</option>)}</select></label><label>Phone<input type="tel" value={contactDraft.phone} onChange={e=>setContactDraft({...contactDraft,phone:e.target.value})} placeholder="(555) 010-0100" /></label><label>Email<input type="email" value={contactDraft.email} onChange={e=>setContactDraft({...contactDraft,email:e.target.value})} placeholder="name@example.com" /></label><label>Website<input value={contactDraft.website} onChange={e=>setContactDraft({...contactDraft,website:e.target.value})} placeholder="example.com" /></label><label className="fullField">Private notes<input value={contactDraft.notes} onChange={e=>setContactDraft({...contactDraft,notes:e.target.value})} placeholder="Only visible to you" /></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowContactForm(false)}>Cancel</button><button className="primary" disabled={busy || !contactDraft.name.trim()} onClick={() => void saveContact()}>{busy?'Saving…':'Save contact'}</button></div></div></div>}
-
         {showRequestForm && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowRequestForm(false)}><div className="modal moduleModal"><div className="modalTop"><div><p className="eyebrow">LANDLORD CENTER</p><h2>Log maintenance request</h2></div><button className="iconButton" onClick={() => setShowRequestForm(false)}>×</button></div><div className="formGrid"><label>Tenant name<input value={requestDraft.tenantName} onChange={e=>setRequestDraft({...requestDraft,tenantName:e.target.value})} placeholder="Taylor Morgan" /></label><label>Tenant email<input type="email" value={requestDraft.tenantEmail} onChange={e=>setRequestDraft({...requestDraft,tenantEmail:e.target.value})} placeholder="tenant@example.com" /></label><label>Priority<select value={requestDraft.priority} onChange={e=>setRequestDraft({...requestDraft,priority:e.target.value})}>{requestPriorities.map(p=><option key={p}>{p}</option>)}</select></label><label>Status<select value={requestDraft.status} onChange={e=>setRequestDraft({...requestDraft,status:e.target.value})}>{requestStatuses.map(s=><option key={s}>{s}</option>)}</select></label><label className="fullField">Issue / title<input value={requestDraft.title} onChange={e=>setRequestDraft({...requestDraft,title:e.target.value})} placeholder="Leaking kitchen faucet" /></label><label className="fullField">Description<input value={requestDraft.description} onChange={e=>setRequestDraft({...requestDraft,description:e.target.value})} placeholder="Details the tenant shared…" /></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowRequestForm(false)}>Cancel</button><button className="primary" disabled={busy || !requestDraft.tenantName.trim() || !requestDraft.title.trim()} onClick={() => void saveRequest()}>{busy?'Saving…':'Save request'}</button></div></div></div>}
 
-        {showEdit && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowEdit(false)}><div className="modal"><div className="modalTop"><div><p className="eyebrow">PROPERTY SETTINGS</p><h2>Edit property</h2></div><button className="iconButton" onClick={() => setShowEdit(false)}>×</button></div><div className="formGrid"><label>Street address<AddressAutocomplete value={editDraft.address} onTextChange={(v) => setEditDraft({ ...editDraft, address: v })} onSelect={(addr) => setEditDraft((d) => ({ ...d, ...applyNormalizedAddress(addr, d.address) }))} placeholder="123 Example Street" /></label><label>City, state & ZIP<input value={editDraft.city} onChange={(e) => setEditDraft({ ...editDraft, city: e.target.value })} placeholder="Example City, FL 12345" /></label><label>Property type<select value={editDraft.type} onChange={(e) => setEditDraft({ ...editDraft, type: e.target.value })}><option>Rental Property</option><option>Primary Residence</option><option>Vacation Home</option><option>Commercial</option><option>Land</option><option>Other</option></select></label><label>Purchase price<input inputMode="decimal" value={editDraft.purchasePrice} onChange={(e) => setEditDraft({ ...editDraft, purchasePrice: e.target.value })} placeholder="390000" /></label><label>Estimated value<input inputMode="decimal" value={editDraft.value} onChange={(e) => setEditDraft({ ...editDraft, value: e.target.value })} placeholder="520000" /></label><label>Mortgage balance<input inputMode="decimal" value={editDraft.mortgage} onChange={(e) => setEditDraft({ ...editDraft, mortgage: e.target.value })} placeholder="310000" /></label><label>Monthly rent<input inputMode="decimal" value={editDraft.rent} onChange={(e) => setEditDraft({ ...editDraft, rent: e.target.value })} placeholder="2950" /></label><label>Monthly property expenses<input inputMode="decimal" value={editDraft.monthlyExpenses} onChange={(e) => setEditDraft({ ...editDraft, monthlyExpenses: e.target.value })} placeholder="1925" /></label></div><div className="editPropertyFooter"><button className="dangerButton" onClick={() => setShowDeleteConfirm(true)}>Delete Property</button><div className="modalActions compactActions"><button className="secondary" onClick={() => setShowEdit(false)}>Cancel</button><button className="primary" disabled={busy || !editDraft.address.trim() || !editDraft.city.trim()} onClick={() => void updateProperty()}>{busy ? 'Saving…' : 'Save Changes'}</button></div></div></div></div>}
+        {showEdit && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowEdit(false)}><div className="modal"><div className="modalTop"><div><p className="eyebrow">PROPERTY SETTINGS</p><h2>Edit property</h2></div><button className="iconButton" onClick={() => setShowEdit(false)}>×</button></div><div className="formGrid"><label>Street address<AddressAutocomplete value={editDraft.address} onTextChange={(v) => setEditDraft({ ...editDraft, address: v })} onSelect={(addr) => setEditDraft((d) => ({ ...d, ...applyNormalizedAddress(addr, d.address) }))} placeholder="123 Example Street" /></label><label>City, state & ZIP<input value={editDraft.city} onChange={(e) => setEditDraft({ ...editDraft, city: e.target.value })} placeholder="Example City, FL 12345" /></label><label>Property type<select value={editDraft.type} onChange={(e) => setEditDraft({ ...editDraft, type: e.target.value })}><option>Rental Property</option><option>Primary Residence</option><option>Vacation Home</option><option>Commercial</option><option>Land</option><option>Other</option></select></label><label>Purchase price<input inputMode="decimal" value={editDraft.purchasePrice} onChange={(e) => setEditDraft({ ...editDraft, purchasePrice: e.target.value })} placeholder="390000" /></label><label>Estimated value<input inputMode="decimal" value={editDraft.value} onChange={(e) => setEditDraft({ ...editDraft, value: e.target.value })} placeholder="520000" /></label><label>Mortgage balance<input inputMode="decimal" value={editDraft.mortgage} onChange={(e) => setEditDraft({ ...editDraft, mortgage: e.target.value })} placeholder="310000" /></label><label>Monthly rent<input inputMode="decimal" value={editDraft.rent} onChange={(e) => setEditDraft({ ...editDraft, rent: e.target.value })} placeholder="2950" /></label><label>Monthly property expenses<input inputMode="decimal" value={editDraft.monthlyExpenses} onChange={(e) => setEditDraft({ ...editDraft, monthlyExpenses: e.target.value })} placeholder="1925" /></label><label>Purchase date<input type="date" value={editDraft.purchaseDate} onChange={(e) => setEditDraft({ ...editDraft, purchaseDate: e.target.value })} /></label><label>Beds<input inputMode="numeric" value={editDraft.beds} onChange={(e) => setEditDraft({ ...editDraft, beds: e.target.value })} placeholder="3" /></label><label>Baths<input inputMode="decimal" value={editDraft.baths} onChange={(e) => setEditDraft({ ...editDraft, baths: e.target.value })} placeholder="2.5" /></label><label>Square feet<input inputMode="numeric" value={editDraft.squareFeet} onChange={(e) => setEditDraft({ ...editDraft, squareFeet: e.target.value })} placeholder="1850" /></label><label>Year built<input inputMode="numeric" value={editDraft.yearBuilt} onChange={(e) => setEditDraft({ ...editDraft, yearBuilt: e.target.value })} placeholder="1998" /></label><label>Lot size (sqft)<input inputMode="numeric" value={editDraft.lotSizeSqft} onChange={(e) => setEditDraft({ ...editDraft, lotSizeSqft: e.target.value })} placeholder="6500" /></label><label>Annual property tax<input inputMode="decimal" value={editDraft.propertyTaxAnnual} onChange={(e) => setEditDraft({ ...editDraft, propertyTaxAnnual: e.target.value })} placeholder="4200" /></label><label>HOA / month<input inputMode="decimal" value={editDraft.hoaMonthly} onChange={(e) => setEditDraft({ ...editDraft, hoaMonthly: e.target.value })} placeholder="0" /></label></div><div className="editPropertyFooter"><button className="dangerButton" onClick={() => setShowDeleteConfirm(true)}>Delete Property</button><div className="modalActions compactActions"><button className="secondary" onClick={() => setShowEdit(false)}>Cancel</button><button className="primary" disabled={busy || !editDraft.address.trim() || !editDraft.city.trim()} onClick={() => void updateProperty()}>{busy ? 'Saving…' : 'Save Changes'}</button></div></div></div></div>}
 
         {showDeleteConfirm && <div className="overlay deleteOverlay" onMouseDown={(e) => e.target === e.currentTarget && setShowDeleteConfirm(false)}><div className="modal deleteModal"><div className="modalTop"><div><p className="eyebrow dangerEyebrow">PERMANENT ACTION</p><h2>Delete this property?</h2></div><button className="iconButton" onClick={() => setShowDeleteConfirm(false)}>×</button></div><p className="deleteWarning">This permanently removes <strong>{selected.address}</strong> and its associated documents, photos, financial transactions, lease, mortgage, insurance, maintenance records, contacts, and maintenance requests. This cannot be undone.</p><div className="modalActions"><button className="secondary" onClick={() => setShowDeleteConfirm(false)}>Keep Property</button><button className="dangerButton solidDanger" disabled={busy} onClick={() => void deleteProperty()}>{busy ? 'Deleting…' : 'Delete Permanently'}</button></div></div></div>}
 
@@ -970,9 +1094,9 @@ export default function Home() {
 
   return (
     <main className="shell">
-      <header className="topbar"><div><span className="brand"><Wordmark /></span><span className="tagline">Your real estate portfolio, all in one place.</span></div><div className="accountActions"><span>{user.email}</span><PricingNavLink /><Link className="secondary" href="/investment-tools">Investment Tools</Link><button className="primary" onClick={() => openAddProperty()}>+ Add Property</button><button className="secondary" onClick={() => void signOut()}>Log out</button></div></header>
+      <header className="topbar"><div className="topbarBrandGroup"><AuthNavMenu /><span className="brand"><Wordmark /></span><span className="tagline">Your real estate portfolio, all in one place.</span></div><div className="accountActions"><span>{user.email}</span><PricingNavLink /><Link className="secondary" href="/investment-tools">Investment Tools</Link><button className="primary" onClick={() => openAddProperty()}>+ Add Property</button><button className="secondary" onClick={() => void signOut()}>Log out</button></div></header>
       {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
-      <section className="intro welcomeIntro"><h1>Good {greetingTimeOfDay()}, {displayNameFromEmail(user.email)}.</h1><p>Here&apos;s your portfolio at a glance.</p></section>
+      <section className="intro welcomeIntro"><h1>Good {greetingTimeOfDay()}, {resolveGreetingName(userProfile, user.email)}.</h1><p>Here&apos;s your portfolio at a glance.</p></section>
 
       <section className="portfolioSnapshot">
         <div className="portfolioSnapshotHead">
@@ -998,7 +1122,7 @@ export default function Home() {
           already established by .intro/.portfolioSnapshot/.sectionHead. */}
 
       <section><div className="sectionHead"><div><h2>My Properties</h2><p>{busy && !properties.length ? 'Loading your portfolio…' : `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} in your portfolio`}</p></div></div>
-        <div className="grid">{properties.map((property) => <article className="propertyCard" key={property.id}><button className="cardOpen" onClick={() => openProperty(property.id)}><div className="photo">{property.coverUrl ? <img src={property.coverUrl} alt={property.address} /> : <div className="photoPlaceholder"><span>⌂</span><small>Add property photos</small></div>}<span className="badge">{property.property_type}</span></div></button><div className="cardBody"><button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button><div className="miniStats"><div><span>Value</span><strong>{money(property.estimated_value)}</strong></div><div><span>Equity</span><strong>{money(Number(property.estimated_value) - Number(property.mortgage_balance))}</strong></div><div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div></div><div className="cardActions"><button onClick={() => openProperty(property.id, 'Documents')}>Documents</button><button onClick={() => openProperty(property.id, 'Photos')}>Photos</button><button onClick={() => openProperty(property.id, 'Financials')}>Financials</button></div></div></article>)}
+        <div className="grid">{properties.map((property) => <article className="propertyCard" key={property.id}><button className="cardOpen" onClick={() => openProperty(property.id)}><div className="photo">{property.coverUrl ? <img src={property.coverUrl} alt={property.address} /> : <div className="photoPlaceholder"><span>⌂</span><small>Add property photos</small></div>}<span className="badge">{property.property_type}</span></div></button><div className="cardBody"><button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button><div className="miniStats"><div><span>Value</span><strong>{money(property.estimated_value)}</strong></div><div><span>Equity</span><strong>{money(Number(property.estimated_value) - Number(property.mortgage_balance))}</strong></div><div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div></div><div className="cardActions"><button onClick={() => openProperty(property.id, 'Documents', 'Documents')}>Documents</button><button onClick={() => openProperty(property.id, 'Documents', 'Photos')}>Photos</button><button onClick={() => openProperty(property.id, 'Financials')}>Financials</button></div></div></article>)}
           {!busy && properties.length === 0 && <button className="emptyPropertyCard" onClick={() => openAddProperty()}><strong>+ Add your first property</strong><span>Start building your organized property file.</span></button>}
         </div>
       </section>
