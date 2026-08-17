@@ -922,3 +922,104 @@ h2, h3, p { margin-top: 0; }
   .compRow { grid-template-columns: 1fr; text-align: left; }
   .compPrice { font-size: 18px; }
 }
+
+/* Milestone 11: Property Profile 2.0 Foundation */
+
+/* Section 3: authenticated navigation foundation */
+.topbarBrandGroup { display: flex; align-items: center; gap: 12px; }
+.authNavMenu { position: relative; }
+.authNavMenuButton { border: 1px solid var(--line); background: white; color: var(--text); width: 40px; height: 40px; border-radius: 10px; font-size: 17px; display: grid; place-items: center; }
+.authNavMenuButton:hover { border-color: var(--brand); color: var(--brand); }
+.authNavMenuPanel { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; min-width: 200px; background: white; border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 12px 28px rgba(15, 30, 24, .12); display: grid; }
+.authNavMenuPanel a { display: block; padding: 10px 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 14px; font-weight: 600; }
+.authNavMenuPanel a:hover { background: var(--brand-soft); color: var(--brand); }
+
+/* Sub-tabs (Property / Documents / People second-level navigation) —
+   a smaller pill-style nav distinct from .tabs so a five-top-level-tab
+   page doesn't visually read as ten again. */
+.subTabs { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 18px; scrollbar-width: none; }
+.subTabs::-webkit-scrollbar { display: none; }
+.subTabs button { white-space: nowrap; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; background: white; color: var(--muted); font-weight: 650; font-size: 12.5px; }
+.subTabs button.active { background: var(--brand); color: white; border-color: var(--brand); }
+
+/* Section 6: Ownership / Entity */
+.ownershipPanel { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 18px; }
+.ownershipPanel .sectionHead { margin-bottom: 10px; }
+.ownershipPanel h3 { font-size: 15px; margin-bottom: 2px; }
+.ownershipTypeTag { font-style: normal; color: var(--muted); font-size: 11px; font-weight: 650; margin-left: 6px; }
+.ownershipDelete { border: 0; background: transparent; color: var(--muted); font-size: 16px; margin-left: 10px; padding: 0 2px; vertical-align: middle; }
+
+/* Section 7: Property Systems & Appliances */
+.systemsPanel { min-width: 0; }
+
+/* Section 8: Notes 2.0 */
+.notesPanel { min-width: 0; }
+.noteComposer { display: flex; gap: 8px; margin-bottom: 12px; }
+.noteComposer input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; background: white; color: var(--text); }
+.noteList { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.noteItem { display: grid; grid-template-columns: 22px minmax(0, 1fr) 22px; align-items: start; gap: 8px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: white; }
+.noteItem.notePinned { background: var(--warm); border-color: #e4d9bd; }
+.notePin { border: 0; background: transparent; color: #b58a2e; font-size: 15px; padding: 0; line-height: 1.5; }
+.noteBody { min-width: 0; overflow-wrap: anywhere; }
+.noteBody p { margin: 0; font-size: 13px; line-height: 1.5; }
+.noteBody small { color: var(--muted); font-size: 11px; }
+.noteDelete { border: 0; background: transparent; color: var(--muted); font-size: 16px; padding: 0; line-height: 1.5; }
+
+/* Section 9: Property Timeline */
+.timelineList { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.timelineItem { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; align-items: baseline; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.timelineItem:first-child { border-top: 0; }
+.timelineDate { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.timelineBody { min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.timelineBody strong { font-size: 13px; }
+.timelineBody span { color: var(--muted); font-size: 11.5px; }
+.timelineAmount { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.timelineMore { color: var(--muted); font-size: 11px; padding-top: 8px; list-style: none; }
+
+/* Sections 10-13: PropCrew */
+.propCrewPanel { min-width: 0; }
+.propCrewCard { min-width: 0; }
+.reusePill { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 8px; font-size: 10px; font-weight: 750; margin-left: 6px; white-space: nowrap; }
+.reuse-good { background: #e4f3ea; color: #1c6b40; }
+.reuse-moderate { background: #fff5dc; color: #805f12; }
+.reuse-weak { background: #fdeceb; color: #8a3d35; }
+.reuse-unknown { background: #eef2ef; color: var(--muted); }
+.propCrewProperties, .propCrewHistory { font-size: 11.5px; margin: 8px 0 0; overflow-wrap: anywhere; }
+.propCrewToggle { border: 0; background: transparent; color: var(--brand); font-weight: 700; font-size: 12px; padding: 8px 0 0; text-decoration: underline; text-underline-offset: 2px; }
+.propCrewDetails { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; display: grid; gap: 10px; }
+.propCrewExperienceNote { background: var(--brand-soft); border-radius: 10px; padding: 10px 12px; }
+.propCrewExperienceNote span { display: block; color: var(--brand); font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .03em; margin-bottom: 4px; }
+.propCrewExperienceNote p { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.propertyCheckList { display: grid; gap: 8px; max-height: 160px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-top: 6px; }
+.propertyCheckItem { display: flex !important; align-items: center; gap: 8px; font-weight: 500 !important; font-size: 13px !important; }
+.propertyCheckItem input { width: 16px; height: 16px; margin: 0; }
+.reusePreferenceField { display: grid; gap: 6px; font-size: 13px; font-weight: 650; }
+.reusePreferenceField .modeToggle { width: fit-content; }
+.reusePreferenceField .modeToggle button { padding: 9px 14px; }
+
+/* Profile page */
+.profileFormSection .evaluatorSectionHead p { max-width: 640px; }
+.profilePhotoPlaceholder { width: 88px; height: 88px; border-radius: 50%; }
+.profilePhotoPlaceholder span { font-size: 28px; }
+
+@media (max-width: 760px) {
+  .noteComposer { flex-direction: column; align-items: stretch; }
+  .timelineItem { grid-template-columns: 1fr; gap: 3px; }
+  .timelineAmount { justify-self: start; }
+  .propertyCheckList { max-height: 140px; }
+}
+@media (max-width: 480px) {
+  .authNavMenuPanel { min-width: 180px; }
+  .reusePreferenceField .modeToggle { width: 100%; }
+  .reusePreferenceField .modeToggle button { flex: 1; }
+}
+@media (max-width: 380px) {
+  /* The new hamburger button adds real width to .topbar's left side —
+     at the very narrowest supported widths (320-375px) there isn't
+     always room for it alongside a full-width .accountActions button
+     row on the same line. Let the topbar wrap to a second row here
+     rather than overflow, instead of touching the shared .topbar rule
+     other pages also use. */
+  .topbar { flex-wrap: wrap; row-gap: 10px; }
+  .topbarBrandGroup { flex: 1 1 auto; min-width: 0; }
+}
