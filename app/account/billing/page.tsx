@@ -16,8 +16,7 @@ import { useAuthUser } from '../../../lib/useAuthUser'
 import { useSubscription } from '../../../lib/useSubscription'
 import { PLANS } from '../../../lib/billing/plans'
 import { openBillingPortal } from '../../../lib/billing/client'
-import { PricingNavLink } from '../../../components/PricingNavLink'
-import { Wordmark } from '../../../components/Wordmark'
+import { AuthHeader } from '../../../components/AuthHeader'
 
 const STATUS_LABEL: Record<string, string> = {
   active: 'Active',
@@ -109,18 +108,15 @@ export default function BillingPage() {
 
   return (
     <main className="shell investmentShell">
-      <header className="topbar">
-        <Link href="/" className="brandButton"><span className="brand"><Wordmark /></span><span className="tagline">Your real estate portfolio, all in one place.</span></Link>
-        <div className="accountActions">
-          <span>{user.email}</span>
-          <PricingNavLink />
-          <Link className="secondary" href="/">Back to Portfolio</Link>
-        </div>
-      </header>
+      <AuthHeader />
 
       <section className="intro">
         <p className="eyebrow">ACCOUNT &amp; BILLING</p>
         <h1>Your plan.</h1>
+        {/* Billing is a compelling account-management reason to show the
+            authentication email (Authenticated Header Simplification,
+            Part 9) — kept here in the page body, not the global header. */}
+        <p className="muted">Signed in as {user.email}</p>
       </section>
 
       {checkoutState === 'success' && (

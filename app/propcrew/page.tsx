@@ -12,8 +12,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
-import { PricingNavLink } from '../../components/PricingNavLink'
-import { Wordmark } from '../../components/Wordmark'
+import { AuthHeader } from '../../components/AuthHeader'
 import { PropCrewPanel } from '../../components/PropCrewPanel'
 
 type PropertyRef = { id: string; address: string; city: string }
@@ -51,13 +50,7 @@ export default function PropCrewPage() {
 
   return (
     <main className="shell">
-      <header className="topbar">
-        <Link href="/" className="brandButton"><span className="brand"><Wordmark /></span><span className="tagline">PropCrew</span></Link>
-        <div className="accountActions">
-          <PricingNavLink />
-          <Link href="/" className="secondary">← Dashboard</Link>
-        </div>
-      </header>
+      <AuthHeader />
 
       <section className="intro evaluatorIntro">
         <p className="eyebrow">PROPCREW</p>

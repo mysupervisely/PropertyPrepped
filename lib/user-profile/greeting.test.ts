@@ -12,15 +12,15 @@ function profile(overrides: Partial<UserProfile> = {}): UserProfile {
 
 describe('resolveGreetingName — display name -> first name -> email prefix -> "there"', () => {
   it('prefers display_name over everything else, including a set first_name', () => {
-    expect(resolveGreetingName(profile({ display_name: 'Kiro', first_name: 'Kirollos' }), 'kirollos.attalla@example.com')).toBe('Kiro')
+    expect(resolveGreetingName(profile({ display_name: 'Jam', first_name: 'Jamie' }), 'jamie.rivera@example.com')).toBe('Jam')
   })
 
   it('falls back to first_name when display_name is not set', () => {
-    expect(resolveGreetingName(profile({ first_name: 'Kirollos' }), 'kirollos.attalla@example.com')).toBe('Kirollos')
+    expect(resolveGreetingName(profile({ first_name: 'Jamie' }), 'jamie.rivera@example.com')).toBe('Jamie')
   })
 
   it('falls back to a capitalized email prefix when no profile name is set', () => {
-    expect(resolveGreetingName(profile(), 'kirollos.attalla@example.com')).toBe('Kirollos')
+    expect(resolveGreetingName(profile(), 'jamie.rivera@example.com')).toBe('Jamie')
   })
 
   it('falls back to "there" when there is no profile and no email', () => {
@@ -32,19 +32,19 @@ describe('resolveGreetingName — display name -> first name -> email prefix -> 
   })
 
   it('never uses email as the greeting when a real name exists (Part 1 requirement)', () => {
-    const result = resolveGreetingName(profile({ display_name: 'Kiro' }), 'someone-else@example.com')
+    const result = resolveGreetingName(profile({ display_name: 'Jam' }), 'someone-else@example.com')
     expect(result).not.toContain('@')
-    expect(result).toBe('Kiro')
+    expect(result).toBe('Jam')
   })
 
   it('treats a whitespace-only display_name/first_name as not set', () => {
-    expect(resolveGreetingName(profile({ display_name: '   ' }), 'kirollos@example.com')).toBe('Kirollos')
-    expect(resolveGreetingName(profile({ display_name: '  ', first_name: '  ' }), 'kirollos@example.com')).toBe('Kirollos')
+    expect(resolveGreetingName(profile({ display_name: '   ' }), 'jamie@example.com')).toBe('Jamie')
+    expect(resolveGreetingName(profile({ display_name: '  ', first_name: '  ' }), 'jamie@example.com')).toBe('Jamie')
   })
 
   it('handles an email with dots/underscores/hyphens in the local part', () => {
     expect(resolveGreetingName(null, 'j.smith@example.com')).toBe('J')
-    expect(resolveGreetingName(null, '_kiro_@example.com')).toBe('Kiro')
+    expect(resolveGreetingName(null, '_jam_@example.com')).toBe('Jam')
   })
 })
 
