@@ -9,9 +9,7 @@ import { canCreateProperty, entitlementsFor } from '../lib/billing/entitlements'
 import { TenantConnectPanel } from '../components/TenantConnectPanel'
 import { UpgradePrompt } from '../components/UpgradePrompt'
 import LandingPage from '../components/LandingPage'
-import { PricingNavLink } from '../components/PricingNavLink'
-import { Wordmark } from '../components/Wordmark'
-import { AuthNavMenu } from '../components/AuthNavMenu'
+import { AuthHeader } from '../components/AuthHeader'
 import DocumentIntelligencePanel, { type ApplyAction } from '../components/DocumentIntelligencePanel'
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
 import { PropCrewPanel } from '../components/PropCrewPanel'
@@ -419,11 +417,6 @@ export default function Home() {
     setBusy(false)
   }
 
-  async function signOut() {
-    if (!supabase) return
-    await supabase.auth.signOut()
-  }
-
   const handleImage = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -447,6 +440,28 @@ export default function Home() {
     }
     setShowAdd(true)
   }
+
+  // Authenticated Header Simplification, Part 6: the hamburger's
+  // "+ Add Property" link (components/AuthNavMenu.tsx) navigates to
+  // "/?add=property" rather than trying to drive a modal across a page
+  // boundary — this reads that one-shot flag on load and opens the exact
+  // same add-property flow the dashboard's own "+ Add Property" button
+  // uses (My Properties section), then strips it from the URL so a
+  // refresh or back-navigation doesn't re-open it. Plain browser APIs
+  // only (no next/navigation searchParams hook), so "/" keeps its static
+  // prerendering.
+  useEffect(() => {
+    if (!authReady || !user) return
+    if (typeof window === 'undefined') return
+    if (new URLSearchParams(window.location.search).get('add') !== 'property') return
+    window.history.replaceState(null, '', window.location.pathname)
+    // The add-property modal only renders in the dashboard view below —
+    // clear any selected property first so it's actually visible even if
+    // this flag arrives while a property workspace is open.
+    setSelectedId(null)
+    openAddProperty()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authReady, user])
 
   async function addProperty() {
     if (!supabase || !user || !draft.address.trim() || !draft.city.trim()) return
@@ -925,19 +940,23 @@ export default function Home() {
 
     return (
       <main className="shell workspaceShell">
-        <header className="topbar">
-          <div className="topbarBrandGroup">
-            <AuthNavMenu />
-            <button className="brandButton" onClick={() => setSelectedId(null)}><span className="brand"><Wordmark /></span><span className="tagline">Your real estate portfolio, all in one place.</span></button>
-          </div>
-          <div className="accountActions"><span>{user.email}</span><PricingNavLink /><Link className="secondary" href={`/investment-tools/property-evaluator?propertyId=${selected.id}`}>Investment Analysis</Link><button className="secondary" onClick={() => openEditProperty(selected)}>Edit Property</button><button className="secondary" onClick={() => setSelectedId(null)}>← All Properties</button><button className="secondary" onClick={() => void signOut()}>Log out</button></div>
-        </header>
+        <AuthHeader onBrandClick={() => setSelectedId(null)} />
         {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
+
+        {/* Contextual, property-scoped controls live here now, not in the
+            global header (Authenticated Header Simplification, Part 4:
+            "these are contextual property actions, not global
+            navigation... do not make users open the hamburger just to
+            edit the property they are currently viewing"). */}
+        <button className="breadcrumbBack" onClick={() => setSelectedId(null)}>← All Properties</button>
 
         <section className="propertyHero">
           <div className="heroPhoto">{selected.coverUrl ? <img src={selected.coverUrl} alt={selected.address} /> : <div className="heroPlaceholder"><span>Property photo</span><small>Add photos in the Photos tab</small></div>}</div>
           <div className="heroInfo">
-            <p className="eyebrow">{selected.property_type.toUpperCase()}</p><h1>{selected.address}</h1><p className="heroCity">{selected.city}</p>
+            <div className="heroInfoHead">
+              <div><p className="eyebrow">{selected.property_type.toUpperCase()}</p><h1>{selected.address}</h1><p className="heroCity">{selected.city}</p></div>
+              <div className="heroInfoActions"><button className="secondary" onClick={() => openEditProperty(selected)}>Edit</button><Link className="secondary" href={`/investment-tools/property-evaluator?propertyId=${selected.id}`}>Investment Analysis</Link></div>
+            </div>
             <div className="heroMetrics"><div><span>Value</span><strong>{money(selected.estimated_value)}</strong></div><div><span>Mortgage</span><strong>{money(selected.mortgage_balance)}</strong></div><div><span>Equity</span><strong>{money(equity)}</strong></div><div><span>Rent</span><strong>{money(selected.monthly_rent)}/mo</strong></div></div>
           </div>
         </section>
@@ -1094,7 +1113,7 @@ export default function Home() {
 
   return (
     <main className="shell">
-      <header className="topbar"><div className="topbarBrandGroup"><AuthNavMenu /><span className="brand"><Wordmark /></span><span className="tagline">Your real estate portfolio, all in one place.</span></div><div className="accountActions"><span>{user.email}</span><PricingNavLink /><Link className="secondary" href="/investment-tools">Investment Tools</Link><button className="primary" onClick={() => openAddProperty()}>+ Add Property</button><button className="secondary" onClick={() => void signOut()}>Log out</button></div></header>
+      <AuthHeader />
       {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
       <section className="intro welcomeIntro"><h1>Good {greetingTimeOfDay()}, {resolveGreetingName(userProfile, user.email)}.</h1><p>Here&apos;s your portfolio at a glance.</p></section>
 
@@ -1121,7 +1140,7 @@ export default function Home() {
           above and "My Properties" below, using the same section spacing
           already established by .intro/.portfolioSnapshot/.sectionHead. */}
 
-      <section><div className="sectionHead"><div><h2>My Properties</h2><p>{busy && !properties.length ? 'Loading your portfolio…' : `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} in your portfolio`}</p></div></div>
+      <section><div className="sectionHead"><div><h2>My Properties</h2><p>{busy && !properties.length ? 'Loading your portfolio…' : `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} in your portfolio`}</p></div><button className="primary" onClick={() => openAddProperty()}>+ Add Property</button></div>
         <div className="grid">{properties.map((property) => <article className="propertyCard" key={property.id}><button className="cardOpen" onClick={() => openProperty(property.id)}><div className="photo">{property.coverUrl ? <img src={property.coverUrl} alt={property.address} /> : <div className="photoPlaceholder"><span>⌂</span><small>Add property photos</small></div>}<span className="badge">{property.property_type}</span></div></button><div className="cardBody"><button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button><div className="miniStats"><div><span>Value</span><strong>{money(property.estimated_value)}</strong></div><div><span>Equity</span><strong>{money(Number(property.estimated_value) - Number(property.mortgage_balance))}</strong></div><div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div></div><div className="cardActions"><button onClick={() => openProperty(property.id, 'Documents', 'Documents')}>Documents</button><button onClick={() => openProperty(property.id, 'Documents', 'Photos')}>Photos</button><button onClick={() => openProperty(property.id, 'Financials')}>Financials</button></div></div></article>)}
           {!busy && properties.length === 0 && <button className="emptyPropertyCard" onClick={() => openAddProperty()}><strong>+ Add your first property</strong><span>Start building your organized property file.</span></button>}
         </div>

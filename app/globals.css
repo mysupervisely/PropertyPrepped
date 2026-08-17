@@ -931,7 +931,7 @@ h2, h3, p { margin-top: 0; }
 .authNavMenuButton { border: 1px solid var(--line); background: white; color: var(--text); width: 40px; height: 40px; border-radius: 10px; font-size: 17px; display: grid; place-items: center; }
 .authNavMenuButton:hover { border-color: var(--brand); color: var(--brand); }
 .authNavMenuPanel { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; min-width: 200px; background: white; border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 12px 28px rgba(15, 30, 24, .12); display: grid; }
-.authNavMenuPanel a { display: block; padding: 10px 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 14px; font-weight: 600; }
+.authNavMenuPanel a { display: block; padding: 10px 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; }
 .authNavMenuPanel a:hover { background: var(--brand-soft); color: var(--brand); }
 
 /* Sub-tabs (Property / Documents / People second-level navigation) —
@@ -1022,4 +1022,47 @@ h2, h3, p { margin-top: 0; }
      other pages also use. */
   .topbar { flex-wrap: wrap; row-gap: 10px; }
   .topbarBrandGroup { flex: 1 1 auto; min-width: 0; }
+}
+
+/* Authenticated Header Simplification — the header itself (.authHeader,
+   components/AuthHeader.tsx) is now just .topbar's existing hamburger +
+   wordmark on the left plus a single reserved action on the right, so it
+   needs no rules of its own beyond what .topbar already provides.
+   Pricing/Investment Tools/PropCrew/Profile/Log out/+Add Property all
+   moved into the hamburger (components/AuthNavMenu.tsx, below); email is
+   no longer shown anywhere in the header. */
+
+/* The single top-right primary action (components/SmartUploadButton.tsx).
+   Not yet wired to anything real — see the component's own doc comment —
+   styled like any other disabled .primary button (.primary:disabled
+   above), just with its own icon+label layout and a shorter label once
+   "Smart Upload" itself doesn't comfortably fit. */
+.smartUploadButton { display: inline-flex; align-items: center; gap: 8px; }
+.smartUploadButton .labelShort { display: none; }
+@media (max-width: 480px) {
+  .smartUploadButton .labelFull { display: none; }
+  .smartUploadButton .labelShort { display: inline; }
+}
+
+/* Hamburger menu additions: "+ Add Property" reads as an action (brand
+   color, bold) rather than a destination; a hairline divider then visually
+   separates it and "Log out" (muted, reddish on hover — ending the
+   session, not navigating) from the plain nav links above them. */
+.authNavMenuPanel a.authNavMenuAction { color: var(--brand); font-weight: 700; }
+.authNavMenuDivider { height: 1px; background: var(--line); margin: 6px 6px; border: 0; }
+.authNavMenuLogout { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 10px 12px; border-radius: 8px; color: var(--muted); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.authNavMenuLogout:hover { background: #fff2f1; color: #862d27; }
+
+/* Property workspace: contextual, property-scoped controls that used to
+   live in that page's own hand-built topbar (Edit Property, Investment
+   Analysis, ← All Properties) now live with the property itself instead
+   of the global header. */
+.breadcrumbBack { display: inline-block; margin-top: 14px; border: 0; background: transparent; color: var(--muted); font-size: 13px; font-weight: 650; padding: 4px 0; cursor: pointer; }
+.breadcrumbBack:hover { color: var(--brand); }
+.heroInfoHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.heroInfoActions { display: flex; gap: 8px; flex-shrink: 0; }
+
+@media (max-width: 620px) {
+  .heroInfoHead { flex-direction: column; align-items: stretch; }
+  .heroInfoActions { justify-content: flex-start; flex-wrap: wrap; }
 }

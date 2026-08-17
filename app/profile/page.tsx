@@ -15,8 +15,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
-import { PricingNavLink } from '../../components/PricingNavLink'
-import { Wordmark } from '../../components/Wordmark'
+import { AuthHeader } from '../../components/AuthHeader'
 import { COMMON_TIMEZONES, type UserProfile } from '../../lib/user-profile/types'
 
 type Draft = { firstName: string; lastName: string; displayName: string; phone: string; timezone: string }
@@ -103,13 +102,7 @@ export default function ProfilePage() {
 
   return (
     <main className="shell">
-      <header className="topbar">
-        <Link href="/" className="brandButton"><span className="brand"><Wordmark /></span><span className="tagline">Profile</span></Link>
-        <div className="accountActions">
-          <PricingNavLink />
-          <Link href="/" className="secondary">← Dashboard</Link>
-        </div>
-      </header>
+      <AuthHeader />
 
       <section className="intro evaluatorIntro">
         <p className="eyebrow">PROFILE</p>
@@ -123,8 +116,8 @@ export default function ProfilePage() {
       <section className="evaluatorSection profileFormSection">
         <div className="evaluatorSectionHead"><h2>Identity</h2><p>A real name here is what PropRoster greets you with — never your email, once one of these is set.</p></div>
         <div className="evalGrid">
-          <label className="evalField"><span>First name</span><input value={draft.firstName} onChange={(e) => setDraft((d) => ({ ...d, firstName: e.target.value }))} placeholder="Kirollos" /></label>
-          <label className="evalField"><span>Last name</span><input value={draft.lastName} onChange={(e) => setDraft((d) => ({ ...d, lastName: e.target.value }))} placeholder="Attalla" /></label>
+          <label className="evalField"><span>First name</span><input value={draft.firstName} onChange={(e) => setDraft((d) => ({ ...d, firstName: e.target.value }))} placeholder="Jamie" /></label>
+          <label className="evalField"><span>Last name</span><input value={draft.lastName} onChange={(e) => setDraft((d) => ({ ...d, lastName: e.target.value }))} placeholder="Rivera" /></label>
           <label className="evalField fullField"><span>Preferred / display name<small>Optional — used instead of your first name if set (e.g. a nickname).</small></span><input value={draft.displayName} onChange={(e) => setDraft((d) => ({ ...d, displayName: e.target.value }))} placeholder="Kiro" /></label>
         </div>
       </section>

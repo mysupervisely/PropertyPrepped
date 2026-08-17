@@ -91,7 +91,7 @@ export function PropertyOwnershipPanel({
           <div className="modal moduleModal">
             <div className="modalTop"><h2>Add owner / entity</h2><button className="iconButton" onClick={() => setShowForm(false)}>×</button></div>
             <div className="formGrid">
-              <label>Ownership/entity name<input value={draft.entityName} onChange={(e) => setDraft((d) => ({ ...d, entityName: e.target.value }))} placeholder="Kirollos Attalla, or Acme Holdings LLC" /></label>
+              <label>Ownership/entity name<input value={draft.entityName} onChange={(e) => setDraft((d) => ({ ...d, entityName: e.target.value }))} placeholder="Jamie Rivera, or Acme Holdings LLC" /></label>
               <label>Ownership type<select value={draft.ownershipType} onChange={(e) => setDraft((d) => ({ ...d, ownershipType: e.target.value as typeof OWNERSHIP_TYPES[number] }))}>{OWNERSHIP_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
               <label>Ownership %<input inputMode="decimal" value={draft.ownershipPercentage} onChange={(e) => setDraft((d) => ({ ...d, ownershipPercentage: e.target.value }))} placeholder="100" /></label>
               <label>Acquisition date<input type="date" value={draft.acquisitionDate} onChange={(e) => setDraft((d) => ({ ...d, acquisitionDate: e.target.value }))} /></label>

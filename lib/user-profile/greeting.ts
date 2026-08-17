@@ -1,7 +1,7 @@
 // PropRoster — Property Profile 2.0, Section 1: the homepage greeting
 // fallback chain. Pure string logic, no Supabase/React — exercised
 // directly in greeting.test.ts, and reused unchanged by both the
-// homepage greeting ("Good morning, Kirollos.") and anywhere else a
+// homepage greeting ("Good morning, Jamie.") and anywhere else a
 // short display name for the signed-in user is needed.
 //
 // Fallback order (Part 1, exact): display/preferred name -> first name
