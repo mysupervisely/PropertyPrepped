@@ -695,17 +695,53 @@ h2, h3, p { margin-top: 0; }
   .landingWhatIsGrid { grid-template-columns: 1fr; }
   .landingPrivacyNote { padding: 0 18px; }
   .landingNav { gap: 14px; }
+}
+
+/* Bugfix (found while diagnosing the mobile Document Intelligence modal
+   overflow): the @media (max-width: 560px) block above was missing its
+   closing brace, which silently nested EVERY rule after it — Milestone 8
+   AI Document Intelligence (including .docIntelModal itself), Tenant
+   Connect, AddressAutocomplete, and Home Purchase Calculator — inside
+   that single 560px media query, so none of those rules applied at any
+   wider viewport. This is a major contributor to the reported "modal
+   doesn't render correctly" symptom: above 560px, .docIntelModal and
+   every .docField/.docFieldGrid/etc. rule were not being applied at all.
+   Closing the brace here restores all of them to top-level, which their
+   own selectors and comments always assumed. */
+
 /* Milestone 8: AI Document Intelligence */
 .pillBad { background: #fdeceb; color: #8a3d35; }
 .aiButton { border-color: #cadfd4 !important; color: var(--brand); }
 .aiStatusPill { display: inline-block; margin-left: 8px; border-radius: 999px; padding: 3px 8px; font-size: 10px; font-weight: 750; vertical-align: middle; }
-.docIntelModal { width: min(760px, calc(100% - 24px)); max-height: 94vh; }
-.docIntelMeta { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; padding-bottom: 18px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
-.docTypeSelect { font-size: 13px; font-weight: 650; min-width: 220px; }
+.docIntelModal {
+  width: min(760px, calc(100% - 24px));
+  /* Hard safety net, independent of any parent flex/grid percentage
+     resolution: this modal can never be wider than the true viewport
+     minus a small margin, on any width. */
+  max-width: calc(100vw - 24px);
+  max-height: 94vh;
+  /* iOS Safari's toolbar can show/hide, changing 100vh mid-session — dvh
+     (dynamic viewport height) tracks the ACTUAL visible height instead.
+     Declared after the vh fallback so unsupporting browsers keep that
+     fallback and everything else still works. */
+  max-height: 94dvh;
+  overflow-wrap: anywhere;
+  padding-left: max(24px, env(safe-area-inset-left));
+  padding-right: max(24px, env(safe-area-inset-right));
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+}
+.docIntelModal .modalTop { min-width: 0; }
+.docIntelModal .modalTop > div { min-width: 0; flex: 1 1 auto; }
+.docIntelModal .modalTop h2 { overflow-wrap: anywhere; }
+/* The close button must never be the thing that gets squeezed out when
+   a long filename is next to it. */
+.docIntelModal .modalTop .iconButton { flex-shrink: 0; }
+.docIntelMeta { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; padding-bottom: 18px; margin-bottom: 18px; border-bottom: 1px solid var(--line); min-width: 0; }
+.docTypeSelect { font-size: 13px; font-weight: 650; min-width: 220px; max-width: 100%; }
 .docTypeSelect span { display: block; margin-bottom: 6px; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
-.docTypeSelect select { width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 10px 11px; background: white; color: var(--text); }
-.docIntelStatusBlock { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; text-align: right; }
-.docIntelStatusBlock small { color: var(--muted); font-size: 11px; }
+.docTypeSelect select { width: 100%; max-width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 10px 11px; background: white; color: var(--text); }
+.docIntelStatusBlock { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; text-align: right; min-width: 0; max-width: 100%; }
+.docIntelStatusBlock small { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
 .docIntelPrompt { text-align: center; padding: 34px 18px; border: 1px dashed var(--line); border-radius: 14px; display: grid; gap: 14px; justify-items: center; }
 .docIntelPrompt p { color: var(--muted); max-width: 480px; margin: 0; }
 .docIntelPrompt.docIntelFailed { border-color: #eecbc5; background: #fff8f7; }
@@ -717,34 +753,62 @@ h2, h3, p { margin-top: 0; }
 .versionPicker select { margin-left: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; background: white; }
 .docIntelSection { border-top: 1px solid var(--line); padding-top: 18px; }
 .docIntelSection:first-of-type { border-top: 0; padding-top: 0; }
-.docOverview { font-size: 16px; font-weight: 650; margin-bottom: 8px; }
-.docSummary { color: var(--text); line-height: 1.6; }
-.docGroup { margin-bottom: 6px; }
+.docOverview { font-size: 16px; font-weight: 650; margin-bottom: 8px; overflow-wrap: anywhere; max-width: 100%; }
+.docSummary { color: var(--text); line-height: 1.6; overflow-wrap: anywhere; max-width: 100%; }
+.docGroup { margin-bottom: 6px; min-width: 0; }
 .docGroup h4 { font-size: 13px; margin-bottom: 12px; }
-.docFieldGrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
-.docField { background: #f9fbfa; border: 1px solid var(--line); border-radius: 11px; padding: 12px 13px; }
+.docFieldGrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; min-width: 0; }
+.docField { background: #f9fbfa; border: 1px solid var(--line); border-radius: 11px; padding: 12px 13px; min-width: 0; max-width: 100%; }
 .docFieldLow { border-color: #f3d9a8; background: #fffaf0; }
-.docFieldHead { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 5px; }
-.docFieldLabel { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
-.confidenceBadge { border-radius: 999px; padding: 2px 7px; font-size: 9px; font-weight: 750; white-space: nowrap; }
+.docFieldHead { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 5px; min-width: 0; }
+.docFieldLabel { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; overflow-wrap: anywhere; min-width: 0; }
+.confidenceBadge { border-radius: 999px; padding: 2px 7px; font-size: 9px; font-weight: 750; white-space: nowrap; flex-shrink: 0; }
 .confHigh { background: #e4f3ea; color: #1c6b40; }
 .confMedium { background: #fff5dc; color: #805f12; }
 .confLow { background: #fdeceb; color: #8a3d35; }
-.docFieldValue { font-size: 14px; font-weight: 650; line-height: 1.4; }
-.docFieldSource { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: 11px; }
-.docFieldSnippet { font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.docList { margin: 0; padding-left: 18px; display: grid; gap: 7px; color: var(--text); font-size: 13px; line-height: 1.5; }
+.docFieldValue { font-size: 14px; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
+.docFieldSource { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: 11px; min-width: 0; }
+/* Source snippets are AI-quoted sentences and can be long — previously
+   forced to one nowrap/ellipsis line, which (as an inline <span>, not a
+   sized block) didn't actually truncate and instead pushed the whole
+   card wider than the modal. Wrapping normally keeps the full citation
+   readable with no horizontal overflow (Part 5: "allow normal multi-line
+   wrapping... do not force horizontal overflow" — nothing is removed). */
+.docFieldSnippet { font-style: italic; display: block; white-space: normal; overflow-wrap: anywhere; }
+.docList { margin: 0; padding-left: 18px; display: grid; gap: 7px; color: var(--text); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .docListWarn li::marker { color: #b58a2e; }
 .docSourceList { padding-left: 0; list-style: none; }
-.docSourceList li { border-bottom: 1px solid var(--line); padding-bottom: 7px; }
+.docSourceList li { border-bottom: 1px solid var(--line); padding-bottom: 7px; overflow-wrap: anywhere; }
 .docSourceList li:last-child { border-bottom: 0; }
-.docActionRow { display: grid; gap: 10px; margin-top: 12px; }
-.docActionCard { background: var(--brand-soft); border-radius: 12px; padding: 14px; display: grid; gap: 8px; }
-.docCompare { font-size: 12px; color: var(--brand); margin: 0; }
+.docActionRow { display: grid; gap: 10px; margin-top: 12px; min-width: 0; }
+.docActionCard { background: var(--brand-soft); border-radius: 12px; padding: 14px; display: grid; gap: 8px; min-width: 0; max-width: 100%; }
+.docCompare { font-size: 12px; color: var(--brand); margin: 0; overflow-wrap: anywhere; }
+.docActionCard button { max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
 @media (max-width: 700px) {
   .docFieldGrid { grid-template-columns: 1fr; }
   .docIntelMeta { flex-direction: column; align-items: stretch; }
   .docIntelStatusBlock { align-items: flex-start; text-align: left; }
+}
+@media (max-width: 480px) {
+  /* Slightly smaller chrome so more of a narrow phone screen goes to
+     actual content (Part 7) — body/field text sizes are untouched. */
+  .docIntelModal { padding: 16px; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+  .docIntelModal .modalTop h2 {
+    font-size: 19px;
+    /* Long filenames wrap instead of forcing width, and are capped to two
+       lines with an ellipsis so the header stays compact next to the
+       close button (Part 4) — the stored filename itself is untouched,
+       "Open <name>" and the modal title bar text both still carry the
+       full name, this only affects how the heading is painted. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .docIntelModal .eyebrow { font-size: 11px; }
+  .docTypeSelect { min-width: 0; flex: 1 1 100%; }
+  .docIntelStatusBlock { flex: 1 1 100%; }
 }
 
 /* Milestone 10: Tenant Connect (owner side) */
