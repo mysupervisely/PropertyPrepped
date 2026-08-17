@@ -1202,6 +1202,7 @@ with check (
 -- No UPDATE/DELETE storage policy — attachments are immutable once posted, same as the DB row above.
 
 
+
 -- ============================================================
 -- Milestone 11: Property Profile 2.0 Foundation (see milestone-11-property-profile-2.sql
 -- for section-by-section commentary — identical content, appended here for a single
@@ -1378,10 +1379,17 @@ create index if not exists property_systems_owner_idx on public.property_systems
 alter table public.property_systems enable row level security;
 drop policy if exists "property_systems_select_own" on public.property_systems;
 create policy "property_systems_select_own" on public.property_systems for select to authenticated using ((select auth.uid()) = owner_id);
+-- SECURITY: propcrew_contact_id is a plain FK — Postgres only enforces
+-- that the referenced row EXISTS somewhere, not that it belongs to the
+-- same owner. Without the extra check below, Owner A could set
+-- propcrew_contact_id to any other owner's property_contacts row (an id
+-- they'd have to already know/guess, since UUIDs aren't enumerable, but
+-- RLS must not rely on that). "is null or" keeps the field optional.
 drop policy if exists "property_systems_insert_own" on public.property_systems;
 create policy "property_systems_insert_own" on public.property_systems for insert to authenticated with check (
   (select auth.uid()) = owner_id
   and exists (select 1 from public.properties p where p.id = property_id and p.owner_id = (select auth.uid()))
+  and (propcrew_contact_id is null or exists (select 1 from public.property_contacts c where c.id = propcrew_contact_id and c.owner_id = (select auth.uid())))
 );
 drop policy if exists "property_systems_update_own" on public.property_systems;
 create policy "property_systems_update_own" on public.property_systems for update to authenticated
@@ -1389,6 +1397,7 @@ using ((select auth.uid()) = owner_id)
 with check (
   (select auth.uid()) = owner_id
   and exists (select 1 from public.properties p where p.id = property_id and p.owner_id = (select auth.uid()))
+  and (propcrew_contact_id is null or exists (select 1 from public.property_contacts c where c.id = propcrew_contact_id and c.owner_id = (select auth.uid())))
 );
 drop policy if exists "property_systems_delete_own" on public.property_systems;
 create policy "property_systems_delete_own" on public.property_systems for delete to authenticated using ((select auth.uid()) = owner_id);
@@ -1434,6 +1443,33 @@ create index if not exists maintenance_records_system_idx on public.maintenance_
 -- a real, linked calculation instead of a guess.
 alter table public.maintenance_records add column if not exists propcrew_contact_id uuid references public.property_contacts(id) on delete set null;
 create index if not exists maintenance_records_propcrew_contact_idx on public.maintenance_records(propcrew_contact_id);
+
+-- SECURITY: maintenance_records' original (Milestone 5) insert/update
+-- policies only ever checked `owner_id = auth.uid()` — they never
+-- validated any FK column's target. That was already true of property_id
+-- before this milestone (a separate, pre-existing, lower-severity gap:
+-- since every read of this table is itself owner_id-scoped, a forged
+-- property_id can't leak another owner's data, only create an orphaned
+-- row invisible to both owners — out of scope for this milestone, not
+-- changed here). The two NEW columns above are this milestone's own
+-- responsibility, so their policies are tightened here, in the same
+-- drop-and-recreate idiom every other policy in this schema uses, so an
+-- existing production project picks up the fix by simply running this
+-- upgrade file — no separate patch needed.
+drop policy if exists "maintenance_insert_own" on public.maintenance_records;
+create policy "maintenance_insert_own" on public.maintenance_records for insert to authenticated with check (
+  (select auth.uid()) = owner_id
+  and (system_id is null or exists (select 1 from public.property_systems s where s.id = system_id and s.owner_id = (select auth.uid())))
+  and (propcrew_contact_id is null or exists (select 1 from public.property_contacts c where c.id = propcrew_contact_id and c.owner_id = (select auth.uid())))
+);
+drop policy if exists "maintenance_update_own" on public.maintenance_records;
+create policy "maintenance_update_own" on public.maintenance_records for update to authenticated
+using ((select auth.uid()) = owner_id)
+with check (
+  (select auth.uid()) = owner_id
+  and (system_id is null or exists (select 1 from public.property_systems s where s.id = system_id and s.owner_id = (select auth.uid())))
+  and (propcrew_contact_id is null or exists (select 1 from public.property_contacts c where c.id = propcrew_contact_id and c.owner_id = (select auth.uid())))
+);
 
 -- ============================================================
 -- Section 8: Property Notes 2.0
@@ -1489,6 +1525,30 @@ create policy "property_notes_delete_own" on public.property_notes for delete to
 alter table public.property_contacts add column if not exists would_use_again text check (would_use_again in ('YES', 'POSSIBLY', 'NO'));
 alter table public.property_contacts add column if not exists experience_note text;
 
+-- SECURITY: property_contacts' original (Milestone 6) insert/update
+-- policies only ever checked `owner_id = auth.uid()` — property_id
+-- itself was never cross-checked against ownership. That was a narrower
+-- risk before PropCrew (a contact was just a per-property note); it
+-- becomes directly relevant now because PropCrewPanel.save() writes
+-- property_id from client-supplied form state (the "primary" associated
+-- property in its multi-select), so a forged property_id here is one
+-- request away, not a theoretical concern. Tightened here for the same
+-- "Owner A cannot link a PropCrew contact to Owner B's property" property
+-- that property_contact_links below already enforces for its OWN rows —
+-- this closes the same hole on property_contacts' own property_id column.
+drop policy if exists "property_contacts_insert_own" on public.property_contacts;
+create policy "property_contacts_insert_own" on public.property_contacts for insert to authenticated with check (
+  (select auth.uid()) = owner_id
+  and exists (select 1 from public.properties p where p.id = property_id and p.owner_id = (select auth.uid()))
+);
+drop policy if exists "property_contacts_update_own" on public.property_contacts;
+create policy "property_contacts_update_own" on public.property_contacts for update to authenticated
+using ((select auth.uid()) = owner_id)
+with check (
+  (select auth.uid()) = owner_id
+  and exists (select 1 from public.properties p where p.id = property_id and p.owner_id = (select auth.uid()))
+);
+
 -- 2. property_contact_links: a provider can serve MULTIPLE properties
 --    (Part 10: "One PropCrew provider may be associated with multiple
 --    properties"), but property_contacts.property_id is a single FK — kept
@@ -1535,3 +1595,20 @@ on conflict (contact_id, property_id) do nothing;
 -- "owner approves -> relevant PropCrew options shown -> owner selects
 -- approved provider(s)") from requiring a schema change when it's built.
 alter table public.maintenance_requests add column if not exists assigned_contact_id uuid references public.property_contacts(id) on delete set null;
+
+-- SECURITY: same reasoning as maintenance_records above — this new FK
+-- column needs its own ownership check added to the existing (Milestone
+-- 6) insert/update policies, which otherwise only checked
+-- `owner_id = auth.uid()`.
+drop policy if exists "maintenance_requests_insert_own" on public.maintenance_requests;
+create policy "maintenance_requests_insert_own" on public.maintenance_requests for insert to authenticated with check (
+  (select auth.uid()) = owner_id
+  and (assigned_contact_id is null or exists (select 1 from public.property_contacts c where c.id = assigned_contact_id and c.owner_id = (select auth.uid())))
+);
+drop policy if exists "maintenance_requests_update_own" on public.maintenance_requests;
+create policy "maintenance_requests_update_own" on public.maintenance_requests for update to authenticated
+using ((select auth.uid()) = owner_id)
+with check (
+  (select auth.uid()) = owner_id
+  and (assigned_contact_id is null or exists (select 1 from public.property_contacts c where c.id = assigned_contact_id and c.owner_id = (select auth.uid())))
+);
