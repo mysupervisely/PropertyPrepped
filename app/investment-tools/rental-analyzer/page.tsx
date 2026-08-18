@@ -361,12 +361,19 @@ function PropertyEvaluator() {
       purchasePrice: property.purchase_price ? String(property.purchase_price) : f.purchasePrice,
       marketValue: property.estimated_value ? String(property.estimated_value) : f.marketValue,
       monthlyRent: String(lease?.monthly_rent || property.monthly_rent || f.monthlyRent),
-      // Item 7: a mortgage record proves the property is financed. Its
-      // absence proves nothing either way — PropRoster has no canonical
-      // "paid off" flag on properties (see the completion report) — so
-      // this is never allowed to default to PaidOff, only to Financed
-      // (when a mortgage row exists) or Unknown (left for the user).
-      financingStatus: mortgage ? 'Financed' : 'Unknown',
+      // Property Financing Status Foundation (milestone-13): the
+      // canonical property.financing_status is now the primary,
+      // explicit-user-confirmed source when it's a decisive value
+      // ('Active Mortgage' / 'Paid Off' / 'No Mortgage') — reliable
+      // provider/derived signals only take over when it's genuinely
+      // unset (null or the explicit 'Unknown'). A mortgage record proves
+      // the property is financed; its absence proves nothing either way,
+      // so the fallback still only ever reaches Financed or Unknown,
+      // never PaidOff. Precedence: explicit user-confirmed value >
+      // reliable derived value (mortgage row) > Unknown.
+      financingStatus: property.financing_status === 'Active Mortgage' ? 'Financed'
+        : property.financing_status === 'Paid Off' || property.financing_status === 'No Mortgage' ? 'PaidOff'
+        : mortgage ? 'Financed' : 'Unknown',
       downPaymentMode: 'amount',
       downPaymentAmount: mortgage ? String(Math.max(0, Number(property.purchase_price || 0) - Number(mortgage.original_balance || 0))) : f.downPaymentAmount,
       interestRate: mortgage?.interest_rate ? String(mortgage.interest_rate) : f.interestRate,
