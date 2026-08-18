@@ -600,7 +600,7 @@ function PropertyEvaluator() {
             <label className="evalField">
               <span>Property Address</span>
               <div className="evalInputWrap">
-                <AddressAutocomplete value={form.address} onTextChange={(v) => set('address', v)} onSelect={(addr) => set('address', addr.formattedAddress)} placeholder="12109 Rustic River Way, Tampa, FL 33635" />
+                <AddressAutocomplete value={form.address} onTextChange={(v) => set('address', v)} onSelect={(addr) => set('address', addr.formattedAddress)} placeholder="123 Example Street, Example City, FL 12345" />
               </div>
             </label>
             <label className="evalField"><span>Property type</span><select value={form.propertyType} onChange={(e) => set('propertyType', e.target.value)}>{propertyTypeOptions.map((t) => <option key={t}>{t}</option>)}</select></label>
