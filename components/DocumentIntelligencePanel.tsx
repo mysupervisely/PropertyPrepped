@@ -95,6 +95,8 @@ export default function DocumentIntelligencePanel({
   currentMortgageBalance,
   currentMonthlyRent,
   currentEstimatedValue,
+  canUseDocumentIntelligence,
+  onUpgradeClick,
   onClose,
   onOpenDocument,
   onRefresh,
@@ -106,6 +108,10 @@ export default function DocumentIntelligencePanel({
   currentMortgageBalance?: number | null
   currentMonthlyRent?: number | null
   currentEstimatedValue?: number | null
+  /** Launch Pricing: gates both the initial "Analyze" and "Retry Analysis" triggers — UI-only (the analyze route enforces this server-side regardless), keeps this panel from opening a request the plan can't complete. */
+  canUseDocumentIntelligence: boolean
+  /** Shown in place of the Analyze/Retry button when the plan doesn't include Document Intelligence — parent owns the actual upgrade modal (this component has no billing/supabase context of its own). */
+  onUpgradeClick: () => void
   onClose: () => void
   onOpenDocument: () => void
   onRefresh: () => void
@@ -212,7 +218,11 @@ export default function DocumentIntelligencePanel({
         {status === 'Not Analyzed' && (
           <div className="docIntelPrompt">
             <p>Upload it. PropRoster handles the rest — extract key details, dates, amounts and coverage/terms from this document automatically.</p>
-            <button className="primary" disabled={busy} onClick={() => void runAnalyze()}>{busy ? 'Starting…' : 'Analyze with PropRoster AI'}</button>
+            {canUseDocumentIntelligence ? (
+              <button className="primary" disabled={busy} onClick={() => void runAnalyze()}>{busy ? 'Starting…' : 'Analyze with PropRoster AI'}</button>
+            ) : (
+              <><p className="muted">AI Document Intelligence is included with Manage.</p><button className="primary" onClick={onUpgradeClick}>Included with Manage</button></>
+            )}
           </div>
         )}
 
@@ -224,7 +234,11 @@ export default function DocumentIntelligencePanel({
           <div className="docIntelPrompt docIntelFailed">
             <p>{document.analysis_error || 'The last analysis attempt failed.'}</p>
             <p className="muted">Your document and any existing PropRoster data are unchanged.</p>
-            <button className="primary" disabled={busy} onClick={() => void runAnalyze()}>{busy ? 'Retrying…' : 'Retry Analysis'}</button>
+            {canUseDocumentIntelligence ? (
+              <button className="primary" disabled={busy} onClick={() => void runAnalyze()}>{busy ? 'Retrying…' : 'Retry Analysis'}</button>
+            ) : (
+              <button className="primary" onClick={onUpgradeClick}>Included with Manage</button>
+            )}
           </div>
         )}
 

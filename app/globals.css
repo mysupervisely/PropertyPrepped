@@ -616,6 +616,16 @@ h2, h3, p { margin-top: 0; }
 .pricingCard .primary, .pricingCard .secondary { width: 100%; text-align: center; text-decoration: none; }
 .pricingFooterNote { max-width: 720px; margin: 8px 0 40px; }
 
+/* Launch Pricing (capability-based relaunch): feature-first cards — the
+   list below the price is the actual pitch, property count is just one
+   line inside it, never the headline (see PLAN_FEATURE_HIGHLIGHTS). */
+.pricingFeatureList { list-style: none; margin: 2px 0 10px; padding: 0; display: grid; gap: 6px; font-size: 13.5px; }
+.pricingFeatureList li { padding-left: 20px; position: relative; }
+.pricingFeatureList li::before { content: '✓'; position: absolute; left: 0; color: var(--brand); font-weight: 800; }
+.pricingCardComingSoon { opacity: .85; }
+.pricingBadgeComingSoon { background: var(--muted); }
+.pricingLegacyNote { margin: 0 0 18px; }
+
 .upgradeModal { width: min(480px, calc(100% - 30px)); }
 .upgradeLead { font-weight: 700; font-size: 16px; margin-bottom: 6px; }
 

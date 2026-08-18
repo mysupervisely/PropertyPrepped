@@ -19,7 +19,10 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
+import { useSubscription } from '../../lib/useSubscription'
+import { entitlementsFor } from '../../lib/billing/entitlements'
 import { AuthHeader } from '../../components/AuthHeader'
+import { UpgradePrompt } from '../../components/UpgradePrompt'
 import type { ApplyFields, DocumentAnalysisOutput } from '../../lib/document-intelligence/schemas'
 import type { DocumentType } from '../../lib/document-intelligence/types'
 import type { SmartUploadContact, SmartUploadProperty, SmartUploadSystem } from '../../lib/smart-upload/types'
@@ -66,8 +69,9 @@ const STATUS_TONE: Record<ImportDisplayStatus, string> = {
 
 export default function SmartImportPage() {
   const { user, ready } = useAuthUser()
+  const { plan, loading: planLoading } = useSubscription(user)
 
-  if (!ready) return <main className="authShell"><div className="loadingState">Loading Smart Import…</div></main>
+  if (!ready || (user && planLoading)) return <main className="authShell"><div className="loadingState">Loading Smart Import…</div></main>
 
   if (!user) {
     return (
@@ -78,6 +82,27 @@ export default function SmartImportPage() {
           <p className="authIntro">Sign in to import existing property records.</p>
           <Link className="primary authSubmit" href="/">Go to sign in</Link>
         </section>
+      </main>
+    )
+  }
+
+  // Launch Pricing: Smart Import shares the exact same AI pipeline as
+  // Smart Upload/Retry Analysis (see this file's own top comment) — a
+  // page-level gate here is the "meaningful entry point" half of
+  // enforcement; the analyze route's server-side check is what actually
+  // stops the AI cost regardless of what this page does.
+  if (!entitlementsFor(plan).canUseSmartImport && supabase) {
+    return (
+      <main className="shell">
+        <AuthHeader />
+        <UpgradePrompt
+          supabase={supabase}
+          currentPlan={plan}
+          onClose={() => {}}
+          headline="Smart Import is included with Manage."
+          targetPlanId="manage"
+          description="Manage includes Smart Upload, Smart Import, AI Document Intelligence, Rent Ledger and PropWatch."
+        />
       </main>
     )
   }

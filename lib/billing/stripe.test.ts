@@ -3,6 +3,11 @@ import { isPurchasablePlanId, isStripeConfigured, planForPriceId, resolvePriceId
 
 const ENV = {
   STRIPE_SECRET_KEY: 'sk_test_123',
+  // Launch Pricing: new + legacy price ids configured side by side —
+  // exactly the "keep existing legacy Stripe environment-variable
+  // mappings intact" launch requirement.
+  STRIPE_ORGANIZE_PRICE_ID: 'price_organize',
+  STRIPE_MANAGE_PRICE_ID: 'price_manage',
   STRIPE_INVESTOR_PRICE_ID: 'price_investor',
   STRIPE_PORTFOLIO_PRICE_ID: 'price_portfolio',
   STRIPE_PORTFOLIO_PRO_PRICE_ID: 'price_portfolio_pro',
@@ -19,17 +24,26 @@ describe('isStripeConfigured — missing Stripe configuration must not crash the
 })
 
 describe('isPurchasablePlanId — the browser may only ever name a plan, never a Stripe Price id', () => {
-  it('accepts exactly the three purchasable plan identifiers', () => {
-    expect(isPurchasablePlanId('investor')).toBe(true)
-    expect(isPurchasablePlanId('portfolio')).toBe(true)
-    expect(isPurchasablePlanId('portfolio_pro')).toBe(true)
+  it('accepts exactly the two launch-purchasable plan identifiers', () => {
+    expect(isPurchasablePlanId('organize')).toBe(true)
+    expect(isPurchasablePlanId('manage')).toBe(true)
   })
 
   it('rejects "free" — it is not purchasable through Checkout', () => {
     expect(isPurchasablePlanId('free')).toBe(false)
   })
 
-  it('7/9. rejects "owner" — the internal plan has no Stripe product and can never be Checkout\'s target', () => {
+  it('rejects "automate" — Coming Soon, not purchasable at launch', () => {
+    expect(isPurchasablePlanId('automate')).toBe(false)
+  })
+
+  it('rejects legacy plan ids — no longer offered to new customers, even though existing subscribers keep them', () => {
+    expect(isPurchasablePlanId('investor')).toBe(false)
+    expect(isPurchasablePlanId('portfolio')).toBe(false)
+    expect(isPurchasablePlanId('portfolio_pro')).toBe(false)
+  })
+
+  it('rejects "owner" — the internal plan has no Stripe product and can never be Checkout\'s target', () => {
     expect(isPurchasablePlanId('owner')).toBe(false)
   })
 
@@ -41,25 +55,29 @@ describe('isPurchasablePlanId — the browser may only ever name a plan, never a
     expect(isPurchasablePlanId(null)).toBe(false)
     expect(isPurchasablePlanId(undefined)).toBe(false)
     expect(isPurchasablePlanId(123)).toBe(false)
-    expect(isPurchasablePlanId({ plan: 'portfolio_pro' })).toBe(false)
-    expect(isPurchasablePlanId('portfolio_pro; DROP TABLE user_subscriptions;')).toBe(false)
+    expect(isPurchasablePlanId({ plan: 'manage' })).toBe(false)
+    expect(isPurchasablePlanId('manage; DROP TABLE user_subscriptions;')).toBe(false)
   })
 })
 
 describe('resolvePriceId — server-side plan → Price id mapping', () => {
   it('resolves each purchasable plan to its configured env var', () => {
-    expect(resolvePriceId('investor', ENV)).toBe('price_investor')
-    expect(resolvePriceId('portfolio', ENV)).toBe('price_portfolio')
-    expect(resolvePriceId('portfolio_pro', ENV)).toBe('price_portfolio_pro')
+    expect(resolvePriceId('organize', ENV)).toBe('price_organize')
+    expect(resolvePriceId('manage', ENV)).toBe('price_manage')
   })
 
   it('returns null (not a guessed default) when the env var is unset', () => {
-    expect(resolvePriceId('investor', {})).toBeNull()
+    expect(resolvePriceId('organize', {})).toBeNull()
   })
 })
 
 describe('planForPriceId — webhook-side Price id → plan mapping', () => {
-  it('resolves each configured price id back to its plan', () => {
+  it('resolves each new launch-pricing price id to its plan', () => {
+    expect(planForPriceId('price_organize', ENV)).toBe('organize')
+    expect(planForPriceId('price_manage', ENV)).toBe('manage')
+  })
+
+  it('CRITICAL: still resolves every legacy price id to its legacy plan — an old valid Stripe Price must never resolve to Free', () => {
     expect(planForPriceId('price_investor', ENV)).toBe('investor')
     expect(planForPriceId('price_portfolio', ENV)).toBe('portfolio')
     expect(planForPriceId('price_portfolio_pro', ENV)).toBe('portfolio_pro')
@@ -72,5 +90,10 @@ describe('planForPriceId — webhook-side Price id → plan mapping', () => {
 
   it('resolves an unrecognized price id to free rather than guessing a paid plan', () => {
     expect(planForPriceId('price_some_other_product', ENV)).toBe('free')
+  })
+
+  it('still resolves legacy price ids correctly even when the NEW env vars are unset (a deployment that has not yet added Organize/Manage prices)', () => {
+    const legacyOnlyEnv = { ...ENV, STRIPE_ORGANIZE_PRICE_ID: undefined, STRIPE_MANAGE_PRICE_ID: undefined }
+    expect(planForPriceId('price_portfolio', legacyOnlyEnv)).toBe('portfolio')
   })
 })

@@ -28,17 +28,33 @@ export function getStripeClient(): Stripe {
   return cachedClient
 }
 
-// Only these three plans are purchasable through Checkout — Free has no
-// price, and 21+ is a "Let's Talk" contact flow with no Stripe object at
-// all (Section 6/15: do NOT create an automatic Stripe tier for 21+).
+// Launch Pricing: only 'organize'/'manage' are purchasable through
+// Checkout for NEW customers — Free has no price, 'automate' has no
+// Stripe price yet (Coming Soon), the legacy plans are no longer offered
+// (see PRICE_ENV_VAR_LEGACY below for why their env vars stay wired
+// regardless), and 21+ is a "Let's Talk" contact flow with no Stripe
+// object at all (Section 6/15: do NOT create an automatic Stripe tier
+// for 21+).
 const PRICE_ENV_VAR: Record<PurchasablePlanId, string> = {
+  organize: 'STRIPE_ORGANIZE_PRICE_ID',
+  manage: 'STRIPE_MANAGE_PRICE_ID',
+}
+
+// LEGACY — kept intact and unchanged (Section: Legacy Subscribers: "DO
+// NOT remove recognition of their existing Stripe Price IDs"). Never
+// used by the checkout route (new customers can't select these plan
+// ids — isPurchasablePlanId below rejects them), ONLY by
+// planForPriceId() so an existing subscriber's webhook events
+// (renewals, portal-driven changes) keep resolving to the correct
+// legacy plan forever, exactly as before this launch-pricing change.
+const PRICE_ENV_VAR_LEGACY: Record<'investor' | 'portfolio' | 'portfolio_pro', string> = {
   investor: 'STRIPE_INVESTOR_PRICE_ID',
   portfolio: 'STRIPE_PORTFOLIO_PRICE_ID',
   portfolio_pro: 'STRIPE_PORTFOLIO_PRO_PRICE_ID',
 }
 
 export function isPurchasablePlanId(value: unknown): value is PurchasablePlanId {
-  return value === 'investor' || value === 'portfolio' || value === 'portfolio_pro'
+  return value === 'organize' || value === 'manage'
 }
 
 /**
@@ -60,11 +76,22 @@ export function resolvePriceId(plan: PurchasablePlanId, env: Record<string, stri
  * a stale/renamed price, or a manual Stripe Dashboard subscription not
  * created through our Checkout flow) safely resolves to 'free' rather
  * than guessing.
+ *
+ * Checks NEW launch-pricing price ids first, then LEGACY price ids —
+ * both recognized unconditionally, forever. This is what makes "an old
+ * valid Stripe Price never resolves to Free" true: an existing Investor/
+ * Portfolio/Portfolio Pro subscriber's every future webhook event
+ * (renewal, portal-driven update, cancellation) still maps their price
+ * id to their real legacy plan, exactly as it did before this launch
+ * pricing change — nothing here depends on whether that plan is
+ * currently purchasable.
  */
 export function planForPriceId(priceId: string | null | undefined, env: Record<string, string | undefined> = process.env): PlanId {
   if (!priceId) return 'free'
-  if (priceId === env.STRIPE_INVESTOR_PRICE_ID) return 'investor'
-  if (priceId === env.STRIPE_PORTFOLIO_PRICE_ID) return 'portfolio'
-  if (priceId === env.STRIPE_PORTFOLIO_PRO_PRICE_ID) return 'portfolio_pro'
+  if (priceId === env[PRICE_ENV_VAR.organize]) return 'organize'
+  if (priceId === env[PRICE_ENV_VAR.manage]) return 'manage'
+  if (priceId === env[PRICE_ENV_VAR_LEGACY.investor]) return 'investor'
+  if (priceId === env[PRICE_ENV_VAR_LEGACY.portfolio]) return 'portfolio'
+  if (priceId === env[PRICE_ENV_VAR_LEGACY.portfolio_pro]) return 'portfolio_pro'
   return 'free'
 }
