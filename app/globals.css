@@ -342,17 +342,37 @@ h2, h3, p { margin-top: 0; }
 /* Final Launch Fixes: PropWatch dashboard reorder — compact, two
    side-by-side panels (desktop) instead of three stacked full-width
    sections. Reuses .commandCenterSection/.sectionHead/.dashboardItemList/
-   .dashboardItemRow as-is; only the panel wrapper below is new. */
-.propWatchGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
-.propWatchPanel { border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: white; min-width: 0; }
+   .dashboardItemRow as-is; only the panel wrapper below is new.
+
+   Small Launch Follow-up (Unified PropWatch Card): real mobile testing
+   showed two separate bordered cards read as too much vertical weight,
+   especially with Upcoming empty. propWatchCard is now the ONE outer
+   card (border/radius/background live here only); propWatchGrid is
+   purely an internal layout — side by side on desktop with a vertical
+   divider, stacked with a horizontal divider on mobile. align-items:
+   start (kept) means the shorter panel never gets stretched/padded to
+   match the taller one, so an empty Upcoming panel stays exactly as
+   tall as its own compact content. */
+.propWatchCard { border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: white; }
+.propWatchGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; align-items: start; }
+.propWatchPanel { min-width: 0; padding-left: 16px; }
+.propWatchPanel:first-child { padding-left: 0; }
+.propWatchPanel:last-child { padding-right: 0; border-left: 1px solid var(--line); }
 .propWatchPanel .dashboardItemList { gap: 6px; }
 .propWatchPanel .dashboardItemRow { padding: 10px 12px; }
+/* Compact empty state inside a PropWatch panel — .emptyState's shared
+   170px min-height (used elsewhere for large centered placeholders) is
+   exactly the "large empty Upcoming space" this follow-up fixes; scoped
+   here only, .emptyState itself is untouched for every other caller. */
+.propWatchPanel .emptyState { min-height: 0; padding: 6px 0 0; text-align: left; place-items: start; }
 .propWatchPanelHead { margin-bottom: 10px; }
 .propWatchPanelHead h3 { font-size: 15px; margin-bottom: 2px; }
 .propWatchPanelHead p { color: var(--muted); font-size: 12.5px; margin-bottom: 0; }
 .propWatchPanelSubhead { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
 @media (max-width: 720px) {
   .propWatchGrid { grid-template-columns: 1fr; }
+  .propWatchPanel { padding-left: 0; }
+  .propWatchPanel:last-child { border-left: none; border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
 }
 
 /* Milestone 5: leases, mortgage, insurance & maintenance */
@@ -1028,8 +1048,16 @@ h2, h3, p { margin-top: 0; }
 .authNavMenuButton { border: 1px solid var(--line); background: white; color: var(--text); width: 40px; height: 40px; border-radius: 10px; font-size: 17px; display: grid; place-items: center; }
 .authNavMenuButton:hover { border-color: var(--brand); color: var(--brand); }
 /* Final Launch Fixes: header profile avatar — same button, ~34px
-   circle, comfortably inside the existing 40px touch target. */
-.authNavAvatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; display: block; }
+   circle, comfortably inside the existing 40px touch target.
+   Follow-up (avatar presentation): authNavMenuButtonHasAvatar strips
+   the button's own white background/border/padding (built for the ☰
+   glyph) so nothing square shows behind the circular photo — width =
+   height, border-radius: 50%, overflow: hidden as a defensive clip in
+   case the image ever briefly renders larger than its box. The ☰
+   fallback state (no photo) is completely untouched. */
+.authNavMenuButtonHasAvatar { background: transparent; border-color: transparent; padding: 0; border-radius: 50%; overflow: hidden; }
+.authNavMenuButtonHasAvatar:hover { border-color: transparent; }
+.authNavAvatar { width: 34px; height: 34px; border-radius: 50%; overflow: hidden; object-fit: cover; object-position: center; display: block; }
 .authNavMenuPanel { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; min-width: 200px; background: white; border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 12px 28px rgba(15, 30, 24, .12); display: grid; }
 .authNavMenuPanel a { display: block; padding: 10px 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; }
 .authNavMenuPanel a:hover { background: var(--brand-soft); color: var(--brand); }
