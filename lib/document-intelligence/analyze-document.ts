@@ -12,6 +12,7 @@ export type AnalyzeDocumentInput = {
   documentType: DocumentType
   fileBuffer: ArrayBuffer
   fileName: string
+  mimeType: 'application/pdf' | 'image/jpeg' | 'image/png' | 'image/webp'
 }
 
 export type AnalyzeDocumentResult = {

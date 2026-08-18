@@ -18,6 +18,7 @@ function fakeOutput(overrides: Partial<DocumentAnalysisOutput> = {}): DocumentAn
       escrowAmount: null, loanTermYears: null, maturityDate: null, tenantName: null, tenantEmail: null, monthlyRent: null,
       securityDeposit: null, startDate: null, endDate: null, vendor: null, description: null, cost: null, amount: null,
       date: null, category: null, name: null, businessName: null, phone: null, email: null, website: null, estimatedValue: null,
+      propertyAddress: null,
     },
     ...overrides,
   }
@@ -34,7 +35,7 @@ describe('analyzeDocument — orchestration', () => {
       }),
     }
 
-    const result = await analyzeDocument({ documentType: 'Insurance Policy', fileBuffer: new ArrayBuffer(4), fileName: 'policy.pdf' }, provider)
+    const result = await analyzeDocument({ documentType: 'Insurance Policy', fileBuffer: new ArrayBuffer(4), fileName: 'policy.pdf', mimeType: 'application/pdf' }, provider)
 
     expect(provider.analyzeDocument).toHaveBeenCalledOnce()
     expect(result.provider).toBe('fake-provider')
@@ -52,7 +53,7 @@ describe('analyzeDocument — 7. malformed AI response', () => {
     }
 
     await expect(
-      analyzeDocument({ documentType: 'Lease', fileBuffer: new ArrayBuffer(4), fileName: 'lease.pdf' }, provider),
+      analyzeDocument({ documentType: 'Lease', fileBuffer: new ArrayBuffer(4), fileName: 'lease.pdf', mimeType: 'application/pdf' }, provider),
     ).rejects.toThrow('could not be parsed')
   })
 })
@@ -76,7 +77,7 @@ describe('analyzeDocument — 13. safe handling of prompt-injection-like documen
       }),
     }
 
-    const result = await analyzeDocument({ documentType: 'Insurance Policy', fileBuffer: new ArrayBuffer(4), fileName: 'policy.pdf' }, provider)
+    const result = await analyzeDocument({ documentType: 'Insurance Policy', fileBuffer: new ArrayBuffer(4), fileName: 'policy.pdf', mimeType: 'application/pdf' }, provider)
 
     // The suspicious text survives byte-for-byte as plain field data — proving
     // there's no code path that interprets it as anything but a string.

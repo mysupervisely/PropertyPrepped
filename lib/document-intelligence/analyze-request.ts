@@ -20,7 +20,12 @@ import { TempProviderDiagnosticError } from './temp-diagnostics'
 
 export type PropertyDocumentRow = {
   id: string
-  property_id: string
+  // Smart Upload Foundation: nullable — a Smart Upload item is uploaded
+  // and analyzed BEFORE the user has chosen which property it belongs to
+  // (supabase/milestone-12-smart-upload.sql). Every other write path in
+  // this app still always supplies a real property_id at upload time, so
+  // this is the only place that needed to change to accommodate it.
+  property_id: string | null
   owner_id: string
   name: string
   storage_path: string
@@ -29,6 +34,32 @@ export type PropertyDocumentRow = {
   document_type: string | null
   classification_source: string | null
   analysis_status: string | null
+}
+
+// Smart Upload Foundation: AI analysis originally supported PDF only —
+// receipts/invoices captured via a phone camera (Smart Upload's priority
+// V1 use case, Part 10) are images, so this now also accepts the same
+// image formats already accepted elsewhere in this app (property photo
+// uploads — see supabase/schema.sql's property-photos bucket
+// allowed_mime_types), MINUS heic/heif: Anthropic's vision input does not
+// accept those directly, and this app has no image-transcoding step, so
+// a HEIC photo fails this check today rather than being silently
+// mis-sent — Section 19's "handle unsupported files gracefully" (the
+// document itself still saves to Documents; only AI analysis is skipped).
+const SUPPORTED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+
+function resolveMimeType(doc: Pick<PropertyDocumentRow, 'mime_type' | 'name'>): 'application/pdf' | 'image/jpeg' | 'image/png' | 'image/webp' | null {
+  const lowerName = doc.name.toLowerCase()
+  if (doc.mime_type === 'application/pdf' || (!doc.mime_type && lowerName.endsWith('.pdf'))) return 'application/pdf'
+  if (doc.mime_type && SUPPORTED_IMAGE_MIME_TYPES.has(doc.mime_type)) return doc.mime_type as 'image/jpeg' | 'image/png' | 'image/webp'
+  // No mime_type on record (older rows, or an upload that didn't set
+  // one) — fall back to a conservative extension check for the same set.
+  if (!doc.mime_type) {
+    if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) return 'image/jpeg'
+    if (lowerName.endsWith('.png')) return 'image/png'
+    if (lowerName.endsWith('.webp')) return 'image/webp'
+  }
+  return null
 }
 
 export type AnalyzeRequestDeps = {
@@ -46,7 +77,7 @@ export type AnalyzeRequestDeps = {
   updateDocumentStatus: (documentId: string, patch: Record<string, unknown>) => Promise<void>
   createSignedUrl: (storagePath: string) => Promise<string | null>
   fetchFileBytes: (url: string) => Promise<ArrayBuffer>
-  analyze: (input: { documentType: DocumentType; fileBuffer: ArrayBuffer; fileName: string }) => Promise<AnalyzeDocumentResult>
+  analyze: (input: { documentType: DocumentType; fileBuffer: ArrayBuffer; fileName: string; mimeType: 'application/pdf' | 'image/jpeg' | 'image/png' | 'image/webp' }) => Promise<AnalyzeDocumentResult>
   getNextVersion: (documentId: string) => Promise<number>
   saveAnalysis: (row: Record<string, unknown>) => Promise<{ id: string } | null>
   recordUsage: (row: Record<string, unknown>) => Promise<void>
@@ -73,6 +104,15 @@ export type AnalyzeRequestResult = { status: number; body: Record<string, unknow
 // base64 payload (~26.7MB) comfortably under that ceiling with headroom for
 // prompt overhead — 28MB raw would have produced a base64 payload
 // (~37.3MB) that already exceeds the limit before any prompt text is added.
+//
+// Smart Upload Foundation: applied unchanged to images too, rather than
+// measuring and hardcoding a separate, tighter image-specific number —
+// "reuse the existing limit, do not silently increase it" (Part 4). A
+// phone photo is realistically a few MB, well under this either way; if
+// Anthropic's own (tighter, undocumented-here) per-image limit ever
+// rejects one first, that surfaces as a normal analysis failure through
+// the existing generic error handling below, same as any other provider
+// error.
 const MAX_FILE_BYTES = 20 * 1024 * 1024
 
 export async function handleAnalyzeRequest(
@@ -91,9 +131,9 @@ export async function handleAnalyzeRequest(
     return { status: 503, body: { error: 'AI document analysis has not been configured yet.' } }
   }
 
-  const isPdf = doc.mime_type === 'application/pdf' || doc.name.toLowerCase().endsWith('.pdf')
-  if (!isPdf) {
-    return { status: 415, body: { error: 'AI analysis currently supports PDF documents only.' } }
+  const resolvedMimeType = resolveMimeType(doc)
+  if (!resolvedMimeType) {
+    return { status: 415, body: { error: 'AI analysis currently supports PDF, JPEG, PNG, and WEBP files.' } }
   }
   // Explicit server-side limits — never rely on the browser having validated
   // this. `size_bytes` is a bigint column; 0/undefined must fail closed
@@ -146,7 +186,7 @@ export async function handleAnalyzeRequest(
 
   let result: AnalyzeDocumentResult
   try {
-    result = await deps.analyze({ documentType: requestedType, fileBuffer, fileName: doc.name })
+    result = await deps.analyze({ documentType: requestedType, fileBuffer, fileName: doc.name, mimeType: resolvedMimeType })
   } catch (err) {
     // Never surface the raw provider error (could contain request internals,
     // or an UnverifiedModelError naming an internal config value) to the client.

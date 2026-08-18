@@ -192,9 +192,15 @@ describe('Production-hardening pass — Anthropic union AND optional-parameter l
     return count
   }
 
-  it('the OLD internal-shaped request would have produced exactly 36 union parameters (documents Incident 1\'s root cause, does not regress it — this schema is never sent to Anthropic directly anymore)', () => {
+  // 37, not 36: Smart Upload Foundation added one more nullable field
+  // (applyFields.propertyAddress) to ApplyFieldsSchema, so the OLD
+  // (never-sent) internal shape now has one more nullable/union field
+  // than it did when Incident 1 was fixed. Still documents the same
+  // fact — the provider-facing schema actually sent to Anthropic
+  // (tested immediately below) stays at ZERO regardless of this number.
+  it('the OLD internal-shaped request would have produced exactly 37 union parameters (documents Incident 1\'s root cause, does not regress it — this schema is never sent to Anthropic directly anymore)', () => {
     const format = zodOutputFormat(DocumentAnalysisSchema)
-    expect(countAnyOf(format.schema)).toBe(36)
+    expect(countAnyOf(format.schema)).toBe(37)
   })
 
   it('the provider-facing schema actually sent to Anthropic produces ZERO union parameters (Incident 1 stays fixed)', () => {

@@ -14,6 +14,9 @@ export type AnalyzeProviderInput = {
   documentType: DocumentType
   fileBuffer: ArrayBuffer
   fileName: string
+  // Smart Upload Foundation: which content-block shape to send to
+  // Anthropic (document vs. image) — see providers/anthropic.ts.
+  mimeType: 'application/pdf' | 'image/jpeg' | 'image/png' | 'image/webp'
 }
 
 export type AnalyzeProviderResult = {

@@ -40,42 +40,53 @@ Accuracy and honesty rules:
 You must respond only with the structured output described by the provided schema — do not add commentary outside of it.`
 }
 
+// Smart Upload Foundation: every type's guidance now also asks for
+// propertyAddress in applyFields (moved out of the free-text
+// importantNotes list for the types that used to mention it there) —
+// it's used to suggest which of the reader's own properties this
+// document belongs to, so it matters for every document type, not just
+// the ones that previously had a reason to mention an address.
 const FIELD_GUIDANCE: Record<DocumentType, string> = {
   'Insurance Policy': `This is an insurance policy or declarations page.
-Fill applyFields with: carrier, policyNumber, annualPremium, deductible, effectiveDate, expirationDate (dates as YYYY-MM-DD, amounts as plain digits with no "$" or ",").
+Fill applyFields with: carrier, policyNumber, annualPremium, deductible, effectiveDate, expirationDate (dates as YYYY-MM-DD, amounts as plain digits with no "$" or ","), propertyAddress (the insured property's street address, if shown).
 Put anything else worth knowing in importantNotes — dwelling/other-structures/personal-property/loss-of-use/liability/medical-payments coverage amounts, wind/hurricane deductible, whether flood coverage or replacement cost coverage is indicated, major endorsements or exclusions, mortgagee if shown, and renewal information.
 Example of the tone to use in a note: "Dwelling coverage appears to be $425,000, with a 2% hurricane deductible. Flood coverage was not identified in the uploaded document."`,
 
   Lease: `This is a lease agreement.
-Fill applyFields with: tenantName, tenantEmail (only if shown), monthlyRent, securityDeposit, startDate, endDate (dates as YYYY-MM-DD, amounts as plain digits).
+Fill applyFields with: tenantName, tenantEmail (only if shown), monthlyRent, securityDeposit, startDate, endDate (dates as YYYY-MM-DD, amounts as plain digits), propertyAddress (the rented property's street address, if shown).
 Put anything else worth knowing in importantNotes — landlord name, rent due date, late fee, grace period, renewal terms, notice requirement, utilities responsibility, pet provisions, maintenance responsibilities, early termination provisions, and other unusual clauses.
 Include one note or itemsToReview entry reminding the reader that this summary does not replace reviewing the full signed lease.`,
 
   'Mortgage / Loan Statement': `This is a mortgage or loan statement/document.
-Fill applyFields with: lender, loanNumber, originalBalance, currentBalance, interestRate, monthlyPayment, escrowAmount, loanTermYears, maturityDate.
+Fill applyFields with: lender, loanNumber, originalBalance, currentBalance, interestRate, monthlyPayment, escrowAmount, loanTermYears, maturityDate, propertyAddress (the mortgaged property's street address, if shown).
 Do not include a loan number's full digits anywhere — mask earlier digits (e.g. "••••1234") in applyFields.loanNumber and never surface a fully unmasked account/loan number in the summary, overview, or any note.
 Put anything else worth knowing in importantNotes — whether the rate is fixed or adjustable and any ARM adjustment information, taxes/insurance portions if broken out separately from principal and interest, next payment date, and any prepayment penalty indication.`,
 
-  'Closing Disclosure / Settlement Statement': `This is a closing disclosure or settlement statement. This document type has no applyFields to fill (leave applyFields values all not-identified) — put everything in importantNotes: property address, buyer, seller, closing date, purchase price, loan amount, down payment, earnest money, closing costs, lender/seller credits, prorated property taxes if shown, recording fees, title costs, prepaid insurance, cash to close, and other major transaction costs.
+  'Closing Disclosure / Settlement Statement': `This is a closing disclosure or settlement statement.
+Fill applyFields with: propertyAddress only (leave every other applyFields value not-identified) — put everything else in importantNotes: buyer, seller, closing date, purchase price, loan amount, down payment, earnest money, closing costs, lender/seller credits, prorated property taxes if shown, recording fees, title costs, prepaid insurance, cash to close, and other major transaction costs.
 This is for organizing records only — do not calculate or state a tax basis, and do not give tax advice; note in missingOrUnclear that basis calculations are outside this summary's scope if relevant.`,
 
-  'Inspection Report': `This is a home/property inspection report. This document type has no applyFields to fill — put everything in importantNotes: inspection date, inspector name, inspection company, major systems reviewed, high-priority issues, safety concerns, water/moisture/roof/HVAC/electrical/plumbing/foundation observations, items requiring monitoring, and recommended specialist follow-ups.
+  'Inspection Report': `This is a home/property inspection report.
+Fill applyFields with: propertyAddress only (leave every other applyFields value not-identified) — put everything else in importantNotes: inspection date, inspector name, inspection company, major systems reviewed, high-priority issues, safety concerns, water/moisture/roof/HVAC/electrical/plumbing/foundation observations, items requiring monitoring, and recommended specialist follow-ups.
 Only include an "estimated remaining life" figure if the report explicitly states one — never estimate this yourself. Do not turn the inspector's observations into definitive engineering conclusions or repair-cost estimates; report what the inspector wrote, using their own qualifiers (e.g. "appears", "recommend further evaluation").`,
 
   Appraisal: `This is a property appraisal.
-Fill applyFields with: estimatedValue (plain digits, no "$" or ",") and effectiveDate.
-Put anything else worth knowing in importantNotes — property address, property type, square footage, lot size, bedrooms, bathrooms, year built, a brief description of comparable sales if listed, appraiser name/company, and important valuation notes or conditions.`,
+Fill applyFields with: estimatedValue (plain digits, no "$" or ","), effectiveDate, propertyAddress (the appraised property's street address, if shown).
+Put anything else worth knowing in importantNotes — property type, square footage, lot size, bedrooms, bathrooms, year built, a brief description of comparable sales if listed, appraiser name/company, and important valuation notes or conditions.`,
 
   'Contractor Invoice / Receipt': `This is a contractor invoice or receipt.
-Fill applyFields with: vendor, phone, email, website, description (a short description of the work), category (e.g. Plumbing, Electrical, HVAC, Roofing, Landscaping, General Repair), cost, amount (same value as cost), date (invoice date, YYYY-MM-DD), name (vendor contact name if different from business), businessName.
-Put anything else worth knowing in importantNotes — invoice number, property/service address, a breakdown of labor/materials/tax if shown, warranty information, and any recommended follow-up work mentioned.`,
+Fill applyFields with: vendor, phone, email, website, description (a short description of the work), category (e.g. Plumbing, Electrical, HVAC, Roofing, Landscaping, General Repair), cost, amount (same value as cost), date (invoice date, YYYY-MM-DD), name (vendor contact name if different from business), businessName, propertyAddress (the property the work/purchase was for, if shown — a service address, not the vendor's own business address).
+Put anything else worth knowing in importantNotes — invoice number, a breakdown of labor/materials/tax if shown, warranty information, and any recommended follow-up work mentioned.`,
 
-  'Property Tax Document': `This is a property tax document. This document type has no applyFields to fill — put everything in importantNotes: property address, tax year, assessed value if shown, tax amount, due date(s), any exemptions listed, and the taxing authority.
+  'Property Tax Document': `This is a property tax document.
+Fill applyFields with: propertyAddress only (leave every other applyFields value not-identified) — put everything else in importantNotes: tax year, assessed value if shown, tax amount, due date(s), any exemptions listed, and the taxing authority.
 This is for record-keeping only — do not give tax advice.`,
 
-  'HOA Document': `This is an HOA (homeowners association) document. This document type has no applyFields to fill — put everything in importantNotes: HOA name, property address, dues amount and frequency, special assessments if mentioned, key rules or restrictions, and important dates (meetings, due dates, deadlines).`,
+  'HOA Document': `This is an HOA (homeowners association) document.
+Fill applyFields with: propertyAddress only (leave every other applyFields value not-identified) — put everything else in importantNotes: HOA name, dues amount and frequency, special assessments if mentioned, key rules or restrictions, and important dates (meetings, due dates, deadlines).`,
 
-  Other: `This document doesn't map to one of PropRoster's specific document types. This document type has no applyFields to fill — put everything in importantNotes: key parties, key dates, financial amounts, and anything unusual worth reviewing, based on the document's actual content. If you can tell it actually IS one of PropRoster's other supported types, say so in the classification (your classification is not limited by which schema you were given).`,
+  Other: `This document doesn't map to one of PropRoster's specific document types.
+Fill applyFields with: propertyAddress only, if a property address is identifiable (leave every other applyFields value not-identified) — put everything else in importantNotes: key parties, key dates, financial amounts, and anything unusual worth reviewing, based on the document's actual content. If you can tell it actually IS one of PropRoster's other supported types, say so in the classification (your classification is not limited by which schema you were given).`,
 }
 
 export function buildUserPrompt(documentType: DocumentType, fileName: string): string {

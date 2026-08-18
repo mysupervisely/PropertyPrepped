@@ -37,6 +37,7 @@ function fakeAnalyzeResult(): AnalyzeDocumentResult {
       escrowAmount: null, loanTermYears: null, maturityDate: null, tenantName: null, tenantEmail: null, monthlyRent: null,
       securityDeposit: null, startDate: null, endDate: null, vendor: null, description: null, cost: null, amount: null,
       date: null, category: null, name: null, businessName: null, phone: null, email: null, website: null, estimatedValue: null,
+      propertyAddress: null,
     },
   }
   return { output, provider: 'anthropic', modelName: 'claude-sonnet-5', usage: { inputTokens: 100, outputTokens: 50 } }
@@ -87,12 +88,35 @@ describe('handleAnalyzeRequest — AI not configured', () => {
 })
 
 describe('handleAnalyzeRequest — 10. unsupported file', () => {
-  it('rejects a non-PDF document with 415 before touching storage or the AI', async () => {
-    const deps = baseDeps({ getDocument: vi.fn().mockResolvedValue(fakeDoc({ mime_type: 'image/jpeg', name: 'photo.jpg' })) })
+  it('rejects a document type AI analysis does not support (e.g. Word) with 415 before touching storage or the AI', async () => {
+    const deps = baseDeps({ getDocument: vi.fn().mockResolvedValue(fakeDoc({ mime_type: 'application/msword', name: 'notes.doc' })) })
     const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
     expect(result.status).toBe(415)
     expect(deps.createSignedUrl).not.toHaveBeenCalled()
     expect(deps.analyze).not.toHaveBeenCalled()
+  })
+
+  it('rejects a HEIC photo with 415 — Anthropic does not accept it directly and this app has no transcoding step', async () => {
+    const deps = baseDeps({ getDocument: vi.fn().mockResolvedValue(fakeDoc({ mime_type: 'image/heic', name: 'IMG_0001.heic' })) })
+    const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
+    expect(result.status).toBe(415)
+    expect(deps.analyze).not.toHaveBeenCalled()
+  })
+
+  // Smart Upload Foundation (Part 10): receipts captured by a phone camera
+  // are images, not PDFs — the whole point of extending this endpoint.
+  it('accepts a JPEG photo and passes the resolved mime type through to analyze()', async () => {
+    const deps = baseDeps({ getDocument: vi.fn().mockResolvedValue(fakeDoc({ mime_type: 'image/jpeg', name: 'receipt.jpg' })) })
+    const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
+    expect(result.status).toBe(200)
+    expect(deps.analyze).toHaveBeenCalledWith(expect.objectContaining({ mimeType: 'image/jpeg' }))
+  })
+
+  it('accepts a PNG photo', async () => {
+    const deps = baseDeps({ getDocument: vi.fn().mockResolvedValue(fakeDoc({ mime_type: 'image/png', name: 'receipt.png' })) })
+    const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
+    expect(result.status).toBe(200)
+    expect(deps.analyze).toHaveBeenCalledWith(expect.objectContaining({ mimeType: 'image/png' }))
   })
 
   it('rejects a file over the size limit with 413', async () => {

@@ -106,10 +106,18 @@ export class AnthropicDocumentIntelligenceProvider implements DocumentIntelligen
           {
             role: 'user',
             content: [
-              {
-                type: 'document',
-                source: { type: 'base64', media_type: 'application/pdf', data: base64 },
-              },
+              // Smart Upload Foundation: a receipt/invoice captured by a
+              // phone camera arrives as an image, not a PDF — Claude's
+              // Messages API takes a different content-block `type` for
+              // each ("document" vs. "image"), so this is now built from
+              // the document's real, server-validated mime type
+              // (analyze-request.ts's resolveMimeType()) rather than
+              // being hardcoded to PDF. Nothing else about the request
+              // (schema, prompt, model, structured-output config) differs
+              // between the two — same single pipeline either way.
+              input.mimeType === 'application/pdf'
+                ? { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } }
+                : { type: 'image' as const, source: { type: 'base64' as const, media_type: input.mimeType, data: base64 } },
               { type: 'text', text: buildUserPrompt(input.documentType, input.fileName) },
             ],
           },

@@ -99,6 +99,13 @@ export const ApplyFieldsSchema = z.object({
   website: z.string().nullable(),
   // Appraisal → Property
   estimatedValue: z.string().nullable(),
+  // Smart Upload Foundation: the property's street address, when the
+  // document states one — used to suggest which of the caller's own
+  // properties this item belongs to (never to silently assign one; see
+  // lib/smart-upload/match-property.ts). Requested for every document
+  // type (DOCUMENT_TYPE_APPLY_FIELDS below), since any document type can
+  // mention an address, not just the types that already had a use for it.
+  propertyAddress: z.string().nullable(),
 })
 
 export const DocumentAnalysisSchema = z.object({
@@ -251,6 +258,7 @@ export const ProviderApplyFieldsSchema = z.object({
   email: unknownableField(z.string()),
   website: unknownableField(z.string()),
   estimatedValue: unknownableField(z.string()),
+  propertyAddress: unknownableField(z.string()),
 })
 
 /**
@@ -347,6 +355,7 @@ export const APPLY_FIELD_LABELS: Record<keyof ApplyFields, string> = {
   vendor: 'Vendor', description: 'Description', cost: 'Cost', amount: 'Amount', date: 'Date', category: 'Category',
   name: 'Contact Name', businessName: 'Business Name', phone: 'Phone', email: 'Email', website: 'Website',
   estimatedValue: 'Estimated Value',
+  propertyAddress: 'Property Address',
 }
 
 /**
@@ -359,17 +368,21 @@ export const APPLY_FIELD_LABELS: Record<keyof ApplyFields, string> = {
  * lives in `importantNotes` instead, exactly as it did in the internal
  * `groups` free text before.
  */
+// Smart Upload Foundation: 'propertyAddress' is appended to every type's
+// list (not just the types that previously mentioned an address in
+// importantNotes free text) — property matching needs to work regardless
+// of which kind of document was uploaded.
 export const DOCUMENT_TYPE_APPLY_FIELDS: Record<DocumentType, (keyof ApplyFields)[]> = {
-  'Insurance Policy': ['carrier', 'policyNumber', 'annualPremium', 'deductible', 'effectiveDate', 'expirationDate'],
-  Lease: ['tenantName', 'tenantEmail', 'monthlyRent', 'securityDeposit', 'startDate', 'endDate'],
-  'Mortgage / Loan Statement': ['lender', 'loanNumber', 'originalBalance', 'currentBalance', 'interestRate', 'monthlyPayment', 'escrowAmount', 'loanTermYears', 'maturityDate'],
-  'Closing Disclosure / Settlement Statement': [],
-  'Inspection Report': [],
-  Appraisal: ['estimatedValue', 'effectiveDate'],
-  'Contractor Invoice / Receipt': ['vendor', 'description', 'cost', 'amount', 'date', 'category', 'name', 'businessName', 'phone', 'email', 'website'],
-  'Property Tax Document': [],
-  'HOA Document': [],
-  Other: [],
+  'Insurance Policy': ['carrier', 'policyNumber', 'annualPremium', 'deductible', 'effectiveDate', 'expirationDate', 'propertyAddress'],
+  Lease: ['tenantName', 'tenantEmail', 'monthlyRent', 'securityDeposit', 'startDate', 'endDate', 'propertyAddress'],
+  'Mortgage / Loan Statement': ['lender', 'loanNumber', 'originalBalance', 'currentBalance', 'interestRate', 'monthlyPayment', 'escrowAmount', 'loanTermYears', 'maturityDate', 'propertyAddress'],
+  'Closing Disclosure / Settlement Statement': ['propertyAddress'],
+  'Inspection Report': ['propertyAddress'],
+  Appraisal: ['estimatedValue', 'effectiveDate', 'propertyAddress'],
+  'Contractor Invoice / Receipt': ['vendor', 'description', 'cost', 'amount', 'date', 'category', 'name', 'businessName', 'phone', 'email', 'website', 'propertyAddress'],
+  'Property Tax Document': ['propertyAddress'],
+  'HOA Document': ['propertyAddress'],
+  Other: ['propertyAddress'],
 }
 
 const MAX_NOTES = 8
