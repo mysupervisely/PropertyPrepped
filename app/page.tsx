@@ -23,6 +23,16 @@ import { deriveTimeline } from '../lib/property-timeline/derive-timeline'
 import { resolveGreetingName, greetingTimeOfDay } from '../lib/user-profile/greeting'
 import type { UserProfile } from '../lib/user-profile/types'
 import { DOCUMENT_TYPES } from '../lib/document-intelligence/types'
+import {
+  buildLeaseDateItems, buildInsuranceDateItems, buildMortgageDateItems, buildMaintenanceDateItems,
+  buildOpenMaintenanceItems, splitAttentionAndUpcoming, sortByDaysUntilAscending, limitItems,
+  type DashboardDateItem, type OpenMaintenanceItem, type NavTarget,
+} from '../lib/dashboard/attention'
+import {
+  documentActivity, maintenanceActivity, financialActivity, noteActivity,
+  leaseActivity, insuranceActivity, mortgageActivity, propertyActivity, propCrewActivity,
+  sortByTimestampDescending, type ActivityItem,
+} from '../lib/dashboard/activity'
 
 // Investment Tools 2.0 (Part 2): splits a resolved NormalizedAddress into
 // this app's existing two-field address/city shape (properties.address,
@@ -67,6 +77,11 @@ type Property = {
   // for a row that predates this column — null and 'Unknown' are always
   // treated identically ("not entered"), never as proof of anything.
   financing_status: string | null
+  // Milestone 16 (Landlord Command Center): already selected by
+  // loadPortfolio()'s existing `.select('*')` — properties.created_at
+  // has always been fetched, just never typed until Recent Activity
+  // needed a "Property added" timestamp. No new query.
+  created_at: string
 }
 
 // Core Experience Bundle, item 6: the only four allowed values (mirrors
@@ -205,6 +220,26 @@ function appreciationFor(estimatedValue: number, purchasePrice: number): { amoun
 const formatSize = (bytes: number) => {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+// Milestone 16: same local-noon date-only parsing already used
+// throughout this file (e.g. `new Date(\`${lease.end_date}T12:00:00\`)`)
+// and in lib/dashboard/date-classification.ts — a bare `new
+// Date(dateOnlyString)` parses as UTC midnight, which displays one
+// calendar day early in every negative-UTC-offset timezone.
+const dateOnly = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateString()
+
+// Relative timestamp for Recent Activity — "Today," "Yesterday," "3 days
+// ago," falling back to a plain calendar date beyond a week so the feed
+// never has to guess at exact-second precision the user doesn't need.
+function relativeTime(iso: string): string {
+  const then = new Date(iso)
+  if (Number.isNaN(then.getTime())) return ''
+  const days = Math.floor((Date.now() - then.getTime()) / (24 * 60 * 60 * 1000))
+  if (days <= 0) return 'Today'
+  if (days === 1) return 'Yesterday'
+  if (days < 7) return `${days} days ago`
+  return then.toLocaleDateString()
 }
 
 const safeName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -386,6 +421,53 @@ export default function Home() {
     const expenses = ytd.filter((tx) => tx.transaction_type === 'Expense').reduce((sum, tx) => sum + Number(tx.amount), 0)
     return { value, debt, equity: value - debt, rent, monthlyExpenses, income, expenses, cashFlow: income - expenses }
   }, [properties, transactions])
+
+  // Milestone 16: Landlord Command Center. Every input here is data
+  // app/page.tsx already loads for the property workspace (loadPortfolio()
+  // above) — no new query, no new table. All the actual date-threshold/
+  // sort/dedup logic lives in lib/dashboard/ (unit tested there); this is
+  // just wiring already-fetched, RLS-scoped rows into it.
+  const NEEDS_ATTENTION_LIMIT = 10
+  const UPCOMING_LIMIT = 8
+  const OPEN_MAINTENANCE_LIMIT = 6
+  const RECENT_ACTIVITY_LIMIT = 8
+
+  const propertyLabelById = useMemo(() => new Map(properties.map((p) => [p.id, p.address])), [properties])
+
+  const { attentionItems, upcomingItems, openMaintenanceItems, recentActivity } = useMemo(() => {
+    const dateItems: DashboardDateItem[] = [
+      ...buildLeaseDateItems(leases, propertyLabelById),
+      ...buildInsuranceDateItems(insurancePolicies, propertyLabelById),
+      ...buildMortgageDateItems(mortgages, propertyLabelById),
+      ...buildMaintenanceDateItems(maintenanceRecords, propertyLabelById),
+    ]
+    const { needsAttention, upcoming } = splitAttentionAndUpcoming(dateItems)
+
+    const activity: ActivityItem[] = sortByTimestampDescending([
+      ...documentActivity(documents, propertyLabelById),
+      ...maintenanceActivity(maintenanceRecords, propertyLabelById),
+      ...financialActivity(transactions, propertyLabelById),
+      ...noteActivity(propertyNotes, propertyLabelById),
+      ...leaseActivity(leases, propertyLabelById),
+      ...insuranceActivity(insurancePolicies, propertyLabelById),
+      ...mortgageActivity(mortgages, propertyLabelById),
+      ...propertyActivity(properties),
+      ...propCrewActivity(contacts, propertyLabelById),
+    ])
+
+    return {
+      attentionItems: limitItems(sortByDaysUntilAscending(needsAttention), NEEDS_ATTENTION_LIMIT),
+      upcomingItems: limitItems(sortByDaysUntilAscending(upcoming), UPCOMING_LIMIT),
+      openMaintenanceItems: limitItems(buildOpenMaintenanceItems(maintenanceRecords, propertyLabelById), OPEN_MAINTENANCE_LIMIT),
+      recentActivity: limitItems(activity, RECENT_ACTIVITY_LIMIT),
+    }
+  }, [leases, insurancePolicies, mortgages, maintenanceRecords, documents, transactions, propertyNotes, properties, contacts, propertyLabelById])
+
+  const openMaintenanceCount = useMemo(() => maintenanceRecords.filter((m) => m.status !== 'Completed').length, [maintenanceRecords])
+
+  function goToNav(propertyId: string, nav: NavTarget) {
+    openProperty(propertyId, nav.tab, nav.docsSubTab, nav.propSubTab, nav.peopleSubTab)
+  }
 
   const selected = properties.find((property) => property.id === selectedId) || null
   const selectedDocs = documents.filter((doc) => doc.property_id === selectedId)
@@ -1365,11 +1447,94 @@ export default function Home() {
         )}
       </section>
 
-      {/* Reserved layout space for a future compact "Needs Your Attention"
-          (Property Watch) section — intentionally not built in this pass.
-          It would slot in here as its own <section>, between the snapshot
-          above and "My Properties" below, using the same section spacing
-          already established by .intro/.portfolioSnapshot/.sectionHead. */}
+      {/* Milestone 16: Landlord Command Center — occupies the space
+          reserved above ("future compact 'Needs Your Attention' section"),
+          between the snapshot and My Properties, using the same
+          .intro/.portfolioSnapshot/.sectionHead spacing already
+          established. Every item's onClick reuses openProperty() (via
+          goToNav()) directly — no second navigation system, no URL
+          round-trip needed for a same-page dashboard. */}
+
+      <section className="commandCenterSection needsAttentionSection">
+        <div className="sectionHead"><div><h2>Needs Attention</h2><p>{attentionItems.length ? `${attentionItems.length} item${attentionItems.length === 1 ? '' : 's'} need a look` : 'Leases, insurance, mortgages and scheduled maintenance across your portfolio.'}</p></div></div>
+        {attentionItems.length === 0 ? (
+          <div className="emptyState"><strong>Everything looks up to date.</strong></div>
+        ) : (
+          <div className="dashboardItemList">
+            {attentionItems.map((item) => (
+              <button key={`${item.type}-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
+                <span className={`statusPill ${item.urgency === 'Expired' ? 'pillBad' : 'pillWarn'}`}>{item.urgency === 'Expired' ? 'Expired' : 'Due soon'}</span>
+                <span className="dashboardItemBody">
+                  <strong>{item.label}</strong>
+                  <span>{item.description}</span>
+                  <span className="muted">{item.propertyLabel} · {dateOnly(item.date)}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="commandCenterSection">
+        <div className="sectionHead"><div><h2>Upcoming</h2><p>Important dates coming up across your portfolio.</p></div></div>
+        {upcomingItems.length === 0 ? (
+          <div className="emptyState"><strong>No important dates coming up.</strong></div>
+        ) : (
+          <div className="dashboardItemList">
+            {upcomingItems.map((item) => (
+              <button key={`${item.type}-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
+                <span className="statusPill pillNeutral">{item.daysUntil === 0 ? 'Today' : `${item.daysUntil}d`}</span>
+                <span className="dashboardItemBody">
+                  <strong>{item.label}</strong>
+                  <span>{item.description}</span>
+                  <span className="muted">{item.propertyLabel} · {dateOnly(item.date)}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="commandCenterSection">
+        <div className="sectionHead"><div><h2>Open Maintenance</h2><p>{openMaintenanceCount ? `${openMaintenanceCount} open item${openMaintenanceCount === 1 ? '' : 's'} across your portfolio` : 'Nothing open right now.'}</p></div></div>
+        {openMaintenanceItems.length === 0 ? (
+          <div className="emptyState"><strong>No open maintenance items.</strong></div>
+        ) : (
+          <div className="dashboardItemList">
+            {openMaintenanceItems.map((item) => (
+              <button key={item.id} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
+                <span className="statusPill pillWarn">{item.status}</span>
+                <span className="dashboardItemBody">
+                  <strong>{item.description}</strong>
+                  <span>{[item.category, item.vendor].filter(Boolean).join(' · ')}</span>
+                  <span className="muted">{item.propertyLabel} · {dateOnly(item.date)}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="commandCenterSection">
+        <div className="sectionHead"><div><h2>Recent Activity</h2><p>What&apos;s changed across your portfolio lately.</p></div></div>
+        {recentActivity.length === 0 ? (
+          <div className="emptyState"><strong>Activity will appear here as you add information to your properties.</strong></div>
+        ) : (
+          <div className="dashboardItemList">
+            {recentActivity.map((item) => (
+              item.nav && item.propertyId ? (
+                <button key={item.id} className="dashboardItemRow" onClick={() => goToNav(item.propertyId as string, item.nav as NavTarget)}>
+                  <span className="dashboardItemBody"><strong>{item.description}</strong><span className="muted">{relativeTime(item.timestamp)}</span></span>
+                </button>
+              ) : (
+                <div key={item.id} className="dashboardItemRow dashboardItemRowStatic">
+                  <span className="dashboardItemBody"><strong>{item.description}</strong><span className="muted">{relativeTime(item.timestamp)}</span></span>
+                </div>
+              )
+            ))}
+          </div>
+        )}
+      </section>
 
       <section><div className="sectionHead"><div><h2>My Properties</h2><p>{busy && !properties.length ? 'Loading your portfolio…' : `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} in your portfolio`}</p></div><button className="primary" onClick={() => openAddProperty()}>+ Add Property</button></div>
         <div className="grid">{properties.map((property) => <article className="propertyCard" key={property.id}><button className="cardOpen" onClick={() => openProperty(property.id)}><div className="photo">{property.coverUrl ? <img src={property.coverUrl} alt={property.address} /> : <div className="photoPlaceholder"><span>⌂</span><small>Add property photos</small></div>}<span className="badge">{property.property_type}</span></div></button><div className="cardBody"><button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button><div className="miniStats"><div><span>Value</span><strong>{money(property.estimated_value)}</strong></div><div><span>Equity</span><strong>{money(Number(property.estimated_value) - Number(property.mortgage_balance))}</strong></div><div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div></div><div className="cardActions"><button onClick={() => openProperty(property.id, 'Documents', 'Documents')}>Documents</button><button onClick={() => openProperty(property.id, 'Documents', 'Photos')}>Photos</button><button onClick={() => openProperty(property.id, 'Financials')}>Financials</button></div></div></article>)}
