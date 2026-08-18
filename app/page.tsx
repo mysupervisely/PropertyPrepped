@@ -1730,7 +1730,12 @@ export default function Home() {
           Milestone 16 already built. Only the heading changed. */}
 
       <section className="commandCenterSection needsAttentionSection">
-        <div className="sectionHead"><div><p className="eyebrow">PROPWATCH</p><h2>Needs your attention</h2><p>{attentionItems.length ? `${attentionItems.length} item${attentionItems.length === 1 ? '' : 's'} need a look` : 'Rent, leases, insurance, mortgages and scheduled maintenance across your portfolio.'}</p></div></div>
+        {/* Launch Polish: PropWatch keeps its approved mixed-case brand
+            casing here even though every other eyebrow on this page is
+            plain uppercase — an explicit, deliberate exception for this
+            one branded product name, not a change to the eyebrow style
+            itself. */}
+        <div className="sectionHead"><div><p className="eyebrow">PropWatch</p><h2>Needs your attention</h2><p>{attentionItems.length ? `${attentionItems.length} item${attentionItems.length === 1 ? '' : 's'} need a look` : 'Rent, leases, insurance, mortgages and scheduled maintenance across your portfolio.'}</p></div></div>
         {attentionItems.length === 0 ? (
           <div className="emptyState"><strong>You&apos;re all caught up.</strong></div>
         ) : (

@@ -18,6 +18,12 @@ import { useAuthUser } from '../../lib/useAuthUser'
 import { AuthHeader } from '../../components/AuthHeader'
 import { COMMON_TIMEZONES, type UserProfile } from '../../lib/user-profile/types'
 
+// Launch Polish: same path-sanitizing helper app/page.tsx already uses
+// for property photo/document uploads — not exported from there (a
+// page component, not a shared module), so duplicated verbatim rather
+// than reaching into an unrelated page file for one line.
+const safeName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_')
+
 type Draft = { firstName: string; lastName: string; displayName: string; phone: string; timezone: string }
 
 const emptyDraft: Draft = { firstName: '', lastName: '', displayName: '', phone: '', timezone: '' }
@@ -42,6 +48,15 @@ export default function ProfilePage() {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
 
+  // Launch Polish: one canonical profile photo, mirroring
+  // app/page.tsx's property cover-photo flow — a short-lived signed URL
+  // for display (the profile-photos bucket is private, never a bare
+  // public URL), and photoBusy doubles as the duplicate-click guard on
+  // the upload input/remove button.
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [photoError, setPhotoError] = useState('')
+
   useEffect(() => {
     if (!supabase || !user) return
     setLoading(true)
@@ -55,6 +70,58 @@ export default function ProfilePage() {
       setLoading(false)
     })
   }, [user?.id])
+
+  useEffect(() => {
+    if (!supabase || !profile?.photo_path) { setPhotoUrl(null); return }
+    let cancelled = false
+    supabase.storage.from('profile-photos').createSignedUrl(profile.photo_path, 3600).then(({ data }) => {
+      if (!cancelled) setPhotoUrl(data?.signedUrl || null)
+    })
+    return () => { cancelled = true }
+  }, [profile?.photo_path])
+
+  async function uploadPhoto(file: File) {
+    if (!supabase || !user) return
+    if (!file.type.startsWith('image/')) { setPhotoError('Choose an image file.'); return }
+    setPhotoBusy(true)
+    setPhotoError('')
+    const path = `${user.id}/avatar/${crypto.randomUUID()}-${safeName(file.name)}`
+    const { error: uploadError } = await supabase.storage.from('profile-photos').upload(path, file, { contentType: file.type, upsert: false })
+    if (uploadError) {
+      setPhotoError(uploadError.message)
+      setPhotoBusy(false)
+      return
+    }
+    const { data, error: saveError } = await supabase.from('user_profiles').upsert({ id: user.id, photo_path: path, updated_at: new Date().toISOString() }).select('*').single()
+    if (saveError) {
+      // The row write failed — remove the orphaned upload rather than
+      // leaving a photo in storage nothing points to.
+      await supabase.storage.from('profile-photos').remove([path])
+      setPhotoError(saveError.message)
+      setPhotoBusy(false)
+      return
+    }
+    const oldPath = profile?.photo_path
+    setProfile(data as UserProfile)
+    if (oldPath && oldPath !== path) await supabase.storage.from('profile-photos').remove([oldPath])
+    setPhotoBusy(false)
+  }
+
+  async function removePhoto() {
+    if (!supabase || !user || !profile?.photo_path) return
+    setPhotoBusy(true)
+    setPhotoError('')
+    const path = profile.photo_path
+    const { data, error: saveError } = await supabase.from('user_profiles').upsert({ id: user.id, photo_path: null, updated_at: new Date().toISOString() }).select('*').single()
+    if (saveError) {
+      setPhotoError(saveError.message)
+      setPhotoBusy(false)
+      return
+    }
+    setProfile(data as UserProfile)
+    await supabase.storage.from('profile-photos').remove([path])
+    setPhotoBusy(false)
+  }
 
   async function save() {
     if (!supabase || !user) return
@@ -137,8 +204,20 @@ export default function ProfilePage() {
       </section>
 
       <section className="evaluatorSection profileFormSection">
-        <div className="evaluatorSectionHead"><h2>Photo</h2><p>Profile photos aren&apos;t supported yet — this is reserved space so it can be added later without another migration.</p></div>
-        <div className="photoPlaceholder profilePhotoPlaceholder"><span>◐</span><small>Coming soon</small></div>
+        <div className="evaluatorSectionHead"><h2>Photo</h2><p>A profile photo helps you recognize your account at a glance. Private to you — never shown to anyone else.</p></div>
+        <div className="profilePhotoRow">
+          <div className="profilePhotoPreview">
+            {photoUrl ? <img src={photoUrl} alt="Profile photo" /> : <div className="photoPlaceholder profilePhotoPlaceholder"><span>◐</span></div>}
+          </div>
+          <div className="profilePhotoActions">
+            <label className="secondary profilePhotoUploadButton">
+              {photoBusy ? 'Uploading…' : photoUrl ? 'Change photo' : 'Add photo'}
+              <input type="file" accept="image/*" disabled={photoBusy} onChange={(e) => { const file = e.target.files?.[0]; if (file) void uploadPhoto(file); e.target.value = '' }} />
+            </label>
+            {photoUrl && <button className="dangerLink" disabled={photoBusy} onClick={() => void removePhoto()}>Remove photo</button>}
+          </div>
+        </div>
+        {photoError && <p className="errorMessage">{photoError}</p>}
       </section>
 
       <div className="editPropertyFooter compactActions">

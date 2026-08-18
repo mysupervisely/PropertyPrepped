@@ -236,7 +236,9 @@ export function PropCrewPanel({
       <div className="sectionHead workspaceHeading">
         {showHeader ? (
           <div>
-            <p className="eyebrow">PROPCREW</p>
+            {/* Launch Polish: approved mixed-case brand casing, an
+                explicit exception for this branded product name. */}
+            <p className="eyebrow">PropCrew</p>
             <h2>Your private crew directory</h2>
             <p>Every contractor, agent, lender and professional you&apos;ve worked with — {PROPCREW_PRIVACY_DISCLOSURE.toLowerCase()}</p>
           </div>

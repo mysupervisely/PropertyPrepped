@@ -53,7 +53,10 @@ export default function PropCrewPage() {
       <AuthHeader />
 
       <section className="intro evaluatorIntro">
-        <p className="eyebrow">PROPCREW</p>
+        {/* Launch Polish: PropCrew keeps its approved mixed-case brand
+            casing here — an explicit exception for this branded product
+            name, not a change to the eyebrow style used elsewhere. */}
+        <p className="eyebrow">PropCrew</p>
         <h1>Every provider, across every property.</h1>
         <p>Your private directory of contractors, agents, lenders and professionals — never a marketplace, never shared with anyone else.</p>
       </section>
