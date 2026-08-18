@@ -55,6 +55,10 @@ h2, h3, p { margin-top: 0; }
 .photoPlaceholder span { font-size: 32px; color: var(--brand); }
 .photoPlaceholder small { font-size: 13px; }
 .badge { position: absolute; left: 14px; top: 14px; background: rgba(255,255,255,.92); border: 1px solid rgba(0,0,0,.06); padding: 7px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+/* Milestone 17: compact occupancy indicator, mirroring .badge on the
+   opposite corner so it never crowds the existing property-type badge.
+   Rental properties only (deriveOccupancy is only computed for those). */
+.occupancyBadge { position: absolute; right: 14px; top: 14px; padding: 7px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
 .cardBody { padding: 19px; }
 .cardBody h3 { margin-bottom: 3px; font-size: 19px; }
 .muted { color: var(--muted); font-size: 14px; }
@@ -372,6 +376,47 @@ h2, h3, p { margin-top: 0; }
 .moduleModal .fullField { grid-column: 1 / -1; }
 @media (max-width: 800px) { .moduleGrid { grid-template-columns: 1fr; } .recordMetrics { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width: 560px) { .maintenanceRow { grid-template-columns: 1fr; } .maintenanceDate { border-right: 0; border-bottom: 1px solid var(--line); padding-bottom: 10px; flex-direction: row; justify-content: flex-start; gap: 6px; align-items: baseline; } .maintenanceTitle { flex-direction: column; gap: 7px; } .maintenanceActions .dangerLink { margin-left: 0; } .recordMetrics { grid-template-columns: 1fr 1fr; } }
+
+/* Milestone 17: Tenant & Lease Management V2 — reuses .recordCard/
+   .recordTop/.recordMetrics/.recordRows/.statusPill/.pillGood/.pillWarn/
+   .pillBad/.pillNeutral as-is; the rules below only add what's genuinely
+   new (the Current Lease Card's own action row, tenant contact wrapping,
+   the compact stacked Lease History list, and the grouped Add/Edit form). */
+.currentLeaseCard { max-width: 560px; }
+.leaseCardActions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.recordEdit { border: 0; background: transparent; color: var(--brand); font-size: 12px; font-weight: 700; padding: 4px 2px; text-decoration: underline; text-underline-offset: 2px; }
+.tenantContactRow { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 3px 0 0; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.tenantContactRow strong { color: var(--text); font-size: 14px; flex-basis: 100%; }
+
+.leaseHistorySection { margin-top: 22px; }
+.leaseHistoryHeading { margin: 0 0 10px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.leaseHistoryList { display: grid; gap: 10px; }
+.leaseHistoryRow { background: white; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.leaseHistorySummary { width: 100%; display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 0; background: transparent; text-align: left; cursor: pointer; flex-wrap: wrap; }
+.leaseHistoryName { font-weight: 700; font-size: 14px; }
+.leaseHistoryPeriod { color: var(--muted); font-size: 12px; }
+.leaseHistoryRent { font-weight: 700; font-size: 13px; margin-left: auto; }
+.leaseHistoryChevron { color: var(--muted); font-size: 16px; line-height: 1; }
+.leaseHistoryDetail { padding: 0 16px 16px; border-top: 1px solid var(--line); padding-top: 14px; }
+.leaseHistoryDetailActions { display: flex; gap: 14px; margin-top: 4px; }
+.leaseHistoryDetailActions button { border: 0; background: transparent; color: var(--brand); padding: 0; text-decoration: underline; text-underline-offset: 2px; font-size: 12px; }
+.leaseHistoryDetailActions .dangerLink { color: #8a3d35; }
+
+.leaseFormGroups { display: grid; gap: 18px; }
+.formFieldset { border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 0; }
+.formFieldset legend { padding: 0 6px; font-size: 12px; font-weight: 750; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.formFieldset .formGrid { margin: 0; }
+
+@media (max-width: 800px) {
+  .currentLeaseCard { max-width: none; }
+  .leaseHistorySummary { gap: 8px 14px; }
+  .leaseHistoryRent { margin-left: 0; }
+}
+@media (max-width: 480px) {
+  .leaseHistorySummary { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .leaseHistoryChevron { position: absolute; right: 16px; top: 14px; }
+  .leaseHistorySummary { position: relative; padding-right: 40px; }
+}
 
 /* Property edit + delete */
 .editPropertyFooter { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }

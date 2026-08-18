@@ -142,6 +142,16 @@ describe('searchLeases / searchMortgages / searchInsurance', () => {
     expect(results[0].href).toBe('/?openProperty=p1&openTab=Property&openPropSubTab=Lease')
   })
 
+  it('lease matches on tenant_phone (Milestone 17)', () => {
+    const results = searchLeases([{ id: 'l1', property_id: 'p1', tenant_name: 'Sean Urban', tenant_email: null, tenant_phone: '555-0134' }], ['0134'], propertyById)
+    expect(results).toHaveLength(1)
+  })
+
+  it('lease with no tenant_phone on file never matches a phone-shaped query', () => {
+    const results = searchLeases([{ id: 'l1', property_id: 'p1', tenant_name: 'Sean Urban', tenant_email: null }], ['0134'], propertyById)
+    expect(results).toHaveLength(0)
+  })
+
   it('mortgage matches on lender and routes to the Mortgage sub-tab', () => {
     const results = searchMortgages([{ id: 'm1', property_id: 'p1', lender: 'Wells Fargo', loan_number: null }], ['wells'], propertyById)
     expect(results[0].href).toBe('/?openProperty=p1&openTab=Property&openPropSubTab=Mortgage')
