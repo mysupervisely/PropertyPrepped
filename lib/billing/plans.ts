@@ -56,7 +56,7 @@ export const COMING_SOON_PLAN_ORDER: PlanId[] = ['automate']
 // subscribers never go through OUR Checkout route to keep their plan —
 // Stripe renews their existing subscription on its own; see
 // lib/billing/stripe.ts's planForPriceId for how their webhook events
-// still resolve correctly), and 21+ is a "Let's Talk" contact flow with
+// still resolve correctly), and 16+ is a "Let's Talk" contact flow with
 // no Stripe object at all.
 export type PurchasablePlanId = 'organize' | 'manage'
 
@@ -96,15 +96,20 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     mostPopular: true,
   },
   // Not purchasable (excluded from PurchasablePlanId/PUBLIC_PLAN_ORDER).
-  // maxProperties/priceMonthly are placeholders — never read for
-  // enforcement or checkout since this plan can't be assigned to a real
-  // subscription yet; only PLANS.automate.name/tagline/comingSoon are
-  // ever rendered (the /pricing "Coming Soon" card).
+  // priceMonthly is a placeholder — never read for checkout since this
+  // plan can't be assigned to a real subscription yet; only
+  // PLANS.automate.name/tagline/comingSoon/maxProperties are ever
+  // rendered (the /pricing "Coming Soon" card's feature list — see
+  // PLAN_FEATURE_HIGHLIGHTS.automate below). maxProperties matches
+  // Manage's 15 deliberately: the intended future pricing philosophy is
+  // that a customer upgrades from Manage to Automate for automation
+  // capabilities, never for more property slots — Automate is not, and
+  // must not become, "Manage but with a bigger number."
   automate: {
     id: 'automate',
     name: 'Automate',
     priceMonthly: 39.99,
-    maxProperties: 50,
+    maxProperties: 15,
     tagline: 'Automation and coordination for growing portfolios.',
     comingSoon: true,
   },
@@ -159,14 +164,17 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
 // that label; it has no effect on billing.
 export const EARLY_ACCESS_PRICING = true
 
-// 21+ properties is a "Let's Talk" contact flow, not a Stripe tier — there
-// is no PlanId, no price, and no Checkout Session for this. Keeping it out
-// of the PLANS map (rather than inventing a fake plan id) is what makes
-// "do NOT create an automatic Stripe tier for 21+" true by construction:
-// there's no plan identifier a checkout route could ever be asked to
-// resolve for it.
+// 16+ properties is a "Let's Talk" contact flow, not a Stripe tier —
+// there is no PlanId, no price, and no Checkout Session for this.
+// Keeping it out of the PLANS map (rather than inventing a fake plan id)
+// is what makes "do NOT create an automatic Stripe tier for 16+" true
+// by construction: there's no plan identifier a checkout route could
+// ever be asked to resolve for it. "16+" (not ">15") is the approved
+// customer-facing wording — one more than Manage's 15-property ceiling
+// (lib/billing/plans.ts PLANS.manage.maxProperties), the actual
+// self-serve ceiling as of Launch Pricing.
 export const CONTACT_TIER = {
-  label: '21+ Properties',
+  label: '16+ Properties',
   tagline: 'Let’s Talk.',
 } as const
 
@@ -249,7 +257,7 @@ export const PLAN_FEATURE_HIGHLIGHTS: Partial<Record<PlanId, string[]>> = {
     'Rent Ledger & PropWatch',
     '50 AI document analyses / month',
   ],
-  automate: ['Automation and coordination for growing portfolios', 'Details coming soon'],
+  automate: ['Up to 15 properties', 'Automation and coordination for growing portfolios', 'Details coming soon'],
 }
 
 export function isPlanId(value: unknown): value is PlanId {

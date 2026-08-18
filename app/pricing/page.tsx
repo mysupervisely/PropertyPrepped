@@ -162,7 +162,7 @@ export default function PricingPage() {
           <h2>{CONTACT_TIER.label}</h2>
           <p className="pricingTagline">{CONTACT_TIER.tagline}</p>
           <p className="pricingLimit">Managing a larger portfolio? Let&rsquo;s build a plan for your properties.</p>
-          <a className="primary" href="mailto:sales@proproster.com?subject=PropRoster%20%E2%80%94%2021%2B%20properties">Contact Us</a>
+          <a className="primary" href="mailto:sales@proproster.com?subject=PropRoster%20%E2%80%94%2016%2B%20properties">Contact Us</a>
         </article>
       </div>
 
