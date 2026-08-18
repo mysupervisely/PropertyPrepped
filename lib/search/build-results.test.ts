@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   searchProperties, searchDocuments, searchContacts, searchSystems, searchMaintenance,
-  searchFinancials, searchNotes, searchLeases, searchMortgages, searchInsurance,
+  searchFinancials, searchNotes, searchLeases, searchMortgages, searchInsurance, searchRentPayments,
   type PropertyRef,
 } from './build-results'
 
@@ -155,6 +155,17 @@ describe('searchLeases / searchMortgages / searchInsurance', () => {
   it('mortgage matches on lender and routes to the Mortgage sub-tab', () => {
     const results = searchMortgages([{ id: 'm1', property_id: 'p1', lender: 'Wells Fargo', loan_number: null }], ['wells'], propertyById)
     expect(results[0].href).toBe('/?openProperty=p1&openTab=Property&openPropSubTab=Mortgage')
+  })
+
+  it('rent payment matches on reference_number and routes to the Financials tab (Milestone 18)', () => {
+    const results = searchRentPayments([{ id: 'pay1', property_id: 'p1', reference_number: 'ZELLE-4471', amount: 2400, date_received: '2026-08-01' }], ['4471'], propertyById)
+    expect(results).toHaveLength(1)
+    expect(results[0].href).toBe('/?openProperty=p1&openTab=Financials')
+  })
+
+  it('rent payment never matches on amount or date (not searchable fields)', () => {
+    const results = searchRentPayments([{ id: 'pay1', property_id: 'p1', reference_number: 'ZELLE-4471', amount: 2400, date_received: '2026-08-01' }], ['2400'], propertyById)
+    expect(results).toHaveLength(0)
   })
 
   it('insurance matches on carrier and routes to the Insurance sub-tab', () => {

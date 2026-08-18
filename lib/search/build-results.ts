@@ -16,7 +16,7 @@ import { matchesAllWords } from './query'
 
 export type PropertyRef = { id: string; address: string; city: string }
 
-export type SearchResultType = 'Property' | 'Document' | 'PropCrew' | 'System' | 'Maintenance' | 'Financial' | 'Note' | 'Lease' | 'Mortgage' | 'Insurance'
+export type SearchResultType = 'Property' | 'Document' | 'PropCrew' | 'System' | 'Maintenance' | 'Financial' | 'Note' | 'Lease' | 'Mortgage' | 'Insurance' | 'Payment'
 
 export type SearchResult = {
   id: string
@@ -207,5 +207,27 @@ export function searchInsurance(rows: InsuranceRow[], words: string[], propertyB
     .map((i) => {
       const property = propertyById.get(i.property_id)
       return { id: i.id, type: 'Insurance', title: i.carrier, subtitle: property?.address || '', detail: 'Insurance', href: propertyHref(i.property_id, { tab: 'Property', propSubTab: 'Insurance' }) }
+    })
+}
+
+// -- Rent payments (Milestone 18) ------------------------------------
+// Deliberately searches ONLY reference_number — never notes (a private,
+// freeform field, same rule Leases/Financials/Notes already follow: a
+// payment's own tenant/property are already searchable through
+// searchLeases/searchProperties, so this doesn't duplicate that join).
+
+export type RentPaymentRow = { id: string; property_id: string; reference_number: string | null; amount: number; date_received: string }
+export const RENT_PAYMENT_SEARCH_COLUMNS = ['reference_number']
+
+export function searchRentPayments(rows: RentPaymentRow[], words: string[], propertyById: Map<string, PropertyRef>): SearchResult[] {
+  return rows
+    .filter((r) => matchesAllWords(words, [r.reference_number]))
+    .map((r) => {
+      const property = propertyById.get(r.property_id)
+      return {
+        id: r.id, type: 'Payment', title: r.reference_number || 'Rent payment', subtitle: property?.address || '',
+        detail: `Rent payment · ${new Date(`${r.date_received}T12:00:00`).toLocaleDateString()}`,
+        href: propertyHref(r.property_id, { tab: 'Financials' }),
+      }
     })
 }

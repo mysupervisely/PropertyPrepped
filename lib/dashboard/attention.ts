@@ -34,7 +34,12 @@ export type PropertyLabelLookup = Map<string, string>
 
 // -- Lease / Insurance / Mortgage / overdue-Maintenance date items -------
 
-export type DashboardDateItemType = 'Lease' | 'Insurance' | 'Mortgage' | 'Maintenance'
+// Milestone 18 adds 'Rent' and 'System' — built by lib/rent-ledger/
+// ledger.ts (buildRentDateItems / buildSystemWarrantyDateItems) using
+// the exact same classifyDate()/daysUntil() thresholds as every type
+// already here, so they fold into the SAME Needs Attention/Upcoming
+// lists rather than a second, competing list.
+export type DashboardDateItemType = 'Lease' | 'Insurance' | 'Mortgage' | 'Maintenance' | 'Rent' | 'System'
 export type AttentionUrgency = 'Expired' | 'Urgent'
 
 export type DashboardDateItem = {
