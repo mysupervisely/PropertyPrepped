@@ -16,3 +16,9 @@ export const DOCUMENT_CATEGORIES = ['Closing', 'Mortgage', 'Insurance', 'Lease',
 export const FINANCIAL_CATEGORIES = ['Rent', 'Other Income', 'Mortgage', 'Taxes', 'Insurance', 'HOA', 'Utilities', 'Repairs', 'Maintenance', 'CapEx', 'Management', 'Legal & Professional', 'Supplies', 'Other'] as const
 
 export const MAINTENANCE_CATEGORIES = ['Repair', 'Preventative', 'Inspection', 'Renovation', 'Landscaping', 'HVAC', 'Plumbing', 'Electrical', 'Other'] as const
+
+// Milestone 18: Rent Ledger — how a payment arrived, recordkeeping only.
+// PropRoster never processes any of these itself (no ACH, no Stripe, no
+// bank linking); mirrors supabase/milestone-18-rent-ledger-propwatch.sql's
+// rent_payments_payment_method_check exactly.
+export const RENT_PAYMENT_METHODS = ['ACH / Bank Transfer', 'Check', 'Cash', 'Zelle', 'Venmo', 'Cash App', 'Other'] as const

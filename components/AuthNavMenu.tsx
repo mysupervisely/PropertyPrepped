@@ -32,6 +32,11 @@ const NAV_LINKS: { href: string; label: string }[] = [
   // clutter there), reachable from every authenticated page via the
   // hamburger, same as every other destination here.
   { href: '/search', label: 'Search' },
+  // Milestone 18: Rent Ledger — a recordkeeping tool, not a payment
+  // processor (see lib/rent-ledger/). Secondary to the header itself,
+  // same reasoning as Search above: reachable from every authenticated
+  // page via the hamburger, never in the global header.
+  { href: '/rent-ledger', label: 'Rent Ledger' },
   { href: '/investment-tools', label: 'Investment Tools' },
   { href: '/propcrew', label: 'PropCrew' },
   // Milestone 14: secondary to the header's own "+ Smart Upload" (also

@@ -22,10 +22,10 @@ import { AuthHeader } from '../../components/AuthHeader'
 import { normalizeSearchWords, buildOrFilter } from '../../lib/search/query'
 import {
   searchProperties, searchDocuments, searchContacts, searchSystems, searchMaintenance,
-  searchFinancials, searchNotes, searchLeases, searchMortgages, searchInsurance,
+  searchFinancials, searchNotes, searchLeases, searchMortgages, searchInsurance, searchRentPayments,
   PROPERTY_SEARCH_COLUMNS, DOCUMENT_SEARCH_COLUMNS, CONTACT_SEARCH_COLUMNS, SYSTEM_SEARCH_COLUMNS,
   MAINTENANCE_SEARCH_COLUMNS, FINANCIAL_SEARCH_COLUMNS, NOTE_SEARCH_COLUMNS, LEASE_SEARCH_COLUMNS,
-  MORTGAGE_SEARCH_COLUMNS, INSURANCE_SEARCH_COLUMNS,
+  MORTGAGE_SEARCH_COLUMNS, INSURANCE_SEARCH_COLUMNS, RENT_PAYMENT_SEARCH_COLUMNS,
   type SearchResult, type SearchResultType, type PropertyRef,
 } from '../../lib/search/build-results'
 
@@ -41,6 +41,9 @@ const GROUP_KEY: Record<SearchResultType, string> = {
   Property: 'Property', Document: 'Document', PropCrew: 'PropCrew', System: 'System',
   Maintenance: 'Maintenance', Financial: 'Financial', Note: 'Note',
   Lease: 'LeaseMortgageInsurance', Mortgage: 'LeaseMortgageInsurance', Insurance: 'LeaseMortgageInsurance',
+  // Milestone 18: rent payments group with Financials — same "money"
+  // category a landlord already thinks of a Rent transaction as.
+  Payment: 'Financial',
 }
 const GROUP_LABEL: Record<string, string> = {
   Property: 'Properties', Document: 'Documents', PropCrew: 'PropCrew', System: 'Systems',
@@ -51,6 +54,7 @@ const GROUP_ORDER = ['Property', 'Document', 'PropCrew', 'System', 'Maintenance'
 const TYPE_LABEL: Record<SearchResultType, string> = {
   Property: 'PROPERTY', Document: 'DOCUMENT', PropCrew: 'PROPCREW', System: 'SYSTEM',
   Maintenance: 'MAINTENANCE', Financial: 'FINANCIAL', Note: 'NOTE', Lease: 'LEASE', Mortgage: 'MORTGAGE', Insurance: 'INSURANCE',
+  Payment: 'RENT PAYMENT',
 }
 
 export default function SearchPage() {
@@ -107,7 +111,7 @@ function SearchWorkspace() {
     const [
       { data: propRows }, { data: docRows }, { data: contactRows }, { data: linkRows },
       { data: systemRows }, { data: maintRows }, { data: txRows }, { data: noteRows },
-      { data: leaseRows }, { data: mortgageRows }, { data: insuranceRows },
+      { data: leaseRows }, { data: mortgageRows }, { data: insuranceRows }, { data: paymentRows },
     ] = await Promise.all([
       client.from('properties').select('id,address,city,property_type').or(buildOrFilter(PROPERTY_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
       client.from('property_documents').select('id,property_id,name,category,document_type').or(buildOrFilter(DOCUMENT_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
@@ -120,6 +124,7 @@ function SearchWorkspace() {
       client.from('leases').select('id,property_id,tenant_name,tenant_email,tenant_phone').or(buildOrFilter(LEASE_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
       client.from('mortgages').select('id,property_id,lender,loan_number').or(buildOrFilter(MORTGAGE_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
       client.from('insurance_policies').select('id,property_id,carrier,policy_number').or(buildOrFilter(INSURANCE_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
+      client.from('rent_payments').select('id,property_id,reference_number,amount,date_received').or(buildOrFilter(RENT_PAYMENT_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
     ])
 
     // A stale, slower request finishing after a newer one must never
@@ -147,6 +152,7 @@ function SearchWorkspace() {
       ...searchLeases(leaseRows || [], words, propertyById),
       ...searchMortgages(mortgageRows || [], words, propertyById),
       ...searchInsurance(insuranceRows || [], words, propertyById),
+      ...searchRentPayments(paymentRows || [], words, propertyById),
     ]
     setResults(combined)
     setSearched(true)

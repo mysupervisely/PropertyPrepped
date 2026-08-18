@@ -4,7 +4,7 @@ import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import type { User } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
-import { DOCUMENT_CATEGORIES, FINANCIAL_CATEGORIES, MAINTENANCE_CATEGORIES } from '../lib/property-categories'
+import { DOCUMENT_CATEGORIES, FINANCIAL_CATEGORIES, MAINTENANCE_CATEGORIES, RENT_PAYMENT_METHODS } from '../lib/property-categories'
 import { useSubscription } from '../lib/useSubscription'
 import { canCreateProperty, entitlementsFor } from '../lib/billing/entitlements'
 import { TenantConnectPanel } from '../components/TenantConnectPanel'
@@ -37,6 +37,10 @@ import {
   deriveOccupancy, deriveLeaseStatus, selectCurrentLease, sortLeaseHistory,
   normalizeTenants, isValidRentDueDay, formatRentDueDay,
 } from '../lib/leases/status'
+import { periodFromDate, formatPeriodLabel, type RentStatus } from '../lib/rent-ledger/status'
+import {
+  buildRentLedgerRows, buildRentDateItems, buildVacancyItems, buildSystemWarrantyDateItems, type VacancyItem,
+} from '../lib/rent-ledger/ledger'
 
 // Investment Tools 2.0 (Part 2): splits a resolved NormalizedAddress into
 // this app's existing two-field address/city shape (properties.address,
@@ -152,6 +156,14 @@ type LeaseRecord = {
   // so absence renders as "not on file," never a guessed value.
   tenant_phone?: string | null
   rent_due_day?: number | null
+}
+
+// Milestone 18: Rent Ledger + PropWatch V1. One row per RECORDED
+// payment — expected rent is never persisted (see lib/rent-ledger/).
+type RentPaymentRecord = {
+  id: string; owner_id: string; property_id: string; lease_id: string
+  rent_period: string; date_received: string; amount: number; payment_method: string
+  reference_number: string | null; notes: string | null; financial_transaction_id: string | null; created_at: string
 }
 
 type MortgageRecord = {
@@ -298,6 +310,13 @@ function leaseStatusPillClass(status: ReturnType<typeof deriveLeaseStatus>): str
   if (status === 'Expired') return 'pillBad'
   return 'pillNeutral'
 }
+// Milestone 18: same pill vocabulary, for Rent Ledger statuses.
+function rentStatusPillClass(status: RentStatus): string {
+  if (status === 'Paid') return 'pillGood'
+  if (status === 'Due' || status === 'Partial') return 'pillWarn'
+  if (status === 'Overdue') return 'pillBad'
+  return 'pillNeutral' // Upcoming, Unknown
+}
 
 /** Tenant name(s)/phone/email — normalizeTenants() already returns an array so this renders correctly whether a future schema adds true multi-tenant support. */
 function TenantContactList({ lease }: { lease: LeaseRecord }) {
@@ -419,6 +438,7 @@ export default function Home() {
   // without a full remount) doesn't re-introduce the flicker.
   const [profileReady, setProfileReady] = useState(false)
   const [propertySystems, setPropertySystems] = useState<PropertySystem[]>([])
+  const [rentPayments, setRentPayments] = useState<RentPaymentRecord[]>([])
   const [propertyNotes, setPropertyNotes] = useState<PropertyNote[]>([])
   const [propertyOwnership, setPropertyOwnership] = useState<PropertyOwnership[]>([])
   const [propertySubTab, setPropertySubTab] = useState<PropertySubTab>('Lease')
@@ -531,14 +551,24 @@ export default function Home() {
 
   const propertyLabelById = useMemo(() => new Map(properties.map((p) => [p.id, p.address])), [properties])
 
-  const { attentionItems, upcomingItems, openMaintenanceItems, recentActivity } = useMemo(() => {
+  const { attentionItems, upcomingItems, openMaintenanceItems, recentActivity, vacancyItems } = useMemo(() => {
+    // Milestone 18: PropWatch's rent + warranty signals fold into the
+    // SAME dateItems list Milestone 16 already builds — same
+    // classifyDate() thresholds, same Needs Attention/Upcoming split,
+    // no second dashboard. Always evaluated for the CURRENT calendar
+    // month regardless of which month the Rent Ledger page itself is
+    // browsing.
+    const currentPeriod = periodFromDate(new Date())
     const dateItems: DashboardDateItem[] = [
       ...buildLeaseDateItems(leases, propertyLabelById),
       ...buildInsuranceDateItems(insurancePolicies, propertyLabelById),
       ...buildMortgageDateItems(mortgages, propertyLabelById),
       ...buildMaintenanceDateItems(maintenanceRecords, propertyLabelById),
+      ...buildRentDateItems(leases, properties, rentPayments, currentPeriod, propertyLabelById),
+      ...buildSystemWarrantyDateItems(propertySystems, propertyLabelById),
     ]
     const { needsAttention, upcoming } = splitAttentionAndUpcoming(dateItems)
+    const vacancy = buildVacancyItems(properties, leases, propertyLabelById)
 
     const activity: ActivityItem[] = sortByTimestampDescending([
       ...documentActivity(documents, propertyLabelById),
@@ -557,8 +587,9 @@ export default function Home() {
       upcomingItems: limitItems(sortByDaysUntilAscending(upcoming), UPCOMING_LIMIT),
       openMaintenanceItems: limitItems(buildOpenMaintenanceItems(maintenanceRecords, propertyLabelById), OPEN_MAINTENANCE_LIMIT),
       recentActivity: limitItems(activity, RECENT_ACTIVITY_LIMIT),
+      vacancyItems: vacancy,
     }
-  }, [leases, insurancePolicies, mortgages, maintenanceRecords, documents, transactions, propertyNotes, properties, contacts, propertyLabelById])
+  }, [leases, insurancePolicies, mortgages, maintenanceRecords, documents, transactions, propertyNotes, properties, contacts, propertyLabelById, rentPayments, propertySystems])
 
   const openMaintenanceCount = useMemo(() => maintenanceRecords.filter((m) => m.status !== 'Completed').length, [maintenanceRecords])
 
@@ -604,7 +635,7 @@ export default function Home() {
       { data: transactionRows, error: transactionError }, { data: leaseRows, error: leaseError }, { data: mortgageRows, error: mortgageError },
       { data: insuranceRows, error: insuranceError }, { data: maintenanceRows, error: maintenanceError }, { data: contactRows, error: contactError },
       { data: requestRows, error: requestError }, { data: systemRows, error: systemError }, { data: noteRows, error: noteError },
-      { data: ownershipRows, error: ownershipError }, { data: profileRow },
+      { data: ownershipRows, error: ownershipError }, { data: profileRow }, { data: rentPaymentRows, error: rentPaymentError },
     ] = await Promise.all([
       client.from('properties').select('*').order('created_at', { ascending: true }),
       client.from('property_documents').select('*').order('created_at', { ascending: false }),
@@ -620,8 +651,9 @@ export default function Home() {
       client.from('property_notes').select('*').order('is_pinned', { ascending: false }).order('created_at', { ascending: false }),
       client.from('property_ownership').select('*').order('created_at', { ascending: true }),
       client.from('user_profiles').select('*').eq('id', user.id).maybeSingle(),
+      client.from('rent_payments').select('*').order('date_received', { ascending: false }),
     ])
-    const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError || contactError || requestError || systemError || noteError || ownershipError
+    const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError || contactError || requestError || systemError || noteError || ownershipError || rentPaymentError
     if (firstError) {
       setError(firstError.message)
       setBusy(false)
@@ -650,6 +682,7 @@ export default function Home() {
     setUserProfile((profileRow || null) as UserProfile | null)
     setProfileReady(true)
     setMaintenanceRequests((requestRows || []) as MaintenanceRequest[])
+    setRentPayments((rentPaymentRows || []) as RentPaymentRecord[])
     setBusy(false)
   }
 
@@ -1448,8 +1481,34 @@ export default function Home() {
           const monthRows = selectedTransactions.filter((t) => t.transaction_date.startsWith(monthKey))
           const monthCashFlow = monthRows.reduce((sum, t) => sum + (t.transaction_type === 'Income' ? Number(t.amount) : -Number(t.amount)), 0)
           const years = Array.from(new Set([String(new Date().getFullYear()), ...selectedTransactions.map((t) => t.transaction_date.slice(0,4))])).sort().reverse()
+          // Milestone 18: compact "Rent this month" — Section 10's
+          // preferred integration point (a Rent subsection within
+          // Financials, not a new major property tab). Reuses the exact
+          // same buildRentLedgerRows() the /rent-ledger page and
+          // PropWatch both call — one canonical rent-status source.
+          const currentRentPeriod = periodFromDate(new Date())
+          const rentThisMonth = selected.property_type === 'Rental Property'
+            ? buildRentLedgerRows([selected], selectedLeases, rentPayments, currentRentPeriod, new Map([[selected.id, selected.address]]))
+            : []
           return <section className="workspaceContent financialWorkspace">
             <div className="sectionHead workspaceHeading financialHeading"><div><p className="eyebrow">FINANCIALS</p><h2>Property ledger</h2><p>Track every dollar with receipts and source documents attached to the transaction.</p></div><div className="financialActions"><select aria-label="Financial year" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)}>{years.map((year) => <option key={year}>{year}</option>)}</select><label className="secondary csvButton">Import CSV<input type="file" accept=".csv,text/csv" onChange={(e) => { const file = e.target.files?.[0]; if (file) void importTransactionsCsv(file); e.target.value = '' }} /></label><button className="secondary" onClick={exportTransactionsCsv}>Export CSV</button><button className="primary" onClick={() => setShowTransaction(true)}>+ Add transaction</button></div></div>
+            {rentThisMonth.length > 0 && rentThisMonth.map((row) => (
+              <div className="rentThisMonthCard" key={row.leaseId}>
+                <div className="rentThisMonthHead">
+                  <div><p className="eyebrow">RENT — {formatPeriodLabel(currentRentPeriod).toUpperCase()}</p><h3>{row.tenantName}</h3></div>
+                  <span className={`statusPill ${rentStatusPillClass(row.status)}`}>{row.status}</span>
+                </div>
+                <div className="recordMetrics">
+                  <div><span>Expected</span><strong>{money(row.expectedAmount)}</strong></div>
+                  <div><span>Received</span><strong>{money(row.totalPaid)}</strong></div>
+                  {row.remaining > 0 && <div><span>Remaining</span><strong>{money(row.remaining)}</strong></div>}
+                </div>
+                <div className="rentThisMonthActions">
+                  <Link href={`/rent-ledger?lease=${row.leaseId}`} className="primary">+ Record Payment</Link>
+                  <Link href="/rent-ledger" className="secondary">View Rent Ledger</Link>
+                </div>
+              </div>
+            ))}
             <div className="financialStats"><div className="financialStat"><span>{financialYear} income</span><strong>{money(income)}</strong></div><div className="financialStat"><span>{financialYear} expenses</span><strong>{money(expenses)}</strong></div><div className="financialStat"><span>NOI</span><strong>{money(noi)}</strong><small>Excludes mortgage & CapEx</small></div><div className="financialStat"><span>Net cash flow</span><strong>{money(cashFlow)}</strong><small>{money(monthCashFlow)} this month</small></div></div>
             <div className="ledgerWrap"><table className="ledger"><thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Vendor</th><th>Description</th><th>Income</th><th>Expense</th><th>Attachment</th><th></th></tr></thead><tbody>{selectedYearTransactions.length ? selectedYearTransactions.map((tx) => { const doc = selectedDocs.find((d) => d.id === tx.document_id); return <tr key={tx.id}><td>{new Date(`${tx.transaction_date}T12:00:00`).toLocaleDateString()}</td><td><span className={`transactionType ${tx.transaction_type.toLowerCase()}`}>{tx.transaction_type}</span>{tx.is_recurring && <small className="recurringLabel">Recurring</small>}</td><td>{tx.category}</td><td>{tx.vendor || '—'}</td><td className="descriptionCell">{tx.description}</td><td className="moneyCell incomeCell">{tx.transaction_type === 'Income' ? money(tx.amount) : '—'}</td><td className="moneyCell">{tx.transaction_type === 'Expense' ? money(tx.amount) : '—'}</td><td>{doc ? <button className="attachmentButton" onClick={() => void openDocument(doc)}>{doc.name}</button> : <span className="muted">—</span>}</td><td><button className="deleteTransaction" aria-label={`Delete ${tx.description}`} onClick={() => void removeTransaction(tx.id)}>×</button></td></tr>}) : <tr><td colSpan={9}><div className="emptyLedger"><strong>No {financialYear} transactions yet</strong><span>Add your first rent payment or expense, or import a CSV.</span><button className="primary" onClick={() => setShowTransaction(true)}>+ Add transaction</button></div></td></tr>}</tbody></table></div>
             <p className="ledgerNote">NOI is shown as income less operating expenses and excludes transactions categorized as Mortgage or CapEx. PropRoster is an organization tool, not tax or accounting advice.</p>
@@ -1640,12 +1699,18 @@ export default function Home() {
           .intro/.portfolioSnapshot/.sectionHead spacing already
           established. Every item's onClick reuses openProperty() (via
           goToNav()) directly — no second navigation system, no URL
-          round-trip needed for a same-page dashboard. */}
+          round-trip needed for a same-page dashboard.
+
+          Milestone 18: PropWatch is this SAME section, not a second
+          dashboard — rent (Overdue/Due/Partial) and system-warranty
+          signals were folded into attentionItems/dateItems above,
+          alongside the lease/insurance/mortgage/maintenance items
+          Milestone 16 already built. Only the heading changed. */}
 
       <section className="commandCenterSection needsAttentionSection">
-        <div className="sectionHead"><div><h2>Needs Attention</h2><p>{attentionItems.length ? `${attentionItems.length} item${attentionItems.length === 1 ? '' : 's'} need a look` : 'Leases, insurance, mortgages and scheduled maintenance across your portfolio.'}</p></div></div>
+        <div className="sectionHead"><div><p className="eyebrow">PROPWATCH</p><h2>Needs your attention</h2><p>{attentionItems.length ? `${attentionItems.length} item${attentionItems.length === 1 ? '' : 's'} need a look` : 'Rent, leases, insurance, mortgages and scheduled maintenance across your portfolio.'}</p></div></div>
         {attentionItems.length === 0 ? (
-          <div className="emptyState"><strong>Everything looks up to date.</strong></div>
+          <div className="emptyState"><strong>You&apos;re all caught up.</strong></div>
         ) : (
           <div className="dashboardItemList">
             {attentionItems.map((item) => (
@@ -1655,6 +1720,19 @@ export default function Home() {
                   <strong>{item.label}</strong>
                   <span>{item.description}</span>
                   <span className="muted">{item.propertyLabel} · {dateOnly(item.date)}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        {vacancyItems.length > 0 && (
+          <div className="dashboardItemList vacancyList">
+            {vacancyItems.map((item: VacancyItem) => (
+              <button key={item.id} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
+                <span className="statusPill pillNeutral">Vacant</span>
+                <span className="dashboardItemBody">
+                  <strong>{item.propertyLabel}</strong>
+                  <span>No current lease</span>
                 </span>
               </button>
             ))}
