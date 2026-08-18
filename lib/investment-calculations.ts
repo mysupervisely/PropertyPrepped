@@ -322,6 +322,42 @@ export function projectAnalysis(input: AnalysisInput, base: AnalysisResult, year
 }
 
 // ---------------------------------------------------------------------------
+// Financing status (QA Cleanup Bundle, items 5-7) — an explicit choice
+// between "Mortgage / Loan", "Paid Off / No Mortgage" and "Unknown / Not
+// Entered", so a blank/unentered mortgage field is never silently read as
+// proof a property has no debt.
+// ---------------------------------------------------------------------------
+
+export type FinancingStatus = 'Financed' | 'PaidOff' | 'Unknown'
+
+/**
+ * Applies an explicit financing-status choice to a raw AnalysisInput before
+ * it reaches buildAnalysis(). 'Financed', 'Unknown', and undefined (older
+ * saved analyses that predate this field) all pass every financing field
+ * through completely unchanged — so existing financed-property calculations
+ * are byte-identical to before this existed (see the "byte-identical
+ * pass-through" tests below). Only 'PaidOff' changes anything: it models
+ * the purchase as 100% cash (down payment = full purchase price), the exact
+ * same shape as the pre-existing "all-cash property" test case below —
+ * which drives loanAmount to 0 and therefore monthlyMortgagePayment /
+ * annualDebtService to 0 through the existing, unchanged math in
+ * buildAnalysis()/mortgagePayment(). dscr() already returns null (rendered
+ * as "N/A") whenever annualDebtService is 0, so no new
+ * Infinity/divide-by-zero handling is needed here — the math already did
+ * the right thing; this only decides which inputs reach it.
+ */
+export function applyFinancingStatus(input: AnalysisInput, financingStatus: FinancingStatus | undefined): AnalysisInput {
+  if (financingStatus !== 'PaidOff') return input
+  return {
+    ...input,
+    downPaymentMode: 'amount',
+    downPaymentAmount: num(input.purchasePrice),
+    interestRatePercent: 0,
+    loanPointsPercent: 0,
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Deal score (Section C) — descriptive only, never framed as advice.
 // ---------------------------------------------------------------------------
 

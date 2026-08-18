@@ -17,6 +17,26 @@
 // component — pass `scopePropertyId` to show only that property's
 // providers (the per-property People tab); omit it for the full
 // portfolio-wide directory (app/propcrew/page.tsx).
+//
+// QA audit (phone contact picker, deliberately NOT implemented): the
+// W3C Contact Picker API (navigator.contacts.select()) is what a
+// "Choose from Contacts" button would need — it's only implemented in
+// Chromium on Android; Safari (desktop and iOS) has never shipped it, and
+// this app's primary mobile web target is iOS Safari. There is no
+// reliable, secure way to do single-contact selection from the mobile
+// web on that target today, and the privacy requirement here (import
+// ONLY the one contact the user explicitly picks — never request broad
+// address-book access) rules out any broader-permission workaround. Per
+// that finding: manual entry (the Add form below) stays the only path on
+// web. The real fix is native contact picking in a future PropRoster
+// iOS/Android app, which can use each platform's real contact-selection
+// UI; this component is already the natural extension point for that —
+// a future native wrapper can prefill `prefill` (below) from a picked
+// contact exactly the way Document Intelligence's "Add this business to
+// PropCrew" apply action already does, still landing on this same
+// review-before-save form, still never auto-setting
+// would_use_again/experience_note/category without the user confirming
+// them.
 
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -59,7 +79,7 @@ const emptyDraft = {
 export type PropCrewPrefill = { name: string; businessName?: string; phone?: string; email?: string; website?: string }
 
 export function PropCrewPanel({
-  ownerId, properties, scopePropertyId, onChanged, prefill, onPrefillConsumed,
+  ownerId, properties, scopePropertyId, onChanged, prefill, onPrefillConsumed, showHeader = true,
 }: {
   ownerId: string
   properties: PropertyRef[]
@@ -69,6 +89,13 @@ export function PropCrewPanel({
   /** Opens the Add form pre-filled — used by Document Intelligence's "Add this business to PropCrew" apply action (see app/page.tsx's applyExtractedToModule). */
   prefill?: PropCrewPrefill | null
   onPrefillConsumed?: () => void
+  /** QA: default true (unchanged behavior — the property workspace's
+   * People tab has no PropCrew heading of its own, so this panel's is the
+   * only one there). app/propcrew/page.tsx passes false: that page
+   * already has its own "PROPCREW" intro immediately above this panel —
+   * showing both back-to-back was the reported redundant-intro bug. The
+   * "+ Add to PropCrew" button always renders either way. */
+  showHeader?: boolean
 }) {
   const [contacts, setContacts] = useState<PropCrewContact[]>([])
   const [links, setLinks] = useState<ContactLink[]>([])
@@ -207,11 +234,13 @@ export function PropCrewPanel({
   return (
     <div className="propCrewPanel">
       <div className="sectionHead workspaceHeading">
-        <div>
-          <p className="eyebrow">PROPCREW</p>
-          <h2>Your private crew directory</h2>
-          <p>Every contractor, agent, lender and professional you&apos;ve worked with — {PROPCREW_PRIVACY_DISCLOSURE.toLowerCase()}</p>
-        </div>
+        {showHeader ? (
+          <div>
+            <p className="eyebrow">PROPCREW</p>
+            <h2>Your private crew directory</h2>
+            <p>Every contractor, agent, lender and professional you&apos;ve worked with — {PROPCREW_PRIVACY_DISCLOSURE.toLowerCase()}</p>
+          </div>
+        ) : <div />}
         <button className="primary" onClick={openAdd}>+ Add to PropCrew</button>
       </div>
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyFinancingStatus,
   breakEvenOccupancy,
   buildAnalysis,
   calculateNOI,
@@ -171,6 +172,44 @@ describe('buildAnalysis — 2. all-cash property', () => {
 
   it('total cash required equals the full purchase price plus closing costs', () => {
     expect(result.totalCashRequired).toBeCloseTo(350000 + 6000, 6)
+  })
+})
+
+describe('applyFinancingStatus', () => {
+  it('is a byte-identical pass-through for "Financed" (existing financed-property calculations must not change)', () => {
+    expect(applyFinancingStatus(baseInput, 'Financed')).toBe(baseInput)
+  })
+
+  it('is a byte-identical pass-through for "Unknown"', () => {
+    expect(applyFinancingStatus(baseInput, 'Unknown')).toBe(baseInput)
+  })
+
+  it('is a byte-identical pass-through for undefined (older saved analyses that predate this field)', () => {
+    expect(applyFinancingStatus(baseInput, undefined)).toBe(baseInput)
+  })
+
+  it('buildAnalysis(applyFinancingStatus(input, "Financed")) matches buildAnalysis(input) exactly', () => {
+    expect(buildAnalysis(applyFinancingStatus(baseInput, 'Financed'))).toEqual(buildAnalysis(baseInput))
+  })
+
+  it('"PaidOff" reshapes the input into the same all-cash shape as a manual 100%-down entry', () => {
+    const viaStatus = buildAnalysis(applyFinancingStatus(baseInput, 'PaidOff'))
+    const viaManual100Down = buildAnalysis({ ...baseInput, downPaymentMode: 'percent', downPaymentPercent: 100 })
+    expect(viaStatus).toEqual(viaManual100Down)
+  })
+
+  it('"PaidOff" zeroes the loan, monthly P&I and debt service, and reports DSCR as N/A (null) instead of Infinity', () => {
+    const result = buildAnalysis(applyFinancingStatus(baseInput, 'PaidOff'))
+    expect(result.loanAmount).toBe(0)
+    expect(result.monthlyMortgagePayment).toBe(0)
+    expect(result.annualDebtService).toBe(0)
+    expect(result.dscr).toBeNull()
+    assertAllFinite(result)
+  })
+
+  it('"PaidOff" total cash required is the full purchase price plus closing costs, with no financing assumed', () => {
+    const result = buildAnalysis(applyFinancingStatus(baseInput, 'PaidOff'))
+    expect(result.totalCashRequired).toBeCloseTo(baseInput.purchasePrice + (baseInput.closingCosts || 0), 6)
   })
 })
 
