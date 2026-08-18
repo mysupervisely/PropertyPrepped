@@ -32,9 +32,13 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import type { User } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
+import { useSubscription } from '../../lib/useSubscription'
+import { entitlementsFor } from '../../lib/billing/entitlements'
 import { AuthHeader } from '../../components/AuthHeader'
+import { UpgradePrompt } from '../../components/UpgradePrompt'
 import { RENT_PAYMENT_METHODS } from '../../lib/property-categories'
 import { periodFromDate, periodStart, shiftPeriod, formatPeriodLabel, shouldDeleteLinkedTransaction, type RentPeriod, type RentStatus } from '../../lib/rent-ledger/status'
 import { buildRentLedgerRows, summarizeRentLedgerRows, type RentLedgerRow } from '../../lib/rent-ledger/ledger'
@@ -83,10 +87,18 @@ export default function RentLedgerPage() {
     )
   }
 
-  return <RentLedgerWorkspace />
+  return <RentLedgerWorkspace user={user} />
 }
 
-function RentLedgerWorkspace() {
+function RentLedgerWorkspace({ user }: { user: User }) {
+  const { plan } = useSubscription(user)
+  // Launch Pricing: Rent Ledger is a Manage capability. Existing recorded
+  // payments and lease-derived history remain fully VISIBLE regardless of
+  // plan (Section: Downgrade Safety — "prefer read-only historical
+  // visibility... rather than hiding the user's own existing records
+  // entirely") — only the ability to record a NEW payment is gated.
+  const canUseRentLedger = entitlementsFor(plan).canUseRentLedger
+  const [showUpgrade, setShowUpgrade] = useState(false)
   const [properties, setProperties] = useState<PropertyRef[]>([])
   const [leases, setLeases] = useState<LeaseRef[]>([])
   const [payments, setPayments] = useState<PaymentRow[]>([])
@@ -140,6 +152,13 @@ function RentLedgerWorkspace() {
   }, [leases, deepLinkHandled])
 
   function openRecordPayment(lease?: LeaseRef) {
+    // Gated here, once — covers the top "+ Record Payment" button, every
+    // per-row button, AND the ?lease= deep-link auto-open, all of which
+    // call this same function. UI-only (Rent Ledger writes go through
+    // Supabase directly, not a server route, so there is no separate
+    // paid-resource endpoint to enforce this against — same precedent as
+    // the existing Tenant Connect UI-level gate).
+    if (!canUseRentLedger) { setShowUpgrade(true); return }
     setFormError('')
     setDraft({ ...defaultDraft(), propertyId: lease?.property_id || '', leaseId: lease?.id || '' })
     setShowRecordPayment(true)
@@ -317,6 +336,16 @@ function RentLedgerWorkspace() {
             <div className="modalActions"><button className="secondary" onClick={() => setShowRecordPayment(false)}>Cancel</button><button className="primary" disabled={busy} onClick={() => void saveRecordPayment()}>{busy ? 'Saving…' : 'Save Payment'}</button></div>
           </div>
         </div>
+      )}
+      {showUpgrade && supabase && (
+        <UpgradePrompt
+          supabase={supabase}
+          currentPlan={plan}
+          onClose={() => setShowUpgrade(false)}
+          headline="Rent Ledger is included with Manage."
+          targetPlanId="manage"
+          description="Manage includes Smart Upload, Smart Import, AI Document Intelligence, Rent Ledger and PropWatch. Your existing rent records stay visible either way."
+        />
       )}
     </main>
   )

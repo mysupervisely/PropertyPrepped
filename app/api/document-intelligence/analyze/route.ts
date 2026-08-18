@@ -26,7 +26,7 @@ import { getDocumentIntelligenceProvider, isDocumentIntelligenceConfigured } fro
 // codebase (e.g. Tenant Connect gating) — nothing about the plan's
 // semantics changes; this just adds one more consumer of the existing,
 // database-controlled, client-unwritable entitlement.
-import { resolveEffectivePlan } from '../../../../lib/billing/entitlements'
+import { resolveEffectivePlan, entitlementsFor, aiAllowanceRemaining } from '../../../../lib/billing/entitlements'
 
 export const runtime = 'nodejs'
 
@@ -50,17 +50,22 @@ export async function POST(req: NextRequest) {
     }
     const ownerId = userData.user.id
 
-    // TEMPORARY M8 DIAGNOSTIC (Netlify function-log outage): resolved
-    // ONCE, here, from a fresh RLS-scoped read of the caller's OWN
-    // subscription row — never a client-supplied flag, never trusted from
-    // request input. Same resolveEffectivePlan() used everywhere else in
-    // this app (billing page, entitlement checks); 'owner' is an
+    // Resolved ONCE, here, from a fresh RLS-scoped read of the caller's
+    // OWN subscription row — never a client-supplied flag, never trusted
+    // from request input. Same resolveEffectivePlan() used everywhere
+    // else in this app (billing page, entitlement checks); 'owner' is an
     // internal-only plan a client can never self-assign (see
-    // supabase/milestone-9-subscriptions.sql). This does not broaden what
-    // the 'owner' plan grants elsewhere — it only adds this one new,
-    // narrowly-scoped consumer of the same existing check.
-    const { data: subForDiagnostics } = await supabase.from('user_subscriptions').select('plan,status').eq('owner_id', ownerId).maybeSingle()
-    const diagnosticsAuthorized = resolveEffectivePlan(subForDiagnostics) === 'owner'
+    // supabase/milestone-9-subscriptions.sql).
+    //
+    // Launch Pricing (capability-based relaunch): also the ONE place
+    // this route resolves entitlements for the AI-allowance gate below —
+    // reused, not a second query, for the pre-existing M8 diagnostics
+    // check too (this does not broaden what 'owner' grants elsewhere, it
+    // only adds this narrowly-scoped consumer of the same existing check).
+    const { data: subForEntitlements } = await supabase.from('user_subscriptions').select('plan,status').eq('owner_id', ownerId).maybeSingle()
+    const effectivePlan = resolveEffectivePlan(subForEntitlements)
+    const entitlements = entitlementsFor(effectivePlan)
+    const diagnosticsAuthorized = effectivePlan === 'owner'
 
     const payload = (await req.json().catch(() => ({}))) as { documentId?: unknown; documentType?: unknown }
     const configured = isDocumentIntelligenceConfigured()
@@ -73,6 +78,31 @@ export async function POST(req: NextRequest) {
 
     const result = await handleAnalyzeRequest(payload, {
       isAiConfigured: () => configured,
+      // Launch Pricing (capability-based relaunch): the actual security
+      // boundary for AI cost control (Section: AI Enforcement —
+      // "Hiding a button is not sufficient protection for Anthropic
+      // usage"). A plan without canUseDocumentIntelligence never reaches
+      // Anthropic regardless of what the client sent. A plan WITH the
+      // capability but a metered allowance (monthlyAIAnalyses a real
+      // number, currently only 'manage') gets a fresh count of this
+      // calendar month's ai_usage_events — which only ever contains rows
+      // for SUCCESSFUL analyses (recordUsage is only ever called after a
+      // successful deps.analyze() — see analyze-request.ts), so a failed
+      // attempt never consumes the allowance. Unlimited plans
+      // (monthlyAIAnalyses === null) skip the count query entirely.
+      checkAiAllowance: async () => {
+        if (!entitlements.canUseDocumentIntelligence) return { allowed: false, limit: 0, used: 0 }
+        const limit = entitlements.monthlyAIAnalyses
+        if (limit === null) return { allowed: true, limit: null, used: 0 }
+        const monthStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)).toISOString()
+        const { count } = await supabase
+          .from('ai_usage_events')
+          .select('id', { count: 'exact', head: true })
+          .eq('owner_id', ownerId)
+          .gte('created_at', monthStart)
+        const used = count ?? 0
+        return { allowed: aiAllowanceRemaining(limit, used), limit, used }
+      },
       getDocument: async (documentId) => {
         // RLS on property_documents already restricts rows to owner_id =
         // auth.uid() of the token above — another user's document simply

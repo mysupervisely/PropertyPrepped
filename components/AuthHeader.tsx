@@ -31,9 +31,24 @@ import { Wordmark } from './Wordmark'
 import { AuthNavMenu } from './AuthNavMenu'
 import { SmartUploadButton } from './SmartUploadButton'
 import { SmartUploadModal } from './SmartUpload/SmartUploadModal'
+import { UpgradePrompt } from './UpgradePrompt'
+import { supabase } from '../lib/supabase'
+import { useAuthUser } from '../lib/useAuthUser'
+import { useSubscription } from '../lib/useSubscription'
+import { entitlementsFor } from '../lib/billing/entitlements'
 
 export function AuthHeader({ onBrandClick, onSmartUploadCompleted }: { onBrandClick?: () => void; onSmartUploadCompleted?: () => void }) {
   const [smartUploadOpen, setSmartUploadOpen] = useState(false)
+  // Launch Pricing: Smart Upload's entry point is global (this header
+  // renders on every authenticated page), so the gate lives here rather
+  // than being threaded through every page that renders AuthHeader.
+  // UI-only — the real cost boundary is the analyze route's server-side
+  // AI-allowance check (Section: AI Enforcement); this just avoids
+  // opening a workflow the plan can't complete.
+  const [showUpgrade, setShowUpgrade] = useState(false)
+  const { user } = useAuthUser()
+  const { plan } = useSubscription(user)
+  const canUseSmartUpload = entitlementsFor(plan).canUseSmartUpload
 
   const brandContent = (
     <>
@@ -53,9 +68,19 @@ export function AuthHeader({ onBrandClick, onSmartUploadCompleted }: { onBrandCl
             <Link href="/" className="brandButton">{brandContent}</Link>
           )}
         </div>
-        <SmartUploadButton onClick={() => setSmartUploadOpen(true)} />
+        <SmartUploadButton onClick={() => (canUseSmartUpload ? setSmartUploadOpen(true) : setShowUpgrade(true))} />
       </header>
       <SmartUploadModal open={smartUploadOpen} onClose={() => setSmartUploadOpen(false)} onCompleted={onSmartUploadCompleted} />
+      {showUpgrade && supabase && (
+        <UpgradePrompt
+          supabase={supabase}
+          currentPlan={plan}
+          onClose={() => setShowUpgrade(false)}
+          headline="Smart Upload is included with Manage."
+          targetPlanId="manage"
+          description="Manage includes Smart Upload, Smart Import, AI Document Intelligence, Rent Ledger and PropWatch."
+        />
+      )}
     </>
   )
 }

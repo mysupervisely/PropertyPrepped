@@ -389,7 +389,15 @@ export default function Home() {
   const [error, setError] = useState('')
 
   const { plan } = useSubscription(user)
-  const [showUpgrade, setShowUpgrade] = useState(false)
+  const entitlements = useMemo(() => entitlementsFor(plan), [plan])
+  // Launch Pricing: one shared UpgradePrompt instance, distinguished by
+  // WHY it was opened — 'propertyLimit' keeps the original property-count
+  // framing (REACHED_LIMIT_COPY/NEXT_PLAN), 'documentIntelligence' shows
+  // the AI-capability framing (targets Manage specifically, since
+  // NEXT_PLAN's "next rung" may still be Organize, which doesn't include
+  // it). Both reuse the same modal/checkout plumbing — no second prompt
+  // component.
+  const [showUpgrade, setShowUpgrade] = useState<null | 'propertyLimit' | 'documentIntelligence'>(null)
   // Portfolio Snapshot expand/collapse (Section 3/4) — defaults expanded;
   // corrected from localStorage on mount (client-only, so this can't run
   // during server rendering). Presentation preference only, never sent to
@@ -559,16 +567,21 @@ export default function Home() {
     // month regardless of which month the Rent Ledger page itself is
     // browsing.
     const currentPeriod = periodFromDate(new Date())
+    // Launch Pricing: Lease/Insurance/Mortgage/Maintenance signals stay
+    // available to EVERY plan — "Do not destroy the Command Center for
+    // Free/Organize users." Only the M18 additions (rent status, system
+    // warranty, vacancy) are the "enhanced actionable PropWatch signals"
+    // reserved for canUsePropWatch (Manage and above).
     const dateItems: DashboardDateItem[] = [
       ...buildLeaseDateItems(leases, propertyLabelById),
       ...buildInsuranceDateItems(insurancePolicies, propertyLabelById),
       ...buildMortgageDateItems(mortgages, propertyLabelById),
       ...buildMaintenanceDateItems(maintenanceRecords, propertyLabelById),
-      ...buildRentDateItems(leases, properties, rentPayments, currentPeriod, propertyLabelById),
-      ...buildSystemWarrantyDateItems(propertySystems, propertyLabelById),
+      ...(entitlements.canUsePropWatch ? buildRentDateItems(leases, properties, rentPayments, currentPeriod, propertyLabelById) : []),
+      ...(entitlements.canUsePropWatch ? buildSystemWarrantyDateItems(propertySystems, propertyLabelById) : []),
     ]
     const { needsAttention, upcoming } = splitAttentionAndUpcoming(dateItems)
-    const vacancy = buildVacancyItems(properties, leases, propertyLabelById)
+    const vacancy = entitlements.canUsePropWatch ? buildVacancyItems(properties, leases, propertyLabelById) : []
 
     const activity: ActivityItem[] = sortByTimestampDescending([
       ...documentActivity(documents, propertyLabelById),
@@ -589,7 +602,7 @@ export default function Home() {
       recentActivity: limitItems(activity, RECENT_ACTIVITY_LIMIT),
       vacancyItems: vacancy,
     }
-  }, [leases, insurancePolicies, mortgages, maintenanceRecords, documents, transactions, propertyNotes, properties, contacts, propertyLabelById, rentPayments, propertySystems])
+  }, [leases, insurancePolicies, mortgages, maintenanceRecords, documents, transactions, propertyNotes, properties, contacts, propertyLabelById, rentPayments, propertySystems, entitlements])
 
   const openMaintenanceCount = useMemo(() => maintenanceRecords.filter((m) => m.status !== 'Completed').length, [maintenanceRecords])
 
@@ -704,7 +717,7 @@ export default function Home() {
   // stale (e.g. a second tab already used up the last slot).
   function openAddProperty() {
     if (!canCreateProperty(plan, properties.length)) {
-      setShowUpgrade(true)
+      setShowUpgrade('propertyLimit')
       return
     }
     setShowAdd(true)
@@ -757,7 +770,7 @@ export default function Home() {
       // used up the last slot in between.
       if (insertError?.message === 'PROPERTY_LIMIT_REACHED') {
         setShowAdd(false)
-        setShowUpgrade(true)
+        setShowUpgrade('propertyLimit')
       } else {
         setError(insertError?.message || 'Unable to add property.')
       }
@@ -1487,7 +1500,14 @@ export default function Home() {
           // same buildRentLedgerRows() the /rent-ledger page and
           // PropWatch both call — one canonical rent-status source.
           const currentRentPeriod = periodFromDate(new Date())
-          const rentThisMonth = selected.property_type === 'Rental Property'
+          // Launch Pricing: this card is a live current-month PREVIEW (not
+          // stored history) that only makes sense alongside the ability to
+          // act on it — hidden entirely for a plan without canUseRentLedger,
+          // never shown half-functional. Existing recorded payments remain
+          // fully visible on the /rent-ledger page itself regardless of
+          // plan (Section: Downgrade Safety — read-only history, never
+          // hidden data).
+          const rentThisMonth = selected.property_type === 'Rental Property' && entitlements.canUseRentLedger
             ? buildRentLedgerRows([selected], selectedLeases, rentPayments, currentRentPeriod, new Map([[selected.id, selected.address]]))
             : []
           return <section className="workspaceContent financialWorkspace">
@@ -1638,6 +1658,8 @@ export default function Home() {
               currentMortgageBalance={latestMortgage ? Number(latestMortgage.current_balance) : null}
               currentMonthlyRent={latestLease ? Number(latestLease.monthly_rent) : Number(selected.monthly_rent)}
               currentEstimatedValue={Number(selected.estimated_value)}
+              canUseDocumentIntelligence={entitlements.canUseDocumentIntelligence}
+              onUpgradeClick={() => setShowUpgrade('documentIntelligence')}
               onClose={() => setShowDocIntelId(null)}
               onOpenDocument={() => void openDocument(activeDoc)}
               onRefresh={() => void loadPortfolio()}
@@ -1809,7 +1831,19 @@ export default function Home() {
 
       {showAdd && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowAdd(false)}><div className="modal"><div className="modalTop"><h2>Add a property</h2><button className="iconButton" onClick={() => setShowAdd(false)}>×</button></div><label className="uploadBox">{imagePreview ? <img src={imagePreview} alt="Property preview" /> : <div><strong>Add a cover photo</strong><span>Choose a photo now or add one later</span></div>}<input type="file" accept="image/*" onChange={handleImage} /></label><div className="formGrid"><label>Street address<AddressAutocomplete value={draft.address} onTextChange={(v) => setDraft({ ...draft, address: v })} onSelect={(addr) => setDraft((d) => ({ ...d, ...applyNormalizedAddress(addr, d.address) }))} placeholder="123 Example Street" /></label><label>City, state & ZIP<input value={draft.city} onChange={(e) => setDraft({ ...draft, city: e.target.value })} placeholder="Example City, FL 12345" /></label><label>Property type<select value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })}><option>Rental Property</option><option>Primary Residence</option><option>Vacation Home</option><option>Commercial</option><option>Land</option><option>Other</option></select></label><label>Purchase price<input inputMode="decimal" value={draft.purchasePrice} onChange={(e) => setDraft({ ...draft, purchasePrice: e.target.value })} placeholder="390000" /></label><label>Estimated value<input inputMode="decimal" value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} placeholder="520000" /></label><label>Mortgage balance<input inputMode="decimal" value={draft.mortgage} onChange={(e) => setDraft({ ...draft, mortgage: e.target.value })} placeholder="310000" /></label><label>Financing status<select value={draft.financingStatus} onChange={(e) => setDraft({ ...draft, financingStatus: e.target.value })}>{FINANCING_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label><label>Monthly rent<input inputMode="decimal" value={draft.rent} onChange={(e) => setDraft({ ...draft, rent: e.target.value })} placeholder="2950" /></label><label>Monthly property expenses<input inputMode="decimal" value={draft.monthlyExpenses} onChange={(e) => setDraft({ ...draft, monthlyExpenses: e.target.value })} placeholder="1925" /></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowAdd(false)}>Cancel</button><button className="primary" disabled={busy} onClick={() => void addProperty()}>{busy ? 'Saving…' : 'Save Property'}</button></div></div></div>}
 
-      {showUpgrade && supabase && <UpgradePrompt supabase={supabase} currentPlan={plan} onClose={() => setShowUpgrade(false)} />}
+      {showUpgrade === 'propertyLimit' && supabase && (
+        <UpgradePrompt supabase={supabase} currentPlan={plan} onClose={() => setShowUpgrade(null)} />
+      )}
+      {showUpgrade === 'documentIntelligence' && supabase && (
+        <UpgradePrompt
+          supabase={supabase}
+          currentPlan={plan}
+          onClose={() => setShowUpgrade(null)}
+          headline="AI Document Intelligence is included with Manage."
+          targetPlanId="manage"
+          description="Manage includes Smart Upload, Smart Import, AI Document Intelligence, Rent Ledger and PropWatch."
+        />
+      )}
     </main>
   )
 }

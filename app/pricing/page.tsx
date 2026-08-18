@@ -1,21 +1,35 @@
 'use client'
 
-// PropPrepped Milestone 9: public pricing page (Section 7).
+// PropPrepped Milestone 9, relaunched under Launch Pricing (capability-based
+// relaunch): public pricing page (Section 7).
 //
 // Reachable whether or not the visitor is signed in — a real acquisition
 // page, not something hidden behind auth. Property Evaluator stays free
 // regardless of plan (Section 16); this page's CTAs are only about the
 // property-management side of the product.
+//
+// Positioned by CAPABILITY, not property count (Launch Pricing's explicit
+// goal) — PLAN_FEATURE_HIGHLIGHTS leads with what each plan DOES, property
+// count is one bullet among several, never the headline. Legacy plans
+// (investor/portfolio/portfolio_pro) are intentionally absent from
+// PUBLIC_PLAN_ORDER — never offered to new customers — but an existing
+// legacy subscriber visiting this page still sees an accurate note about
+// their current plan rather than the page looking like it forgot them.
 
 import { useState } from 'react'
 import Link from 'next/link'
 import { isSupabaseConfigured, supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { useSubscription } from '../../lib/useSubscription'
-import { CONTACT_TIER, EARLY_ACCESS_PRICING, PLANS, PUBLIC_PLAN_ORDER, TENANT_CONNECT_PRICING_NOTE, type PurchasablePlanId } from '../../lib/billing/plans'
+import {
+  CONTACT_TIER, EARLY_ACCESS_PRICING, PLANS, PUBLIC_PLAN_ORDER, COMING_SOON_PLAN_ORDER,
+  TENANT_CONNECT_PRICING_NOTE, PLAN_FEATURE_HIGHLIGHTS, type PurchasablePlanId,
+} from '../../lib/billing/plans'
 import { startCheckout } from '../../lib/billing/client'
 import { PricingNavLink } from '../../components/PricingNavLink'
 import { Wordmark } from '../../components/Wordmark'
+
+const LEGACY_PLAN_IDS = new Set(['investor', 'portfolio', 'portfolio_pro'])
 
 export default function PricingPage() {
   const { user, ready } = useAuthUser()
@@ -34,6 +48,8 @@ export default function PricingPage() {
     }
   }
 
+  const onLegacyPlan = ready && user && LEGACY_PLAN_IDS.has(currentPlan)
+
   return (
     <main className="shell investmentShell">
       <header className="topbar">
@@ -47,11 +63,23 @@ export default function PricingPage() {
 
       <section className="intro">
         <p className="eyebrow">PRICING</p>
-        <h1>Simple plans that grow with your portfolio.</h1>
-        <p>Start free with your first property. Upgrade only when you need room for more.</p>
+        <h1>Plans built around what you need PropRoster to do.</h1>
+        <p>Start free to try it out. Upgrade for AI-powered document handling, rent tracking, and PropWatch — not just more property slots.</p>
       </section>
 
       {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
+
+      {/* Legacy subscribers are never shown a public card for their own
+          plan (Section: Legacy Subscribers — no longer offered to new
+          customers), so this note is what keeps the page from looking
+          like it forgot them — their plan/billing is completely
+          unchanged, this is copy only. */}
+      {onLegacyPlan && (
+        <div className="statusMessage pricingLegacyNote">
+          You&rsquo;re on the <strong>{PLANS[currentPlan].name}</strong> plan. Your plan and billing are unchanged — manage it from{' '}
+          <Link href="/account/billing">Account &amp; Billing</Link>.
+        </div>
+      )}
 
       <div className="pricingGrid">
         {PUBLIC_PLAN_ORDER.map((planId) => {
@@ -73,7 +101,11 @@ export default function PricingPage() {
                 <span>/month</span>
               </div>
               {isPaid && EARLY_ACCESS_PRICING && <span className="statusPill pricingEarlyAccess">Early Access Pricing</span>}
-              <p className="pricingLimit">Up to <strong>{def.maxProperties}</strong> propert{def.maxProperties === 1 ? 'y' : 'ies'}</p>
+              {PLAN_FEATURE_HIGHLIGHTS[planId] && (
+                <ul className="pricingFeatureList">
+                  {PLAN_FEATURE_HIGHLIGHTS[planId]!.map((feature) => <li key={feature}>{feature}</li>)}
+                </ul>
+              )}
               {TENANT_CONNECT_PRICING_NOTE[planId] && <p className="pricingTenantConnectNote">{TENANT_CONNECT_PRICING_NOTE[planId]}</p>}
               {/* Pushed to the bottom of the flex-column card via margin-top:auto
                   (app/globals.css .pricingCardCta) regardless of how much copy
@@ -102,10 +134,34 @@ export default function PricingPage() {
           )
         })}
 
+        {/* Automate: Coming Soon, never purchasable (Launch Pricing —
+            "Do not show Automate as purchasable"). Same PLANS/
+            PLAN_FEATURE_HIGHLIGHTS definitions as every other card, just
+            never wired to Checkout — the disabled button is the only
+            difference from a real plan card. */}
+        {COMING_SOON_PLAN_ORDER.map((planId) => {
+          const def = PLANS[planId]
+          return (
+            <article className="pricingCard pricingCardComingSoon" key={planId}>
+              <span className="pricingBadge pricingBadgeComingSoon">Coming Soon</span>
+              <h2>{def.name}</h2>
+              <p className="pricingTagline">{def.tagline}</p>
+              {PLAN_FEATURE_HIGHLIGHTS[planId] && (
+                <ul className="pricingFeatureList">
+                  {PLAN_FEATURE_HIGHLIGHTS[planId]!.map((feature) => <li key={feature}>{feature}</li>)}
+                </ul>
+              )}
+              <div className="pricingCardCta">
+                <button className="secondary" disabled>Coming Soon</button>
+              </div>
+            </article>
+          )
+        })}
+
         <article className="pricingCard pricingCardContact">
           <h2>{CONTACT_TIER.label}</h2>
           <p className="pricingTagline">{CONTACT_TIER.tagline}</p>
-          <p className="pricingLimit">Managing more than 20 properties? Let&rsquo;s build a plan for your portfolio.</p>
+          <p className="pricingLimit">Managing a larger portfolio? Let&rsquo;s build a plan for your properties.</p>
           <a className="primary" href="mailto:sales@proproster.com?subject=PropRoster%20%E2%80%94%2021%2B%20properties">Contact Us</a>
         </article>
       </div>
@@ -113,7 +169,7 @@ export default function PricingPage() {
       <section className="pricingFooterNote">
         <p className="muted">
           The Property Evaluator investment-analysis tool is always free to use, on every plan — including before you create an account.
-          Paid plans only affect how many properties you can organize in your portfolio.
+          Manage includes 50 AI-powered document analyses per month (Smart Upload, Smart Import, and Document Intelligence draw from the same monthly allowance).
         </p>
       </section>
     </main>

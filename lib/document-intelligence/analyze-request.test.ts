@@ -46,6 +46,11 @@ function fakeAnalyzeResult(): AnalyzeDocumentResult {
 function baseDeps(overrides: Partial<AnalyzeRequestDeps> = {}): AnalyzeRequestDeps {
   return {
     isAiConfigured: vi.fn().mockReturnValue(true),
+    // Launch Pricing: unlimited/allowed by default so every pre-existing
+    // test in this file keeps exercising the SAME behavior it always
+    // did — only the tests that explicitly override this exercise the
+    // AI-allowance gate itself.
+    checkAiAllowance: vi.fn().mockResolvedValue({ allowed: true, limit: null, used: 0 }),
     getDocument: vi.fn().mockResolvedValue(fakeDoc()),
     claimProcessing: vi.fn().mockResolvedValue(true),
     updateDocumentStatus: vi.fn().mockResolvedValue(undefined),
@@ -332,5 +337,64 @@ describe('handleAnalyzeRequest — 12. re-analysis / versioning', () => {
     expect(deps.saveAnalysis).toHaveBeenCalledWith(expect.objectContaining({ analysis_version: 3 }))
     // The dependency surface has no "updateAnalysis" — re-analysis can only ever INSERT a new row.
     expect(Object.keys(deps)).not.toContain('updateAnalysis')
+  })
+})
+
+describe('handleAnalyzeRequest — Launch Pricing: server-side AI allowance enforcement', () => {
+  it('CRITICAL: an exhausted allowance blocks BEFORE any file work or Anthropic call — analyze() is never invoked', async () => {
+    const deps = baseDeps({ checkAiAllowance: vi.fn().mockResolvedValue({ allowed: false, limit: 50, used: 50 }) })
+    const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
+
+    expect(result.status).toBe(403)
+    expect(result.body.error).toBe('AI_LIMIT_REACHED')
+    expect(deps.analyze).not.toHaveBeenCalled()
+    // Never even reaches the file-fetch/claim-processing steps — the
+    // allowance check is the very first thing after isAiConfigured().
+    expect(deps.createSignedUrl).not.toHaveBeenCalled()
+    expect(deps.claimProcessing).not.toHaveBeenCalled()
+  })
+
+  it('a plan without the capability at all (limit: 0) gets the same structured block, with plan-specific copy', () => {
+    return handleAnalyzeRequest({ documentId: 'doc-1' }, baseDeps({ checkAiAllowance: vi.fn().mockResolvedValue({ allowed: false, limit: 0, used: 0 }) }))
+      .then((result) => {
+        expect(result.status).toBe(403)
+        expect(result.body.message).toMatch(/included with the manage plan/i)
+      })
+  })
+
+  it('exhausted-allowance copy names the numeric limit for a metered (non-zero) plan', async () => {
+    const deps = baseDeps({ checkAiAllowance: vi.fn().mockResolvedValue({ allowed: false, limit: 50, used: 50 }) })
+    const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
+    expect(result.body.message).toMatch(/50 document analyses/)
+  })
+
+  it('an allowed request (under the limit) proceeds to call analyze() normally', async () => {
+    const deps = baseDeps({ checkAiAllowance: vi.fn().mockResolvedValue({ allowed: true, limit: 50, used: 12 }) })
+    const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
+    expect(result.status).toBe(200)
+    expect(deps.analyze).toHaveBeenCalled()
+  })
+
+  it('an unlimited allowance (legacy/owner plans) never blocks regardless of usage', async () => {
+    const deps = baseDeps({ checkAiAllowance: vi.fn().mockResolvedValue({ allowed: true, limit: null, used: 9999 }) })
+    const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
+    expect(result.status).toBe(200)
+    expect(deps.analyze).toHaveBeenCalled()
+  })
+
+  it('a successful analysis still records usage exactly as before — the allowance check does not change what a successful call writes', async () => {
+    const deps = baseDeps({ checkAiAllowance: vi.fn().mockResolvedValue({ allowed: true, limit: 50, used: 5 }) })
+    await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
+    expect(deps.recordUsage).toHaveBeenCalled()
+  })
+
+  it('a failed analysis never records usage — the count a future allowance check reads only ever reflects successful analyses (Retry Analysis genuinely consumes a fresh slot only when it succeeds)', async () => {
+    const deps = baseDeps({
+      checkAiAllowance: vi.fn().mockResolvedValue({ allowed: true, limit: 50, used: 5 }),
+      analyze: vi.fn().mockRejectedValue(new Error('provider timeout')),
+    })
+    const result = await handleAnalyzeRequest({ documentId: 'doc-1' }, deps)
+    expect(result.status).toBe(502)
+    expect(deps.recordUsage).not.toHaveBeenCalled()
   })
 })

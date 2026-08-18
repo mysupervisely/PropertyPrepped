@@ -78,33 +78,108 @@ export function canCreateProperty(plan: PlanId, currentPropertyCount: number): b
 }
 
 // Milestone 10: Tenant Connect launch intent. Unlike the other stub
-// fields below (monthlyAIAnalyses, tenantPortal, etc. — all deliberately
-// unmeasured/false for every plan because no real limit exists yet),
-// tenantConnect IS a real, currently-enforced value per plan: Portfolio
-// and Portfolio Pro get it today, Free does not, and Owner (internal,
-// unlimited) always does. Investor is the deliberate exception — the
-// long-term intent is an optional paid add-on, but since no Stripe add-on
-// product exists yet and nothing may be sold that isn't live, Investor
-// stays `false` here exactly like Free until that billing path is built.
-// This map is the ONLY place that distinction is made; entitlementsFor
-// below just reads it, same as every other field in this file.
+// fields below (tenantPortal, etc. — deliberately unmeasured/false for
+// every plan because no real limit exists yet), tenantConnect IS a
+// real, currently-enforced value per plan: Manage and above get it
+// today, Free/Organize do not, and Owner (internal, unlimited) always
+// does. Legacy Investor is the deliberate exception — the long-term
+// intent is an optional paid add-on, but since no Stripe add-on product
+// exists yet and nothing may be sold that isn't live, legacy Investor
+// stays `false` here exactly like Free until that billing path is
+// built (unchanged from before Launch Pricing). This map is the ONLY
+// place that distinction is made; entitlementsFor below just reads it,
+// same as every other field in this file.
 const TENANT_CONNECT_ENABLED: Record<PlanId, boolean> = {
   free: false,
+  organize: false,
+  manage: true,
+  automate: true,
   investor: false,
   portfolio: true,
   portfolio_pro: true,
   owner: true,
 }
 
-// Central hook point for future entitlements (Section 4/18). Each key
-// returns a safe "not available" default until a real limit is measured
-// and enforced — none of these are checked anywhere yet. Adding real
-// enforcement later means changing this module and the places that read
-// it, never scattering a new check through components.
-export type Entitlements = {
-  maxProperties: number
-  /** Deliberately unmeasured (Section 4/18: do not guess AI usage allowances). `null` = no limit defined/enforced yet, not "unlimited." */
+// Launch Pricing (capability-based relaunch): the real, currently-
+// enforced capability set for each plan. Free/Organize get none of
+// these — Organize is documents/organization/tracking, not AI ingestion
+// or recurring-operations tooling. Manage gets all of them, with a
+// metered monthly AI allowance (Section: AI Enforcement).
+//
+// Legacy paid subscribers (investor/portfolio/portfolio_pro) get the
+// SAME full capability set as Manage, with an UNLIMITED AI allowance
+// (monthlyAIAnalyses: null) — a deliberate, conservative choice per the
+// launch spec ("Choose conservative backward-compatible AI entitlements
+// for legacy subscribers rather than accidentally blocking them during
+// launch"). Before this launch, EVERY signed-in user on ANY plan had
+// unlimited AI analysis calls (see the billing audit, Section 11) — a
+// legacy paying subscriber suddenly hitting a new 50/month cap they were
+// never told about, on launch day, would be a broken-feeling regression
+// for someone already paying. The new 50/month allowance applies only to
+// the NEW 'manage' plan, which is being marketed with that number from
+// day one. This same reasoning is extended uniformly to the other new
+// capability flags (canUseSmartUpload/canUseSmartImport/
+// canUseDocumentIntelligence/canUseRentLedger/canUsePropWatch) — none of
+// these were ever gated before Launch Pricing, so a legacy subscriber
+// loses nothing they already had access to.
+export type ManageCapabilities = {
+  /** `null` = unlimited (no allowance check performed). A real number is enforced server-side in the analyze route — never just hidden client-side (Section: AI Enforcement). */
   monthlyAIAnalyses: number | null
+  canUseSmartUpload: boolean
+  canUseSmartImport: boolean
+  canUseDocumentIntelligence: boolean
+  canUseRentLedger: boolean
+  canUsePropWatch: boolean
+}
+
+const NO_MANAGE_CAPABILITIES: ManageCapabilities = {
+  monthlyAIAnalyses: 0,
+  canUseSmartUpload: false,
+  canUseSmartImport: false,
+  canUseDocumentIntelligence: false,
+  canUseRentLedger: false,
+  canUsePropWatch: false,
+}
+const MANAGE_TIER_CAPABILITIES: ManageCapabilities = {
+  monthlyAIAnalyses: 50,
+  canUseSmartUpload: true,
+  canUseSmartImport: true,
+  canUseDocumentIntelligence: true,
+  canUseRentLedger: true,
+  canUsePropWatch: true,
+}
+/** Full capability set, unlimited AI — legacy paid plans and the internal owner plan (see the module doc comment above for why). */
+const UNLIMITED_CAPABILITIES: ManageCapabilities = {
+  monthlyAIAnalyses: null,
+  canUseSmartUpload: true,
+  canUseSmartImport: true,
+  canUseDocumentIntelligence: true,
+  canUseRentLedger: true,
+  canUsePropWatch: true,
+}
+
+const CAPABILITIES_BY_PLAN: Record<PlanId, ManageCapabilities> = {
+  free: NO_MANAGE_CAPABILITIES,
+  organize: NO_MANAGE_CAPABILITIES,
+  manage: MANAGE_TIER_CAPABILITIES,
+  // Not purchasable yet — if ever internally assigned, at least
+  // Manage-equivalent rather than under-provisioning a "premium" tier.
+  automate: MANAGE_TIER_CAPABILITIES,
+  investor: UNLIMITED_CAPABILITIES,
+  portfolio: UNLIMITED_CAPABILITIES,
+  portfolio_pro: UNLIMITED_CAPABILITIES,
+  owner: UNLIMITED_CAPABILITIES,
+}
+
+// Central hook point for future entitlements (Section 4/18). Each of the
+// still-unmeasured fields below (tenantPortal, portfolioAnalytics,
+// advancedReports, teamMembers, prioritySupport) returns a safe "not
+// available" default until a real limit is measured and enforced — none
+// of these are checked anywhere yet. Adding real enforcement later means
+// changing this module and the places that read it, never scattering a
+// new check through components.
+export type Entitlements = ManageCapabilities & {
+  maxProperties: number
   tenantPortal: boolean
   portfolioAnalytics: boolean
   advancedReports: boolean
@@ -117,7 +192,7 @@ export type Entitlements = {
 export function entitlementsFor(plan: PlanId): Entitlements {
   return {
     maxProperties: maxPropertiesFor(plan),
-    monthlyAIAnalyses: null,
+    ...CAPABILITIES_BY_PLAN[plan],
     tenantPortal: false,
     portfolioAnalytics: false,
     advancedReports: false,
@@ -125,4 +200,16 @@ export function entitlementsFor(plan: PlanId): Entitlements {
     prioritySupport: false,
     tenantConnect: TENANT_CONNECT_ENABLED[plan],
   }
+}
+
+/**
+ * Whether `used` successful AI analyses this calendar month still leaves
+ * room under `limit` (Section: AI Enforcement). `limit === null` always
+ * means unlimited — never blocks. Pure and unit-testable in isolation
+ * from the count query itself (see app/api/document-intelligence/analyze/
+ * route.ts for how `used` is actually counted, from ai_usage_events).
+ */
+export function aiAllowanceRemaining(limit: number | null, used: number): boolean {
+  if (limit === null) return true
+  return used < limit
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   ENTITLED_STATUSES,
+  aiAllowanceRemaining,
   canCreateProperty,
   entitlementsFor,
   maxPropertiesFor,
@@ -54,8 +55,13 @@ describe('resolveEffectivePlan', () => {
 })
 
 describe('maxPropertiesFor — final launch limits', () => {
-  it('matches the exact limits specified for launch', () => {
+  it('matches the exact limits specified for Launch Pricing', () => {
     expect(maxPropertiesFor('free')).toBe(1)
+    expect(maxPropertiesFor('organize')).toBe(5)
+    expect(maxPropertiesFor('manage')).toBe(15)
+  })
+
+  it('legacy plan limits are UNCHANGED by Launch Pricing', () => {
     expect(maxPropertiesFor('investor')).toBe(4)
     expect(maxPropertiesFor('portfolio')).toBe(9)
     expect(maxPropertiesFor('portfolio_pro')).toBe(20)
@@ -63,6 +69,8 @@ describe('maxPropertiesFor — final launch limits', () => {
 
   it('matches PLANS catalog (no drift between the two)', () => {
     expect(maxPropertiesFor('free')).toBe(PLANS.free.maxProperties)
+    expect(maxPropertiesFor('organize')).toBe(PLANS.organize.maxProperties)
+    expect(maxPropertiesFor('manage')).toBe(PLANS.manage.maxProperties)
     expect(maxPropertiesFor('investor')).toBe(PLANS.investor.maxProperties)
     expect(maxPropertiesFor('portfolio')).toBe(PLANS.portfolio.maxProperties)
     expect(maxPropertiesFor('portfolio_pro')).toBe(PLANS.portfolio_pro.maxProperties)
@@ -88,6 +96,16 @@ describe('canCreateProperty — upgrade boundaries', () => {
   it('Portfolio Pro: can create through #20, cannot create #21', () => {
     expect(canCreateProperty('portfolio_pro', 19)).toBe(true) // creating the 20th
     expect(canCreateProperty('portfolio_pro', 20)).toBe(false) // attempting the 21st
+  })
+
+  it('Organize: can create through #5, cannot create #6', () => {
+    expect(canCreateProperty('organize', 4)).toBe(true) // creating the 5th
+    expect(canCreateProperty('organize', 5)).toBe(false) // attempting the 6th
+  })
+
+  it('Manage: can create through #15, cannot create #16', () => {
+    expect(canCreateProperty('manage', 14)).toBe(true) // creating the 15th
+    expect(canCreateProperty('manage', 15)).toBe(false) // attempting the 16th
   })
 
   it('never produces NaN/Infinity for pathological counts', () => {
@@ -119,14 +137,13 @@ describe('canCreateProperty — upgrade boundaries', () => {
   })
 })
 
-describe('entitlementsFor — future capability stubs', () => {
+describe('entitlementsFor — still-unmeasured future capability stubs', () => {
   it('exposes maxProperties matching the plan', () => {
-    expect(entitlementsFor('portfolio').maxProperties).toBe(9)
+    expect(entitlementsFor('manage').maxProperties).toBe(15)
   })
 
-  it('does not guess at unmeasured future limits — returns null/false, never a number pretending to be real', () => {
-    const e = entitlementsFor('portfolio_pro')
-    expect(e.monthlyAIAnalyses).toBeNull()
+  it('does not guess at genuinely unmeasured future limits — returns null/false, never a number pretending to be real', () => {
+    const e = entitlementsFor('manage')
     expect(e.tenantPortal).toBe(false)
     expect(e.portfolioAnalytics).toBe(false)
     expect(e.advancedReports).toBe(false)
@@ -134,23 +151,115 @@ describe('entitlementsFor — future capability stubs', () => {
     expect(e.prioritySupport).toBe(false)
   })
 
-  it('is identical across plans for the not-yet-enforced fields (no accidental partial enforcement)', () => {
+  it('the still-unmeasured stub fields remain identical across every plan (no accidental partial enforcement)', () => {
     const free = entitlementsFor('free')
-    const pro = entitlementsFor('portfolio_pro')
-    expect(free.monthlyAIAnalyses).toBe(pro.monthlyAIAnalyses)
-    expect(free.tenantPortal).toBe(pro.tenantPortal)
+    const manage = entitlementsFor('manage')
+    expect(free.tenantPortal).toBe(manage.tenantPortal)
+    expect(free.portfolioAnalytics).toBe(manage.portfolioAnalytics)
+    expect(free.teamMembers).toBe(manage.teamMembers)
+  })
+})
+
+describe('entitlementsFor — Free (Launch Pricing)', () => {
+  it('has none of the Manage-tier capabilities', () => {
+    const e = entitlementsFor('free')
+    expect(e.canUseSmartUpload).toBe(false)
+    expect(e.canUseSmartImport).toBe(false)
+    expect(e.canUseDocumentIntelligence).toBe(false)
+    expect(e.canUseRentLedger).toBe(false)
+    expect(e.canUsePropWatch).toBe(false)
+    expect(e.monthlyAIAnalyses).toBe(0)
+  })
+})
+
+describe('entitlementsFor — Organize (Launch Pricing)', () => {
+  it('has none of the Manage-tier capabilities, same as Free', () => {
+    const e = entitlementsFor('organize')
+    expect(e.canUseSmartUpload).toBe(false)
+    expect(e.canUseSmartImport).toBe(false)
+    expect(e.canUseDocumentIntelligence).toBe(false)
+    expect(e.canUseRentLedger).toBe(false)
+    expect(e.canUsePropWatch).toBe(false)
+    expect(e.monthlyAIAnalyses).toBe(0)
+  })
+
+  it('still gets the full property/document/PropCrew/Search/Investment-Tools/Lease-Management baseline via maxProperties + the absence of any other gate', () => {
+    expect(entitlementsFor('organize').maxProperties).toBe(5)
+  })
+})
+
+describe('entitlementsFor — Manage (Launch Pricing)', () => {
+  it('has every new capability, with a 50/month AI allowance', () => {
+    const e = entitlementsFor('manage')
+    expect(e.canUseSmartUpload).toBe(true)
+    expect(e.canUseSmartImport).toBe(true)
+    expect(e.canUseDocumentIntelligence).toBe(true)
+    expect(e.canUseRentLedger).toBe(true)
+    expect(e.canUsePropWatch).toBe(true)
+    expect(e.monthlyAIAnalyses).toBe(50)
+  })
+})
+
+describe('entitlementsFor — legacy paid plans (Investor/Portfolio/Portfolio Pro)', () => {
+  it('CRITICAL: remain fully functional — every new capability granted, conservative UNLIMITED AI rather than the new 50/month cap', () => {
+    for (const id of ['investor', 'portfolio', 'portfolio_pro'] as const) {
+      const e = entitlementsFor(id)
+      expect(e.canUseSmartUpload).toBe(true)
+      expect(e.canUseSmartImport).toBe(true)
+      expect(e.canUseDocumentIntelligence).toBe(true)
+      expect(e.canUseRentLedger).toBe(true)
+      expect(e.canUsePropWatch).toBe(true)
+      // Unlimited (null), not 50 — legacy subscribers never had a cap
+      // before Launch Pricing and must not be surprised by one now.
+      expect(e.monthlyAIAnalyses).toBeNull()
+    }
+  })
+})
+
+describe('entitlementsFor — owner/internal plan', () => {
+  it('unrestricted: every capability true, unlimited AI', () => {
+    const e = entitlementsFor('owner')
+    expect(e.canUseSmartUpload).toBe(true)
+    expect(e.canUseSmartImport).toBe(true)
+    expect(e.canUseDocumentIntelligence).toBe(true)
+    expect(e.canUseRentLedger).toBe(true)
+    expect(e.canUsePropWatch).toBe(true)
+    expect(e.monthlyAIAnalyses).toBeNull()
   })
 })
 
 describe('entitlementsFor — Milestone 10 tenantConnect launch intent', () => {
-  it('matches the exact launch intent: Free/Investor false, Portfolio/Portfolio Pro/Owner true', () => {
+  it('matches the exact launch intent: Free/Organize/legacy Investor false, Manage/legacy Portfolio/Portfolio Pro/Owner true', () => {
     expect(entitlementsFor('free').tenantConnect).toBe(false)
-    // Investor stays false deliberately — the long-term intent is a paid
-    // add-on, but no Stripe add-on product exists yet, so it must not be
-    // enabled as if it were already sold.
+    expect(entitlementsFor('organize').tenantConnect).toBe(false)
+    // Legacy Investor stays false deliberately — the long-term intent is
+    // a paid add-on, but no Stripe add-on product exists yet, so it must
+    // not be enabled as if it were already sold. Unchanged by Launch Pricing.
     expect(entitlementsFor('investor').tenantConnect).toBe(false)
+    expect(entitlementsFor('manage').tenantConnect).toBe(true)
     expect(entitlementsFor('portfolio').tenantConnect).toBe(true)
     expect(entitlementsFor('portfolio_pro').tenantConnect).toBe(true)
     expect(entitlementsFor('owner').tenantConnect).toBe(true)
+  })
+})
+
+describe('aiAllowanceRemaining — Section: AI Enforcement', () => {
+  it('unlimited (null limit) always allows, regardless of usage', () => {
+    expect(aiAllowanceRemaining(null, 0)).toBe(true)
+    expect(aiAllowanceRemaining(null, 1_000_000)).toBe(true)
+  })
+
+  it('allows while used is strictly below the limit', () => {
+    expect(aiAllowanceRemaining(50, 0)).toBe(true)
+    expect(aiAllowanceRemaining(50, 49)).toBe(true)
+  })
+
+  it('blocks once used meets or exceeds the limit — the 50th analysis is allowed, the 51st is not', () => {
+    expect(aiAllowanceRemaining(50, 50)).toBe(false)
+    expect(aiAllowanceRemaining(50, 51)).toBe(false)
+  })
+
+  it('a zero limit (Free/Organize — no Document Intelligence capability at all) always blocks', () => {
+    expect(aiAllowanceRemaining(0, 0)).toBe(false)
   })
 })

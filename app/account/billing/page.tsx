@@ -14,7 +14,7 @@ import Link from 'next/link'
 import { isSupabaseConfigured, supabase } from '../../../lib/supabase'
 import { useAuthUser } from '../../../lib/useAuthUser'
 import { useSubscription } from '../../../lib/useSubscription'
-import { PLANS } from '../../../lib/billing/plans'
+import { PLANS, PUBLIC_PLAN_ORDER } from '../../../lib/billing/plans'
 import { openBillingPortal } from '../../../lib/billing/client'
 import { AuthHeader } from '../../../components/AuthHeader'
 
@@ -105,6 +105,15 @@ export default function BillingPage() {
   const def = PLANS[plan]
   const maxProperties = def.maxProperties
   const usedProperties = propertyCount ?? 0
+  // Whether a REAL better self-serve ceiling exists — not the same
+  // question as NEXT_PLAN (which only governs safe direct-Checkout
+  // routing, and is intentionally null for legacy plans to avoid a
+  // double-subscription risk). A legacy Investor/Portfolio subscriber
+  // hitting their limit genuinely can see more room on Manage even
+  // though our Checkout won't auto-switch them there — /pricing is
+  // still the right link. Only a plan whose own ceiling already meets
+  // or beats every purchasable plan's has truly nothing better to buy.
+  const hasRoomToUpgrade = maxProperties < Math.max(...PUBLIC_PLAN_ORDER.map((id) => PLANS[id].maxProperties))
 
   return (
     <main className="shell investmentShell">
@@ -164,7 +173,7 @@ export default function BillingPage() {
         {usedProperties >= maxProperties && (
           <p className="ledgerNote">
             You&rsquo;re using {usedProperties} of {maxProperties} properties on the {def.name} plan.{' '}
-            {plan !== 'portfolio_pro' ? <Link href="/pricing">Upgrade for more room</Link> : 'Contact us if you need room for more.'}
+            {hasRoomToUpgrade ? <Link href="/pricing">Upgrade for more room</Link> : 'Contact us if you need room for more.'}
           </p>
         )}
       </section>

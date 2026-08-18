@@ -62,8 +62,27 @@ function resolveMimeType(doc: Pick<PropertyDocumentRow, 'mime_type' | 'name'>): 
   return null
 }
 
+export type AiAllowanceCheck = {
+  allowed: boolean
+  /** null = unlimited (this plan's entitlementsFor().monthlyAIAnalyses). */
+  limit: number | null
+  used: number
+}
+
 export type AnalyzeRequestDeps = {
   isAiConfigured: () => boolean
+  /**
+   * Launch Pricing (capability-based relaunch): resolves the caller's
+   * plan/entitlement + this calendar month's ai_usage_events count
+   * BEFORE any Anthropic call is made. This is the real security
+   * boundary for AI cost — hiding a button client-side is not
+   * sufficient (Section: AI Enforcement). Checked in two parts by the
+   * route (see app/api/document-intelligence/analyze/route.ts): first
+   * `canUseDocumentIntelligence` (a plan without the capability at all
+   * never reaches this dep), then this allowance/count check for plans
+   * that DO have the capability but a metered monthly limit.
+   */
+  checkAiAllowance: () => Promise<AiAllowanceCheck>
   /** Must be scoped so it can only ever return a document the caller owns. */
   getDocument: (documentId: string) => Promise<PropertyDocumentRow | null>
   /**
@@ -129,6 +148,27 @@ export async function handleAnalyzeRequest(
 
   if (!deps.isAiConfigured()) {
     return { status: 503, body: { error: 'AI document analysis has not been configured yet.' } }
+  }
+
+  // Launch Pricing: the monthly AI allowance is checked BEFORE any file
+  // work or Anthropic call — never after. A plan without
+  // canUseDocumentIntelligence at all is represented by the route
+  // passing a check that's already `allowed: false, limit: 0` (see
+  // route.ts), so this single gate covers both "no AI on this plan" and
+  // "AI included, but this month's allowance is used up."
+  const allowance = await deps.checkAiAllowance()
+  if (!allowance.allowed) {
+    return {
+      status: 403,
+      body: {
+        error: 'AI_LIMIT_REACHED',
+        message: allowance.limit === 0
+          ? 'AI document analysis is included with the Manage plan.'
+          : `You've used your ${allowance.limit} document analyses for this month.`,
+        limit: allowance.limit,
+        used: allowance.used,
+      },
+    }
   }
 
   const resolvedMimeType = resolveMimeType(doc)
