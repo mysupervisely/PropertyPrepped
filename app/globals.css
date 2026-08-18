@@ -1090,11 +1090,50 @@ h2, h3, p { margin-top: 0; }
 .smartUploadEntryIcon { font-size: 24px; text-align: center; }
 .smartUploadEntryOption strong { display: block; font-size: 15px; }
 .smartUploadEntryOption small { color: var(--muted); font-size: 12.5px; }
+.smartUploadImportPrompt { margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+.smartUploadImportPrompt p { color: var(--muted); font-size: 13px; margin: 0; }
 
 .smartUploadQueueList { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
 .smartUploadQueueItem { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 13px 14px; background: white; min-height: 48px; text-align: left; }
 .smartUploadQueueItem:disabled { opacity: .6; cursor: progress; }
 .smartUploadQueueName { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 13.5px; }
+
+/* Milestone 14: Smart Import's batch review queue (app/smart-import/page.tsx).
+   Deliberately reuses .subTabs, .statusPill/pillGood etc., .breadcrumbBack,
+   .formGrid-shaped patterns already used elsewhere — only the pieces with
+   no existing equivalent get new rules here. */
+.importResumeBanner { display: grid; gap: 10px; margin: 18px 0; }
+.importResumeRow { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; border: 1px solid var(--line); background: var(--brand-soft); border-radius: 12px; padding: 14px 16px; }
+.importResumeRow span { font-size: 13.5px; color: var(--text); }
+
+.smartImportPicker { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 18px 0; }
+.smartImportPickerButton { position: relative; cursor: pointer; }
+.smartImportPickerButton input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+.importProgressLine { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 4px 0 16px; font-size: 13px; color: var(--muted); }
+.importProgressAttention { color: #8a3d35; font-weight: 650; }
+
+.importControls { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.importGroupSelect { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.importGroupSelect select { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+
+.importBulkBar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--brand-soft); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
+.importBulkBar select { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+
+.importQueueList { display: grid; gap: 8px; }
+.importQueueGroup { display: grid; gap: 8px; margin-bottom: 14px; }
+.importQueueGroup h4 { margin: 0 0 2px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.importQueueRow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: white; }
+.importQueueRowMain { display: grid; gap: 2px; text-align: left; min-width: 0; }
+.importQueueRowMain strong { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.importQueueRowMain span { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 480px) {
+  .importQueueRow { grid-template-columns: auto minmax(0, 1fr); }
+  .importQueueRow .statusPill { grid-column: 2; justify-self: start; }
+}
+
+.smartImportReviewPanel { display: grid; gap: 14px; max-width: 720px; }
+.importDuplicateWarning { display: grid; gap: 10px; }
 
 .smartUploadReview { display: grid; gap: 18px; }
 

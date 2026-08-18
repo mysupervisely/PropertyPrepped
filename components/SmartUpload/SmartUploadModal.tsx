@@ -21,18 +21,19 @@
 // workflow-state pointer, never a second document/analysis store.
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import type { ApplyFields, DocumentAnalysisOutput } from '../../lib/document-intelligence/schemas'
 import type { DocumentType } from '../../lib/document-intelligence/types'
 import type { SmartUploadContact, SmartUploadProperty, SmartUploadSystem } from '../../lib/smart-upload/types'
 import { isSupportedForSmartUpload, SMART_UPLOAD_ACCEPT } from '../../lib/smart-upload/supported-file-types'
-import { shouldCreateFinancialTransaction, shouldCreateMaintenanceRecord } from '../../lib/smart-upload/idempotency'
-import { findMatchingContact } from '../../lib/smart-upload/match-contact'
 import { reviewKindFor } from '../../lib/smart-upload/review-kind'
+import {
+  addContactToPropCrew, analyzeDocument, confirmItemProperty,
+  saveReceiptRecord, savePrepareOnlyRecord, uploadDocumentForReview,
+} from '../../lib/smart-upload/engine'
 import { ReceiptReview, type ReceiptSaveInput } from './ReceiptReview'
 import { PrepareOnlyReview } from './PrepareOnlyReview'
-
-const safeName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_')
 
 type ItemStatus = 'Uploading' | 'Analyzing' | 'Ready' | 'Failed' | 'Unsupported'
 
@@ -112,53 +113,18 @@ export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean
 
   // Exactly ONE analyze() call per uploaded file — Part 7. Never called
   // again automatically for the same item; a property change, a category
-  // edit, a re-render, or Save never re-triggers this.
-  //
-  // Always requests the 'Other' schema — Document Intelligence's ONE
-  // deliberately type-agnostic field set (vendor/businessName/phone/
-  // email/website/description/amount/date/propertyAddress; see
-  // schemas.ts's DOCUMENT_TYPE_APPLY_FIELDS.Other and prompts.ts's
-  // FIELD_GUIDANCE.Other), since Smart Upload doesn't know the real
-  // document type yet, for either a PDF or a photo. The model still
-  // self-classifies honestly regardless of which schema it was given —
-  // that self-reported classification (not this request type) is what
-  // routes to the Receipt vs. PrepareOnly review screen below, and is
-  // what property_documents.document_type gets set to once this call
-  // returns. This is one Anthropic request, never a classify-then-
-  // extract pair.
+  // edit, a re-render, or Save never re-triggers this. Delegates to
+  // lib/smart-upload/engine.ts's analyzeDocument() — the same function
+  // Smart Import's queue calls — so there is exactly one implementation
+  // of "call Document Intelligence, then read back the result."
   async function runAnalyze(documentId: string, itemId: string) {
     if (!supabase) return
-    const { data: sessionData } = await supabase.auth.getSession()
-    const token = sessionData.session?.access_token
-    if (!token) {
-      patchItem(itemId, { status: 'Failed', error: 'Your session expired — please sign in again.' })
+    const result = await analyzeDocument(supabase, documentId)
+    if (!result.ok) {
+      patchItem(itemId, { status: 'Failed', error: result.error })
       return
     }
-    try {
-      const resp = await fetch('/api/document-intelligence/analyze', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-        body: JSON.stringify({ documentId, documentType: 'Other' as DocumentType }),
-      })
-      const body = await resp.json().catch(() => ({}))
-      if (!resp.ok) {
-        patchItem(itemId, { status: 'Failed', error: body?.error || 'Analysis failed.' })
-        return
-      }
-    } catch {
-      patchItem(itemId, { status: 'Failed', error: 'Analysis failed. Please try again.' })
-      return
-    }
-    const [{ data: docRow }, { data: analysisRows }] = await Promise.all([
-      supabase.from('property_documents').select('document_type').eq('id', documentId).single(),
-      supabase.from('document_analyses').select('structured_data').eq('document_id', documentId).order('analysis_version', { ascending: false }).limit(1),
-    ])
-    const latest = analysisRows?.[0]?.structured_data as DocumentAnalysisOutput | undefined
-    if (!latest) {
-      patchItem(itemId, { status: 'Failed', error: 'Analysis completed but the result could not be loaded.' })
-      return
-    }
-    patchItem(itemId, { status: 'Ready', documentType: (docRow?.document_type as DocumentType) || 'Other', analysis: latest })
+    patchItem(itemId, { status: 'Ready', documentType: result.documentType, analysis: result.analysis })
   }
 
   async function processFile(file: File, batchId: string) {
@@ -179,45 +145,23 @@ export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean
       confirmedPropertyId: null, completedAt: null, createdFinancialTransactionId: null, createdMaintenanceRecordId: null, createdContactId: null, saving: false,
     }])
 
-    const path = `${ownerId}/smart-upload/${batchId}/${crypto.randomUUID()}-${safeName(file.name)}`
-    const { error: uploadError } = await supabase.storage.from('property-documents').upload(path, file, { contentType: file.type || undefined, upsert: false })
-    if (uploadError) {
-      patchItem(localId, { status: 'Failed', error: uploadError.message })
-      return
-    }
-
     // property_id is deliberately null here — Smart Upload analyzes
     // BEFORE the user has chosen which property this belongs to
     // (supabase/milestone-12-smart-upload.sql). category is a neutral
     // placeholder; it's refined once the property/type are confirmed
     // (Save below sets it to a real DOCUMENT_CATEGORIES value).
-    const { data: docRow, error: docError } = await supabase
-      .from('property_documents')
-      .insert({ owner_id: ownerId, property_id: null, name: file.name, category: 'Other', storage_path: path, size_bytes: file.size, mime_type: file.type || null })
-      .select('id')
-      .single()
-    if (docError || !docRow) {
-      await supabase.storage.from('property-documents').remove([path])
-      patchItem(localId, { status: 'Failed', error: docError?.message || 'Could not save this file.' })
-      return
-    }
-
-    const { data: itemRow, error: itemError } = await supabase
-      .from('smart_upload_items')
-      .insert({ owner_id: ownerId, document_id: docRow.id, batch_id: batchId })
-      .select('id')
-      .single()
-    if (itemError || !itemRow) {
-      patchItem(localId, { status: 'Failed', error: itemError?.message || 'Could not start this upload.' })
+    const uploadResult = await uploadDocumentForReview(supabase, ownerId, file, batchId, 'SmartUpload')
+    if (!uploadResult.ok) {
+      patchItem(localId, { status: 'Failed', error: uploadResult.error })
       return
     }
 
     // Re-key the item to the REAL smart_upload_items.id now that it
     // exists, so every later write (property confirmation, Save) targets
     // the real row.
-    setItems((prev) => prev.map((it) => (it.id === localId ? { ...it, id: itemRow.id, documentId: docRow.id, status: 'Analyzing' } : it)))
+    setItems((prev) => prev.map((it) => (it.id === localId ? { ...it, id: uploadResult.itemId, documentId: uploadResult.documentId, status: 'Analyzing' } : it)))
 
-    await runAnalyze(docRow.id, itemRow.id)
+    await runAnalyze(uploadResult.documentId, uploadResult.itemId)
   }
 
   function handleFiles(fileList: FileList | null) {
@@ -232,118 +176,42 @@ export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean
     patchItem(item.id, { confirmedPropertyId: propertyId })
     // Persisted immediately (not only at final Save) — Part 21's
     // leave-and-return foundation: closing and reopening Smart Upload
-    // mid-review keeps this confirmed choice. Both property_documents
-    // AND document_analyses are updated together so the "analysis's
-    // property_id must match its document's property_id" invariant
-    // (supabase/milestone-12-smart-upload.sql) stays true.
-    await Promise.all([
-      supabase.from('property_documents').update({ property_id: propertyId }).eq('id', item.documentId),
-      supabase.from('document_analyses').update({ property_id: propertyId }).eq('document_id', item.documentId),
-      supabase.from('smart_upload_items').update({ confirmed_property_id: propertyId }).eq('id', item.id),
-    ])
+    // mid-review keeps this confirmed choice.
+    await confirmItemProperty(supabase, item.documentId, item.id, propertyId)
   }
 
   async function addToPropCrew(item: QueueItem, prefill: { name: string; businessName: string | null; phone: string | null; email: string | null; role: string }): Promise<{ id: string | null; error?: string }> {
     if (!supabase || !ownerId) return { id: null, error: 'You must be signed in to add a PropCrew provider.' }
-    if (!item.confirmedPropertyId) return { id: null, error: 'Confirm which property this belongs to first, then add the provider to PropCrew.' }
-
-    // Core Experience Bundle, item 2: "if a matching PropCrew contact
-    // already exists, link it rather than creating another" — same exact-
-    // match rule ReceiptReview already uses to auto-detect a match before
-    // this form ever opens, re-checked here against whatever the user
-    // confirmed/edited in the form (a corrected typo can turn a
-    // near-miss into a real match), so a repeat tap or an edited name
-    // that now matches an existing row links instead of duplicating.
-    const existing = findMatchingContact(prefill.name, contacts) || findMatchingContact(prefill.businessName, contacts)
-    if (existing) return { id: existing.id }
-
-    // Part 14: only reliable, actually-present information — never
-    // fabricated. "Would you use them again?" stays unset (Part 14: "can
-    // remain unset until the user has formed an opinion").
-    const { data, error } = await supabase
-      .from('property_contacts')
-      .insert({ owner_id: ownerId, property_id: item.confirmedPropertyId, name: prefill.name, business_name: prefill.businessName, role: prefill.role, phone: prefill.phone, email: prefill.email })
-      .select('id')
-      .single()
-    if (error || !data) return { id: null, error: error?.message || 'Could not add this provider to PropCrew. Please try again.' }
-    setContacts((prev) => [...prev, { id: data.id, name: prefill.name, business_name: prefill.businessName }])
-    return { id: data.id }
+    const result = await addContactToPropCrew(supabase, ownerId, item.confirmedPropertyId, contacts, prefill)
+    if (result.id) setContacts((prev) => [...prev, { id: result.id as string, name: prefill.name, business_name: prefill.businessName }])
+    return result
   }
 
   async function saveReceipt(item: QueueItem, input: ReceiptSaveInput) {
     if (!supabase || !ownerId || !item.confirmedPropertyId) return
     patchItem(item.id, { saving: true })
-
-    let financialTransactionId = item.createdFinancialTransactionId
-    let maintenanceRecordId = item.createdMaintenanceRecordId
-    let contactId = input.contactId || item.createdContactId
-
-    // Idempotency (Part 25): each guard checks the SAME id this item may
-    // have already recorded from an earlier, interrupted/duplicate Save
-    // attempt — a second click never inserts a second row.
-    if (shouldCreateFinancialTransaction({ created_financial_transaction_id: item.createdFinancialTransactionId })) {
-      const { data: tx, error: txError } = await supabase
-        .from('financial_transactions')
-        .insert({
-          owner_id: ownerId, property_id: item.confirmedPropertyId, transaction_date: input.date, transaction_type: 'Expense',
-          category: input.createMaintenanceRecord ? 'Maintenance' : input.financialCategory, vendor: input.vendor || null,
-          description: input.description, amount: Number(input.amount), document_id: item.documentId, is_recurring: false,
-        })
-        .select('id')
-        .single()
-      if (txError || !tx) {
-        patchItem(item.id, { saving: false, error: txError?.message || 'Could not save this expense.' })
-        return
-      }
-      financialTransactionId = tx.id
+    const result = await saveReceiptRecord(supabase, ownerId, {
+      itemId: item.id, documentId: item.documentId, confirmedPropertyId: item.confirmedPropertyId,
+      createdFinancialTransactionId: item.createdFinancialTransactionId, createdMaintenanceRecordId: item.createdMaintenanceRecordId,
+      vendor: input.vendor, date: input.date, amount: input.amount, description: input.description,
+      financialCategory: input.financialCategory, createMaintenanceRecord: input.createMaintenanceRecord,
+      maintenanceCategory: input.maintenanceCategory, systemId: input.systemId, contactId: input.contactId || item.createdContactId,
+    })
+    if (!result.ok) {
+      patchItem(item.id, { saving: false, error: result.error })
+      return
     }
-
-    if (input.createMaintenanceRecord && financialTransactionId && shouldCreateMaintenanceRecord({ created_maintenance_record_id: maintenanceRecordId })) {
-      const { data: rec, error: recError } = await supabase
-        .from('maintenance_records')
-        .insert({
-          owner_id: ownerId, property_id: item.confirmedPropertyId, service_date: input.date, status: 'Completed', category: input.maintenanceCategory,
-          vendor: input.vendor || null, description: input.description, cost: Number(input.amount), document_id: item.documentId,
-          financial_transaction_id: financialTransactionId, system_id: input.systemId || null, propcrew_contact_id: contactId || null,
-        })
-        .select('id')
-        .single()
-      if (recError || !rec) {
-        patchItem(item.id, { saving: false, error: recError?.message || 'Could not save this maintenance record.' })
-        return
-      }
-      maintenanceRecordId = rec.id
-    }
-
-    await supabase.from('property_documents').update({ category: 'Receipts' }).eq('id', item.documentId)
-
-    await supabase
-      .from('smart_upload_items')
-      .update({
-        created_financial_transaction_id: financialTransactionId,
-        created_maintenance_record_id: maintenanceRecordId,
-        created_contact_id: contactId,
-        completed_at: new Date().toISOString(),
-      })
-      .eq('id', item.id)
-
     anyCompletedRef.current = true
     patchItem(item.id, {
       saving: false, error: undefined, completedAt: new Date().toISOString(),
-      createdFinancialTransactionId: financialTransactionId, createdMaintenanceRecordId: maintenanceRecordId, createdContactId: contactId,
+      createdFinancialTransactionId: result.financialTransactionId, createdMaintenanceRecordId: result.maintenanceRecordId, createdContactId: result.contactId,
     })
   }
 
   async function savePrepareOnly(item: QueueItem) {
     if (!supabase || !item.confirmedPropertyId) return
     patchItem(item.id, { saving: true })
-    const categoryByType: Partial<Record<DocumentType, string>> = {
-      'Insurance Policy': 'Insurance', Lease: 'Lease', 'Mortgage / Loan Statement': 'Mortgage',
-      'Closing Disclosure / Settlement Statement': 'Closing', 'Inspection Report': 'Inspection',
-      'Property Tax Document': 'Tax', 'HOA Document': 'Other', Appraisal: 'Other',
-    }
-    await supabase.from('property_documents').update({ category: (item.documentType && categoryByType[item.documentType]) || 'Other' }).eq('id', item.documentId)
-    await supabase.from('smart_upload_items').update({ completed_at: new Date().toISOString() }).eq('id', item.id)
+    await savePrepareOnlyRecord(supabase, item.id, item.documentId, item.documentType)
     anyCompletedRef.current = true
     patchItem(item.id, { saving: false, completedAt: new Date().toISOString() })
   }
@@ -440,6 +308,16 @@ function SmartUploadEntry({ onFiles, compact }: { onFiles: (files: FileList | nu
         <span><strong>Upload Multiple</strong><small>Select several files</small></span>
         <input type="file" accept={SMART_UPLOAD_ACCEPT} multiple onChange={(e) => { onFiles(e.target.files); e.target.value = '' }} />
       </label>
+      {/* Milestone 14, item 1: secondary to the three options above — a
+          brief explainer plus a link out to the full Smart Import review
+          queue, not a fourth option crowding this list. Only shown on the
+          initial (non-compact) Entry screen. */}
+      {!compact && (
+        <div className="smartUploadImportPrompt">
+          <p>Already have property records? Import multiple documents and PropRoster will help organize them.</p>
+          <Link href="/smart-import" className="secondary">Import existing records →</Link>
+        </div>
+      )}
     </div>
   )
 }

@@ -37,6 +37,13 @@ export type SmartUploadItemRow = {
   completed_at: string | null
   created_at: string
   updated_at: string
+  // Milestone 14 (supabase/milestone-14-smart-import.sql): which surface
+  // created this row — 'SmartUpload' (the header's modal) or
+  // 'SmartImport' (the /smart-import review queue). Every other column
+  // and every downstream table this row can point at is identical either
+  // way; this only lets each surface's own "what's still unfinished"
+  // query find its own batches.
+  source: 'SmartUpload' | 'SmartImport'
 }
 
 // Which review experience a classified document type gets (Part 10 vs.
