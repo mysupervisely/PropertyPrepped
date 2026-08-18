@@ -25,6 +25,7 @@
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuthUser } from '../lib/useAuthUser'
 
 const NAV_LINKS: { href: string; label: string }[] = [
   { href: '/', label: 'Dashboard' },
@@ -43,7 +44,11 @@ const NAV_LINKS: { href: string; label: string }[] = [
   // linked from inside that modal's Entry screen) — onboarding an
   // existing portfolio of historical documents, not the everyday
   // add-one-thing action, so it lives here rather than in the header.
-  { href: '/smart-import', label: 'Smart Import' },
+  // Final Launch Fixes: customer-facing label only — "Portfolio Import"
+  // is the approved name for onboarding/bulk organization of existing
+  // property records. The route, table, and internal identifiers stay
+  // /smart-import / smart_upload_items / SmartImport (unchanged).
+  { href: '/smart-import', label: 'Portfolio Import' },
   { href: '/profile', label: 'Profile' },
   { href: '/pricing', label: 'Pricing' },
 ]
@@ -51,6 +56,31 @@ const NAV_LINKS: { href: string; label: string }[] = [
 export function AuthNavMenu() {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const { user } = useAuthUser()
+
+  // Final Launch Fixes: the same canonical private profile photo the
+  // Profile page shows (Launch Polish's profile-photos bucket), reused —
+  // not re-uploaded — here as a small circular avatar in place of the
+  // hamburger glyph. This is still the exact same button/click handler
+  // that already opens this menu (which is where Profile already lives)
+  // — no new menu, no new interaction. Falls back to the generic ☰ icon
+  // whenever there's no photo, and never fetches anything until a user
+  // is present.
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!supabase || !user) { setAvatarUrl(null); return }
+    let cancelled = false
+    supabase.from('user_profiles').select('photo_path').eq('id', user.id).maybeSingle().then(({ data }) => {
+      if (cancelled) return
+      const path = (data as { photo_path?: string | null } | null)?.photo_path
+      if (!path) { setAvatarUrl(null); return }
+      supabase!.storage.from('profile-photos').createSignedUrl(path, 3600).then(({ data: signed }) => {
+        if (!cancelled) setAvatarUrl(signed?.signedUrl || null)
+      })
+    })
+    return () => { cancelled = true }
+  }, [user?.id])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -63,7 +93,7 @@ export function AuthNavMenu() {
   return (
     <div className="authNavMenu" ref={containerRef}>
       <button type="button" className="authNavMenuButton" aria-label="Open navigation menu" aria-haspopup="true" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <span aria-hidden="true">☰</span>
+        {avatarUrl ? <img src={avatarUrl} alt="" className="authNavAvatar" /> : <span aria-hidden="true">☰</span>}
       </button>
       {open && (
         <nav className="authNavMenuPanel" aria-label="Main navigation">

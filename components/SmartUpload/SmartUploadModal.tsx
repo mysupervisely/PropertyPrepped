@@ -308,14 +308,16 @@ function SmartUploadEntry({ onFiles, compact }: { onFiles: (files: FileList | nu
         <span><strong>Upload Multiple</strong><small>Select several files</small></span>
         <input type="file" accept={SMART_UPLOAD_ACCEPT} multiple onChange={(e) => { onFiles(e.target.files); e.target.value = '' }} />
       </label>
-      {/* Milestone 14, item 1: secondary to the three options above — a
-          brief explainer plus a link out to the full Smart Import review
-          queue, not a fourth option crowding this list. Only shown on the
-          initial (non-compact) Entry screen. */}
+      {/* Milestone 14, item 1 / Final Launch Fixes: secondary to the
+          three options above — a brief explainer plus a link out to the
+          full Portfolio Import review queue (still /smart-import
+          internally), not a fourth option crowding this list. Only shown
+          on the initial (non-compact) Entry screen. Paragraph is the
+          approved customer-facing Portfolio Import subtitle, verbatim. */}
       {!compact && (
         <div className="smartUploadImportPrompt">
-          <p>Already have property records? Import multiple documents and PropRoster will help organize them.</p>
-          <Link href="/smart-import" className="secondary">Import existing records →</Link>
+          <p>Upload your existing property records and let PropRoster organize them for you.</p>
+          <Link href="/smart-import" className="secondary">Portfolio Import →</Link>
         </div>
       )}
     </div>

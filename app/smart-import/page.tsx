@@ -71,7 +71,7 @@ export default function SmartImportPage() {
   const { user, ready } = useAuthUser()
   const { plan, loading: planLoading } = useSubscription(user)
 
-  if (!ready || (user && planLoading)) return <main className="authShell"><div className="loadingState">Loading Smart Import…</div></main>
+  if (!ready || (user && planLoading)) return <main className="authShell"><div className="loadingState">Loading Portfolio Import…</div></main>
 
   if (!user) {
     return (
@@ -99,9 +99,9 @@ export default function SmartImportPage() {
           supabase={supabase}
           currentPlan={plan}
           onClose={() => {}}
-          headline="Smart Import is included with Manage."
+          headline="Portfolio Import is included with Manage."
           targetPlanId="manage"
-          description="Manage includes Smart Upload, Smart Import, AI Document Intelligence, Rent Ledger and PropWatch."
+          description="Manage includes Smart Upload, Portfolio Import, AI Document Intelligence, Rent Ledger and PropWatch."
         />
       </main>
     )
@@ -365,16 +365,18 @@ function SmartImportWorkspace({ ownerId }: { ownerId: string }) {
   const propertyById = useMemo(() => new Map(properties.map((p) => [p.id, p])), [properties])
   const activeItem = items.find((it) => it.id === activeItemId) || null
 
-  if (!loaded) return <main className="shell"><AuthHeader /><div className="loadingState">Loading Smart Import…</div></main>
+  if (!loaded) return <main className="shell"><AuthHeader /><div className="loadingState">Loading Portfolio Import…</div></main>
 
   return (
     <main className="shell">
       <AuthHeader />
 
       <section className="intro">
-        <p className="eyebrow">SMART IMPORT</p>
+        <p className="eyebrow">PORTFOLIO IMPORT</p>
         <h1>Bring an existing portfolio into PropRoster.</h1>
-        <p>Select many documents at once — PropRoster analyzes each one, suggests a property, and lines them up for you to review and save. Nothing is applied until you confirm it.</p>
+        {/* Final Launch Fixes: the approved customer-facing subtitle,
+            verbatim, followed by the existing functional detail. */}
+        <p>Upload your existing property records and let PropRoster organize them for you. Select many documents at once — PropRoster analyzes each one, suggests a property, and lines them up for you to review and save. Nothing is applied until you confirm it.</p>
       </section>
 
       {globalError && <div className="globalError">{globalError}<button onClick={() => setGlobalError('')}>×</button></div>}
@@ -384,7 +386,7 @@ function SmartImportWorkspace({ ownerId }: { ownerId: string }) {
           {resumable.map((b) => (
             <div key={b.batchId} className="importResumeRow">
               <span>{b.count} document{b.count === 1 ? '' : 's'} from an unfinished import, started {new Date(b.oldestCreatedAt).toLocaleDateString()}.</span>
-              <button className="primary" onClick={() => void resumeBatch(b.batchId)}>Continue Smart Import</button>
+              <button className="primary" onClick={() => void resumeBatch(b.batchId)}>Continue Portfolio Import</button>
             </div>
           ))}
         </div>

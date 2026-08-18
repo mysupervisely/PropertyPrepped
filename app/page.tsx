@@ -1727,84 +1727,104 @@ export default function Home() {
           dashboard — rent (Overdue/Due/Partial) and system-warranty
           signals were folded into attentionItems/dateItems above,
           alongside the lease/insurance/mortgage/maintenance items
-          Milestone 16 already built. Only the heading changed. */}
+          Milestone 16 already built. Only the heading changed.
 
-      <section className="commandCenterSection needsAttentionSection">
+          Final Launch Fixes, dashboard reorder: PropWatch is now compact
+          — two side-by-side panels (Needs Your Attention, combining the
+          existing attention items + open maintenance items requiring
+          action, and Upcoming) instead of three stacked full-width
+          sections — and moves ahead of My Properties, with Recent
+          Activity moved below My Properties. This is a composition
+          change only: attentionItems/vacancyItems/openMaintenanceItems/
+          upcomingItems/recentActivity are the exact same values from the
+          useMemo above, just re-laid-out; no derivation logic changed.
+          Recent Activity's own section now renders after My Properties,
+          further down this file. */}
+
+      <section className="commandCenterSection propWatchSection">
         {/* Launch Polish: PropWatch keeps its approved mixed-case brand
             casing here even though every other eyebrow on this page is
             plain uppercase — an explicit, deliberate exception for this
             one branded product name, not a change to the eyebrow style
             itself. */}
-        <div className="sectionHead"><div><p className="eyebrow">PropWatch</p><h2>Needs your attention</h2><p>{attentionItems.length ? `${attentionItems.length} item${attentionItems.length === 1 ? '' : 's'} need a look` : 'Rent, leases, insurance, mortgages and scheduled maintenance across your portfolio.'}</p></div></div>
-        {attentionItems.length === 0 ? (
-          <div className="emptyState"><strong>You&apos;re all caught up.</strong></div>
-        ) : (
-          <div className="dashboardItemList">
-            {attentionItems.map((item) => (
-              <button key={`${item.type}-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
-                <span className={`statusPill ${item.urgency === 'Expired' ? 'pillBad' : 'pillWarn'}`}>{item.urgency === 'Expired' ? 'Expired' : 'Due soon'}</span>
-                <span className="dashboardItemBody">
-                  <strong>{item.label}</strong>
-                  <span>{item.description}</span>
-                  <span className="muted">{item.propertyLabel} · {dateOnly(item.date)}</span>
-                </span>
-              </button>
-            ))}
+        <div className="sectionHead"><div><p className="eyebrow">PropWatch</p><h2>Stay ahead of what needs attention.</h2></div></div>
+        <div className="propWatchGrid">
+          <div className="propWatchPanel">
+            <div className="propWatchPanelHead"><h3>Needs Your Attention</h3><p>{attentionItems.length ? `${attentionItems.length} item${attentionItems.length === 1 ? '' : 's'} need a look` : 'Rent, leases, insurance, mortgages and scheduled maintenance across your portfolio.'}</p></div>
+            {attentionItems.length === 0 ? (
+              <div className="emptyState"><strong>You&apos;re all caught up.</strong></div>
+            ) : (
+              <div className="dashboardItemList">
+                {attentionItems.map((item) => (
+                  <button key={`${item.type}-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
+                    <span className={`statusPill ${item.urgency === 'Expired' ? 'pillBad' : 'pillWarn'}`}>{item.urgency === 'Expired' ? 'Expired' : 'Due soon'}</span>
+                    <span className="dashboardItemBody">
+                      <strong>{item.label}</strong>
+                      <span>{item.description}</span>
+                      <span className="muted">{item.propertyLabel} · {dateOnly(item.date)}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {vacancyItems.length > 0 && (
+              <div className="dashboardItemList vacancyList">
+                {vacancyItems.map((item: VacancyItem) => (
+                  <button key={item.id} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
+                    <span className="statusPill pillNeutral">Vacant</span>
+                    <span className="dashboardItemBody">
+                      <strong>{item.propertyLabel}</strong>
+                      <span>No current lease</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {openMaintenanceItems.length > 0 && (
+              <>
+                <div className="propWatchPanelHead propWatchPanelSubhead"><h3>Open Maintenance</h3><p>{openMaintenanceCount} open item{openMaintenanceCount === 1 ? '' : 's'} across your portfolio</p></div>
+                <div className="dashboardItemList">
+                  {openMaintenanceItems.map((item) => (
+                    <button key={item.id} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
+                      <span className="statusPill pillWarn">{item.status}</span>
+                      <span className="dashboardItemBody">
+                        <strong>{item.description}</strong>
+                        <span>{[item.category, item.vendor].filter(Boolean).join(' · ')}</span>
+                        <span className="muted">{item.propertyLabel} · {dateOnly(item.date)}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
-        )}
-        {vacancyItems.length > 0 && (
-          <div className="dashboardItemList vacancyList">
-            {vacancyItems.map((item: VacancyItem) => (
-              <button key={item.id} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
-                <span className="statusPill pillNeutral">Vacant</span>
-                <span className="dashboardItemBody">
-                  <strong>{item.propertyLabel}</strong>
-                  <span>No current lease</span>
-                </span>
-              </button>
-            ))}
+
+          <div className="propWatchPanel">
+            <div className="propWatchPanelHead"><h3>Upcoming</h3><p>Important dates coming up across your portfolio.</p></div>
+            {upcomingItems.length === 0 ? (
+              <div className="emptyState"><strong>No important dates coming up.</strong></div>
+            ) : (
+              <div className="dashboardItemList">
+                {upcomingItems.map((item) => (
+                  <button key={`${item.type}-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
+                    <span className="statusPill pillNeutral">{item.daysUntil === 0 ? 'Today' : `${item.daysUntil}d`}</span>
+                    <span className="dashboardItemBody">
+                      <strong>{item.label}</strong>
+                      <span>{item.description}</span>
+                      <span className="muted">{item.propertyLabel} · {dateOnly(item.date)}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </section>
 
-      <section className="commandCenterSection">
-        <div className="sectionHead"><div><h2>Upcoming</h2><p>Important dates coming up across your portfolio.</p></div></div>
-        {upcomingItems.length === 0 ? (
-          <div className="emptyState"><strong>No important dates coming up.</strong></div>
-        ) : (
-          <div className="dashboardItemList">
-            {upcomingItems.map((item) => (
-              <button key={`${item.type}-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
-                <span className="statusPill pillNeutral">{item.daysUntil === 0 ? 'Today' : `${item.daysUntil}d`}</span>
-                <span className="dashboardItemBody">
-                  <strong>{item.label}</strong>
-                  <span>{item.description}</span>
-                  <span className="muted">{item.propertyLabel} · {dateOnly(item.date)}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="commandCenterSection">
-        <div className="sectionHead"><div><h2>Open Maintenance</h2><p>{openMaintenanceCount ? `${openMaintenanceCount} open item${openMaintenanceCount === 1 ? '' : 's'} across your portfolio` : 'Nothing open right now.'}</p></div></div>
-        {openMaintenanceItems.length === 0 ? (
-          <div className="emptyState"><strong>No open maintenance items.</strong></div>
-        ) : (
-          <div className="dashboardItemList">
-            {openMaintenanceItems.map((item) => (
-              <button key={item.id} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
-                <span className="statusPill pillWarn">{item.status}</span>
-                <span className="dashboardItemBody">
-                  <strong>{item.description}</strong>
-                  <span>{[item.category, item.vendor].filter(Boolean).join(' · ')}</span>
-                  <span className="muted">{item.propertyLabel} · {dateOnly(item.date)}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
+      <section><div className="sectionHead"><div><h2>My Properties</h2><p>{busy && !properties.length ? 'Loading your portfolio…' : `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} in your portfolio`}</p></div><button className="primary" onClick={() => openAddProperty()}>+ Add Property</button></div>
+        <div className="grid">{properties.map((property) => { const propertyOccupancy = property.property_type === 'Rental Property' ? deriveOccupancy(leases.filter((l) => l.property_id === property.id)) : null; return <article className="propertyCard" key={property.id}><button className="cardOpen" onClick={() => openProperty(property.id)}><div className="photo">{property.coverUrl ? <img src={property.coverUrl} alt={property.address} /> : <div className="photoPlaceholder"><span>⌂</span><small>Add property photos</small></div>}<span className="badge">{property.property_type}</span>{propertyOccupancy && <span className={`occupancyBadge ${occupancyPillClass(propertyOccupancy)}`}>{propertyOccupancy === 'Occupancy unknown' ? 'Unknown' : propertyOccupancy === 'Upcoming tenancy' ? 'Upcoming' : propertyOccupancy}</span>}</div></button><div className="cardBody"><button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button><div className="miniStats"><div><span>Value</span><strong>{money(property.estimated_value)}</strong></div><div><span>Equity</span><strong>{money(Number(property.estimated_value) - Number(property.mortgage_balance))}</strong></div><div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div></div><div className="cardActions"><button onClick={() => openProperty(property.id, 'Documents', 'Documents')}>Documents</button><button onClick={() => openProperty(property.id, 'Documents', 'Photos')}>Photos</button><button onClick={() => openProperty(property.id, 'Financials')}>Financials</button></div></div></article> })}
+          {!busy && properties.length === 0 && <button className="emptyPropertyCard" onClick={() => openAddProperty()}><strong>+ Add your first property</strong><span>Start building your organized property file.</span></button>}
+        </div>
       </section>
 
       <section className="commandCenterSection">
@@ -1828,12 +1848,6 @@ export default function Home() {
         )}
       </section>
 
-      <section><div className="sectionHead"><div><h2>My Properties</h2><p>{busy && !properties.length ? 'Loading your portfolio…' : `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} in your portfolio`}</p></div><button className="primary" onClick={() => openAddProperty()}>+ Add Property</button></div>
-        <div className="grid">{properties.map((property) => { const propertyOccupancy = property.property_type === 'Rental Property' ? deriveOccupancy(leases.filter((l) => l.property_id === property.id)) : null; return <article className="propertyCard" key={property.id}><button className="cardOpen" onClick={() => openProperty(property.id)}><div className="photo">{property.coverUrl ? <img src={property.coverUrl} alt={property.address} /> : <div className="photoPlaceholder"><span>⌂</span><small>Add property photos</small></div>}<span className="badge">{property.property_type}</span>{propertyOccupancy && <span className={`occupancyBadge ${occupancyPillClass(propertyOccupancy)}`}>{propertyOccupancy === 'Occupancy unknown' ? 'Unknown' : propertyOccupancy === 'Upcoming tenancy' ? 'Upcoming' : propertyOccupancy}</span>}</div></button><div className="cardBody"><button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button><div className="miniStats"><div><span>Value</span><strong>{money(property.estimated_value)}</strong></div><div><span>Equity</span><strong>{money(Number(property.estimated_value) - Number(property.mortgage_balance))}</strong></div><div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div></div><div className="cardActions"><button onClick={() => openProperty(property.id, 'Documents', 'Documents')}>Documents</button><button onClick={() => openProperty(property.id, 'Documents', 'Photos')}>Photos</button><button onClick={() => openProperty(property.id, 'Financials')}>Financials</button></div></div></article> })}
-          {!busy && properties.length === 0 && <button className="emptyPropertyCard" onClick={() => openAddProperty()}><strong>+ Add your first property</strong><span>Start building your organized property file.</span></button>}
-        </div>
-      </section>
-
       {showAdd && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowAdd(false)}><div className="modal"><div className="modalTop"><h2>Add a property</h2><button className="iconButton" onClick={() => setShowAdd(false)}>×</button></div><label className="uploadBox">{imagePreview ? <img src={imagePreview} alt="Property preview" /> : <div><strong>Add a cover photo</strong><span>Choose a photo now or add one later</span></div>}<input type="file" accept="image/*" onChange={handleImage} /></label><div className="formGrid"><label>Street address<AddressAutocomplete value={draft.address} onTextChange={(v) => setDraft({ ...draft, address: v })} onSelect={(addr) => setDraft((d) => ({ ...d, ...applyNormalizedAddress(addr, d.address) }))} placeholder="123 Example Street" /></label><label>City, state & ZIP<input value={draft.city} onChange={(e) => setDraft({ ...draft, city: e.target.value })} placeholder="Example City, FL 12345" /></label><label>Property type<select value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })}><option>Rental Property</option><option>Primary Residence</option><option>Vacation Home</option><option>Commercial</option><option>Land</option><option>Other</option></select></label><label>Purchase price<input inputMode="decimal" value={draft.purchasePrice} onChange={(e) => setDraft({ ...draft, purchasePrice: e.target.value })} placeholder="390000" /></label><label>Estimated value<input inputMode="decimal" value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} placeholder="520000" /></label><label>Mortgage balance<input inputMode="decimal" value={draft.mortgage} onChange={(e) => setDraft({ ...draft, mortgage: e.target.value })} placeholder="310000" /></label><label>Financing status<select value={draft.financingStatus} onChange={(e) => setDraft({ ...draft, financingStatus: e.target.value })}>{FINANCING_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label><label>Monthly rent<input inputMode="decimal" value={draft.rent} onChange={(e) => setDraft({ ...draft, rent: e.target.value })} placeholder="2950" /></label><label>Monthly property expenses<input inputMode="decimal" value={draft.monthlyExpenses} onChange={(e) => setDraft({ ...draft, monthlyExpenses: e.target.value })} placeholder="1925" /></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowAdd(false)}>Cancel</button><button className="primary" disabled={busy} onClick={() => void addProperty()}>{busy ? 'Saving…' : 'Save Property'}</button></div></div></div>}
 
       {showUpgrade === 'propertyLimit' && supabase && (
@@ -1846,7 +1860,7 @@ export default function Home() {
           onClose={() => setShowUpgrade(null)}
           headline="AI Document Intelligence is included with Manage."
           targetPlanId="manage"
-          description="Manage includes Smart Upload, Smart Import, AI Document Intelligence, Rent Ledger and PropWatch."
+          description="Manage includes Smart Upload, Portfolio Import, AI Document Intelligence, Rent Ledger and PropWatch."
         />
       )}
     </main>

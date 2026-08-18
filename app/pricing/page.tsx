@@ -169,7 +169,7 @@ export default function PricingPage() {
       <section className="pricingFooterNote">
         <p className="muted">
           The Property Evaluator investment-analysis tool is always free to use, on every plan — including before you create an account.
-          Manage includes 50 AI-powered document analyses per month (Smart Upload, Smart Import, and Document Intelligence draw from the same monthly allowance).
+          Manage includes 50 AI-powered document analyses per month (Smart Upload, Portfolio Import, and Document Intelligence draw from the same monthly allowance).
         </p>
       </section>
     </main>

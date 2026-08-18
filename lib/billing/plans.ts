@@ -253,7 +253,7 @@ export const PLAN_FEATURE_HIGHLIGHTS: Partial<Record<PlanId, string[]>> = {
   manage: [
     'Everything in Organize',
     'Up to 15 properties',
-    'Smart Upload & Smart Import (AI)',
+    'Smart Upload & Portfolio Import (AI)',
     'Rent Ledger & PropWatch',
     '50 AI document analyses / month',
   ],

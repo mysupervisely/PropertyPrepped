@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { normalizeMapboxFeature } from './mapbox'
+import { describe, expect, it, vi, afterEach } from 'vitest'
+import { normalizeMapboxFeature, MapboxAddressSearchProvider } from './mapbox'
 
 describe('normalizeMapboxFeature — Mapbox Search Box raw response -> NormalizedAddress', () => {
   it('extracts a fully-populated feature into every NormalizedAddress field', () => {
@@ -80,5 +80,27 @@ describe('normalizeMapboxFeature — Mapbox Search Box raw response -> Normalize
   it('uses feature.id as providerId when properties.mapbox_id is absent', () => {
     const result = normalizeMapboxFeature({ id: 'fallback-id', properties: {} })
     expect(result.providerId).toBe('fallback-id')
+  })
+})
+
+describe('MapboxAddressSearchProvider#search — Final Launch Fixes: U.S.-only restriction', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('restricts the suggest request to the U.S. via the provider\'s real country filter, not a client-side filter', async () => {
+    let requestedUrl: string | undefined
+    const fetchMock = vi.fn(async (url: string) => {
+      requestedUrl = url
+      return { ok: true, json: async () => ({ suggestions: [] }) } as Response
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const provider = new MapboxAddressSearchProvider('test-token')
+    await provider.search('123 Example Street')
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const url = new URL(requestedUrl as string)
+    expect(url.searchParams.get('country')).toBe('us')
   })
 })
