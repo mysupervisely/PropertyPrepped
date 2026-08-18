@@ -662,10 +662,12 @@ export default function Home() {
     setBusy(false)
   }
 
-  const openProperty = (id: string, tab: Tab = 'Overview', docsSubTab?: DocumentsSubTab) => {
+  const openProperty = (id: string, tab: Tab = 'Overview', docsSubTab?: DocumentsSubTab, propSubTab?: PropertySubTab, peopleSubTab?: PeopleSubTab) => {
     setSelectedId(id)
     setActiveTab(tab)
     if (docsSubTab) setDocumentsSubTab(docsSubTab)
+    if (propSubTab) setPropertySubTab(propSubTab)
+    if (peopleSubTab) setPeopleSubTab(peopleSubTab)
     setDocCategory('All')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -682,13 +684,26 @@ export default function Home() {
   // same as every other call site of it in this file, all of which only
   // ever pass an id from the caller's own `properties` list; a forged id
   // here just fails to match any card render and shows nothing.
+  //
+  // Milestone 15 (Global Search): extended with optional ?openTab /
+  // ?openDocsSubTab / ?openPropSubTab / ?openPeopleSubTab params so
+  // app/search/page.tsx can deep-link into any tab a search result
+  // points at, reusing this SAME mechanism rather than a second
+  // navigation architecture. When none of the new params are present
+  // (every existing caller of "?openProperty=<id>" alone), behavior is
+  // byte-identical to before: Documents tab, Documents sub-tab.
   useEffect(() => {
     if (!authReady || !user) return
     if (typeof window === 'undefined') return
-    const id = new URLSearchParams(window.location.search).get('openProperty')
+    const params = new URLSearchParams(window.location.search)
+    const id = params.get('openProperty')
     if (!id) return
+    const tab = (params.get('openTab') as Tab | null) || 'Documents'
+    const docsSubTab = (params.get('openDocsSubTab') as DocumentsSubTab | null) || (tab === 'Documents' ? 'Documents' : undefined)
+    const propSubTab = (params.get('openPropSubTab') as PropertySubTab | null) || undefined
+    const peopleSubTab = (params.get('openPeopleSubTab') as PeopleSubTab | null) || undefined
     window.history.replaceState(null, '', window.location.pathname)
-    openProperty(id, 'Documents', 'Documents')
+    openProperty(id, tab, docsSubTab, propSubTab, peopleSubTab)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authReady, user])
 
