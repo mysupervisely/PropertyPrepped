@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PLAN_IDS, PLANS, PUBLIC_PLAN_ORDER, COMING_SOON_PLAN_ORDER, TENANT_CONNECT_PRICING_NOTE, isPlanId } from './plans'
+import { PLAN_IDS, PLANS, PUBLIC_PLAN_ORDER, COMING_SOON_PLAN_ORDER, TENANT_CONNECT_PRICING_NOTE, PLAN_FEATURE_HIGHLIGHTS, CONTACT_TIER, isPlanId } from './plans'
 
 describe('internal owner plan — catalog shape', () => {
   it('exists in PLANS with unlimited properties and no price', () => {
@@ -31,6 +31,17 @@ describe('Launch Pricing — new public plan catalog', () => {
     expect(PLANS.automate.comingSoon).toBe(true)
     expect(PUBLIC_PLAN_ORDER).not.toContain('automate')
     expect(COMING_SOON_PLAN_ORDER).toContain('automate')
+  })
+
+  it('Launch Polish: Automate displays "Up to 15 properties" — same ceiling as Manage, never a bigger number (upgrade reason is capability, not property count)', () => {
+    expect(PLANS.automate.maxProperties).toBe(PLANS.manage.maxProperties)
+    expect(PLAN_FEATURE_HIGHLIGHTS.automate).toContain('Up to 15 properties')
+  })
+
+  it('Launch Polish: the contact tier reads "16+ Properties" — one more than Manage\'s ceiling, never ">15"', () => {
+    expect(CONTACT_TIER.label).toBe('16+ Properties')
+    expect(CONTACT_TIER.label).not.toContain('>15')
+    expect(CONTACT_TIER.label).not.toContain('21+')
   })
 })
 

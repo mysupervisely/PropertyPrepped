@@ -108,7 +108,7 @@ export function UpgradePrompt({
               {busy ? 'Redirecting…' : `Upgrade to ${PLANS[nextPlanId].name}`}
             </button>
           ) : (
-            <a className="primary" href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('PropRoster — 21+ properties')}`}>
+            <a className="primary" href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('PropRoster — 16+ properties')}`}>
               Contact Us
             </a>
           )}

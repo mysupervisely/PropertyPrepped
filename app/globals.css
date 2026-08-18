@@ -1074,6 +1074,17 @@ h2, h3, p { margin-top: 0; }
 .profileFormSection .evaluatorSectionHead p { max-width: 640px; }
 .profilePhotoPlaceholder { width: 88px; height: 88px; border-radius: 50%; }
 .profilePhotoPlaceholder span { font-size: 28px; }
+/* Launch Polish: real profile-photo upload/change/remove — one canonical
+   circular avatar, mirroring property photos' upload/gallery pattern
+   at a much smaller scale (no gallery, no multi-select). */
+.profilePhotoRow { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.profilePhotoPreview { width: 88px; height: 88px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background: var(--bg); }
+.profilePhotoPreview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.profilePhotoActions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.profilePhotoUploadButton { position: relative; cursor: pointer; display: inline-flex; align-items: center; }
+.profilePhotoUploadButton input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.profilePhotoActions .dangerLink { border: 0; background: transparent; color: #8a3d35; padding: 0; text-decoration: underline; text-underline-offset: 2px; font-size: 13px; cursor: pointer; }
+.profilePhotoActions .dangerLink:disabled { opacity: .6; cursor: default; }
 
 @media (max-width: 760px) {
   .noteComposer { flex-direction: column; align-items: stretch; }

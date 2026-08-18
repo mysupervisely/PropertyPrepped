@@ -32,9 +32,9 @@ export function getStripeClient(): Stripe {
 // Checkout for NEW customers — Free has no price, 'automate' has no
 // Stripe price yet (Coming Soon), the legacy plans are no longer offered
 // (see PRICE_ENV_VAR_LEGACY below for why their env vars stay wired
-// regardless), and 21+ is a "Let's Talk" contact flow with no Stripe
+// regardless), and 16+ is a "Let's Talk" contact flow with no Stripe
 // object at all (Section 6/15: do NOT create an automatic Stripe tier
-// for 21+).
+// for 16+).
 const PRICE_ENV_VAR: Record<PurchasablePlanId, string> = {
   organize: 'STRIPE_ORGANIZE_PRICE_ID',
   manage: 'STRIPE_MANAGE_PRICE_ID',
