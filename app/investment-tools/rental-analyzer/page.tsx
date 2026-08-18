@@ -28,12 +28,14 @@ import { PricingNavLink } from '../../../components/PricingNavLink'
 import { Wordmark } from '../../../components/Wordmark'
 import { AddressAutocomplete } from '../../../components/AddressAutocomplete'
 import {
+  applyFinancingStatus,
   buildAnalysis,
   buildDealIndicators,
   num,
   resolveMonthlyRent,
   type AnalysisInput,
   type AnalysisResult,
+  type FinancingStatus,
 } from '../../../lib/investment-calculations'
 
 type Mode = 'percent' | 'amount'
@@ -46,6 +48,12 @@ type FormState = {
   units: string
   purchasePrice: string
   marketValue: string
+  // QA Cleanup Bundle, items 5-7: explicit financing status. 'Unknown' is
+  // the honest default for a blank analysis — never inferred as "Paid Off"
+  // just because a mortgage field is empty (see applyFinancingStatus() in
+  // lib/investment-calculations.ts for how this drives the math, and
+  // loadFromProperty() below for how it's set when prefilling).
+  financingStatus: FinancingStatus
   downPaymentMode: Mode
   downPaymentPercent: string
   downPaymentAmount: string
@@ -82,6 +90,7 @@ function defaultForm(): FormState {
   return {
     name: '', address: '', propertyType: 'Rental Property', units: '1',
     purchasePrice: '', marketValue: '',
+    financingStatus: 'Financed',
     downPaymentMode: 'percent', downPaymentPercent: '20', downPaymentAmount: '',
     interestRate: '7', loanTermYears: '30', closingCosts: '', loanPoints: '',
     useUnitRents: false, monthlyRent: '', unitRents: [{ label: 'Unit 1', monthlyRent: '' }], otherIncome: '',
@@ -351,6 +360,12 @@ function PropertyEvaluator() {
       purchasePrice: property.purchase_price ? String(property.purchase_price) : f.purchasePrice,
       marketValue: property.estimated_value ? String(property.estimated_value) : f.marketValue,
       monthlyRent: String(lease?.monthly_rent || property.monthly_rent || f.monthlyRent),
+      // Item 7: a mortgage record proves the property is financed. Its
+      // absence proves nothing either way — PropRoster has no canonical
+      // "paid off" flag on properties (see the completion report) — so
+      // this is never allowed to default to PaidOff, only to Financed
+      // (when a mortgage row exists) or Unknown (left for the user).
+      financingStatus: mortgage ? 'Financed' : 'Unknown',
       downPaymentMode: 'amount',
       downPaymentAmount: mortgage ? String(Math.max(0, Number(property.purchase_price || 0) - Number(mortgage.original_balance || 0))) : f.downPaymentAmount,
       interestRate: mortgage?.interest_rate ? String(mortgage.interest_rate) : f.interestRate,
@@ -369,7 +384,7 @@ function PropertyEvaluator() {
     setLoadingContext(false)
   }
 
-  const input = useMemo(() => toAnalysisInput(form), [form])
+  const input = useMemo(() => applyFinancingStatus(toAnalysisInput(form), form.financingStatus), [form])
   const result = useMemo(() => buildAnalysis(input), [input])
   const indicators = useMemo(() => buildDealIndicators(result), [result])
   const yearNow = { propertyValue: result.propertyValueForAnalysis, equity: result.equityAtPurchase }
@@ -512,7 +527,7 @@ function PropertyEvaluator() {
     { label: 'Monthly Cash Flow', value: money(result.monthlyCashFlow), toneClass: cashFlowTone(result.monthlyCashFlow) },
     { label: 'Cap Rate', value: pct(result.capRatePercent) },
     { label: 'Cash-on-Cash Return', value: pct(result.cashOnCashReturnPercent) },
-    { label: 'DSCR', value: ratioText(result.dscr) },
+    { label: 'DSCR', value: ratioText(result.dscr), hint: result.dscr === null ? 'No mortgage debt' : undefined },
     { label: 'Total Cash Required', value: money(result.totalCashRequired), hint: 'Down payment + closing costs + points' },
     { label: 'Break-Even Occupancy', value: pct(result.breakEvenOccupancyPercent), hint: 'Occupancy needed to break even' },
     {
@@ -596,21 +611,35 @@ function PropertyEvaluator() {
 
           <Section title="Financing" description="Loan amount, down payment and estimated payment are calculated automatically below.">
             <label className="evalField">
-              <span>Down payment</span>
-              <div className="modeField">
-                <div className="modeToggle">
-                  <button type="button" className={form.downPaymentMode === 'percent' ? 'active' : ''} onClick={() => set('downPaymentMode', 'percent')}>%</button>
-                  <button type="button" className={form.downPaymentMode === 'amount' ? 'active' : ''} onClick={() => set('downPaymentMode', 'amount')}>$</button>
-                </div>
-                {form.downPaymentMode === 'percent'
-                  ? <div className="evalInputWrap"><input inputMode="decimal" value={form.downPaymentPercent} onChange={(e) => set('downPaymentPercent', e.target.value)} placeholder="20" /><span className="evalSuffix">%</span></div>
-                  : <div className="evalInputWrap"><input inputMode="decimal" value={form.downPaymentAmount} onChange={(e) => set('downPaymentAmount', e.target.value)} placeholder="70000" /><span className="evalSuffix">$</span></div>}
-              </div>
+              <span>Financing status</span>
+              <select value={form.financingStatus} onChange={(e) => set('financingStatus', e.target.value as FinancingStatus)}>
+                <option value="Financed">Mortgage / Loan</option>
+                <option value="PaidOff">Paid Off / No Mortgage</option>
+                <option value="Unknown">Unknown / Not Entered</option>
+              </select>
             </label>
-            <NumberField label="Interest rate" value={form.interestRate} onChange={(v) => set('interestRate', v)} placeholder="7" suffix="%" />
-            <NumberField label="Loan term" value={form.loanTermYears} onChange={(v) => set('loanTermYears', v)} placeholder="30" suffix="years" />
+            {form.financingStatus === 'PaidOff' ? (
+              <p className="fullField ledgerNote">No mortgage — modeled as an all-cash purchase using the purchase price entered above. Down payment, interest rate, loan term and points don&apos;t apply and are hidden below.</p>
+            ) : (
+              <>
+                <label className="evalField">
+                  <span>Down payment</span>
+                  <div className="modeField">
+                    <div className="modeToggle">
+                      <button type="button" className={form.downPaymentMode === 'percent' ? 'active' : ''} onClick={() => set('downPaymentMode', 'percent')}>%</button>
+                      <button type="button" className={form.downPaymentMode === 'amount' ? 'active' : ''} onClick={() => set('downPaymentMode', 'amount')}>$</button>
+                    </div>
+                    {form.downPaymentMode === 'percent'
+                      ? <div className="evalInputWrap"><input inputMode="decimal" value={form.downPaymentPercent} onChange={(e) => set('downPaymentPercent', e.target.value)} placeholder="20" /><span className="evalSuffix">%</span></div>
+                      : <div className="evalInputWrap"><input inputMode="decimal" value={form.downPaymentAmount} onChange={(e) => set('downPaymentAmount', e.target.value)} placeholder="70000" /><span className="evalSuffix">$</span></div>}
+                  </div>
+                </label>
+                <NumberField label="Interest rate" value={form.interestRate} onChange={(v) => set('interestRate', v)} placeholder="7" suffix="%" />
+                <NumberField label="Loan term" value={form.loanTermYears} onChange={(v) => set('loanTermYears', v)} placeholder="30" suffix="years" />
+                <NumberField label="Loan fees / points" value={form.loanPoints} onChange={(v) => set('loanPoints', v)} placeholder="Optional" suffix="%" hint="% of the loan amount, one-time." />
+              </>
+            )}
             <NumberField label="Closing costs" value={form.closingCosts} onChange={(v) => set('closingCosts', v)} placeholder="Optional" suffix="$" />
-            <NumberField label="Loan fees / points" value={form.loanPoints} onChange={(v) => set('loanPoints', v)} placeholder="Optional" suffix="%" hint="% of the loan amount, one-time." />
             <div className="financingSummary">
               <div><span>Loan amount</span><strong>{money(result.loanAmount)}</strong></div>
               <div><span>Down payment</span><strong>{money(result.downPaymentAmount)}</strong></div>
@@ -681,7 +710,7 @@ function PropertyEvaluator() {
           <MetricTile label="Monthly Cash Flow" value={money(result.monthlyCashFlow)} hint="NOI ÷ 12 minus the mortgage payment." emphasis tone={result.monthlyCashFlow >= 0 ? 'good' : 'bad'} />
           <MetricTile label="Annual Cash Flow" value={money(result.annualCashFlow)} hint="Monthly cash flow × 12." tone={result.annualCashFlow >= 0 ? 'good' : 'bad'} />
           <MetricTile label="Cash-on-Cash Return" value={pct(result.cashOnCashReturnPercent)} hint="Annual cash flow ÷ total cash invested." />
-          <MetricTile label="DSCR" value={ratioText(result.dscr)} hint="NOI ÷ annual mortgage payments. Lenders often want 1.20x+." />
+          <MetricTile label="DSCR" value={ratioText(result.dscr)} hint={result.dscr === null ? 'No mortgage debt — DSCR does not apply to an all-cash purchase.' : 'NOI ÷ annual mortgage payments. Lenders often want 1.20x+.'} />
           <MetricTile label="GRM" value={ratioText(result.grm)} hint="Purchase price ÷ annual gross income." />
           <MetricTile label="Break-Even Occupancy" value={pct(result.breakEvenOccupancyPercent)} hint="Occupancy needed to cover expenses and debt service." />
           <MetricTile label="Total Cash Required" value={money(result.totalCashRequired)} hint="Down payment + closing costs + loan points." />

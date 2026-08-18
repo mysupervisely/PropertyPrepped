@@ -61,7 +61,7 @@ export default function PropCrewPage() {
       {properties.length === 0 ? (
         <div className="emptyState compsEmptyState"><strong>Add a property first.</strong><span>PropCrew providers are linked to your properties — add one from the Dashboard to get started.</span></div>
       ) : (
-        <PropCrewPanel ownerId={user.id} properties={properties} />
+        <PropCrewPanel ownerId={user.id} properties={properties} showHeader={false} />
       )}
     </main>
   )

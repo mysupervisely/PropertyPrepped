@@ -22,6 +22,7 @@ import type { NormalizedAddress } from '../lib/address/types'
 import { deriveTimeline } from '../lib/property-timeline/derive-timeline'
 import { resolveGreetingName, greetingTimeOfDay } from '../lib/user-profile/greeting'
 import type { UserProfile } from '../lib/user-profile/types'
+import { DOCUMENT_TYPES } from '../lib/document-intelligence/types'
 
 // Investment Tools 2.0 (Part 2): splits a resolved NormalizedAddress into
 // this app's existing two-field address/city shape (properties.address,
@@ -243,6 +244,16 @@ export default function Home() {
   const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([])
   // Property Profile 2.0
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  // QA: the greeting briefly showed the email-prefix fallback (e.g.
+  // "Kirollos") before user_profiles resolved and it flipped to the real
+  // preferred/display name ("Kiro") — resolveGreetingName(null, email)
+  // legitimately falls through to the email prefix when profile is null,
+  // which is correct once loading has actually finished, but wrong while
+  // still in flight. This tracks that distinction; set once, true, after
+  // the first successful profile fetch below — never reset except on
+  // sign-out, so an in-app data refresh (loadPortfolio() called again
+  // without a full remount) doesn't re-introduce the flicker.
+  const [profileReady, setProfileReady] = useState(false)
   const [propertySystems, setPropertySystems] = useState<PropertySystem[]>([])
   const [propertyNotes, setPropertyNotes] = useState<PropertyNote[]>([])
   const [propertyOwnership, setPropertyOwnership] = useState<PropertyOwnership[]>([])
@@ -254,6 +265,13 @@ export default function Home() {
   const [showModuleForm, setShowModuleForm] = useState<'Lease'|'Mortgage'|'Insurance'|'Maintenance'|null>(null)
   const [showRequestForm, setShowRequestForm] = useState(false)
   const [showDocIntelId, setShowDocIntelId] = useState<string | null>(null)
+  // QA: Move / Refile — moveDraft holds the in-progress edits for the
+  // document currently being moved (moveDocId), and moveError surfaces the
+  // block-and-explain message when a linked canonical record prevents
+  // changing the property.
+  const [moveDocId, setMoveDocId] = useState<string | null>(null)
+  const [moveDraft, setMoveDraft] = useState({ propertyId: '', category: '', documentType: '' })
+  const [moveError, setMoveError] = useState('')
   const [leaseDraft, setLeaseDraft] = useState({ tenantName:'', tenantEmail:'', monthlyRent:'', securityDeposit:'', startDate:new Date().toISOString().slice(0,10), endDate:'', renewalStatus:'Active', documentId:'', notes:'' })
   const [mortgageDraft, setMortgageDraft] = useState({ lender:'', loanNumber:'', originalBalance:'', currentBalance:'', interestRate:'', monthlyPayment:'', escrowAmount:'', loanTermYears:'30', maturityDate:'', documentId:'' })
   const [insuranceDraft, setInsuranceDraft] = useState({ carrier:'', policyNumber:'', annualPremium:'', deductible:'', effectiveDate:'', expirationDate:'', documentId:'' })
@@ -309,6 +327,7 @@ export default function Home() {
       setContacts([])
       setMaintenanceRequests([])
       setUserProfile(null)
+      setProfileReady(false)
       setPropertySystems([])
       setPropertyNotes([])
       setPropertyOwnership([])
@@ -413,6 +432,7 @@ export default function Home() {
     setPropertyNotes((noteRows || []) as PropertyNote[])
     setPropertyOwnership((ownershipRows || []) as PropertyOwnership[])
     setUserProfile((profileRow || null) as UserProfile | null)
+    setProfileReady(true)
     setMaintenanceRequests((requestRows || []) as MaintenanceRequest[])
     setBusy(false)
   }
@@ -686,14 +706,40 @@ export default function Home() {
     setBusy(false)
   }
 
+  // QA: "Open" didn't reliably open the document, particularly on mobile
+  // Safari. Root cause — window.open() only bypasses the popup blocker
+  // when called SYNCHRONOUSLY inside the click handler; by the time the
+  // `await`ed signed-URL fetch resolved, iOS/mobile Safari no longer
+  // treated this as a user-initiated action and silently blocked it (or
+  // opened a blank tab that never navigated). Fix: open the tab
+  // immediately, before the async call, then redirect it once the real
+  // signed URL is known — same private, short-lived (60s) signed URL as
+  // before, same storage bucket, no public URL, nothing re-uploaded.
+  // This is the one place every "Open" action in the app goes through
+  // (DocumentIntelligencePanel's "Open <name>" button uses the same
+  // onOpenDocument callback), so normal Documents and Smart
+  // Upload-created documents both go through this identical fix.
   async function openDocument(doc: PropertyDocument) {
     if (!supabase) return
+    // Deliberately omit "noopener" here (unlike a normal <a target="_blank">
+    // link) — noopener makes window.open() return null in every modern
+    // browser, and we need the window reference to redirect it below.
+    // opener is cleared manually instead once we're done with it.
+    const newTab = window.open('', '_blank', 'noreferrer')
     const { data, error: urlError } = await supabase.storage.from('property-documents').createSignedUrl(doc.storage_path, 60)
     if (urlError || !data?.signedUrl) {
-      setError(urlError?.message || 'Unable to open this document.')
+      newTab?.close()
+      setError(urlError?.message || 'Unable to open this document. Please try again.')
       return
     }
-    window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+    if (newTab) {
+      try { newTab.opener = null } catch { /* not settable in every browser — best effort */ }
+      newTab.location.href = data.signedUrl
+    } else {
+      // The synchronous open was itself blocked (rare) — fall back to a
+      // same-tab navigation rather than silently doing nothing.
+      window.location.href = data.signedUrl
+    }
   }
 
   async function removeDocument(doc: PropertyDocument) {
@@ -703,6 +749,80 @@ export default function Home() {
     if (storageError) setError(storageError.message)
     const { error: rowError } = await supabase.from('property_documents').delete().eq('id', doc.id)
     if (rowError) setError(rowError.message)
+    await loadPortfolio()
+    setBusy(false)
+  }
+
+  // QA: Move / Refile — updates the canonical property_documents row's
+  // property_id/category/document_type in place. Never re-uploads the
+  // file, never creates a second row, never re-runs AI analysis. Moving
+  // category/type only (same property) is always safe. Moving to a
+  // DIFFERENT property is blocked, with an explanation, whenever the
+  // document is linked from any canonical record (a financial
+  // transaction, maintenance record, lease, insurance policy, mortgage,
+  // or property system) — those records keep their own property_id
+  // unchanged, so relocating just the document would leave it filed
+  // under a different property than the record it supports. Deliberately
+  // NOT a cascading migration (Part 2: "do not build a complicated
+  // cascading record migration system") — the smallest safe behavior is
+  // block-and-explain, not guess-and-move.
+  const DOCUMENT_LINK_CHECKS: { table: string; label: string }[] = [
+    { table: 'financial_transactions', label: 'a financial transaction' },
+    { table: 'maintenance_records', label: 'a maintenance record' },
+    { table: 'leases', label: 'a lease' },
+    { table: 'insurance_policies', label: 'an insurance policy' },
+    { table: 'mortgages', label: 'a mortgage' },
+    { table: 'property_system_documents', label: 'a property system' },
+  ]
+
+  async function findDocumentLinks(documentId: string): Promise<string[]> {
+    const client = supabase
+    if (!client) return []
+    const results = await Promise.all(
+      DOCUMENT_LINK_CHECKS.map(({ table }) => client.from(table).select('id', { count: 'exact', head: true }).eq('document_id', documentId)),
+    )
+    return DOCUMENT_LINK_CHECKS.filter((_, i) => (results[i].count || 0) > 0).map((c) => c.label)
+  }
+
+  function openMoveDocument(doc: PropertyDocument) {
+    setMoveDocId(doc.id)
+    setMoveDraft({ propertyId: doc.property_id, category: doc.category, documentType: doc.document_type || '' })
+    setMoveError('')
+  }
+
+  async function confirmMoveDocument() {
+    if (!supabase || !user) return
+    const doc = selectedDocs.find((d) => d.id === moveDocId)
+    if (!doc) return
+    setBusy(true)
+    setMoveError('')
+    if (moveDraft.propertyId !== doc.property_id) {
+      const links = await findDocumentLinks(doc.id)
+      if (links.length) {
+        setMoveError(`Can't move this document to a different property — it's linked to ${links.join(', ')} on the current property. Unlink it there first, or leave this document filed where it is.`)
+        setBusy(false)
+        return
+      }
+    }
+    const patch: Record<string, unknown> = { property_id: moveDraft.propertyId, category: moveDraft.category }
+    // Same convention DocumentIntelligencePanel's own manual type-change
+    // already uses — a user-set classification is never silently
+    // overwritten by a later AI analysis (analyze-request.ts checks this
+    // same flag).
+    if (moveDraft.documentType) { patch.document_type = moveDraft.documentType; patch.classification_source = 'User' }
+    const { error: moveDocError } = await supabase.from('property_documents').update(patch).eq('id', doc.id)
+    if (moveDocError) {
+      setMoveError(moveDocError.message)
+      setBusy(false)
+      return
+    }
+    // Keep document_analyses.property_id in sync with its document's own
+    // property_id (the same invariant Smart Upload's property-confirmation
+    // step maintains — see supabase/milestone-12-smart-upload.sql).
+    if (moveDraft.propertyId !== doc.property_id) {
+      await supabase.from('document_analyses').update({ property_id: moveDraft.propertyId }).eq('document_id', doc.id)
+    }
+    setMoveDocId(null)
     await loadPortfolio()
     setBusy(false)
   }
@@ -1026,7 +1146,7 @@ export default function Home() {
                 <label className={`dropZone ${isDragging ? 'dragging' : ''}`} onDragEnter={(e) => { e.preventDefault(); setIsDragging(true) }} onDragOver={(e) => e.preventDefault()} onDragLeave={() => setIsDragging(false)} onDrop={(e: DragEvent<HTMLLabelElement>) => { e.preventDefault(); setIsDragging(false); void addDocumentFiles(e.dataTransfer.files) }}><span className="uploadIcon">↑</span><strong>{busy ? 'Uploading…' : 'Drop documents here or choose files'}</strong><small>PDF, spreadsheets, receipts, contracts and more · up to 50 MB each</small><input type="file" multiple disabled={busy} onChange={(e) => e.target.files && void addDocumentFiles(e.target.files)} /></label>
               </div>
               <div className="documentHeader"><h3>{docCategory === 'All' ? 'All documents' : docCategory}</h3><span>{filteredDocs.length} file{filteredDocs.length === 1 ? '' : 's'}</span></div>
-              <div className="documentList">{filteredDocs.length ? filteredDocs.map((doc) => <div className="documentRow" key={doc.id}><div className="fileIcon">{doc.name.split('.').pop()?.toUpperCase().slice(0, 4) || 'FILE'}</div><div className="fileName"><strong>{doc.name}</strong><span>{doc.category} · {formatSize(doc.size_bytes)} · {new Date(doc.created_at).toLocaleDateString()}{doc.document_type ? ` · ${doc.document_type}` : ''}{doc.analysis_status && doc.analysis_status !== 'Not Analyzed' && <span className={`aiStatusPill ${doc.analysis_status === 'Completed' ? 'pillGood' : doc.analysis_status === 'Failed' ? 'pillBad' : 'pillWarn'}`}>{doc.analysis_status === 'Completed' ? 'AI Analyzed' : doc.analysis_status}</span>}</span></div><div className="rowActions"><button onClick={() => void openDocument(doc)}>Open</button><button className="aiButton" onClick={() => setShowDocIntelId(doc.id)}>{doc.analysis_status === 'Completed' ? 'View AI Analysis' : 'Analyze with PropRoster AI'}</button><button onClick={() => void removeDocument(doc)}>Remove</button></div></div>) : <div className="emptyState"><strong>No documents here yet</strong><span>Upload a file above and PropRoster will keep it with this property.</span></div>}</div>
+              <div className="documentList">{filteredDocs.length ? filteredDocs.map((doc) => <div className="documentRow" key={doc.id}><div className="fileIcon">{doc.name.split('.').pop()?.toUpperCase().slice(0, 4) || 'FILE'}</div><div className="fileName"><strong>{doc.name}</strong><span>{doc.category} · {formatSize(doc.size_bytes)} · {new Date(doc.created_at).toLocaleDateString()}{doc.document_type ? ` · ${doc.document_type}` : ''}{doc.analysis_status && doc.analysis_status !== 'Not Analyzed' && <span className={`aiStatusPill ${doc.analysis_status === 'Completed' ? 'pillGood' : doc.analysis_status === 'Failed' ? 'pillBad' : 'pillWarn'}`}>{doc.analysis_status === 'Completed' ? 'AI Analyzed' : doc.analysis_status}</span>}</span></div><div className="rowActions"><button onClick={() => void openDocument(doc)}>Open</button><button className="aiButton" onClick={() => setShowDocIntelId(doc.id)}>{doc.analysis_status === 'Completed' ? 'View AI Analysis' : 'Analyze with PropRoster AI'}</button><button onClick={() => openMoveDocument(doc)}>Move</button><button onClick={() => void removeDocument(doc)}>Remove</button></div></div>) : <div className="emptyState"><strong>No documents here yet</strong><span>Upload a file above and PropRoster will keep it with this property.</span></div>}</div>
             </div>
           </div>
           </>}
@@ -1129,6 +1249,27 @@ export default function Home() {
             />
           )
         })()}
+
+        {moveDocId && (() => {
+          const moveDoc = selectedDocs.find((d) => d.id === moveDocId)
+          if (!moveDoc) return null
+          const currentProperty = properties.find((p) => p.id === moveDoc.property_id)
+          return (
+            <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setMoveDocId(null)}>
+              <div className="modal">
+                <div className="modalTop"><div><p className="eyebrow">DOCUMENT CENTER</p><h2>Move / refile document</h2></div><button className="iconButton" onClick={() => setMoveDocId(null)}>×</button></div>
+                <p className="deleteWarning">Moving <strong>{moveDoc.name}</strong>. Currently filed under {currentProperty ? `${currentProperty.address}${currentProperty.city ? `, ${currentProperty.city}` : ''}` : 'this property'} · {moveDoc.category}{moveDoc.document_type ? ` · ${moveDoc.document_type}` : ''}.</p>
+                <div className="formGrid">
+                  <label>Property<select value={moveDraft.propertyId} onChange={(e) => setMoveDraft({ ...moveDraft, propertyId: e.target.value })}>{properties.map((p) => <option key={p.id} value={p.id}>{p.address}{p.city ? `, ${p.city}` : ''}</option>)}</select></label>
+                  <label>Category<select value={moveDraft.category} onChange={(e) => setMoveDraft({ ...moveDraft, category: e.target.value })}>{DOCUMENT_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></label>
+                  <label className="fullField">Document type<select value={moveDraft.documentType} onChange={(e) => setMoveDraft({ ...moveDraft, documentType: e.target.value })}><option value="">Not classified</option>{DOCUMENT_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
+                </div>
+                {moveError && <p className="errorMessage">{moveError}</p>}
+                <div className="modalActions"><button className="secondary" onClick={() => setMoveDocId(null)}>Cancel</button><button className="primary" disabled={busy || !moveDraft.propertyId} onClick={() => void confirmMoveDocument()}>{busy ? 'Moving…' : 'Move'}</button></div>
+              </div>
+            </div>
+          )
+        })()}
       </main>
     )
   }
@@ -1137,7 +1278,7 @@ export default function Home() {
     <main className="shell">
       <AuthHeader onSmartUploadCompleted={() => void loadPortfolio()} />
       {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
-      <section className="intro welcomeIntro"><h1>Good {greetingTimeOfDay()}, {resolveGreetingName(userProfile, user.email)}.</h1><p>Here&apos;s your portfolio at a glance.</p></section>
+      <section className="intro welcomeIntro"><h1>Good {greetingTimeOfDay()}{profileReady ? `, ${resolveGreetingName(userProfile, user.email)}` : ''}.</h1><p>Here&apos;s your portfolio at a glance.</p></section>
 
       <section className="portfolioSnapshot">
         <div className="portfolioSnapshotHead">
