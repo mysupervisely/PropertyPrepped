@@ -165,6 +165,26 @@ const money = (n: number) => new Intl.NumberFormat('en-US', {
   style: 'currency', currency: 'USD', maximumFractionDigits: 0,
 }).format(n || 0)
 
+// Core Experience Bundle, item 4: sign-prefixed variants for Appreciation
+// only (money()/plain percentages elsewhere stay exactly as they were —
+// this is deliberately separate, not a change to existing formatting).
+const signedMoney = (n: number) => (n >= 0 ? `+${money(n)}` : money(n))
+const signedPercent = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`
+
+// Appreciation = estimated/current value - purchase price (what the
+// property itself has gained since purchase). Deliberately NOT Equity
+// (value - debt, what the owner would keep if sold today) and NOT
+// "Profit" — no renovation costs, selling costs, taxes, depreciation, or
+// rental income enter this number; those live in Financials. Returns
+// null (never shown) unless both purchase price and estimated value are
+// genuinely available and positive — a $0/unset purchase price must
+// never be read as "100% appreciation."
+function appreciationFor(estimatedValue: number, purchasePrice: number): { amount: number; percent: number } | null {
+  if (!(purchasePrice > 0) || !(estimatedValue > 0)) return null
+  const amount = estimatedValue - purchasePrice
+  return { amount, percent: (amount / purchasePrice) * 100 }
+}
+
 const formatSize = (bytes: number) => {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
@@ -1079,6 +1099,7 @@ export default function Home() {
   if (selected) {
     const monthlyCashFlow = Number(selected.monthly_rent) - Number(selected.monthly_expenses)
     const equity = Number(selected.estimated_value) - Number(selected.mortgage_balance)
+    const appreciation = appreciationFor(Number(selected.estimated_value), Number(selected.purchase_price))
 
     return (
       <main className="shell workspaceShell">
@@ -1109,8 +1130,20 @@ export default function Home() {
           <div className="sectionHead workspaceHeading"><div><p className="eyebrow">PROPERTY OVERVIEW</p><h2>At a glance</h2></div><button className="secondary" onClick={() => openEditProperty(selected)}>Edit property facts</button></div>
           <div className="overviewGrid">
             <div className="overviewPanel"><h3>Financial snapshot</h3><div className="detailRows">
-              <div><span>Purchase price</span><strong>{money(selected.purchase_price)}</strong></div><div><span>Estimated value</span><strong>{money(selected.estimated_value)}</strong></div><div><span>Mortgage balance</span><strong>{money(selected.mortgage_balance)}</strong></div><div><span>Estimated equity</span><strong>{money(equity)}</strong></div><div><span>Monthly rent</span><strong>{money(selected.monthly_rent)}</strong></div><div><span>Monthly property expenses</span><strong>{money(selected.monthly_expenses)}</strong></div>{selected.property_tax_annual != null && <div><span>Annual property tax</span><strong>{money(selected.property_tax_annual)}</strong></div>}{selected.hoa_monthly != null && <div><span>HOA / month</span><strong>{money(selected.hoa_monthly)}</strong></div>}<div className="highlightRow"><span>Estimated cash flow</span><strong>{money(monthlyCashFlow)}/mo</strong></div>
+              <div><span>Purchase price</span><strong>{money(selected.purchase_price)}</strong></div><div><span>Estimated value</span><strong>{money(selected.estimated_value)}</strong></div><div><span>Mortgage balance</span><strong>{money(selected.mortgage_balance)}</strong></div><div><span>Estimated equity</span><strong>{money(equity)}</strong></div>{appreciation && <div className={appreciation.amount >= 0 ? 'metricTone-good' : 'metricTone-bad'}><span>Appreciation</span><strong>{signedMoney(appreciation.amount)} <small>({signedPercent(appreciation.percent)})</small></strong></div>}<div><span>Monthly rent</span><strong>{money(selected.monthly_rent)}</strong></div><div><span>Monthly property expenses</span><strong>{money(selected.monthly_expenses)}</strong></div>{selected.property_tax_annual != null && <div><span>Annual property tax</span><strong>{money(selected.property_tax_annual)}</strong></div>}{selected.hoa_monthly != null && <div><span>HOA / month</span><strong>{money(selected.hoa_monthly)}</strong></div>}<div className="highlightRow"><span>Estimated cash flow</span><strong>{money(monthlyCashFlow)}/mo</strong></div>
             </div></div>
+            {/* Core Experience Bundle, item 5 audit: automatic enrichment
+                from an existing provider was investigated and intentionally
+                NOT implemented here — RentCast's AVM Value endpoint (the
+                only property-data integration this app currently calls)
+                never returns the SUBJECT property's own facts, only
+                comparable (other, nearby) properties' facts; the subject's
+                own facts require RentCast's separate Property Records
+                endpoint, a new billed request not added without approval
+                (see the completion report). Whenever that IS wired in, the
+                merge precedence must be: explicit user-confirmed value >
+                reliable provider value > blank — never silently overwrite
+                a value the user already entered/confirmed below. */}
             <div className="overviewPanel"><h3>Property facts</h3><div className="detailRows">
               {selected.beds != null && <div><span>Beds</span><strong>{selected.beds}</strong></div>}
               {selected.baths != null && <div><span>Baths</span><strong>{selected.baths}</strong></div>}

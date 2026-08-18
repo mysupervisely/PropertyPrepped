@@ -1119,6 +1119,7 @@ h2, h3, p { margin-top: 0; }
 .smartUploadServiceSection { display: grid; gap: 14px; border-left: 2px solid var(--brand-soft); padding-left: 14px; }
 .smartUploadContactSection { display: grid; gap: 6px; }
 .smartUploadContactPrompt { display: grid; gap: 8px; }
+.smartUploadContactForm { display: grid; gap: 10px; }
 .smartUploadContactActions { display: flex; gap: 8px; }
 .smartUploadSavedBanner { background: var(--brand-soft); color: var(--brand); border-radius: 10px; padding: 12px 14px; font-weight: 650; font-size: 13.5px; display: grid; gap: 8px; justify-items: start; }
 .smartUploadOpenLink { display: inline-block; }

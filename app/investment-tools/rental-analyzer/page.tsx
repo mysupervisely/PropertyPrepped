@@ -26,6 +26,7 @@ import { canCreateProperty } from '../../../lib/billing/entitlements'
 import { UpgradePrompt } from '../../../components/UpgradePrompt'
 import { PricingNavLink } from '../../../components/PricingNavLink'
 import { Wordmark } from '../../../components/Wordmark'
+import { AuthHeader } from '../../../components/AuthHeader'
 import { AddressAutocomplete } from '../../../components/AddressAutocomplete'
 import {
   applyFinancingStatus,
@@ -546,14 +547,24 @@ function PropertyEvaluator() {
 
   return (
     <main className="shell investmentShell">
-      <header className="topbar">
-        <Link href="/investment-tools" className="brandButton"><span className="brand"><Wordmark /></span><span className="tagline">Investment Tools</span></Link>
-        <div className="accountActions">
-          {user ? <span>{user.email}</span> : isSupabaseConfigured && <Link href="/" className="secondary">Sign in to save</Link>}
-          <PricingNavLink />
-          <Link href="/investment-tools" className="secondary">← Investment Tools</Link>
-        </div>
-      </header>
+      {/* Core Experience Bundle, item 1: authenticated users get the same
+          global header as the rest of the app; the "← Investment Tools"
+          contextual link moves into the page content below instead of
+          living in the header. Signed-out visitors keep the existing
+          public topbar (Pricing + "Sign in to save" prompt) unchanged. */}
+      {user ? (
+        <AuthHeader />
+      ) : (
+        <header className="topbar">
+          <Link href="/investment-tools" className="brandButton"><span className="brand"><Wordmark /></span><span className="tagline">Investment Tools</span></Link>
+          <div className="accountActions">
+            {isSupabaseConfigured && <Link href="/" className="secondary">Sign in to save</Link>}
+            <PricingNavLink />
+            <Link href="/investment-tools" className="secondary">← Investment Tools</Link>
+          </div>
+        </header>
+      )}
+      {user && <Link className="breadcrumbBack" href="/investment-tools">← Investment Tools</Link>}
 
       <section className="intro evaluatorIntro">
         <p className="eyebrow">RENTAL PROPERTY ANALYZER</p>

@@ -13,6 +13,7 @@ import { matchProperty } from '../../lib/smart-upload/match-property'
 import { findMatchingContact } from '../../lib/smart-upload/match-contact'
 import { extractReceiptFields, looksLikeServiceInvoice, missingReceiptFields } from '../../lib/smart-upload/receipt-fields'
 import { FINANCIAL_CATEGORIES, MAINTENANCE_CATEGORIES } from '../../lib/property-categories'
+import { PROPCREW_CATEGORIES } from '../PropCrewPanel'
 import { PropertyPicker } from './PropertyPicker'
 
 export type ReceiptSaveInput = {
@@ -47,7 +48,7 @@ export function ReceiptReview({
   busy: boolean
   saved: boolean
   onSelectProperty: (propertyId: string) => void
-  onAddToPropCrew: (prefill: { name: string; businessName: string | null; phone: string | null; email: string | null; role: string }) => Promise<string | null>
+  onAddToPropCrew: (prefill: { name: string; businessName: string | null; phone: string | null; email: string | null; role: string }) => Promise<{ id: string | null; error?: string }>
   onSave: (input: ReceiptSaveInput) => void
 }) {
   const extracted = useMemo(() => extractReceiptFields(applyFields), [applyFields])
@@ -71,23 +72,55 @@ export function ReceiptReview({
   const [contactId, setContactId] = useState<string>('')
   const [addingContact, setAddingContact] = useState(false)
   const [skippedContact, setSkippedContact] = useState(false)
+  // Core Experience Bundle, item 2: "Add to PropCrew" no longer creates
+  // the provider immediately — it opens this small editable confirmation
+  // form first ("do not silently create the provider"), prefilled only
+  // from what Smart Upload's one analysis call actually extracted.
+  const [showContactForm, setShowContactForm] = useState(false)
+  const [contactDraft, setContactDraft] = useState({ name: '', businessName: '', phone: '', email: '', role: 'Other' })
+  const [contactError, setContactError] = useState('')
 
   const propertySystems = useMemo(() => systems.filter((s) => s.property_id === confirmedPropertyId), [systems, confirmedPropertyId])
   const matchedContact = useMemo(() => findMatchingContact(vendor || applyFields.businessName, contacts), [vendor, applyFields.businessName, contacts])
 
   const canSave = Boolean(confirmedPropertyId) && description.trim().length > 0 && Number(amount) > 0 && !busy
 
-  async function handleAddToPropCrew() {
+  // Category guess where reliable (Part 2): only reuse the maintenance
+  // category already inferred from the extracted invoice when it's also
+  // a real PropCrew category — the two lists overlap (HVAC, Plumbing,
+  // Electrical, Landscaping, Other) but aren't the same list, so this
+  // never invents a PropCrew category the extraction didn't support.
+  function openContactForm() {
+    const reliableRole = (PROPCREW_CATEGORIES as readonly string[]).includes(maintenanceCategory) ? maintenanceCategory : 'Other'
+    setContactDraft({
+      name: applyFields.name || applyFields.businessName || vendor || '',
+      businessName: applyFields.businessName || '',
+      phone: applyFields.phone || '',
+      email: applyFields.email || '',
+      role: reliableRole,
+    })
+    setContactError('')
+    setShowContactForm(true)
+  }
+
+  async function confirmAddToPropCrew() {
+    if (!contactDraft.name.trim()) return
     setAddingContact(true)
-    const id = await onAddToPropCrew({
-      name: applyFields.name || applyFields.businessName || vendor || 'New contact',
-      businessName: applyFields.businessName || vendor || null,
-      phone: applyFields.phone || null,
-      email: applyFields.email || null,
-      role: maintenanceCategory,
+    setContactError('')
+    const result = await onAddToPropCrew({
+      name: contactDraft.name.trim(),
+      businessName: contactDraft.businessName.trim() || null,
+      phone: contactDraft.phone.trim() || null,
+      email: contactDraft.email.trim() || null,
+      role: contactDraft.role,
     })
     setAddingContact(false)
-    if (id) setContactId(id)
+    if (result.id) {
+      setContactId(result.id)
+      setShowContactForm(false)
+    } else {
+      setContactError(result.error || 'Could not add this provider to PropCrew. Please try again.')
+    }
   }
 
   return (
@@ -121,15 +154,32 @@ export function ReceiptReview({
 
           <div className="smartUploadContactSection">
             <p className="eyebrow">PROPCREW PROVIDER</p>
-            {matchedContact || contactId ? (
-              <p className="muted">Matched to {matchedContact?.business_name || matchedContact?.name || 'the selected provider'} in your PropCrew.</p>
+            {contactId ? (
+              <p className="muted">Linked to PropCrew.</p>
+            ) : matchedContact ? (
+              <p className="muted">Matched to {matchedContact.business_name || matchedContact.name} in your PropCrew.</p>
+            ) : showContactForm ? (
+              <div className="smartUploadContactForm">
+                <div className="formGrid">
+                  <label>Name<input value={contactDraft.name} onChange={(e) => setContactDraft((d) => ({ ...d, name: e.target.value }))} placeholder="Mike" /></label>
+                  <label>Business name<input value={contactDraft.businessName} onChange={(e) => setContactDraft((d) => ({ ...d, businessName: e.target.value }))} placeholder="ABC Air" /></label>
+                  <label>Phone<input value={contactDraft.phone} onChange={(e) => setContactDraft((d) => ({ ...d, phone: e.target.value }))} placeholder="(555) 123-4567" /></label>
+                  <label>Email<input type="email" value={contactDraft.email} onChange={(e) => setContactDraft((d) => ({ ...d, email: e.target.value }))} placeholder="mike@abcair.com" /></label>
+                  <label>Category<select value={contactDraft.role} onChange={(e) => setContactDraft((d) => ({ ...d, role: e.target.value }))}>{PROPCREW_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></label>
+                </div>
+                {contactError && <p className="errorMessage">{contactError}</p>}
+                <div className="smartUploadContactActions">
+                  <button type="button" className="primary" disabled={addingContact || !contactDraft.name.trim()} onClick={() => void confirmAddToPropCrew()}>{addingContact ? 'Adding…' : 'Confirm & Add'}</button>
+                  <button type="button" className="secondary" disabled={addingContact} onClick={() => setShowContactForm(false)}>Cancel</button>
+                </div>
+              </div>
             ) : skippedContact ? (
               <p className="muted">Not linked to a PropCrew provider.</p>
             ) : (vendor || applyFields.businessName) ? (
               <div className="smartUploadContactPrompt">
                 <p>{vendor || applyFields.businessName} isn&rsquo;t in your PropCrew yet.</p>
                 <div className="smartUploadContactActions">
-                  <button type="button" className="secondary" disabled={addingContact} onClick={() => void handleAddToPropCrew()}>{addingContact ? 'Adding…' : 'Add to PropCrew'}</button>
+                  <button type="button" className="secondary" onClick={openContactForm}>Add to PropCrew</button>
                   <button type="button" className="secondary" onClick={() => setSkippedContact(true)}>Skip</button>
                 </div>
               </div>

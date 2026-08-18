@@ -11,6 +11,7 @@ import { isSupabaseConfigured, supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { PricingNavLink } from '../../components/PricingNavLink'
 import { Wordmark } from '../../components/Wordmark'
+import { AuthHeader } from '../../components/AuthHeader'
 
 type SavedAnalysis = {
   id: string
@@ -63,10 +64,18 @@ export default function InvestmentToolsHub() {
 
   return (
     <main className="shell investmentShell">
-      <header className="topbar">
-        <Link href="/" className="brandButton"><span className="brand"><Wordmark /></span><span className="tagline">Your real estate portfolio, all in one place.</span></Link>
-        <div className="accountActions">{ready && user && <span>{user.email}</span>}<PricingNavLink /><Link href="/" className="secondary">← All Properties</Link></div>
-      </header>
+      {/* Core Experience Bundle, item 1: authenticated users get the same
+          global header as the rest of the app; signed-out visitors keep
+          the existing public topbar (Pricing + back link) unchanged — this
+          page is reachable without signing in, and must stay that way. */}
+      {ready && user ? (
+        <AuthHeader />
+      ) : (
+        <header className="topbar">
+          <Link href="/" className="brandButton"><span className="brand"><Wordmark /></span><span className="tagline">Your real estate portfolio, all in one place.</span></Link>
+          <div className="accountActions"><PricingNavLink /><Link href="/" className="secondary">← All Properties</Link></div>
+        </header>
+      )}
 
       <section className="intro">
         <p className="eyebrow">INVESTMENT TOOLS</p>

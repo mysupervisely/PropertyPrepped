@@ -27,6 +27,7 @@ import type { DocumentType } from '../../lib/document-intelligence/types'
 import type { SmartUploadContact, SmartUploadProperty, SmartUploadSystem } from '../../lib/smart-upload/types'
 import { isSupportedForSmartUpload, SMART_UPLOAD_ACCEPT } from '../../lib/smart-upload/supported-file-types'
 import { shouldCreateFinancialTransaction, shouldCreateMaintenanceRecord } from '../../lib/smart-upload/idempotency'
+import { findMatchingContact } from '../../lib/smart-upload/match-contact'
 import { reviewKindFor } from '../../lib/smart-upload/review-kind'
 import { ReceiptReview, type ReceiptSaveInput } from './ReceiptReview'
 import { PrepareOnlyReview } from './PrepareOnlyReview'
@@ -242,8 +243,20 @@ export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean
     ])
   }
 
-  async function addToPropCrew(item: QueueItem, prefill: { name: string; businessName: string | null; phone: string | null; email: string | null; role: string }): Promise<string | null> {
-    if (!supabase || !ownerId || !item.confirmedPropertyId) return null
+  async function addToPropCrew(item: QueueItem, prefill: { name: string; businessName: string | null; phone: string | null; email: string | null; role: string }): Promise<{ id: string | null; error?: string }> {
+    if (!supabase || !ownerId) return { id: null, error: 'You must be signed in to add a PropCrew provider.' }
+    if (!item.confirmedPropertyId) return { id: null, error: 'Confirm which property this belongs to first, then add the provider to PropCrew.' }
+
+    // Core Experience Bundle, item 2: "if a matching PropCrew contact
+    // already exists, link it rather than creating another" — same exact-
+    // match rule ReceiptReview already uses to auto-detect a match before
+    // this form ever opens, re-checked here against whatever the user
+    // confirmed/edited in the form (a corrected typo can turn a
+    // near-miss into a real match), so a repeat tap or an edited name
+    // that now matches an existing row links instead of duplicating.
+    const existing = findMatchingContact(prefill.name, contacts) || findMatchingContact(prefill.businessName, contacts)
+    if (existing) return { id: existing.id }
+
     // Part 14: only reliable, actually-present information — never
     // fabricated. "Would you use them again?" stays unset (Part 14: "can
     // remain unset until the user has formed an opinion").
@@ -252,9 +265,9 @@ export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean
       .insert({ owner_id: ownerId, property_id: item.confirmedPropertyId, name: prefill.name, business_name: prefill.businessName, role: prefill.role, phone: prefill.phone, email: prefill.email })
       .select('id')
       .single()
-    if (error || !data) return null
+    if (error || !data) return { id: null, error: error?.message || 'Could not add this provider to PropCrew. Please try again.' }
     setContacts((prev) => [...prev, { id: data.id, name: prefill.name, business_name: prefill.businessName }])
-    return data.id
+    return { id: data.id }
   }
 
   async function saveReceipt(item: QueueItem, input: ReceiptSaveInput) {
