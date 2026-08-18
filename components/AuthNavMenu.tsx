@@ -92,7 +92,13 @@ export function AuthNavMenu() {
 
   return (
     <div className="authNavMenu" ref={containerRef}>
-      <button type="button" className="authNavMenuButton" aria-label="Open navigation menu" aria-haspopup="true" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      {/* Final Launch Fixes follow-up (avatar presentation): the button's
+          own white fill/border (built for the ☰ glyph state) only gets
+          dropped when an avatar photo is actually rendered inside it —
+          authNavMenuButtonHasAvatar strips background/border/padding so
+          nothing shows behind the circular photo. Same button, same
+          click handler, same fallback ☰ glyph with no photo. */}
+      <button type="button" className={`authNavMenuButton${avatarUrl ? ' authNavMenuButtonHasAvatar' : ''}`} aria-label="Open navigation menu" aria-haspopup="true" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         {avatarUrl ? <img src={avatarUrl} alt="" className="authNavAvatar" /> : <span aria-hidden="true">☰</span>}
       </button>
       {open && (

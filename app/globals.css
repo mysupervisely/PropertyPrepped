@@ -1048,8 +1048,16 @@ h2, h3, p { margin-top: 0; }
 .authNavMenuButton { border: 1px solid var(--line); background: white; color: var(--text); width: 40px; height: 40px; border-radius: 10px; font-size: 17px; display: grid; place-items: center; }
 .authNavMenuButton:hover { border-color: var(--brand); color: var(--brand); }
 /* Final Launch Fixes: header profile avatar — same button, ~34px
-   circle, comfortably inside the existing 40px touch target. */
-.authNavAvatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; display: block; }
+   circle, comfortably inside the existing 40px touch target.
+   Follow-up (avatar presentation): authNavMenuButtonHasAvatar strips
+   the button's own white background/border/padding (built for the ☰
+   glyph) so nothing square shows behind the circular photo — width =
+   height, border-radius: 50%, overflow: hidden as a defensive clip in
+   case the image ever briefly renders larger than its box. The ☰
+   fallback state (no photo) is completely untouched. */
+.authNavMenuButtonHasAvatar { background: transparent; border-color: transparent; padding: 0; border-radius: 50%; overflow: hidden; }
+.authNavMenuButtonHasAvatar:hover { border-color: transparent; }
+.authNavAvatar { width: 34px; height: 34px; border-radius: 50%; overflow: hidden; object-fit: cover; object-position: center; display: block; }
 .authNavMenuPanel { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; min-width: 200px; background: white; border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 12px 28px rgba(15, 30, 24, .12); display: grid; }
 .authNavMenuPanel a { display: block; padding: 10px 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; }
 .authNavMenuPanel a:hover { background: var(--brand-soft); color: var(--brand); }
