@@ -28,6 +28,10 @@ import { supabase } from '../lib/supabase'
 
 const NAV_LINKS: { href: string; label: string }[] = [
   { href: '/', label: 'Dashboard' },
+  // Milestone 15: Global Search — secondary to the header itself (no
+  // clutter there), reachable from every authenticated page via the
+  // hamburger, same as every other destination here.
+  { href: '/search', label: 'Search' },
   { href: '/investment-tools', label: 'Investment Tools' },
   { href: '/propcrew', label: 'PropCrew' },
   // Milestone 14: secondary to the header's own "+ Smart Upload" (also

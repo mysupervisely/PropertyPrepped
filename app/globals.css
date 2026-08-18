@@ -1135,6 +1135,28 @@ h2, h3, p { margin-top: 0; }
 .smartImportReviewPanel { display: grid; gap: 14px; max-width: 720px; }
 .importDuplicateWarning { display: grid; gap: 10px; }
 
+/* Milestone 15: Global Search (app/search/page.tsx). Reuses .emptyState,
+   .eyebrow, .muted, .addressResolving-style loading label — only the
+   pieces with no existing equivalent get new rules here. */
+.searchInputWrap { position: relative; margin: 8px 0 6px; }
+.searchInput { width: 100%; border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; font-size: 16px; background: white; color: var(--text); outline: none; }
+.searchInput:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+.searchHint { margin: 4px 0 0; }
+.searchEmptyState { margin-top: 14px; }
+
+.searchResultGroup { margin-top: 22px; }
+.searchResultList { display: grid; gap: 8px; margin-top: 8px; }
+.searchResultRow { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 13px 14px; background: white; text-decoration: none; color: inherit; }
+.searchResultRow:hover { border-color: var(--brand); }
+.searchResultType { font-size: 10px; font-weight: 750; letter-spacing: .04em; color: var(--brand); background: var(--brand-soft); padding: 4px 8px; border-radius: 999px; white-space: nowrap; }
+.searchResultBody { display: grid; gap: 2px; min-width: 0; }
+.searchResultBody strong { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.searchResultBody span { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 480px) {
+  .searchResultRow { grid-template-columns: 1fr; }
+  .searchResultType { width: fit-content; }
+}
+
 .smartUploadReview { display: grid; gap: 18px; }
 
 /* Property picker (components/SmartUpload/PropertyPicker.tsx) — large,
