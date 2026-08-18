@@ -160,7 +160,15 @@ export default function HomePurchaseCalculatorPage() {
           <section className="evaluatorSection">
             <div className="evaluatorSectionHead"><h2>Property</h2><p>Optional — helps you keep track of what this estimate was for.</p></div>
             <div className="evalGrid">
-              <label className="evalField">
+              {/* Final Launch Fixes: this section only ever has one
+                  field, so on desktop's 2-column .evalGrid it was
+                  rendering at half width — fullField spans both
+                  columns (the same class the Add Property modal and
+                  other .evalGrid forms already use for a lone/long
+                  field), and .evalGrid already collapses to one column
+                  on mobile regardless, so this doesn't change mobile
+                  sizing at all. */}
+              <label className="evalField fullField">
                 <span>Address</span>
                 <div className="evalInputWrap">
                   <AddressAutocomplete value={form.address} onTextChange={(v) => set('address', v)} onSelect={(addr) => set('address', addr.formattedAddress)} placeholder="123 Example Street, Example City, FL" />

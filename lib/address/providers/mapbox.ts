@@ -106,6 +106,14 @@ export class MapboxAddressSearchProvider implements AddressSearchProvider {
     url.searchParams.set('session_token', this.sessionToken)
     url.searchParams.set('types', 'address')
     url.searchParams.set('limit', '5')
+    // Final Launch Fixes: PropRoster V1 is U.S.-only, but nothing was
+    // restricting Search Box results to it — a production test returned
+    // an Australian suggestion. Mapbox's suggest endpoint has a real
+    // server-side `country` filter (ISO 3166-1 alpha-2, comma-separated)
+    // built for exactly this; using it means non-U.S. results are never
+    // returned in the first place, rather than trusting a client-side
+    // filter to remember to drop them after the fact.
+    url.searchParams.set('country', 'us')
 
     const response = await fetch(url.toString())
     if (!response.ok) {

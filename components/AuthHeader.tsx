@@ -78,7 +78,7 @@ export function AuthHeader({ onBrandClick, onSmartUploadCompleted }: { onBrandCl
           onClose={() => setShowUpgrade(false)}
           headline="Smart Upload is included with Manage."
           targetPlanId="manage"
-          description="Manage includes Smart Upload, Smart Import, AI Document Intelligence, Rent Ledger and PropWatch."
+          description="Manage includes Smart Upload, Portfolio Import, AI Document Intelligence, Rent Ledger and PropWatch."
         />
       )}
     </>

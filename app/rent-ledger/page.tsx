@@ -177,16 +177,38 @@ function RentLedgerWorkspace({ user }: { user: User }) {
     let financialTransactionId: string | null = null
 
     if (draft.recordAsIncome) {
+      // Bug fix: this insert never set owner_id, so it could never
+      // satisfy financial_transactions_insert_own's RLS check ((select
+      // auth.uid()) = owner_id) — every "Record this as rental income"
+      // attempt failed here, surfacing Postgres's raw RLS error text to
+      // the user. The policy itself was correct (same FK-ownership idiom
+      // used everywhere else in this schema); the write payload was
+      // missing the field, exactly like every other financial_transactions
+      // insert in the app (see app/page.tsx's maintenance/manual-expense
+      // inserts) already includes.
       const { data: txRow, error: txError } = await supabase.from('financial_transactions').insert({
+        owner_id: user.id,
         property_id: draft.propertyId, transaction_type: 'Income', category: 'Rent',
         description: `Rent — ${formatPeriodLabel(period)}${lease ? ` — ${lease.tenant_name}` : ''}`,
         amount, transaction_date: draft.dateReceived, vendor: lease?.tenant_name || null,
       }).select('id').single()
-      if (txError) { setFormError(txError.message); setBusy(false); return }
+      if (txError) {
+        // Never surface raw Postgres/RLS text to the landlord — log the
+        // real detail for us, show a short friendly message to them.
+        console.error('rent-ledger: failed to create linked financial_transactions row', txError)
+        setFormError("We couldn't record this payment. Please try again."); setBusy(false); return
+      }
       financialTransactionId = txRow.id
     }
 
+    // Same missing-owner_id bug applied here too — rent_payments_insert_own
+    // requires (select auth.uid()) = owner_id as well. It was masked by
+    // the financial_transactions insert above always failing first
+    // whenever "record as income" was checked, but with that box
+    // unchecked this insert would have failed with the exact same class
+    // of error.
     const { error: payError } = await supabase.from('rent_payments').insert({
+      owner_id: user.id,
       property_id: draft.propertyId, lease_id: draft.leaseId, rent_period: periodStart(period),
       date_received: draft.dateReceived, amount, payment_method: draft.paymentMethod,
       reference_number: draft.referenceNumber.trim() || null, notes: draft.notes.trim() || null,
@@ -200,7 +222,8 @@ function RentLedgerWorkspace({ user }: { user: User }) {
       // Best-effort cleanup: never leave a phantom Financials entry
       // behind if the payment record itself failed to save.
       if (financialTransactionId) await supabase.from('financial_transactions').delete().eq('id', financialTransactionId)
-      setFormError(payError.message); setBusy(false); return
+      console.error('rent-ledger: failed to create rent_payments row', payError)
+      setFormError("We couldn't record this payment. Please try again."); setBusy(false); return
     }
 
     setShowRecordPayment(false)

@@ -339,6 +339,22 @@ h2, h3, p { margin-top: 0; }
   .dashboardItemRow .statusPill { width: fit-content; }
 }
 
+/* Final Launch Fixes: PropWatch dashboard reorder — compact, two
+   side-by-side panels (desktop) instead of three stacked full-width
+   sections. Reuses .commandCenterSection/.sectionHead/.dashboardItemList/
+   .dashboardItemRow as-is; only the panel wrapper below is new. */
+.propWatchGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.propWatchPanel { border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: white; min-width: 0; }
+.propWatchPanel .dashboardItemList { gap: 6px; }
+.propWatchPanel .dashboardItemRow { padding: 10px 12px; }
+.propWatchPanelHead { margin-bottom: 10px; }
+.propWatchPanelHead h3 { font-size: 15px; margin-bottom: 2px; }
+.propWatchPanelHead p { color: var(--muted); font-size: 12.5px; margin-bottom: 0; }
+.propWatchPanelSubhead { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+@media (max-width: 720px) {
+  .propWatchGrid { grid-template-columns: 1fr; }
+}
+
 /* Milestone 5: leases, mortgage, insurance & maintenance */
 .moduleWorkspace { padding-bottom: 44px; }
 .moduleGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
@@ -503,6 +519,14 @@ h2, h3, p { margin-top: 0; }
 .evalSuffix { position: absolute; right: 12px; color: var(--muted); font-size: 12px; font-weight: 650; pointer-events: none; }
 .fullField { grid-column: 1 / -1; }
 .modeField { display: flex; gap: 8px; align-items: center; }
+/* Final Launch Fixes: .evalInputWrap had no flex-basis inside this flex
+   row, so it sized to the browser's default intrinsic input width
+   instead of filling the space next to the fixed-width %/$ toggle —
+   entered Down Payment / Closing Costs values were real (the
+   calculation always used them) but got visually clipped inside that
+   narrow box. Letting it grow closes the gap without changing anything
+   about NumberField's plain (non-mode) inputs elsewhere on this page. */
+.modeField .evalInputWrap { flex: 1 1 0; min-width: 0; }
 .modeToggle { display: flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; flex-shrink: 0; }
 .modeToggle button { border: 0; background: white; color: var(--muted); padding: 11px 12px; font-weight: 700; font-size: 12px; }
 .modeToggle button.active { background: var(--brand); color: white; }
@@ -1003,6 +1027,9 @@ h2, h3, p { margin-top: 0; }
 .authNavMenu { position: relative; }
 .authNavMenuButton { border: 1px solid var(--line); background: white; color: var(--text); width: 40px; height: 40px; border-radius: 10px; font-size: 17px; display: grid; place-items: center; }
 .authNavMenuButton:hover { border-color: var(--brand); color: var(--brand); }
+/* Final Launch Fixes: header profile avatar — same button, ~34px
+   circle, comfortably inside the existing 40px touch target. */
+.authNavAvatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; display: block; }
 .authNavMenuPanel { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; min-width: 200px; background: white; border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 12px 28px rgba(15, 30, 24, .12); display: grid; }
 .authNavMenuPanel a { display: block; padding: 10px 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; }
 .authNavMenuPanel a:hover { background: var(--brand-soft); color: var(--brand); }
