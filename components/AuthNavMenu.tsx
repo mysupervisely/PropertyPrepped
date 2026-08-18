@@ -30,6 +30,11 @@ const NAV_LINKS: { href: string; label: string }[] = [
   { href: '/', label: 'Dashboard' },
   { href: '/investment-tools', label: 'Investment Tools' },
   { href: '/propcrew', label: 'PropCrew' },
+  // Milestone 14: secondary to the header's own "+ Smart Upload" (also
+  // linked from inside that modal's Entry screen) — onboarding an
+  // existing portfolio of historical documents, not the everyday
+  // add-one-thing action, so it lives here rather than in the header.
+  { href: '/smart-import', label: 'Smart Import' },
   { href: '/profile', label: 'Profile' },
   { href: '/pricing', label: 'Pricing' },
 ]
