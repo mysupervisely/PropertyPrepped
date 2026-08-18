@@ -61,7 +61,24 @@ type Property = {
   purchase_date: string | null
   property_tax_annual: number | null
   hoa_monthly: number | null
+  // Core Experience Bundle, item 6 (Property Financing Status
+  // Foundation, supabase/milestone-13-financing-status.sql): one of
+  // 'Active Mortgage' | 'Paid Off' | 'No Mortgage' | 'Unknown', or null
+  // for a row that predates this column — null and 'Unknown' are always
+  // treated identically ("not entered"), never as proof of anything.
+  financing_status: string | null
 }
+
+// Core Experience Bundle, item 6: the only four allowed values (mirrors
+// the check constraint in supabase/milestone-13-financing-status.sql).
+// 'Unknown' is the explicit, honest default — a blank/never-set mortgage
+// field must never be silently read as "Paid Off" or "No Mortgage."
+const FINANCING_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: 'Unknown', label: 'Unknown / Not Entered' },
+  { value: 'Active Mortgage', label: 'Active Mortgage / Loan' },
+  { value: 'Paid Off', label: 'Paid Off' },
+  { value: 'No Mortgage', label: 'No Mortgage / Cash Purchase' },
+]
 
 type PropertyDocument = {
   id: string
@@ -164,6 +181,26 @@ const requestStatuses = ['Submitted', 'Scheduled', 'In Progress', 'Completed']
 const money = (n: number) => new Intl.NumberFormat('en-US', {
   style: 'currency', currency: 'USD', maximumFractionDigits: 0,
 }).format(n || 0)
+
+// Core Experience Bundle, item 4: sign-prefixed variants for Appreciation
+// only (money()/plain percentages elsewhere stay exactly as they were —
+// this is deliberately separate, not a change to existing formatting).
+const signedMoney = (n: number) => (n >= 0 ? `+${money(n)}` : money(n))
+const signedPercent = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`
+
+// Appreciation = estimated/current value - purchase price (what the
+// property itself has gained since purchase). Deliberately NOT Equity
+// (value - debt, what the owner would keep if sold today) and NOT
+// "Profit" — no renovation costs, selling costs, taxes, depreciation, or
+// rental income enter this number; those live in Financials. Returns
+// null (never shown) unless both purchase price and estimated value are
+// genuinely available and positive — a $0/unset purchase price must
+// never be read as "100% appreciation."
+function appreciationFor(estimatedValue: number, purchasePrice: number): { amount: number; percent: number } | null {
+  if (!(purchasePrice > 0) || !(estimatedValue > 0)) return null
+  const amount = estimatedValue - purchasePrice
+  return { amount, percent: (amount / purchasePrice) * 100 }
+}
 
 const formatSize = (bytes: number) => {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
@@ -290,10 +327,10 @@ export default function Home() {
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState('')
   const [draft, setDraft] = useState({
-    address: '', city: '', type: 'Rental Property', value: '', mortgage: '', rent: '', purchasePrice: '', monthlyExpenses: '',
+    address: '', city: '', type: 'Rental Property', value: '', mortgage: '', rent: '', purchasePrice: '', monthlyExpenses: '', financingStatus: 'Unknown',
   })
   const [editDraft, setEditDraft] = useState({
-    address: '', city: '', type: 'Rental Property', value: '', mortgage: '', rent: '', purchasePrice: '', monthlyExpenses: '',
+    address: '', city: '', type: 'Rental Property', value: '', mortgage: '', rent: '', purchasePrice: '', monthlyExpenses: '', financingStatus: 'Unknown',
     beds: '', baths: '', squareFeet: '', yearBuilt: '', lotSizeSqft: '', purchaseDate: '', propertyTaxAnnual: '', hoaMonthly: '',
   })
 
@@ -497,6 +534,7 @@ export default function Home() {
       monthly_rent: Number(draft.rent || 0),
       purchase_price: Number(draft.purchasePrice || 0),
       monthly_expenses: Number(draft.monthlyExpenses || 0),
+      financing_status: draft.financingStatus,
     }).select('*').single()
 
     if (insertError || !inserted) {
@@ -524,7 +562,7 @@ export default function Home() {
       }
     }
 
-    setDraft({ address: '', city: '', type: 'Rental Property', value: '', mortgage: '', rent: '', purchasePrice: '', monthlyExpenses: '' })
+    setDraft({ address: '', city: '', type: 'Rental Property', value: '', mortgage: '', rent: '', purchasePrice: '', monthlyExpenses: '', financingStatus: 'Unknown' })
     setCoverFile(null)
     setImagePreview('')
     setShowAdd(false)
@@ -542,6 +580,7 @@ export default function Home() {
       rent: String(property.monthly_rent || ''),
       purchasePrice: String(property.purchase_price || ''),
       monthlyExpenses: String(property.monthly_expenses || ''),
+      financingStatus: property.financing_status || 'Unknown',
       beds: property.beds != null ? String(property.beds) : '',
       baths: property.baths != null ? String(property.baths) : '',
       squareFeet: property.square_feet != null ? String(property.square_feet) : '',
@@ -569,6 +608,7 @@ export default function Home() {
       monthly_rent: Number(editDraft.rent || 0),
       purchase_price: Number(editDraft.purchasePrice || 0),
       monthly_expenses: Number(editDraft.monthlyExpenses || 0),
+      financing_status: editDraft.financingStatus,
       beds: editDraft.beds ? Number(editDraft.beds) : null,
       baths: editDraft.baths ? Number(editDraft.baths) : null,
       square_feet: editDraft.squareFeet ? Number(editDraft.squareFeet) : null,
@@ -1079,6 +1119,7 @@ export default function Home() {
   if (selected) {
     const monthlyCashFlow = Number(selected.monthly_rent) - Number(selected.monthly_expenses)
     const equity = Number(selected.estimated_value) - Number(selected.mortgage_balance)
+    const appreciation = appreciationFor(Number(selected.estimated_value), Number(selected.purchase_price))
 
     return (
       <main className="shell workspaceShell">
@@ -1109,8 +1150,20 @@ export default function Home() {
           <div className="sectionHead workspaceHeading"><div><p className="eyebrow">PROPERTY OVERVIEW</p><h2>At a glance</h2></div><button className="secondary" onClick={() => openEditProperty(selected)}>Edit property facts</button></div>
           <div className="overviewGrid">
             <div className="overviewPanel"><h3>Financial snapshot</h3><div className="detailRows">
-              <div><span>Purchase price</span><strong>{money(selected.purchase_price)}</strong></div><div><span>Estimated value</span><strong>{money(selected.estimated_value)}</strong></div><div><span>Mortgage balance</span><strong>{money(selected.mortgage_balance)}</strong></div><div><span>Estimated equity</span><strong>{money(equity)}</strong></div><div><span>Monthly rent</span><strong>{money(selected.monthly_rent)}</strong></div><div><span>Monthly property expenses</span><strong>{money(selected.monthly_expenses)}</strong></div>{selected.property_tax_annual != null && <div><span>Annual property tax</span><strong>{money(selected.property_tax_annual)}</strong></div>}{selected.hoa_monthly != null && <div><span>HOA / month</span><strong>{money(selected.hoa_monthly)}</strong></div>}<div className="highlightRow"><span>Estimated cash flow</span><strong>{money(monthlyCashFlow)}/mo</strong></div>
+              <div><span>Purchase price</span><strong>{money(selected.purchase_price)}</strong></div><div><span>Estimated value</span><strong>{money(selected.estimated_value)}</strong></div><div><span>Mortgage balance</span><strong>{money(selected.mortgage_balance)}</strong></div><div><span>Estimated equity</span><strong>{money(equity)}</strong></div>{appreciation && <div className={appreciation.amount >= 0 ? 'metricTone-good' : 'metricTone-bad'}><span>Appreciation</span><strong>{signedMoney(appreciation.amount)} <small>({signedPercent(appreciation.percent)})</small></strong></div>}<div><span>Monthly rent</span><strong>{money(selected.monthly_rent)}</strong></div><div><span>Monthly property expenses</span><strong>{money(selected.monthly_expenses)}</strong></div>{selected.property_tax_annual != null && <div><span>Annual property tax</span><strong>{money(selected.property_tax_annual)}</strong></div>}{selected.hoa_monthly != null && <div><span>HOA / month</span><strong>{money(selected.hoa_monthly)}</strong></div>}<div className="highlightRow"><span>Estimated cash flow</span><strong>{money(monthlyCashFlow)}/mo</strong></div>
             </div></div>
+            {/* Core Experience Bundle, item 5 audit: automatic enrichment
+                from an existing provider was investigated and intentionally
+                NOT implemented here — RentCast's AVM Value endpoint (the
+                only property-data integration this app currently calls)
+                never returns the SUBJECT property's own facts, only
+                comparable (other, nearby) properties' facts; the subject's
+                own facts require RentCast's separate Property Records
+                endpoint, a new billed request not added without approval
+                (see the completion report). Whenever that IS wired in, the
+                merge precedence must be: explicit user-confirmed value >
+                reliable provider value > blank — never silently overwrite
+                a value the user already entered/confirmed below. */}
             <div className="overviewPanel"><h3>Property facts</h3><div className="detailRows">
               {selected.beds != null && <div><span>Beds</span><strong>{selected.beds}</strong></div>}
               {selected.baths != null && <div><span>Baths</span><strong>{selected.baths}</strong></div>}
@@ -1222,7 +1275,7 @@ export default function Home() {
 
         {showRequestForm && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowRequestForm(false)}><div className="modal moduleModal"><div className="modalTop"><div><p className="eyebrow">LANDLORD CENTER</p><h2>Log maintenance request</h2></div><button className="iconButton" onClick={() => setShowRequestForm(false)}>×</button></div><div className="formGrid"><label>Tenant name<input value={requestDraft.tenantName} onChange={e=>setRequestDraft({...requestDraft,tenantName:e.target.value})} placeholder="Taylor Morgan" /></label><label>Tenant email<input type="email" value={requestDraft.tenantEmail} onChange={e=>setRequestDraft({...requestDraft,tenantEmail:e.target.value})} placeholder="tenant@example.com" /></label><label>Priority<select value={requestDraft.priority} onChange={e=>setRequestDraft({...requestDraft,priority:e.target.value})}>{requestPriorities.map(p=><option key={p}>{p}</option>)}</select></label><label>Status<select value={requestDraft.status} onChange={e=>setRequestDraft({...requestDraft,status:e.target.value})}>{requestStatuses.map(s=><option key={s}>{s}</option>)}</select></label><label className="fullField">Issue / title<input value={requestDraft.title} onChange={e=>setRequestDraft({...requestDraft,title:e.target.value})} placeholder="Leaking kitchen faucet" /></label><label className="fullField">Description<input value={requestDraft.description} onChange={e=>setRequestDraft({...requestDraft,description:e.target.value})} placeholder="Details the tenant shared…" /></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowRequestForm(false)}>Cancel</button><button className="primary" disabled={busy || !requestDraft.tenantName.trim() || !requestDraft.title.trim()} onClick={() => void saveRequest()}>{busy?'Saving…':'Save request'}</button></div></div></div>}
 
-        {showEdit && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowEdit(false)}><div className="modal"><div className="modalTop"><div><p className="eyebrow">PROPERTY SETTINGS</p><h2>Edit property</h2></div><button className="iconButton" onClick={() => setShowEdit(false)}>×</button></div><div className="formGrid"><label>Street address<AddressAutocomplete value={editDraft.address} onTextChange={(v) => setEditDraft({ ...editDraft, address: v })} onSelect={(addr) => setEditDraft((d) => ({ ...d, ...applyNormalizedAddress(addr, d.address) }))} placeholder="123 Example Street" /></label><label>City, state & ZIP<input value={editDraft.city} onChange={(e) => setEditDraft({ ...editDraft, city: e.target.value })} placeholder="Example City, FL 12345" /></label><label>Property type<select value={editDraft.type} onChange={(e) => setEditDraft({ ...editDraft, type: e.target.value })}><option>Rental Property</option><option>Primary Residence</option><option>Vacation Home</option><option>Commercial</option><option>Land</option><option>Other</option></select></label><label>Purchase price<input inputMode="decimal" value={editDraft.purchasePrice} onChange={(e) => setEditDraft({ ...editDraft, purchasePrice: e.target.value })} placeholder="390000" /></label><label>Estimated value<input inputMode="decimal" value={editDraft.value} onChange={(e) => setEditDraft({ ...editDraft, value: e.target.value })} placeholder="520000" /></label><label>Mortgage balance<input inputMode="decimal" value={editDraft.mortgage} onChange={(e) => setEditDraft({ ...editDraft, mortgage: e.target.value })} placeholder="310000" /></label><label>Monthly rent<input inputMode="decimal" value={editDraft.rent} onChange={(e) => setEditDraft({ ...editDraft, rent: e.target.value })} placeholder="2950" /></label><label>Monthly property expenses<input inputMode="decimal" value={editDraft.monthlyExpenses} onChange={(e) => setEditDraft({ ...editDraft, monthlyExpenses: e.target.value })} placeholder="1925" /></label><label>Purchase date<input type="date" value={editDraft.purchaseDate} onChange={(e) => setEditDraft({ ...editDraft, purchaseDate: e.target.value })} /></label><label>Beds<input inputMode="numeric" value={editDraft.beds} onChange={(e) => setEditDraft({ ...editDraft, beds: e.target.value })} placeholder="3" /></label><label>Baths<input inputMode="decimal" value={editDraft.baths} onChange={(e) => setEditDraft({ ...editDraft, baths: e.target.value })} placeholder="2.5" /></label><label>Square feet<input inputMode="numeric" value={editDraft.squareFeet} onChange={(e) => setEditDraft({ ...editDraft, squareFeet: e.target.value })} placeholder="1850" /></label><label>Year built<input inputMode="numeric" value={editDraft.yearBuilt} onChange={(e) => setEditDraft({ ...editDraft, yearBuilt: e.target.value })} placeholder="1998" /></label><label>Lot size (sqft)<input inputMode="numeric" value={editDraft.lotSizeSqft} onChange={(e) => setEditDraft({ ...editDraft, lotSizeSqft: e.target.value })} placeholder="6500" /></label><label>Annual property tax<input inputMode="decimal" value={editDraft.propertyTaxAnnual} onChange={(e) => setEditDraft({ ...editDraft, propertyTaxAnnual: e.target.value })} placeholder="4200" /></label><label>HOA / month<input inputMode="decimal" value={editDraft.hoaMonthly} onChange={(e) => setEditDraft({ ...editDraft, hoaMonthly: e.target.value })} placeholder="0" /></label></div><div className="editPropertyFooter"><button className="dangerButton" onClick={() => setShowDeleteConfirm(true)}>Delete Property</button><div className="modalActions compactActions"><button className="secondary" onClick={() => setShowEdit(false)}>Cancel</button><button className="primary" disabled={busy || !editDraft.address.trim() || !editDraft.city.trim()} onClick={() => void updateProperty()}>{busy ? 'Saving…' : 'Save Changes'}</button></div></div></div></div>}
+        {showEdit && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowEdit(false)}><div className="modal"><div className="modalTop"><div><p className="eyebrow">PROPERTY SETTINGS</p><h2>Edit property</h2></div><button className="iconButton" onClick={() => setShowEdit(false)}>×</button></div><div className="formGrid"><label>Street address<AddressAutocomplete value={editDraft.address} onTextChange={(v) => setEditDraft({ ...editDraft, address: v })} onSelect={(addr) => setEditDraft((d) => ({ ...d, ...applyNormalizedAddress(addr, d.address) }))} placeholder="123 Example Street" /></label><label>City, state & ZIP<input value={editDraft.city} onChange={(e) => setEditDraft({ ...editDraft, city: e.target.value })} placeholder="Example City, FL 12345" /></label><label>Property type<select value={editDraft.type} onChange={(e) => setEditDraft({ ...editDraft, type: e.target.value })}><option>Rental Property</option><option>Primary Residence</option><option>Vacation Home</option><option>Commercial</option><option>Land</option><option>Other</option></select></label><label>Purchase price<input inputMode="decimal" value={editDraft.purchasePrice} onChange={(e) => setEditDraft({ ...editDraft, purchasePrice: e.target.value })} placeholder="390000" /></label><label>Estimated value<input inputMode="decimal" value={editDraft.value} onChange={(e) => setEditDraft({ ...editDraft, value: e.target.value })} placeholder="520000" /></label><label>Mortgage balance<input inputMode="decimal" value={editDraft.mortgage} onChange={(e) => setEditDraft({ ...editDraft, mortgage: e.target.value })} placeholder="310000" /></label><label>Financing status<select value={editDraft.financingStatus} onChange={(e) => setEditDraft({ ...editDraft, financingStatus: e.target.value })}>{FINANCING_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label><label>Monthly rent<input inputMode="decimal" value={editDraft.rent} onChange={(e) => setEditDraft({ ...editDraft, rent: e.target.value })} placeholder="2950" /></label><label>Monthly property expenses<input inputMode="decimal" value={editDraft.monthlyExpenses} onChange={(e) => setEditDraft({ ...editDraft, monthlyExpenses: e.target.value })} placeholder="1925" /></label><label>Purchase date<input type="date" value={editDraft.purchaseDate} onChange={(e) => setEditDraft({ ...editDraft, purchaseDate: e.target.value })} /></label><label>Beds<input inputMode="numeric" value={editDraft.beds} onChange={(e) => setEditDraft({ ...editDraft, beds: e.target.value })} placeholder="3" /></label><label>Baths<input inputMode="decimal" value={editDraft.baths} onChange={(e) => setEditDraft({ ...editDraft, baths: e.target.value })} placeholder="2.5" /></label><label>Square feet<input inputMode="numeric" value={editDraft.squareFeet} onChange={(e) => setEditDraft({ ...editDraft, squareFeet: e.target.value })} placeholder="1850" /></label><label>Year built<input inputMode="numeric" value={editDraft.yearBuilt} onChange={(e) => setEditDraft({ ...editDraft, yearBuilt: e.target.value })} placeholder="1998" /></label><label>Lot size (sqft)<input inputMode="numeric" value={editDraft.lotSizeSqft} onChange={(e) => setEditDraft({ ...editDraft, lotSizeSqft: e.target.value })} placeholder="6500" /></label><label>Annual property tax<input inputMode="decimal" value={editDraft.propertyTaxAnnual} onChange={(e) => setEditDraft({ ...editDraft, propertyTaxAnnual: e.target.value })} placeholder="4200" /></label><label>HOA / month<input inputMode="decimal" value={editDraft.hoaMonthly} onChange={(e) => setEditDraft({ ...editDraft, hoaMonthly: e.target.value })} placeholder="0" /></label></div><div className="editPropertyFooter"><button className="dangerButton" onClick={() => setShowDeleteConfirm(true)}>Delete Property</button><div className="modalActions compactActions"><button className="secondary" onClick={() => setShowEdit(false)}>Cancel</button><button className="primary" disabled={busy || !editDraft.address.trim() || !editDraft.city.trim()} onClick={() => void updateProperty()}>{busy ? 'Saving…' : 'Save Changes'}</button></div></div></div></div>}
 
         {showDeleteConfirm && <div className="overlay deleteOverlay" onMouseDown={(e) => e.target === e.currentTarget && setShowDeleteConfirm(false)}><div className="modal deleteModal"><div className="modalTop"><div><p className="eyebrow dangerEyebrow">PERMANENT ACTION</p><h2>Delete this property?</h2></div><button className="iconButton" onClick={() => setShowDeleteConfirm(false)}>×</button></div><p className="deleteWarning">This permanently removes <strong>{selected.address}</strong> and its associated documents, photos, financial transactions, lease, mortgage, insurance, maintenance records, contacts, and maintenance requests. This cannot be undone.</p><div className="modalActions"><button className="secondary" onClick={() => setShowDeleteConfirm(false)}>Keep Property</button><button className="dangerButton solidDanger" disabled={busy} onClick={() => void deleteProperty()}>{busy ? 'Deleting…' : 'Delete Permanently'}</button></div></div></div>}
 
@@ -1309,7 +1362,7 @@ export default function Home() {
         </div>
       </section>
 
-      {showAdd && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowAdd(false)}><div className="modal"><div className="modalTop"><h2>Add a property</h2><button className="iconButton" onClick={() => setShowAdd(false)}>×</button></div><label className="uploadBox">{imagePreview ? <img src={imagePreview} alt="Property preview" /> : <div><strong>Add a cover photo</strong><span>Choose a photo now or add one later</span></div>}<input type="file" accept="image/*" onChange={handleImage} /></label><div className="formGrid"><label>Street address<AddressAutocomplete value={draft.address} onTextChange={(v) => setDraft({ ...draft, address: v })} onSelect={(addr) => setDraft((d) => ({ ...d, ...applyNormalizedAddress(addr, d.address) }))} placeholder="123 Example Street" /></label><label>City, state & ZIP<input value={draft.city} onChange={(e) => setDraft({ ...draft, city: e.target.value })} placeholder="Example City, FL 12345" /></label><label>Property type<select value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })}><option>Rental Property</option><option>Primary Residence</option><option>Vacation Home</option><option>Commercial</option><option>Land</option><option>Other</option></select></label><label>Purchase price<input inputMode="decimal" value={draft.purchasePrice} onChange={(e) => setDraft({ ...draft, purchasePrice: e.target.value })} placeholder="390000" /></label><label>Estimated value<input inputMode="decimal" value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} placeholder="520000" /></label><label>Mortgage balance<input inputMode="decimal" value={draft.mortgage} onChange={(e) => setDraft({ ...draft, mortgage: e.target.value })} placeholder="310000" /></label><label>Monthly rent<input inputMode="decimal" value={draft.rent} onChange={(e) => setDraft({ ...draft, rent: e.target.value })} placeholder="2950" /></label><label>Monthly property expenses<input inputMode="decimal" value={draft.monthlyExpenses} onChange={(e) => setDraft({ ...draft, monthlyExpenses: e.target.value })} placeholder="1925" /></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowAdd(false)}>Cancel</button><button className="primary" disabled={busy} onClick={() => void addProperty()}>{busy ? 'Saving…' : 'Save Property'}</button></div></div></div>}
+      {showAdd && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowAdd(false)}><div className="modal"><div className="modalTop"><h2>Add a property</h2><button className="iconButton" onClick={() => setShowAdd(false)}>×</button></div><label className="uploadBox">{imagePreview ? <img src={imagePreview} alt="Property preview" /> : <div><strong>Add a cover photo</strong><span>Choose a photo now or add one later</span></div>}<input type="file" accept="image/*" onChange={handleImage} /></label><div className="formGrid"><label>Street address<AddressAutocomplete value={draft.address} onTextChange={(v) => setDraft({ ...draft, address: v })} onSelect={(addr) => setDraft((d) => ({ ...d, ...applyNormalizedAddress(addr, d.address) }))} placeholder="123 Example Street" /></label><label>City, state & ZIP<input value={draft.city} onChange={(e) => setDraft({ ...draft, city: e.target.value })} placeholder="Example City, FL 12345" /></label><label>Property type<select value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })}><option>Rental Property</option><option>Primary Residence</option><option>Vacation Home</option><option>Commercial</option><option>Land</option><option>Other</option></select></label><label>Purchase price<input inputMode="decimal" value={draft.purchasePrice} onChange={(e) => setDraft({ ...draft, purchasePrice: e.target.value })} placeholder="390000" /></label><label>Estimated value<input inputMode="decimal" value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} placeholder="520000" /></label><label>Mortgage balance<input inputMode="decimal" value={draft.mortgage} onChange={(e) => setDraft({ ...draft, mortgage: e.target.value })} placeholder="310000" /></label><label>Financing status<select value={draft.financingStatus} onChange={(e) => setDraft({ ...draft, financingStatus: e.target.value })}>{FINANCING_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label><label>Monthly rent<input inputMode="decimal" value={draft.rent} onChange={(e) => setDraft({ ...draft, rent: e.target.value })} placeholder="2950" /></label><label>Monthly property expenses<input inputMode="decimal" value={draft.monthlyExpenses} onChange={(e) => setDraft({ ...draft, monthlyExpenses: e.target.value })} placeholder="1925" /></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowAdd(false)}>Cancel</button><button className="primary" disabled={busy} onClick={() => void addProperty()}>{busy ? 'Saving…' : 'Save Property'}</button></div></div></div>}
 
       {showUpgrade && supabase && <UpgradePrompt supabase={supabase} currentPlan={plan} onClose={() => setShowUpgrade(false)} />}
     </main>

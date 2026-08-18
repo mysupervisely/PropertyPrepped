@@ -112,8 +112,19 @@ export function AddressAutocomplete({
       if (resp.ok) {
         const body = (await resp.json().catch(() => ({}))) as { address?: NormalizedAddress }
         if (body.address) {
+          // Core Experience Bundle, item 3: this used to also call
+          // onTextChange(body.address.formattedAddress) here — always
+          // overwriting whatever onSelect's caller-side state update had
+          // just set (e.g. Add/Edit Property's applyNormalizedAddress(),
+          // which correctly splits the resolved structured components
+          // into addressLine1 for Street Address vs. city/state/postalCode
+          // for City, State & ZIP) with the single full formatted string,
+          // via a second, separately-raced state update. onSelect is the
+          // single source of truth for what the controlled `value` becomes
+          // — every caller's own onSelect already decides that (either the
+          // full formattedAddress for a one-field form, or the structured
+          // split for a two-field form); this component must not also try.
           onSelect(body.address)
-          onTextChange(body.address.formattedAddress)
           return
         }
       }

@@ -16,6 +16,7 @@ import Link from 'next/link'
 import { AddressAutocomplete } from '../../../components/AddressAutocomplete'
 import { PricingNavLink } from '../../../components/PricingNavLink'
 import { Wordmark } from '../../../components/Wordmark'
+import { AuthHeader } from '../../../components/AuthHeader'
 import { useAuthUser } from '../../../lib/useAuthUser'
 import { num } from '../../../lib/investment-calculations'
 import { buildHomePurchaseAnalysis, type HomePurchaseInput, type PercentOrAmountMode } from '../../../lib/investment-tools/home-purchase-calculations'
@@ -109,14 +110,23 @@ export default function HomePurchaseCalculatorPage() {
 
   return (
     <main className="shell investmentShell">
-      <header className="topbar">
-        <Link href="/investment-tools" className="brandButton"><span className="brand"><Wordmark /></span><span className="tagline">Investment Tools</span></Link>
-        <div className="accountActions">
-          {user && <span>{user.email}</span>}
-          <PricingNavLink />
-          <Link href="/investment-tools" className="secondary">← Investment Tools</Link>
-        </div>
-      </header>
+      {/* Core Experience Bundle, item 1: authenticated users get the same
+          global header as the rest of the app; the "← Investment Tools"
+          contextual link moves into the page content below instead of
+          living in the header. Signed-out visitors keep the existing
+          public topbar unchanged. */}
+      {user ? (
+        <AuthHeader />
+      ) : (
+        <header className="topbar">
+          <Link href="/investment-tools" className="brandButton"><span className="brand"><Wordmark /></span><span className="tagline">Investment Tools</span></Link>
+          <div className="accountActions">
+            <PricingNavLink />
+            <Link href="/investment-tools" className="secondary">← Investment Tools</Link>
+          </div>
+        </header>
+      )}
+      {user && <Link className="breadcrumbBack" href="/investment-tools">← Investment Tools</Link>}
 
       <section className="intro evaluatorIntro">
         <p className="eyebrow">HOME PURCHASE CALCULATOR</p>

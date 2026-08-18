@@ -80,6 +80,18 @@ export function normalizeRentCastResponse(raw: RentCastValueResponse, subject: N
     // didn't provide any basis for: more supporting comps -> higher
     // stated confidence. No estimate at all -> null, not a guess.
     confidence: estimatedValue > 0 ? (comparables.length >= 3 ? 'High' : comparables.length >= 1 ? 'Medium' : 'Low') : null,
+    // Core Experience Bundle, item 5 (Automatic Property Facts) audit
+    // finding: RentCast's AVM Value endpoint (this file, /v1/avm/value)
+    // never returns the SUBJECT property's own beds/baths/squareFootage/
+    // yearBuilt/lotSize/propertyType — only `comparables[]`, which are
+    // OTHER nearby properties' facts, never attributable to the subject.
+    // The subject's own characteristics live on RentCast's separate
+    // Property Records endpoint (GET /v1/properties), a distinct, ADDITIONAL
+    // billed request this codebase does not currently call anywhere.
+    // Per that item's explicit instruction ("do not add extra RentCast
+    // paid requests silently... STOP and report"), this stays null rather
+    // than guessing from comp data — see the completion report for the
+    // endpoint/fields/cost/caching recommendation for a future milestone.
     propertyFacts: null,
     comparables,
     providerMetadata: { provider: 'rentcast', generatedAt: new Date().toISOString() },
