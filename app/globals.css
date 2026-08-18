@@ -317,6 +317,24 @@ h2, h3, p { margin-top: 0; }
   .snapshotMetric strong { font-size: 17px; }
 }
 
+/* Milestone 16: Landlord Command Center — Needs Attention / Upcoming /
+   Open Maintenance / Recent Activity. Reuses .sectionHead, .emptyState,
+   .statusPill/.pillGood/.pillWarn/.pillBad/.pillNeutral as-is; only the
+   item-row layout below is new. */
+.commandCenterSection { margin-bottom: 28px; }
+.dashboardItemList { display: grid; gap: 8px; }
+.dashboardItemRow { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; width: 100%; text-align: left; border: 1px solid var(--line); border-radius: 12px; padding: 13px 14px; background: white; cursor: pointer; }
+.dashboardItemRow:hover { border-color: var(--brand); }
+.dashboardItemRowStatic { cursor: default; }
+.dashboardItemRowStatic:hover { border-color: var(--line); }
+.dashboardItemBody { display: grid; gap: 2px; min-width: 0; }
+.dashboardItemBody strong { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dashboardItemBody span { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 480px) {
+  .dashboardItemRow { grid-template-columns: 1fr; }
+  .dashboardItemRow .statusPill { width: fit-content; }
+}
+
 /* Milestone 5: leases, mortgage, insurance & maintenance */
 .moduleWorkspace { padding-bottom: 44px; }
 .moduleGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
