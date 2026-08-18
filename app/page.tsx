@@ -1748,6 +1748,12 @@ export default function Home() {
             one branded product name, not a change to the eyebrow style
             itself. */}
         <div className="sectionHead"><div><p className="eyebrow">PropWatch</p><h2>Stay ahead of what needs attention.</h2></div></div>
+        {/* Small Launch Follow-up: ONE unified outer card (propWatchCard)
+            instead of two separate bordered panels — propWatchGrid is now
+            purely an internal layout (side by side on desktop, stacked
+            with a divider on mobile), not two independent cards. Content
+            below is unchanged, only re-wrapped. */}
+        <div className="propWatchCard">
         <div className="propWatchGrid">
           <div className="propWatchPanel">
             <div className="propWatchPanelHead"><h3>Needs Your Attention</h3><p>{attentionItems.length ? `${attentionItems.length} item${attentionItems.length === 1 ? '' : 's'} need a look` : 'Rent, leases, insurance, mortgages and scheduled maintenance across your portfolio.'}</p></div>
@@ -1818,6 +1824,7 @@ export default function Home() {
               </div>
             )}
           </div>
+        </div>
         </div>
       </section>
 
