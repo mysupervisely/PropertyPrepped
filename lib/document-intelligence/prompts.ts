@@ -85,8 +85,23 @@ This is for record-keeping only — do not give tax advice.`,
   'HOA Document': `This is an HOA (homeowners association) document.
 Fill applyFields with: propertyAddress only (leave every other applyFields value not-identified) — put everything else in importantNotes: HOA name, dues amount and frequency, special assessments if mentioned, key rules or restrictions, and important dates (meetings, due dates, deadlines).`,
 
-  Other: `This document doesn't map to one of PropRoster's specific document types.
-Fill applyFields with: propertyAddress only, if a property address is identifiable (leave every other applyFields value not-identified) — put everything else in importantNotes: key parties, key dates, financial amounts, and anything unusual worth reviewing, based on the document's actual content. If you can tell it actually IS one of PropRoster's other supported types, say so in the classification (your classification is not limited by which schema you were given).`,
+  // Smart Upload Foundation: this is also the schema Smart Upload's
+  // automatic first-pass analysis always requests — for a PDF, a
+  // photographed receipt, or a photographed insurance/lease page alike
+  // — before the real document type is known. Ask for each field
+  // generically, in a way that's honest for ANY kind of document, rather
+  // than assuming any particular one (e.g. never phrase this as "this is
+  // a receipt" — that would push the model to force a landlord's name
+  // into "vendor" or monthly rent into "amount" mislabeled as a cost).
+  Other: `This document either doesn't map to one of PropRoster's specific document types, or its type hasn't been determined yet — you are seeing it before any category has been confirmed. Do not assume it is any particular kind of document (not a receipt, not a lease, not anything specific) — read it and describe what it actually is.
+Fill applyFields with, ONLY when clearly and unambiguously present (leave anything else not-identified rather than guessing or forcing a value to fit):
+- vendor / businessName: the primary business or party named in the document, if any (e.g. a store, contractor, insurer, landlord, lender — whichever kind of party the document actually names).
+- phone, email, website: contact details for that same business/party, only if shown.
+- description: one short, neutral phrase for what this document is about (e.g. "HVAC repair invoice", "homeowners insurance declarations page", "residential lease agreement") — not a summary, just a label.
+- amount: the single primary dollar figure the document clearly centers on, if there is one unambiguous figure (a total due, a premium, a monthly rent, a loan balance — whichever applies). Leave not-identified if multiple amounts appear with no single clear primary one, rather than picking arbitrarily.
+- date: the single primary date the document clearly centers on, if there is one unambiguous date (an invoice/service date, an effective date, a lease start date — whichever applies). Leave not-identified if this is unclear.
+- propertyAddress: the property's street address, if shown.
+Put everything else worth knowing in importantNotes — key parties, key dates, financial amounts, and anything unusual worth reviewing, based on the document's actual content. Report your real best-guess classification regardless of what fields this schema happened to ask for (your classification is not limited by which schema you were given) — but only fill the applyFields fields listed above; do not invent or repurpose a field to hold a value from a document type this schema doesn't cover.`,
 }
 
 export function buildUserPrompt(documentType: DocumentType, fileName: string): string {

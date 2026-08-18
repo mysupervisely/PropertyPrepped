@@ -26,7 +26,6 @@ import type { ApplyFields, DocumentAnalysisOutput } from '../../lib/document-int
 import type { DocumentType } from '../../lib/document-intelligence/types'
 import type { SmartUploadContact, SmartUploadProperty, SmartUploadSystem } from '../../lib/smart-upload/types'
 import { isSupportedForSmartUpload, SMART_UPLOAD_ACCEPT } from '../../lib/smart-upload/supported-file-types'
-import { guessDocumentType } from '../../lib/smart-upload/guess-document-type'
 import { shouldCreateFinancialTransaction, shouldCreateMaintenanceRecord } from '../../lib/smart-upload/idempotency'
 import { reviewKindFor } from '../../lib/smart-upload/review-kind'
 import { ReceiptReview, type ReceiptSaveInput } from './ReceiptReview'
@@ -113,7 +112,20 @@ export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean
   // Exactly ONE analyze() call per uploaded file — Part 7. Never called
   // again automatically for the same item; a property change, a category
   // edit, a re-render, or Save never re-triggers this.
-  async function runAnalyze(documentId: string, itemId: string, documentType: DocumentType) {
+  //
+  // Always requests the 'Other' schema — Document Intelligence's ONE
+  // deliberately type-agnostic field set (vendor/businessName/phone/
+  // email/website/description/amount/date/propertyAddress; see
+  // schemas.ts's DOCUMENT_TYPE_APPLY_FIELDS.Other and prompts.ts's
+  // FIELD_GUIDANCE.Other), since Smart Upload doesn't know the real
+  // document type yet, for either a PDF or a photo. The model still
+  // self-classifies honestly regardless of which schema it was given —
+  // that self-reported classification (not this request type) is what
+  // routes to the Receipt vs. PrepareOnly review screen below, and is
+  // what property_documents.document_type gets set to once this call
+  // returns. This is one Anthropic request, never a classify-then-
+  // extract pair.
+  async function runAnalyze(documentId: string, itemId: string) {
     if (!supabase) return
     const { data: sessionData } = await supabase.auth.getSession()
     const token = sessionData.session?.access_token
@@ -125,7 +137,7 @@ export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean
       const resp = await fetch('/api/document-intelligence/analyze', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-        body: JSON.stringify({ documentId, documentType }),
+        body: JSON.stringify({ documentId, documentType: 'Other' as DocumentType }),
       })
       const body = await resp.json().catch(() => ({}))
       if (!resp.ok) {
@@ -145,7 +157,7 @@ export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean
       patchItem(itemId, { status: 'Failed', error: 'Analysis completed but the result could not be loaded.' })
       return
     }
-    patchItem(itemId, { status: 'Ready', documentType: (docRow?.document_type as DocumentType) || documentType, analysis: latest })
+    patchItem(itemId, { status: 'Ready', documentType: (docRow?.document_type as DocumentType) || 'Other', analysis: latest })
   }
 
   async function processFile(file: File, batchId: string) {
@@ -204,7 +216,7 @@ export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean
     // the real row.
     setItems((prev) => prev.map((it) => (it.id === localId ? { ...it, id: itemRow.id, documentId: docRow.id, status: 'Analyzing' } : it)))
 
-    await runAnalyze(docRow.id, itemRow.id, guessDocumentType(file.type || ''))
+    await runAnalyze(docRow.id, itemRow.id)
   }
 
   function handleFiles(fileList: FileList | null) {

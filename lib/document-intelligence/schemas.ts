@@ -372,6 +372,20 @@ export const APPLY_FIELD_LABELS: Record<keyof ApplyFields, string> = {
 // list (not just the types that previously mentioned an address in
 // importantNotes free text) — property matching needs to work regardless
 // of which kind of document was uploaded.
+//
+// 'Other' additionally carries a small, genuinely type-agnostic field set
+// (vendor/businessName/phone/email/website/description/amount/date) —
+// this is the schema Smart Upload's automatic first-pass analysis always
+// requests, for both PDFs and images, before it knows the real document
+// type (components/SmartUpload/SmartUploadModal.tsx). Deliberately NOT
+// the full Receipt field set: forcing "this is a contractor invoice"
+// framing onto a photographed insurance page or lease would produce
+// wrong/misleading values (a landlord's name mislabeled as "vendor", the
+// document's actual subject bent to fit a shape it doesn't have) — see
+// prompts.ts's FIELD_GUIDANCE.Other for how each field is asked for
+// generically instead. This also benefits the ordinary, unrelated case
+// of a real 'Other'-classified document uploaded the normal way (used to
+// extract nothing structured at all beyond notes).
 export const DOCUMENT_TYPE_APPLY_FIELDS: Record<DocumentType, (keyof ApplyFields)[]> = {
   'Insurance Policy': ['carrier', 'policyNumber', 'annualPremium', 'deductible', 'effectiveDate', 'expirationDate', 'propertyAddress'],
   Lease: ['tenantName', 'tenantEmail', 'monthlyRent', 'securityDeposit', 'startDate', 'endDate', 'propertyAddress'],
@@ -382,7 +396,7 @@ export const DOCUMENT_TYPE_APPLY_FIELDS: Record<DocumentType, (keyof ApplyFields
   'Contractor Invoice / Receipt': ['vendor', 'description', 'cost', 'amount', 'date', 'category', 'name', 'businessName', 'phone', 'email', 'website', 'propertyAddress'],
   'Property Tax Document': ['propertyAddress'],
   'HOA Document': ['propertyAddress'],
-  Other: ['propertyAddress'],
+  Other: ['vendor', 'businessName', 'phone', 'email', 'website', 'description', 'amount', 'date', 'propertyAddress'],
 }
 
 const MAX_NOTES = 8

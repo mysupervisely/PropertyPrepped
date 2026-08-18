@@ -1793,3 +1793,82 @@ with check (
 );
 drop policy if exists "smart_upload_items_delete_own" on public.smart_upload_items;
 create policy "smart_upload_items_delete_own" on public.smart_upload_items for delete to authenticated using ((select auth.uid()) = owner_id);
+
+-- ============================================================
+-- Section 3: RLS hardening — financial_transactions / maintenance_records
+-- / leases / insurance_policies property_id ownership
+-- ============================================================
+-- These four tables' INSERT/UPDATE policies have only ever checked
+-- owner_id = auth.uid() — never that property_id actually belongs to
+-- that same owner. maintenance_records' own Milestone 11 hardening pass
+-- explicitly deferred this exact gap as "pre-existing, lower-severity,
+-- out of scope for that milestone" (see the comment directly above its
+-- policies below, left as historical record) — closed now, on all four
+-- tables at once, on request.
+--
+-- Every SELECT on these tables is already owner_id-scoped, so a forged
+-- property_id was never a direct read-leak — but it let a caller
+-- create, or move via UPDATE, a financial/maintenance/lease/insurance
+-- record against a property_id that isn't theirs: a real data-integrity
+-- gap (an orphaned/misattributed record, invisible to both owners),
+-- exactly the class of issue Milestone 11's FK-forging review closed
+-- elsewhere in this schema. Smart Upload's own new writes were never
+-- exposed to this — its property_id always comes from
+-- smart_upload_items.confirmed_property_id, itself ownership-checked in
+-- Section 2 above — this section is a general fix, not Smart-Upload-
+-- specific.
+drop policy if exists "financial_transactions_insert_own" on public.financial_transactions;
+create policy "financial_transactions_insert_own" on public.financial_transactions for insert to authenticated with check (
+  (select auth.uid()) = owner_id
+  and exists (select 1 from public.properties p where p.id = property_id and p.owner_id = (select auth.uid()))
+);
+drop policy if exists "financial_transactions_update_own" on public.financial_transactions;
+create policy "financial_transactions_update_own" on public.financial_transactions for update to authenticated
+using ((select auth.uid()) = owner_id)
+with check (
+  (select auth.uid()) = owner_id
+  and exists (select 1 from public.properties p where p.id = property_id and p.owner_id = (select auth.uid()))
+);
+
+drop policy if exists "maintenance_insert_own" on public.maintenance_records;
+create policy "maintenance_insert_own" on public.maintenance_records for insert to authenticated with check (
+  (select auth.uid()) = owner_id
+  and exists (select 1 from public.properties p where p.id = property_id and p.owner_id = (select auth.uid()))
+  and (system_id is null or exists (select 1 from public.property_systems s where s.id = system_id and s.owner_id = (select auth.uid())))
+  and (propcrew_contact_id is null or exists (select 1 from public.property_contacts c where c.id = propcrew_contact_id and c.owner_id = (select auth.uid())))
+);
+drop policy if exists "maintenance_update_own" on public.maintenance_records;
+create policy "maintenance_update_own" on public.maintenance_records for update to authenticated
+using ((select auth.uid()) = owner_id)
+with check (
+  (select auth.uid()) = owner_id
+  and exists (select 1 from public.properties p where p.id = property_id and p.owner_id = (select auth.uid()))
+  and (system_id is null or exists (select 1 from public.property_systems s where s.id = system_id and s.owner_id = (select auth.uid())))
+  and (propcrew_contact_id is null or exists (select 1 from public.property_contacts c where c.id = propcrew_contact_id and c.owner_id = (select auth.uid())))
+);
+
+drop policy if exists "leases_insert_own" on public.leases;
+create policy "leases_insert_own" on public.leases for insert to authenticated with check (
+  (select auth.uid()) = owner_id
+  and exists (select 1 from public.properties p where p.id = property_id and p.owner_id = (select auth.uid()))
+);
+drop policy if exists "leases_update_own" on public.leases;
+create policy "leases_update_own" on public.leases for update to authenticated
+using ((select auth.uid()) = owner_id)
+with check (
+  (select auth.uid()) = owner_id
+  and exists (select 1 from public.properties p where p.id = property_id and p.owner_id = (select auth.uid()))
+);
+
+drop policy if exists "insurance_insert_own" on public.insurance_policies;
+create policy "insurance_insert_own" on public.insurance_policies for insert to authenticated with check (
+  (select auth.uid()) = owner_id
+  and exists (select 1 from public.properties p where p.id = property_id and p.owner_id = (select auth.uid()))
+);
+drop policy if exists "insurance_update_own" on public.insurance_policies;
+create policy "insurance_update_own" on public.insurance_policies for update to authenticated
+using ((select auth.uid()) = owner_id)
+with check (
+  (select auth.uid()) = owner_id
+  and exists (select 1 from public.properties p where p.id = property_id and p.owner_id = (select auth.uid()))
+);

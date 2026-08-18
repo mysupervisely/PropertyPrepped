@@ -1032,16 +1032,16 @@ h2, h3, p { margin-top: 0; }
    moved into the hamburger (components/AuthNavMenu.tsx, below); email is
    no longer shown anywhere in the header. */
 
-/* The single top-right primary action (components/SmartUploadButton.tsx).
-   Not yet wired to anything real — see the component's own doc comment —
-   styled like any other disabled .primary button (.primary:disabled
-   above), just with its own icon+label layout and a shorter label once
-   "Smart Upload" itself doesn't comfortably fit. */
-.smartUploadButton { display: inline-flex; align-items: center; gap: 8px; }
-.smartUploadButton .labelShort { display: none; }
-@media (max-width: 480px) {
-  .smartUploadButton .labelFull { display: none; }
-  .smartUploadButton .labelShort { display: inline; }
+/* The single top-right primary action (components/SmartUploadButton.tsx)
+   — opens the real Smart Upload workflow (components/SmartUpload/
+   SmartUploadModal.tsx). Always reads "+ Smart Upload", every width —
+   never shortened to just "Upload". At the narrowest supported widths
+   (320-430px) only the button's own font-size/padding shrink, so it
+   stays a comfortable tap target without crowding the wordmark; the
+   label text itself is untouched. */
+.smartUploadButton { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+@media (max-width: 430px) {
+  .smartUploadButton { padding: 10px 12px; font-size: 12.5px; gap: 5px; }
 }
 
 /* Hamburger menu additions: "+ Add Property" reads as an action (brand

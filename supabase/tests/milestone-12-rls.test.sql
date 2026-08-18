@@ -45,6 +45,12 @@ insert into public.maintenance_records (id, property_id, owner_id, service_date,
   ('33300000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-00000000b001', 'a0000000-0000-0000-0000-00000000a001', current_date, 'Repair', 'A''s repair', 100),
   ('33300000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-00000000b002', 'a0000000-0000-0000-0000-00000000a002', current_date, 'Repair', 'B''s repair', 75);
 
+insert into public.leases (id, property_id, owner_id, tenant_name, start_date, end_date) values
+  ('77700000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-00000000b001', 'a0000000-0000-0000-0000-00000000a001', 'A''s Tenant', current_date, current_date + interval '1 year');
+
+insert into public.insurance_policies (id, property_id, owner_id, carrier) values
+  ('88800000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-00000000b001', 'a0000000-0000-0000-0000-00000000a001', 'A''s Insurer');
+
 -- A pre-existing smart_upload_items row for Owner A, used by the tenant
 -- read-isolation check below.
 insert into public.smart_upload_items (id, owner_id, document_id) values
@@ -204,7 +210,151 @@ begin
   end;
 end $$;
 
--- ===== 13. smart_upload_items: Owner B cannot see Owner A's smart_upload_items row =====
+-- ============================================================
+-- RLS hardening: financial_transactions / maintenance_records / leases
+-- / insurance_policies property_id ownership (still impersonating
+-- Owner A from the blocks above). Three checks per table: own property
+-- accepted, another owner's property rejected, UPDATE cannot switch to
+-- another owner's property.
+-- ============================================================
+
+-- ===== 13. financial_transactions: Owner A can INSERT against their own property =====
+do $$
+declare new_id uuid;
+begin
+  insert into public.financial_transactions (property_id, owner_id, transaction_type, description, amount)
+  values ('b0000000-0000-0000-0000-00000000b001', 'a0000000-0000-0000-0000-00000000a001', 'Expense', 'A''s new expense', 25)
+  returning id into new_id;
+  if new_id is null then raise exception 'REGRESSION: financial_transactions INSERT against the owner''s own property did not succeed'; end if;
+  raise notice 'PASS: financial_transactions INSERT against the owner''s own property succeeded';
+end $$;
+
+-- ===== 14. financial_transactions: Owner A cannot INSERT against Owner B's property =====
+do $$
+begin
+  begin
+    insert into public.financial_transactions (property_id, owner_id, transaction_type, description, amount)
+    values ('b0000000-0000-0000-0000-00000000b002', 'a0000000-0000-0000-0000-00000000a001', 'Expense', 'Forged', 25);
+    raise exception 'REGRESSION: Owner A created a financial_transactions row against Owner B''s property';
+  exception
+    when insufficient_privilege then raise notice 'PASS: financial_transactions INSERT against another owner''s property correctly rejected';
+  end;
+end $$;
+
+-- ===== 15. financial_transactions: Owner A cannot UPDATE their own transaction's property_id to Owner B's property =====
+do $$
+begin
+  begin
+    update public.financial_transactions set property_id = 'b0000000-0000-0000-0000-00000000b002' where id = '55500000-0000-0000-0000-000000000001';
+    raise exception 'REGRESSION: Owner A UPDATEd their own financial_transactions row''s property_id to Owner B''s property';
+  exception
+    when insufficient_privilege then raise notice 'PASS: financial_transactions UPDATE of property_id to another owner''s property correctly rejected';
+  end;
+end $$;
+
+-- ===== 16. maintenance_records: Owner A can INSERT against their own property =====
+do $$
+declare new_id uuid;
+begin
+  insert into public.maintenance_records (property_id, owner_id, service_date, category, description, cost)
+  values ('b0000000-0000-0000-0000-00000000b001', 'a0000000-0000-0000-0000-00000000a001', current_date, 'Repair', 'A''s new repair', 25)
+  returning id into new_id;
+  if new_id is null then raise exception 'REGRESSION: maintenance_records INSERT against the owner''s own property did not succeed'; end if;
+  raise notice 'PASS: maintenance_records INSERT against the owner''s own property succeeded';
+end $$;
+
+-- ===== 17. maintenance_records: Owner A cannot INSERT against Owner B's property =====
+do $$
+begin
+  begin
+    insert into public.maintenance_records (property_id, owner_id, service_date, category, description, cost)
+    values ('b0000000-0000-0000-0000-00000000b002', 'a0000000-0000-0000-0000-00000000a001', current_date, 'Repair', 'Forged', 25);
+    raise exception 'REGRESSION: Owner A created a maintenance_records row against Owner B''s property';
+  exception
+    when insufficient_privilege then raise notice 'PASS: maintenance_records INSERT against another owner''s property correctly rejected';
+  end;
+end $$;
+
+-- ===== 18. maintenance_records: Owner A cannot UPDATE their own record's property_id to Owner B's property =====
+do $$
+begin
+  begin
+    update public.maintenance_records set property_id = 'b0000000-0000-0000-0000-00000000b002' where id = '33300000-0000-0000-0000-000000000001';
+    raise exception 'REGRESSION: Owner A UPDATEd their own maintenance_records row''s property_id to Owner B''s property';
+  exception
+    when insufficient_privilege then raise notice 'PASS: maintenance_records UPDATE of property_id to another owner''s property correctly rejected';
+  end;
+end $$;
+
+-- ===== 19. leases: Owner A can INSERT against their own property =====
+do $$
+declare new_id uuid;
+begin
+  insert into public.leases (property_id, owner_id, tenant_name, start_date, end_date)
+  values ('b0000000-0000-0000-0000-00000000b001', 'a0000000-0000-0000-0000-00000000a001', 'A''s New Tenant', current_date, current_date + interval '1 year')
+  returning id into new_id;
+  if new_id is null then raise exception 'REGRESSION: leases INSERT against the owner''s own property did not succeed'; end if;
+  raise notice 'PASS: leases INSERT against the owner''s own property succeeded';
+end $$;
+
+-- ===== 20. leases: Owner A cannot INSERT against Owner B's property =====
+do $$
+begin
+  begin
+    insert into public.leases (property_id, owner_id, tenant_name, start_date, end_date)
+    values ('b0000000-0000-0000-0000-00000000b002', 'a0000000-0000-0000-0000-00000000a001', 'Forged', current_date, current_date + interval '1 year');
+    raise exception 'REGRESSION: Owner A created a leases row against Owner B''s property';
+  exception
+    when insufficient_privilege then raise notice 'PASS: leases INSERT against another owner''s property correctly rejected';
+  end;
+end $$;
+
+-- ===== 21. leases: Owner A cannot UPDATE their own lease's property_id to Owner B's property =====
+do $$
+begin
+  begin
+    update public.leases set property_id = 'b0000000-0000-0000-0000-00000000b002' where id = '77700000-0000-0000-0000-000000000001';
+    raise exception 'REGRESSION: Owner A UPDATEd their own leases row''s property_id to Owner B''s property';
+  exception
+    when insufficient_privilege then raise notice 'PASS: leases UPDATE of property_id to another owner''s property correctly rejected';
+  end;
+end $$;
+
+-- ===== 22. insurance_policies: Owner A can INSERT against their own property =====
+do $$
+declare new_id uuid;
+begin
+  insert into public.insurance_policies (property_id, owner_id, carrier)
+  values ('b0000000-0000-0000-0000-00000000b001', 'a0000000-0000-0000-0000-00000000a001', 'A''s New Insurer')
+  returning id into new_id;
+  if new_id is null then raise exception 'REGRESSION: insurance_policies INSERT against the owner''s own property did not succeed'; end if;
+  raise notice 'PASS: insurance_policies INSERT against the owner''s own property succeeded';
+end $$;
+
+-- ===== 23. insurance_policies: Owner A cannot INSERT against Owner B's property =====
+do $$
+begin
+  begin
+    insert into public.insurance_policies (property_id, owner_id, carrier)
+    values ('b0000000-0000-0000-0000-00000000b002', 'a0000000-0000-0000-0000-00000000a001', 'Forged');
+    raise exception 'REGRESSION: Owner A created an insurance_policies row against Owner B''s property';
+  exception
+    when insufficient_privilege then raise notice 'PASS: insurance_policies INSERT against another owner''s property correctly rejected';
+  end;
+end $$;
+
+-- ===== 24. insurance_policies: Owner A cannot UPDATE their own policy's property_id to Owner B's property =====
+do $$
+begin
+  begin
+    update public.insurance_policies set property_id = 'b0000000-0000-0000-0000-00000000b002' where id = '88800000-0000-0000-0000-000000000001';
+    raise exception 'REGRESSION: Owner A UPDATEd their own insurance_policies row''s property_id to Owner B''s property';
+  exception
+    when insufficient_privilege then raise notice 'PASS: insurance_policies UPDATE of property_id to another owner''s property correctly rejected';
+  end;
+end $$;
+
+-- ===== 25. smart_upload_items: Owner B cannot see Owner A's smart_upload_items row =====
 select set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-00000000a002', true);
 do $$
 declare cnt integer;
@@ -214,7 +364,7 @@ begin
   raise notice 'PASS: smart_upload_items SELECT isolation — Owner B cannot see Owner A''s row';
 end $$;
 
--- ===== 14. Tenant cannot access owner Smart Upload staging/review data =====
+-- ===== 26. Tenant cannot access owner Smart Upload staging/review data =====
 select set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-00000000a003', true);
 select set_config('request.jwt.claims', '{"email":"tenant1@example.com"}', true);
 do $$
@@ -234,7 +384,7 @@ begin
   end;
 end $$;
 
--- ===== 15. Tenant cannot see the owner's property_documents rows either (pre-existing guarantee, still true after Part 1's nullability change) =====
+-- ===== 27. Tenant cannot see the owner's property_documents rows either (pre-existing guarantee, still true after Part 1's nullability change) =====
 do $$
 declare cnt integer;
 begin
