@@ -33,6 +33,10 @@ import {
   leaseActivity, insuranceActivity, mortgageActivity, propertyActivity, propCrewActivity,
   sortByTimestampDescending, type ActivityItem,
 } from '../lib/dashboard/activity'
+import {
+  deriveOccupancy, deriveLeaseStatus, selectCurrentLease, sortLeaseHistory,
+  normalizeTenants, isValidRentDueDay, formatRentDueDay,
+} from '../lib/leases/status'
 
 // Investment Tools 2.0 (Part 2): splits a resolved NormalizedAddress into
 // this app's existing two-field address/city shape (properties.address,
@@ -142,6 +146,12 @@ type FinancialTransaction = {
 
 type LeaseRecord = {
   id: string; property_id: string; owner_id: string; tenant_name: string; tenant_email: string | null; monthly_rent: number; security_deposit: number; start_date: string; end_date: string; renewal_status: string; document_id: string | null; notes: string | null; created_at: string
+  // Milestone 17: Tenant & Lease Management V2 — both nullable, added by
+  // supabase/milestone-17-tenant-lease-v2.sql. Optional here (not every
+  // row will have them; older rows have neither) rather than defaulted,
+  // so absence renders as "not on file," never a guessed value.
+  tenant_phone?: string | null
+  rent_due_day?: number | null
 }
 
 type MortgageRecord = {
@@ -271,6 +281,88 @@ function EmptyModule({ title, text, action, onClick }: { title: string; text: st
   return <div className="emptyModule"><strong>{title}</strong><span>{text}</span><button className="primary" onClick={onClick}>+ {action}</button></div>
 }
 
+// Milestone 17: Tenant & Lease Management V2 ---------------------------
+//
+// occupancyPillClass / leaseStatusPillClass map lib/leases/status.ts's
+// derived OccupancyStatus/LeaseStatus onto this app's EXISTING pill
+// vocabulary (statusPill + pillGood/pillWarn/pillBad/pillNeutral, already
+// used by Document Intelligence and Smart Import) — no new badge system.
+function occupancyPillClass(status: ReturnType<typeof deriveOccupancy>): string {
+  if (status === 'Occupied') return 'pillGood'
+  if (status === 'Upcoming tenancy') return 'pillWarn'
+  return 'pillNeutral'
+}
+function leaseStatusPillClass(status: ReturnType<typeof deriveLeaseStatus>): string {
+  if (status === 'Active') return 'pillGood'
+  if (status === 'Upcoming' || status === 'Expiring Soon') return 'pillWarn'
+  if (status === 'Expired') return 'pillBad'
+  return 'pillNeutral'
+}
+
+/** Tenant name(s)/phone/email — normalizeTenants() already returns an array so this renders correctly whether a future schema adds true multi-tenant support. */
+function TenantContactList({ lease }: { lease: LeaseRecord }) {
+  const tenants = normalizeTenants(lease)
+  if (!tenants.length) return <p>No tenant name on file</p>
+  return <>{tenants.map((t, i) => <p key={i} className="tenantContactRow"><strong>{t.name}</strong>{t.email && <span>{t.email}</span>}{t.phone && <span>{t.phone}</span>}{!t.email && !t.phone && <span className="muted">No contact info added</span>}</p>)}</>
+}
+
+/** The prominent Current Lease Card — the one place a landlord should be able to see everything about who's there and on what terms, at a glance. */
+function LeaseCard({ lease, doc, heading, onEdit, onDelete, onOpenDocument }: {
+  lease: LeaseRecord; doc: PropertyDocument | undefined; heading: string
+  onEdit: () => void; onDelete: () => void; onOpenDocument: (doc: PropertyDocument) => void
+}) {
+  const status = deriveLeaseStatus(lease)
+  const rentDue = formatRentDueDay(lease.rent_due_day ?? null)
+  return <article className="recordCard currentLeaseCard">
+    <div className="recordTop">
+      <div>
+        <span className={`statusPill ${leaseStatusPillClass(status)}`}>{status || 'Status unknown'}</span>
+        <h3>{heading}</h3>
+        <TenantContactList lease={lease} />
+      </div>
+      <div className="leaseCardActions">
+        <button className="recordEdit" onClick={onEdit} aria-label={`Edit lease for ${lease.tenant_name}`}>Edit</button>
+        <button className="recordDelete" onClick={onDelete} aria-label={`Delete lease for ${lease.tenant_name}`}>×</button>
+      </div>
+    </div>
+    <div className="recordMetrics">
+      <div><span>Monthly rent</span><strong>{money(lease.monthly_rent)}</strong></div>
+      {lease.security_deposit > 0 && <div><span>Security deposit</span><strong>{money(lease.security_deposit)}</strong></div>}
+      {rentDue && <div><span>Rent due</span><strong>{rentDue.replace('Rent due on the ', '').replace(' of each month', '')}</strong></div>}
+    </div>
+    <div className="recordRows">
+      <div><span>Lease term</span><strong>{new Date(`${lease.start_date}T12:00:00`).toLocaleDateString()} – {new Date(`${lease.end_date}T12:00:00`).toLocaleDateString()}</strong></div>
+      {doc && <div><span>Signed lease</span><button onClick={() => onOpenDocument(doc)}>{doc.name}</button></div>}
+      {lease.notes && <div><span>Notes</span><strong>{lease.notes}</strong></div>}
+    </div>
+  </article>
+}
+
+/** Compact, stacked (never a wide table) Lease History row — tenant, period, rent, status — with an expand toggle for the rest. */
+function LeaseHistoryRow({ lease, doc, onEdit, onDelete, onOpenDocument }: {
+  lease: LeaseRecord; doc: PropertyDocument | undefined
+  onEdit: () => void; onDelete: () => void; onOpenDocument: (doc: PropertyDocument) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const status = deriveLeaseStatus(lease)
+  return <article className="leaseHistoryRow">
+    <button className="leaseHistorySummary" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
+      <span className={`statusPill ${leaseStatusPillClass(status)}`}>{status || 'Status unknown'}</span>
+      <span className="leaseHistoryName">{lease.tenant_name}</span>
+      <span className="leaseHistoryPeriod">{new Date(`${lease.start_date}T12:00:00`).toLocaleDateString()} – {new Date(`${lease.end_date}T12:00:00`).toLocaleDateString()}</span>
+      <span className="leaseHistoryRent">{money(lease.monthly_rent)}</span>
+      <span className="leaseHistoryChevron">{expanded ? '−' : '+'}</span>
+    </button>
+    {expanded && <div className="recordRows leaseHistoryDetail">
+      <TenantContactList lease={lease} />
+      {lease.security_deposit > 0 && <div><span>Security deposit</span><strong>{money(lease.security_deposit)}</strong></div>}
+      {doc && <div><span>Signed lease</span><button onClick={() => onOpenDocument(doc)}>{doc.name}</button></div>}
+      {lease.notes && <div><span>Notes</span><strong>{lease.notes}</strong></div>}
+      <div className="leaseHistoryDetailActions"><button onClick={onEdit}>Edit</button><button className="dangerLink" onClick={onDelete}>Remove</button></div>
+    </div>}
+  </article>
+}
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
   const [authReady, setAuthReady] = useState(false)
@@ -344,7 +436,12 @@ export default function Home() {
   const [moveDocId, setMoveDocId] = useState<string | null>(null)
   const [moveDraft, setMoveDraft] = useState({ propertyId: '', category: '', documentType: '' })
   const [moveError, setMoveError] = useState('')
-  const [leaseDraft, setLeaseDraft] = useState({ tenantName:'', tenantEmail:'', monthlyRent:'', securityDeposit:'', startDate:new Date().toISOString().slice(0,10), endDate:'', renewalStatus:'Active', documentId:'', notes:'' })
+  const [leaseDraft, setLeaseDraft] = useState({ tenantName:'', tenantEmail:'', tenantPhone:'', monthlyRent:'', securityDeposit:'', rentDueDay:'', startDate:new Date().toISOString().slice(0,10), endDate:'', renewalStatus:'Active', documentId:'', notes:'' })
+  // Milestone 17: null while adding a new lease; set to the lease's id
+  // while editing an existing one — saveLease() branches insert/update
+  // on this, and the same leaseDraft/modal is reused for both.
+  const [editingLeaseId, setEditingLeaseId] = useState<string | null>(null)
+  const [leaseFormError, setLeaseFormError] = useState('')
   const [mortgageDraft, setMortgageDraft] = useState({ lender:'', loanNumber:'', originalBalance:'', currentBalance:'', interestRate:'', monthlyPayment:'', escrowAmount:'', loanTermYears:'30', maturityDate:'', documentId:'' })
   const [insuranceDraft, setInsuranceDraft] = useState({ carrier:'', policyNumber:'', annualPremium:'', deductible:'', effectiveDate:'', expirationDate:'', documentId:'' })
   const [maintenanceDraft, setMaintenanceDraft] = useState({ serviceDate:new Date().toISOString().slice(0,10), status:'Completed', category:'Repair', vendor:'', description:'', cost:'', documentId:'', addToFinancials:true })
@@ -972,7 +1069,7 @@ export default function Home() {
     setShowDocIntelId(null)
     if (action === 'Insurance') { setInsuranceDraft((d) => ({ ...d, ...values })); setShowModuleForm('Insurance'); setActiveTab('Property'); setPropertySubTab('Insurance') }
     else if (action === 'Mortgage') { setMortgageDraft((d) => ({ ...d, ...values })); setShowModuleForm('Mortgage'); setActiveTab('Property'); setPropertySubTab('Mortgage') }
-    else if (action === 'Lease') { setLeaseDraft((d) => ({ ...d, ...values })); setShowModuleForm('Lease'); setActiveTab('Property'); setPropertySubTab('Lease') }
+    else if (action === 'Lease') { setEditingLeaseId(null); setLeaseDraft((d) => ({ ...d, ...values })); setShowModuleForm('Lease'); setActiveTab('Property'); setPropertySubTab('Lease') }
     else if (action === 'Maintenance') { setMaintenanceDraft((d) => ({ ...d, ...values })); setShowModuleForm('Maintenance'); setActiveTab('Property'); setPropertySubTab('Maintenance') }
     else if (action === 'FinancialExpense') { setTransactionDraft((d) => ({ ...d, ...values })); setShowTransaction(true); setActiveTab('Financials') }
     else if (action === 'Contact') { setPropCrewPrefill({ name: values.name || values.businessName || 'New contact', businessName: values.businessName, phone: values.phone, email: values.email, website: values.website }); setActiveTab('People'); setPeopleSubTab('PropCrew') }
@@ -1035,11 +1132,44 @@ export default function Home() {
     setBusy(false)
   }
 
+  function resetLeaseDraft() {
+    setLeaseDraft({ tenantName:'', tenantEmail:'', tenantPhone:'', monthlyRent:'', securityDeposit:'', rentDueDay:'', startDate:new Date().toISOString().slice(0,10), endDate:'', renewalStatus:'Active', documentId:'', notes:'' })
+    setEditingLeaseId(null); setLeaseFormError('')
+  }
+
+  function openLeaseForm(lease?: LeaseRecord) {
+    if (lease) {
+      setEditingLeaseId(lease.id)
+      setLeaseDraft({
+        tenantName: lease.tenant_name, tenantEmail: lease.tenant_email || '', tenantPhone: lease.tenant_phone || '',
+        monthlyRent: String(lease.monthly_rent ?? ''), securityDeposit: String(lease.security_deposit ?? ''),
+        rentDueDay: lease.rent_due_day ? String(lease.rent_due_day) : '',
+        startDate: lease.start_date, endDate: lease.end_date, renewalStatus: lease.renewal_status,
+        documentId: lease.document_id || '', notes: lease.notes || '',
+      })
+    } else {
+      resetLeaseDraft()
+    }
+    setLeaseFormError('')
+    setShowModuleForm('Lease')
+  }
+
   async function saveLease() {
     if (!supabase || !user || !selectedId || !leaseDraft.tenantName.trim() || !leaseDraft.endDate) return
-    setBusy(true); setError('')
-    const { error: e } = await supabase.from('leases').insert({ owner_id:user.id, property_id:selectedId, tenant_name:leaseDraft.tenantName.trim(), tenant_email:leaseDraft.tenantEmail.trim()||null, monthly_rent:Number(leaseDraft.monthlyRent||0), security_deposit:Number(leaseDraft.securityDeposit||0), start_date:leaseDraft.startDate, end_date:leaseDraft.endDate, renewal_status:leaseDraft.renewalStatus, document_id:leaseDraft.documentId||null, notes:leaseDraft.notes.trim()||null })
-    if (e) setError(e.message); else { setShowModuleForm(null); setLeaseDraft({ tenantName:'', tenantEmail:'', monthlyRent:'', securityDeposit:'', startDate:new Date().toISOString().slice(0,10), endDate:'', renewalStatus:'Active', documentId:'', notes:'' }); await loadPortfolio() }
+    const rentDueDay = leaseDraft.rentDueDay.trim() ? Number(leaseDraft.rentDueDay) : null
+    if (!isValidRentDueDay(rentDueDay)) { setLeaseFormError('Rent due day must be a whole number from 1 to 31.'); return }
+    setBusy(true); setError(''); setLeaseFormError('')
+    const payload = {
+      owner_id: user.id, property_id: selectedId, tenant_name: leaseDraft.tenantName.trim(),
+      tenant_email: leaseDraft.tenantEmail.trim() || null, tenant_phone: leaseDraft.tenantPhone.trim() || null,
+      monthly_rent: Number(leaseDraft.monthlyRent || 0), security_deposit: Number(leaseDraft.securityDeposit || 0),
+      rent_due_day: rentDueDay, start_date: leaseDraft.startDate, end_date: leaseDraft.endDate,
+      renewal_status: leaseDraft.renewalStatus, document_id: leaseDraft.documentId || null, notes: leaseDraft.notes.trim() || null,
+    }
+    const { error: e } = editingLeaseId
+      ? await supabase.from('leases').update(payload).eq('id', editingLeaseId)
+      : await supabase.from('leases').insert(payload)
+    if (e) setError(e.message); else { setShowModuleForm(null); resetLeaseDraft(); await loadPortfolio() }
     setBusy(false)
   }
 
@@ -1329,7 +1459,43 @@ export default function Home() {
         {activeTab === 'Property' && <section className="workspaceContent moduleWorkspace">
           <div className="subTabs" role="tablist" aria-label="Property sections">{propertySubTabs.map((sub) => <button key={sub} role="tab" aria-selected={propertySubTab === sub} className={propertySubTab === sub ? 'active' : ''} onClick={() => setPropertySubTab(sub)}>{sub}</button>)}</div>
 
-          {propertySubTab === 'Lease' && <><div className="sectionHead workspaceHeading"><div><p className="eyebrow">LEASES</p><h2>Tenants & lease terms</h2><p>Keep rent, deposits, renewal dates and the signed lease together.</p></div><button className="primary" onClick={() => setShowModuleForm('Lease')}>+ Add lease</button></div>{selectedLeases.length ? <div className="moduleGrid">{selectedLeases.map((lease) => { const doc=selectedDocs.find(d=>d.id===lease.document_id); return <article className="recordCard" key={lease.id}><div className="recordTop"><div><span className="statusPill">{lease.renewal_status}</span><h3>{lease.tenant_name}</h3><p>{lease.tenant_email || 'No email added'}</p></div><button className="recordDelete" onClick={() => void removeModuleRecord('leases', lease.id)}>×</button></div><div className="recordMetrics"><div><span>Monthly rent</span><strong>{money(lease.monthly_rent)}</strong></div><div><span>Deposit</span><strong>{money(lease.security_deposit)}</strong></div></div><div className="recordRows"><div><span>Lease term</span><strong>{new Date(`${lease.start_date}T12:00:00`).toLocaleDateString()} – {new Date(`${lease.end_date}T12:00:00`).toLocaleDateString()}</strong></div>{doc && <div><span>Signed lease</span><button onClick={() => void openDocument(doc)}>{doc.name}</button></div>}{lease.notes && <div><span>Notes</span><strong>{lease.notes}</strong></div>}</div></article>})}</div> : <EmptyModule title="No lease records yet" text="Add the tenant, rent, deposit, dates and signed lease." action="Add lease" onClick={() => setShowModuleForm('Lease')} />}</>}
+          {propertySubTab === 'Lease' && (() => {
+            const occupancy = deriveOccupancy(selectedLeases)
+            const current = selectCurrentLease(selectedLeases)
+            const history = sortLeaseHistory(selectedLeases).filter((l) => l.id !== current?.id)
+            return <>
+              <div className="sectionHead workspaceHeading"><div><p className="eyebrow">TENANTS &amp; LEASE</p><h2>Tenants &amp; lease terms</h2><p>Keep rent, deposits, renewal dates and the signed lease together.</p></div><button className="primary" onClick={() => openLeaseForm()}>+ Add lease</button></div>
+
+              {current ? (
+                <LeaseCard
+                  lease={current}
+                  doc={selectedDocs.find((d) => d.id === current.document_id)}
+                  heading={occupancy === 'Upcoming tenancy' ? 'Upcoming tenancy' : 'Current lease'}
+                  onEdit={() => openLeaseForm(current)}
+                  onDelete={() => void removeModuleRecord('leases', current.id)}
+                  onOpenDocument={(doc) => void openDocument(doc)}
+                />
+              ) : occupancy === 'Occupancy unknown' ? (
+                <EmptyModule title="Occupancy unknown" text="This property has lease records whose dates we can't reliably read. Open a lease below to fix its dates." action="Add lease" onClick={() => openLeaseForm()} />
+              ) : (
+                <EmptyModule title="Currently vacant" text="No active lease on file for this property yet." action="Add lease" onClick={() => openLeaseForm()} />
+              )}
+
+              {history.length > 0 && <div className="leaseHistorySection">
+                <h3 className="leaseHistoryHeading">Lease history</h3>
+                <div className="leaseHistoryList">
+                  {history.map((lease) => <LeaseHistoryRow
+                    key={lease.id}
+                    lease={lease}
+                    doc={selectedDocs.find((d) => d.id === lease.document_id)}
+                    onEdit={() => openLeaseForm(lease)}
+                    onDelete={() => void removeModuleRecord('leases', lease.id)}
+                    onOpenDocument={(doc) => void openDocument(doc)}
+                  />)}
+                </div>
+              </div>}
+            </>
+          })()}
 
           {propertySubTab === 'Mortgage' && <><div className="sectionHead workspaceHeading"><div><p className="eyebrow">MORTGAGE</p><h2>Loan details</h2><p>Track your lender, balance, rate, payment and loan documents.</p></div><button className="primary" onClick={() => setShowModuleForm('Mortgage')}>+ Add mortgage</button></div>{selectedMortgages.length ? <div className="moduleGrid">{selectedMortgages.map((loan) => { const doc=selectedDocs.find(d=>d.id===loan.document_id); return <article className="recordCard" key={loan.id}><div className="recordTop"><div><span className="statusPill">Mortgage</span><h3>{loan.lender}</h3><p>{loan.loan_number ? `Loan ••••${loan.loan_number.slice(-4)}` : 'Loan number not added'}</p></div><button className="recordDelete" onClick={() => void removeModuleRecord('mortgages', loan.id)}>×</button></div><div className="recordMetrics"><div><span>Current balance</span><strong>{money(loan.current_balance)}</strong></div><div><span>Monthly payment</span><strong>{money(loan.monthly_payment)}</strong></div><div><span>Rate</span><strong>{Number(loan.interest_rate).toFixed(3)}%</strong></div></div><div className="recordRows"><div><span>Original balance</span><strong>{money(loan.original_balance)}</strong></div><div><span>Escrow / month</span><strong>{money(loan.escrow_amount)}</strong></div>{loan.maturity_date && <div><span>Maturity</span><strong>{new Date(`${loan.maturity_date}T12:00:00`).toLocaleDateString()}</strong></div>}{doc && <div><span>Loan document</span><button onClick={() => void openDocument(doc)}>{doc.name}</button></div>}</div></article>})}</div> : <EmptyModule title="No mortgage details yet" text="Add the lender, balance, rate, monthly payment and loan document." action="Add mortgage" onClick={() => setShowModuleForm('Mortgage')} />}</>}
 
@@ -1363,8 +1529,29 @@ export default function Home() {
           </>}
         </section>}
 
-        {showModuleForm && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowModuleForm(null)}><div className="modal moduleModal"><div className="modalTop"><div><p className="eyebrow">{showModuleForm.toUpperCase()}</p><h2>Add {showModuleForm.toLowerCase()}</h2></div><button className="iconButton" onClick={() => setShowModuleForm(null)}>×</button></div>
-          {showModuleForm === 'Lease' && <div className="formGrid"><label>Tenant name<input value={leaseDraft.tenantName} onChange={e=>setLeaseDraft({...leaseDraft,tenantName:e.target.value})} /></label><label>Tenant email<input type="email" value={leaseDraft.tenantEmail} onChange={e=>setLeaseDraft({...leaseDraft,tenantEmail:e.target.value})} /></label><label>Monthly rent<input inputMode="decimal" value={leaseDraft.monthlyRent} onChange={e=>setLeaseDraft({...leaseDraft,monthlyRent:e.target.value})} /></label><label>Security deposit<input inputMode="decimal" value={leaseDraft.securityDeposit} onChange={e=>setLeaseDraft({...leaseDraft,securityDeposit:e.target.value})} /></label><label>Start date<input type="date" value={leaseDraft.startDate} onChange={e=>setLeaseDraft({...leaseDraft,startDate:e.target.value})} /></label><label>End date<input type="date" value={leaseDraft.endDate} onChange={e=>setLeaseDraft({...leaseDraft,endDate:e.target.value})} /></label><label>Lease status<select value={leaseDraft.renewalStatus} onChange={e=>setLeaseDraft({...leaseDraft,renewalStatus:e.target.value})}><option>Active</option><option>Renewal pending</option><option>Month-to-month</option><option>Ended</option></select></label><label>Signed lease<select value={leaseDraft.documentId} onChange={e=>setLeaseDraft({...leaseDraft,documentId:e.target.value})}><option value="">No attachment</option>{selectedDocs.filter(d=>d.category==='Lease'||d.category==='Other').map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><label className="fullField">Notes<input value={leaseDraft.notes} onChange={e=>setLeaseDraft({...leaseDraft,notes:e.target.value})} /></label></div>}
+        {showModuleForm && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowModuleForm(null)}><div className="modal moduleModal"><div className="modalTop"><div><p className="eyebrow">{showModuleForm.toUpperCase()}</p><h2>{showModuleForm === 'Lease' ? (editingLeaseId ? 'Edit lease' : 'Add lease') : `Add ${showModuleForm.toLowerCase()}`}</h2></div><button className="iconButton" onClick={() => setShowModuleForm(null)}>×</button></div>
+          {showModuleForm === 'Lease' && <div className="leaseFormGroups">
+            <fieldset className="formFieldset"><legend>Tenant information</legend><div className="formGrid">
+              <label>Tenant name<input value={leaseDraft.tenantName} onChange={e=>setLeaseDraft({...leaseDraft,tenantName:e.target.value})} placeholder="Taylor Morgan" /></label>
+              <label>Tenant email<input type="email" value={leaseDraft.tenantEmail} onChange={e=>setLeaseDraft({...leaseDraft,tenantEmail:e.target.value})} placeholder="tenant@example.com" /></label>
+              <label>Tenant phone<input type="tel" value={leaseDraft.tenantPhone} onChange={e=>setLeaseDraft({...leaseDraft,tenantPhone:e.target.value})} placeholder="(555) 555-0100" /></label>
+            </div></fieldset>
+            <fieldset className="formFieldset"><legend>Lease dates</legend><div className="formGrid">
+              <label>Start date<input type="date" value={leaseDraft.startDate} onChange={e=>setLeaseDraft({...leaseDraft,startDate:e.target.value})} /></label>
+              <label>End date<input type="date" value={leaseDraft.endDate} onChange={e=>setLeaseDraft({...leaseDraft,endDate:e.target.value})} /></label>
+              <label>Lease status<select value={leaseDraft.renewalStatus} onChange={e=>setLeaseDraft({...leaseDraft,renewalStatus:e.target.value})}><option>Active</option><option>Renewal pending</option><option>Month-to-month</option><option>Ended</option></select></label>
+            </div></fieldset>
+            <fieldset className="formFieldset"><legend>Rent &amp; deposit</legend><div className="formGrid">
+              <label>Monthly rent<input inputMode="decimal" value={leaseDraft.monthlyRent} onChange={e=>setLeaseDraft({...leaseDraft,monthlyRent:e.target.value})} placeholder="2950" /></label>
+              <label>Security deposit<input inputMode="decimal" value={leaseDraft.securityDeposit} onChange={e=>setLeaseDraft({...leaseDraft,securityDeposit:e.target.value})} placeholder="0" /></label>
+              <label>Rent due day<input inputMode="numeric" value={leaseDraft.rentDueDay} onChange={e=>setLeaseDraft({...leaseDraft,rentDueDay:e.target.value})} placeholder="1" /><small>Day of the month, 1–31. Optional.</small></label>
+            </div></fieldset>
+            <fieldset className="formFieldset"><legend>Lease document</legend><div className="formGrid">
+              <label className="fullField">Signed lease<select value={leaseDraft.documentId} onChange={e=>setLeaseDraft({...leaseDraft,documentId:e.target.value})}><option value="">No attachment</option>{selectedDocs.filter(d=>d.category==='Lease'||d.category==='Other').map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
+              <label className="fullField">Notes<input value={leaseDraft.notes} onChange={e=>setLeaseDraft({...leaseDraft,notes:e.target.value})} /></label>
+            </div></fieldset>
+            {leaseFormError && <p className="errorMessage">{leaseFormError}</p>}
+          </div>}
           {showModuleForm === 'Mortgage' && <div className="formGrid"><label>Lender<input value={mortgageDraft.lender} onChange={e=>setMortgageDraft({...mortgageDraft,lender:e.target.value})} /></label><label>Loan number<input value={mortgageDraft.loanNumber} onChange={e=>setMortgageDraft({...mortgageDraft,loanNumber:e.target.value})} /></label><label>Original balance<input inputMode="decimal" value={mortgageDraft.originalBalance} onChange={e=>setMortgageDraft({...mortgageDraft,originalBalance:e.target.value})} /></label><label>Current balance<input inputMode="decimal" value={mortgageDraft.currentBalance} onChange={e=>setMortgageDraft({...mortgageDraft,currentBalance:e.target.value})} /></label><label>Interest rate %<input inputMode="decimal" value={mortgageDraft.interestRate} onChange={e=>setMortgageDraft({...mortgageDraft,interestRate:e.target.value})} /></label><label>Monthly payment<input inputMode="decimal" value={mortgageDraft.monthlyPayment} onChange={e=>setMortgageDraft({...mortgageDraft,monthlyPayment:e.target.value})} /></label><label>Escrow / month<input inputMode="decimal" value={mortgageDraft.escrowAmount} onChange={e=>setMortgageDraft({...mortgageDraft,escrowAmount:e.target.value})} /></label><label>Loan term (years)<input inputMode="numeric" value={mortgageDraft.loanTermYears} onChange={e=>setMortgageDraft({...mortgageDraft,loanTermYears:e.target.value})} /></label><label>Maturity date<input type="date" value={mortgageDraft.maturityDate} onChange={e=>setMortgageDraft({...mortgageDraft,maturityDate:e.target.value})} /></label><label>Loan document<select value={mortgageDraft.documentId} onChange={e=>setMortgageDraft({...mortgageDraft,documentId:e.target.value})}><option value="">No attachment</option>{selectedDocs.filter(d=>d.category==='Mortgage'||d.category==='Closing'||d.category==='Other').map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label></div>}
           {showModuleForm === 'Insurance' && <div className="formGrid"><label>Carrier<input value={insuranceDraft.carrier} onChange={e=>setInsuranceDraft({...insuranceDraft,carrier:e.target.value})} /></label><label>Policy number<input value={insuranceDraft.policyNumber} onChange={e=>setInsuranceDraft({...insuranceDraft,policyNumber:e.target.value})} /></label><label>Annual premium<input inputMode="decimal" value={insuranceDraft.annualPremium} onChange={e=>setInsuranceDraft({...insuranceDraft,annualPremium:e.target.value})} /></label><label>Deductible<input inputMode="decimal" value={insuranceDraft.deductible} onChange={e=>setInsuranceDraft({...insuranceDraft,deductible:e.target.value})} /></label><label>Effective date<input type="date" value={insuranceDraft.effectiveDate} onChange={e=>setInsuranceDraft({...insuranceDraft,effectiveDate:e.target.value})} /></label><label>Expiration date<input type="date" value={insuranceDraft.expirationDate} onChange={e=>setInsuranceDraft({...insuranceDraft,expirationDate:e.target.value})} /></label><label className="fullField">Policy document<select value={insuranceDraft.documentId} onChange={e=>setInsuranceDraft({...insuranceDraft,documentId:e.target.value})}><option value="">No attachment</option>{selectedDocs.filter(d=>d.category==='Insurance'||d.category==='Other').map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label></div>}
           {showModuleForm === 'Maintenance' && <div className="formGrid"><label>Service date<input type="date" value={maintenanceDraft.serviceDate} onChange={e=>setMaintenanceDraft({...maintenanceDraft,serviceDate:e.target.value})} /></label><label>Status<select value={maintenanceDraft.status} onChange={e=>setMaintenanceDraft({...maintenanceDraft,status:e.target.value})}><option>Completed</option><option>Scheduled</option><option>In progress</option><option>Needs follow-up</option></select></label><label>Category<select value={maintenanceDraft.category} onChange={e=>setMaintenanceDraft({...maintenanceDraft,category:e.target.value})}>{MAINTENANCE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></label><label>Vendor<input value={maintenanceDraft.vendor} onChange={e=>setMaintenanceDraft({...maintenanceDraft,vendor:e.target.value})} /></label><label>Cost<input inputMode="decimal" value={maintenanceDraft.cost} onChange={e=>setMaintenanceDraft({...maintenanceDraft,cost:e.target.value})} /></label><label>Receipt / invoice<select value={maintenanceDraft.documentId} onChange={e=>setMaintenanceDraft({...maintenanceDraft,documentId:e.target.value})}><option value="">No attachment</option>{selectedDocs.filter(d=>['Receipts','Warranties','Other'].includes(d.category)).map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><label className="fullField">Description<input value={maintenanceDraft.description} onChange={e=>setMaintenanceDraft({...maintenanceDraft,description:e.target.value})} placeholder="HVAC repair, annual service, roof inspection…" /></label><label className="recurringCheck fullField"><input type="checkbox" checked={maintenanceDraft.addToFinancials} onChange={e=>setMaintenanceDraft({...maintenanceDraft,addToFinancials:e.target.checked})} /><span>Add this cost to Financials</span><small>PropRoster creates a linked Maintenance expense so you only enter the cost once.</small></label></div>}
@@ -1383,7 +1570,7 @@ export default function Home() {
           if (!activeDoc) return null
           const latestInsurance = selectedInsurance[0]
           const latestMortgage = selectedMortgages[0]
-          const latestLease = selectedLeases[0]
+          const latestLease = selectCurrentLease(selectedLeases) || selectedLeases[0]
           return (
             <DocumentIntelligencePanel
               document={activeDoc}
@@ -1537,7 +1724,7 @@ export default function Home() {
       </section>
 
       <section><div className="sectionHead"><div><h2>My Properties</h2><p>{busy && !properties.length ? 'Loading your portfolio…' : `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} in your portfolio`}</p></div><button className="primary" onClick={() => openAddProperty()}>+ Add Property</button></div>
-        <div className="grid">{properties.map((property) => <article className="propertyCard" key={property.id}><button className="cardOpen" onClick={() => openProperty(property.id)}><div className="photo">{property.coverUrl ? <img src={property.coverUrl} alt={property.address} /> : <div className="photoPlaceholder"><span>⌂</span><small>Add property photos</small></div>}<span className="badge">{property.property_type}</span></div></button><div className="cardBody"><button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button><div className="miniStats"><div><span>Value</span><strong>{money(property.estimated_value)}</strong></div><div><span>Equity</span><strong>{money(Number(property.estimated_value) - Number(property.mortgage_balance))}</strong></div><div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div></div><div className="cardActions"><button onClick={() => openProperty(property.id, 'Documents', 'Documents')}>Documents</button><button onClick={() => openProperty(property.id, 'Documents', 'Photos')}>Photos</button><button onClick={() => openProperty(property.id, 'Financials')}>Financials</button></div></div></article>)}
+        <div className="grid">{properties.map((property) => { const propertyOccupancy = property.property_type === 'Rental Property' ? deriveOccupancy(leases.filter((l) => l.property_id === property.id)) : null; return <article className="propertyCard" key={property.id}><button className="cardOpen" onClick={() => openProperty(property.id)}><div className="photo">{property.coverUrl ? <img src={property.coverUrl} alt={property.address} /> : <div className="photoPlaceholder"><span>⌂</span><small>Add property photos</small></div>}<span className="badge">{property.property_type}</span>{propertyOccupancy && <span className={`occupancyBadge ${occupancyPillClass(propertyOccupancy)}`}>{propertyOccupancy === 'Occupancy unknown' ? 'Unknown' : propertyOccupancy === 'Upcoming tenancy' ? 'Upcoming' : propertyOccupancy}</span>}</div></button><div className="cardBody"><button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button><div className="miniStats"><div><span>Value</span><strong>{money(property.estimated_value)}</strong></div><div><span>Equity</span><strong>{money(Number(property.estimated_value) - Number(property.mortgage_balance))}</strong></div><div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div></div><div className="cardActions"><button onClick={() => openProperty(property.id, 'Documents', 'Documents')}>Documents</button><button onClick={() => openProperty(property.id, 'Documents', 'Photos')}>Photos</button><button onClick={() => openProperty(property.id, 'Financials')}>Financials</button></div></div></article> })}
           {!busy && properties.length === 0 && <button className="emptyPropertyCard" onClick={() => openAddProperty()}><strong>+ Add your first property</strong><span>Start building your organized property file.</span></button>}
         </div>
       </section>

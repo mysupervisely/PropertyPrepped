@@ -171,12 +171,15 @@ export function searchNotes(rows: NoteRow[], words: string[], propertyById: Map<
 // -- Lease / Mortgage / Insurance (grouped in the UI, kept as three small
 // functions here since each table's fields are genuinely different) -----
 
-export type LeaseRow = { id: string; property_id: string; tenant_name: string; tenant_email: string | null }
-export const LEASE_SEARCH_COLUMNS = ['tenant_name', 'tenant_email']
+// Milestone 17: tenant_phone joins tenant_name/tenant_email as a
+// searchable, safe lease-identifying field. Never searches notes (a
+// private, freeform field) or any other sensitive data.
+export type LeaseRow = { id: string; property_id: string; tenant_name: string; tenant_email: string | null; tenant_phone?: string | null }
+export const LEASE_SEARCH_COLUMNS = ['tenant_name', 'tenant_email', 'tenant_phone']
 
 export function searchLeases(rows: LeaseRow[], words: string[], propertyById: Map<string, PropertyRef>): SearchResult[] {
   return rows
-    .filter((l) => matchesAllWords(words, [l.tenant_name, l.tenant_email]))
+    .filter((l) => matchesAllWords(words, [l.tenant_name, l.tenant_email, l.tenant_phone]))
     .map((l) => {
       const property = propertyById.get(l.property_id)
       return { id: l.id, type: 'Lease', title: l.tenant_name, subtitle: property?.address || '', detail: 'Lease', href: propertyHref(l.property_id, { tab: 'Property', propSubTab: 'Lease' }) }

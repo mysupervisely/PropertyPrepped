@@ -117,7 +117,7 @@ function SearchWorkspace() {
       client.from('maintenance_records').select('id,property_id,description,category,vendor').or(buildOrFilter(MAINTENANCE_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
       client.from('financial_transactions').select('id,property_id,description,category,vendor').or(buildOrFilter(FINANCIAL_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
       client.from('property_notes').select('id,property_id,body').or(buildOrFilter(NOTE_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
-      client.from('leases').select('id,property_id,tenant_name,tenant_email').or(buildOrFilter(LEASE_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
+      client.from('leases').select('id,property_id,tenant_name,tenant_email,tenant_phone').or(buildOrFilter(LEASE_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
       client.from('mortgages').select('id,property_id,lender,loan_number').or(buildOrFilter(MORTGAGE_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
       client.from('insurance_policies').select('id,property_id,carrier,policy_number').or(buildOrFilter(INSURANCE_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
     ])
