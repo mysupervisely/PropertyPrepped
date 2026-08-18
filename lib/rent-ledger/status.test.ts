@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   periodFromDate, periodKey, periodStart, periodEnd, shiftPeriod, formatPeriodLabel, clampDueDate,
-  deriveRentObligation, deriveRentStatus,
+  deriveRentObligation, deriveRentStatus, shouldDeleteLinkedTransaction,
 } from './status'
 
 const AUG_2026 = { year: 2026, month: 8 }
@@ -116,5 +116,20 @@ describe('deriveRentStatus', () => {
     const obligation = deriveRentObligation(activeLease, AUG_2026)
     const totalPaid = 1200 + 1200
     expect(deriveRentStatus(obligation, totalPaid, NOW)).toBe('Paid')
+  })
+})
+
+describe('shouldDeleteLinkedTransaction', () => {
+  it('is true when this payment created the linked transaction', () => {
+    expect(shouldDeleteLinkedTransaction({ financial_transaction_id: 'tx-1', created_linked_transaction: true })).toBe(true)
+  })
+  it('is false when the payment is merely linked to a pre-existing/manual transaction — that transaction must never be deleted', () => {
+    expect(shouldDeleteLinkedTransaction({ financial_transaction_id: 'tx-manual', created_linked_transaction: false })).toBe(false)
+  })
+  it('is false when there is no linked transaction at all, even if the marker were somehow true', () => {
+    expect(shouldDeleteLinkedTransaction({ financial_transaction_id: null, created_linked_transaction: true })).toBe(false)
+  })
+  it('is false for the common case of no linkage and no marker', () => {
+    expect(shouldDeleteLinkedTransaction({ financial_transaction_id: null, created_linked_transaction: false })).toBe(false)
   })
 })

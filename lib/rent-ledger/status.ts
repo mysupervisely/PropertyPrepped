@@ -145,3 +145,22 @@ export function deriveRentStatus(obligation: RentObligation, totalPaid: number, 
   if (days === 0) return 'Due'
   return 'Upcoming'
 }
+
+// -- Rent payment <-> financial transaction deletion safety -----------
+//
+// Deleting a rent payment must be able to clean up the ONE
+// financial_transactions row IT created (so a deleted payment never
+// leaves phantom income behind) — but must NEVER delete a pre-existing/
+// manual transaction that a payment merely got linked to. The only
+// current write path (Record Payment) always creates a fresh
+// transaction rather than linking an existing one, but the RLS layer
+// doesn't enforce that, so deletion logic must not rely on "a link
+// exists" as a proxy for "this payment created it" — it must check the
+// explicit created_linked_transaction marker instead.
+
+export type RentPaymentForDeletion = { financial_transaction_id: string | null; created_linked_transaction: boolean }
+
+/** True only when this payment is what created financial_transaction_id — never true for a payment merely linked to a pre-existing/manual transaction. */
+export function shouldDeleteLinkedTransaction(payment: RentPaymentForDeletion): boolean {
+  return payment.created_linked_transaction === true && payment.financial_transaction_id !== null
+}

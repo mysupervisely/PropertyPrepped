@@ -36,7 +36,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { AuthHeader } from '../../components/AuthHeader'
 import { RENT_PAYMENT_METHODS } from '../../lib/property-categories'
-import { periodFromDate, periodStart, shiftPeriod, formatPeriodLabel, type RentPeriod, type RentStatus } from '../../lib/rent-ledger/status'
+import { periodFromDate, periodStart, shiftPeriod, formatPeriodLabel, shouldDeleteLinkedTransaction, type RentPeriod, type RentStatus } from '../../lib/rent-ledger/status'
 import { buildRentLedgerRows, summarizeRentLedgerRows, type RentLedgerRow } from '../../lib/rent-ledger/ledger'
 
 const money = (n: number | null | undefined) => new Intl.NumberFormat('en-US', {
@@ -55,6 +55,7 @@ type LeaseRef = { id: string; property_id: string; tenant_name: string; monthly_
 type PaymentRow = {
   id: string; owner_id: string; property_id: string; lease_id: string; rent_period: string; date_received: string
   amount: number; payment_method: string; reference_number: string | null; notes: string | null; financial_transaction_id: string | null
+  created_linked_transaction: boolean
 }
 
 function defaultDraft() {
@@ -171,6 +172,10 @@ function RentLedgerWorkspace() {
       date_received: draft.dateReceived, amount, payment_method: draft.paymentMethod,
       reference_number: draft.referenceNumber.trim() || null, notes: draft.notes.trim() || null,
       financial_transaction_id: financialTransactionId,
+      // True only because we just created financialTransactionId above
+      // — this is what lets deletePayment() safely know it's ours to
+      // remove later, never a pre-existing/manual transaction.
+      created_linked_transaction: financialTransactionId !== null,
     })
     if (payError) {
       // Best-effort cleanup: never leave a phantom Financials entry
@@ -189,10 +194,12 @@ function RentLedgerWorkspace() {
     if (!supabase) return
     setBusy(true)
     await supabase.from('rent_payments').delete().eq('id', payment.id)
-    // The linked financial_transactions row was created BY this payment
-    // — remove it too, so the same money is never left counted once the
-    // payment record that explains it is gone.
-    if (payment.financial_transaction_id) await supabase.from('financial_transactions').delete().eq('id', payment.financial_transaction_id)
+    // Only remove the linked financial_transactions row when THIS
+    // payment is what created it (created_linked_transaction) — never
+    // just because a link exists. A payment merely linked to a
+    // pre-existing/manual transaction must never take that unrelated
+    // transaction down with it.
+    if (shouldDeleteLinkedTransaction(payment)) await supabase.from('financial_transactions').delete().eq('id', payment.financial_transaction_id as string)
     await load()
     setBusy(false)
   }

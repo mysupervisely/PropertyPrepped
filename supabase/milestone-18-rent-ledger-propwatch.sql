@@ -57,8 +57,18 @@ create table if not exists public.rent_payments (
   -- transaction itself (from the Financials ledger directly) should not
   -- silently delete the landlord's payment record.
   financial_transaction_id uuid references public.financial_transactions(id) on delete set null,
+  -- True only when THIS payment is what created financial_transaction_id
+  -- (the app's only current write path, saveRecordPayment()). Deleting
+  -- a rent payment is only ever allowed to cascade-delete the linked
+  -- transaction when this is true — never merely because a link exists
+  -- — so a payment that in the future gets linked to a pre-existing/
+  -- manual transaction instead of one it created can never take that
+  -- unrelated transaction down with it.
+  created_linked_transaction boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+alter table public.rent_payments add column if not exists created_linked_transaction boolean not null default false;
 
 alter table public.rent_payments drop constraint if exists rent_payments_payment_method_check;
 alter table public.rent_payments add constraint rent_payments_payment_method_check
