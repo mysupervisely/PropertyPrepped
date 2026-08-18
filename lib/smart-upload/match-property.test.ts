@@ -3,19 +3,19 @@ import { matchProperty } from './match-property'
 import type { SmartUploadProperty } from './types'
 
 const properties: SmartUploadProperty[] = [
-  { id: 'p1', address: '12109 Rustic River Way', city: 'Example City, FL 12345' },
+  { id: 'p1', address: '123 Example Street', city: 'Example City, FL 12345' },
   { id: 'p2', address: '48 Ocean Avenue', city: 'Example City, FL 12345' },
 ]
 
 describe('matchProperty — PROPERTY ASSIGNMENT', () => {
   it('confident match: exact normalized address match returns High confidence', () => {
-    const result = matchProperty('12109 Rustic River Way', properties)
+    const result = matchProperty('123 Example Street', properties)
     expect(result.confidence).toBe('High')
     expect(result.property?.id).toBe('p1')
   })
 
   it('confident match: same street number plus overlapping text (extra unit/suite) still returns High', () => {
-    const result = matchProperty('12109 Rustic River Way, Unit B', properties)
+    const result = matchProperty('123 Example Street, Unit B', properties)
     expect(result.confidence).toBe('High')
     expect(result.property?.id).toBe('p1')
   })
@@ -39,13 +39,13 @@ describe('matchProperty — PROPERTY ASSIGNMENT', () => {
   })
 
   it('no match: an empty properties list never throws, just returns None', () => {
-    const result = matchProperty('12109 Rustic River Way', [])
+    const result = matchProperty('123 Example Street', [])
     expect(result.confidence).toBe('None')
     expect(result.property).toBeNull()
   })
 
   it('never returns a property that is not in the supplied list (cross-owner rejection at the data layer, not this function) — the caller only ever passes its own RLS-scoped properties', () => {
-    const result = matchProperty('12109 Rustic River Way', [])
+    const result = matchProperty('123 Example Street', [])
     expect(result.property).toBeNull()
   })
 
@@ -56,7 +56,7 @@ describe('matchProperty — PROPERTY ASSIGNMENT', () => {
   })
 
   it('is case- and punctuation-insensitive', () => {
-    const result = matchProperty('12109 RUSTIC RIVER WAY.', properties)
+    const result = matchProperty('123 EXAMPLE STREET.', properties)
     expect(result.confidence).toBe('High')
   })
 })

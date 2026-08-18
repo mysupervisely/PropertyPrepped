@@ -97,7 +97,7 @@ export default function PropertyValueCompsPage() {
                 value={addressText}
                 onTextChange={(v) => { setAddressText(v); setNormalized(null) }}
                 onSelect={(addr) => { setNormalized(addr); setAddressText(addr.formattedAddress) }}
-                placeholder="17 Amazon Ave, Miami, FL 33101"
+                placeholder="123 Example Street, Example City, FL 12345"
               />
             </div>
           </label>
