@@ -99,6 +99,13 @@ export const ApplyFieldsSchema = z.object({
   website: z.string().nullable(),
   // Appraisal → Property
   estimatedValue: z.string().nullable(),
+  // Smart Upload Foundation: the property's street address, when the
+  // document states one — used to suggest which of the caller's own
+  // properties this item belongs to (never to silently assign one; see
+  // lib/smart-upload/match-property.ts). Requested for every document
+  // type (DOCUMENT_TYPE_APPLY_FIELDS below), since any document type can
+  // mention an address, not just the types that already had a use for it.
+  propertyAddress: z.string().nullable(),
 })
 
 export const DocumentAnalysisSchema = z.object({
@@ -251,6 +258,7 @@ export const ProviderApplyFieldsSchema = z.object({
   email: unknownableField(z.string()),
   website: unknownableField(z.string()),
   estimatedValue: unknownableField(z.string()),
+  propertyAddress: unknownableField(z.string()),
 })
 
 /**
@@ -347,6 +355,7 @@ export const APPLY_FIELD_LABELS: Record<keyof ApplyFields, string> = {
   vendor: 'Vendor', description: 'Description', cost: 'Cost', amount: 'Amount', date: 'Date', category: 'Category',
   name: 'Contact Name', businessName: 'Business Name', phone: 'Phone', email: 'Email', website: 'Website',
   estimatedValue: 'Estimated Value',
+  propertyAddress: 'Property Address',
 }
 
 /**
@@ -359,17 +368,35 @@ export const APPLY_FIELD_LABELS: Record<keyof ApplyFields, string> = {
  * lives in `importantNotes` instead, exactly as it did in the internal
  * `groups` free text before.
  */
+// Smart Upload Foundation: 'propertyAddress' is appended to every type's
+// list (not just the types that previously mentioned an address in
+// importantNotes free text) — property matching needs to work regardless
+// of which kind of document was uploaded.
+//
+// 'Other' additionally carries a small, genuinely type-agnostic field set
+// (vendor/businessName/phone/email/website/description/amount/date) —
+// this is the schema Smart Upload's automatic first-pass analysis always
+// requests, for both PDFs and images, before it knows the real document
+// type (components/SmartUpload/SmartUploadModal.tsx). Deliberately NOT
+// the full Receipt field set: forcing "this is a contractor invoice"
+// framing onto a photographed insurance page or lease would produce
+// wrong/misleading values (a landlord's name mislabeled as "vendor", the
+// document's actual subject bent to fit a shape it doesn't have) — see
+// prompts.ts's FIELD_GUIDANCE.Other for how each field is asked for
+// generically instead. This also benefits the ordinary, unrelated case
+// of a real 'Other'-classified document uploaded the normal way (used to
+// extract nothing structured at all beyond notes).
 export const DOCUMENT_TYPE_APPLY_FIELDS: Record<DocumentType, (keyof ApplyFields)[]> = {
-  'Insurance Policy': ['carrier', 'policyNumber', 'annualPremium', 'deductible', 'effectiveDate', 'expirationDate'],
-  Lease: ['tenantName', 'tenantEmail', 'monthlyRent', 'securityDeposit', 'startDate', 'endDate'],
-  'Mortgage / Loan Statement': ['lender', 'loanNumber', 'originalBalance', 'currentBalance', 'interestRate', 'monthlyPayment', 'escrowAmount', 'loanTermYears', 'maturityDate'],
-  'Closing Disclosure / Settlement Statement': [],
-  'Inspection Report': [],
-  Appraisal: ['estimatedValue', 'effectiveDate'],
-  'Contractor Invoice / Receipt': ['vendor', 'description', 'cost', 'amount', 'date', 'category', 'name', 'businessName', 'phone', 'email', 'website'],
-  'Property Tax Document': [],
-  'HOA Document': [],
-  Other: [],
+  'Insurance Policy': ['carrier', 'policyNumber', 'annualPremium', 'deductible', 'effectiveDate', 'expirationDate', 'propertyAddress'],
+  Lease: ['tenantName', 'tenantEmail', 'monthlyRent', 'securityDeposit', 'startDate', 'endDate', 'propertyAddress'],
+  'Mortgage / Loan Statement': ['lender', 'loanNumber', 'originalBalance', 'currentBalance', 'interestRate', 'monthlyPayment', 'escrowAmount', 'loanTermYears', 'maturityDate', 'propertyAddress'],
+  'Closing Disclosure / Settlement Statement': ['propertyAddress'],
+  'Inspection Report': ['propertyAddress'],
+  Appraisal: ['estimatedValue', 'effectiveDate', 'propertyAddress'],
+  'Contractor Invoice / Receipt': ['vendor', 'description', 'cost', 'amount', 'date', 'category', 'name', 'businessName', 'phone', 'email', 'website', 'propertyAddress'],
+  'Property Tax Document': ['propertyAddress'],
+  'HOA Document': ['propertyAddress'],
+  Other: ['vendor', 'businessName', 'phone', 'email', 'website', 'description', 'amount', 'date', 'propertyAddress'],
 }
 
 const MAX_NOTES = 8

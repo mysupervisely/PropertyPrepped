@@ -1032,16 +1032,16 @@ h2, h3, p { margin-top: 0; }
    moved into the hamburger (components/AuthNavMenu.tsx, below); email is
    no longer shown anywhere in the header. */
 
-/* The single top-right primary action (components/SmartUploadButton.tsx).
-   Not yet wired to anything real — see the component's own doc comment —
-   styled like any other disabled .primary button (.primary:disabled
-   above), just with its own icon+label layout and a shorter label once
-   "Smart Upload" itself doesn't comfortably fit. */
-.smartUploadButton { display: inline-flex; align-items: center; gap: 8px; }
-.smartUploadButton .labelShort { display: none; }
-@media (max-width: 480px) {
-  .smartUploadButton .labelFull { display: none; }
-  .smartUploadButton .labelShort { display: inline; }
+/* The single top-right primary action (components/SmartUploadButton.tsx)
+   — opens the real Smart Upload workflow (components/SmartUpload/
+   SmartUploadModal.tsx). Always reads "+ Smart Upload", every width —
+   never shortened to just "Upload". At the narrowest supported widths
+   (320-430px) only the button's own font-size/padding shrink, so it
+   stays a comfortable tap target without crowding the wordmark; the
+   label text itself is untouched. */
+.smartUploadButton { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+@media (max-width: 430px) {
+  .smartUploadButton { padding: 10px 12px; font-size: 12.5px; gap: 5px; }
 }
 
 /* Hamburger menu additions: "+ Add Property" reads as an action (brand
@@ -1065,4 +1065,60 @@ h2, h3, p { margin-top: 0; }
 @media (max-width: 620px) {
   .heroInfoHead { flex-direction: column; align-items: stretch; }
   .heroInfoActions { justify-content: flex-start; flex-wrap: wrap; }
+}
+
+/* Smart Upload Foundation (components/SmartUpload/*) — a mobile-first
+   modal: entry options, a queue for "Upload Multiple", and a review
+   screen per item. Reuses .overlay/.modal/.docField/.docGroup/
+   .statusPill/.pillGood etc. from Document Intelligence wherever the
+   shape already matches (Part 22: "do not create different business
+   logic for each" of desktop/mobile — one layout, no separate mobile
+   markup). */
+.smartUploadModal { width: min(560px, 100%); }
+
+.smartUploadEntryPrompt { font-weight: 650; margin-bottom: 14px; }
+.smartUploadEntry { display: grid; gap: 10px; }
+.smartUploadEntryCompact { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.smartUploadEntryOption { display: grid; grid-template-columns: 44px 1fr; align-items: center; column-gap: 12px; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; cursor: pointer; background: white; min-height: 56px; }
+.smartUploadEntryOption:hover { border-color: var(--brand); }
+.smartUploadEntryOption input { display: none; }
+.smartUploadEntryIcon { font-size: 24px; text-align: center; }
+.smartUploadEntryOption strong { display: block; font-size: 15px; }
+.smartUploadEntryOption small { color: var(--muted); font-size: 12.5px; }
+
+.smartUploadQueueList { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.smartUploadQueueItem { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 13px 14px; background: white; min-height: 48px; text-align: left; }
+.smartUploadQueueItem:disabled { opacity: .6; cursor: progress; }
+.smartUploadQueueName { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 13.5px; }
+
+.smartUploadReview { display: grid; gap: 18px; }
+
+/* Property picker (components/SmartUpload/PropertyPicker.tsx) — large,
+   equal tap targets (Part 8/22), never visually implying a preselected
+   choice beyond the explicit "Suggested match" badge. */
+.propertyPickerPrompt { font-weight: 650; margin-bottom: 10px; }
+.propertyPickerGrid { display: grid; gap: 10px; }
+.propertyPickerOption { display: grid; text-align: left; gap: 3px; border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: white; min-height: 56px; }
+.propertyPickerOption strong { font-size: 14.5px; }
+.propertyPickerOption span { color: var(--muted); font-size: 12.5px; }
+.propertyPickerOption.selected { border-color: var(--brand); background: var(--brand-soft); }
+.propertyPickerOption.selected span { color: var(--brand); }
+.propertyPickerOption.suggested { border-color: #cadfd4; }
+.propertyPickerBadge { display: inline-block; width: fit-content; background: var(--brand-soft); color: var(--brand); font-size: 10.5px; font-weight: 750; text-transform: uppercase; letter-spacing: .03em; padding: 3px 8px; border-radius: 999px; margin-bottom: 4px; }
+
+.smartUploadTaxNote { margin-top: -6px; }
+.smartUploadToggle { display: flex; align-items: flex-start; gap: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 13px 14px; cursor: pointer; }
+.smartUploadToggle input { margin-top: 3px; width: 16px; height: 16px; }
+.smartUploadToggle span { font-weight: 650; font-size: 13.5px; display: block; }
+.smartUploadToggle small { color: var(--muted); font-size: 12px; display: block; margin-top: 2px; }
+.smartUploadServiceSection { display: grid; gap: 14px; border-left: 2px solid var(--brand-soft); padding-left: 14px; }
+.smartUploadContactSection { display: grid; gap: 6px; }
+.smartUploadContactPrompt { display: grid; gap: 8px; }
+.smartUploadContactActions { display: flex; gap: 8px; }
+.smartUploadSavedBanner { background: var(--brand-soft); color: var(--brand); border-radius: 10px; padding: 12px 14px; font-weight: 650; font-size: 13.5px; display: grid; gap: 8px; justify-items: start; }
+.smartUploadOpenLink { display: inline-block; }
+.smartUploadSaveButton { width: 100%; padding: 14px; font-size: 14.5px; }
+
+@media (max-width: 480px) {
+  .smartUploadModal { border-radius: 16px 16px 0 0; width: 100%; }
 }

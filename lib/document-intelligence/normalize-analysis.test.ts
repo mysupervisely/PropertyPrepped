@@ -108,18 +108,26 @@ describe('normalizeDocumentTypeAnalysis — groups (built deterministically, nev
     expect(notes.fields[1].sourcePage).toBeNull() // no second highlight supplied
   })
 
-  it('omits the "Key Details" group entirely for a document type with no applyFields (e.g. Inspection Report)', () => {
+  // Smart Upload Foundation: propertyAddress was added to EVERY document
+  // type's applyFields list (schemas.ts's DOCUMENT_TYPE_APPLY_FIELDS), so
+  // a type with otherwise no applyFields (e.g. Inspection Report) now
+  // shows a "Key Details" group with exactly that one field — never
+  // omitted, and never silently fabricated as identified when it isn't.
+  it('"Key Details" for a document type with no OTHER applyFields (e.g. Inspection Report) shows only the always-present Property Address field', () => {
     const normalized = normalizeDocumentTypeAnalysis(
       'Inspection Report',
       baseRaw({ classification: { documentType: 'Inspection Report', confidence: 'High' }, applyFields: {}, importantNotes: ['Roof appears original, recommend evaluation.'] }),
     )
-    expect(normalized.groups.find((g) => g.title === 'Key Details')).toBeUndefined()
+    const keyDetails = normalized.groups.find((g) => g.title === 'Key Details')
+    expect(keyDetails?.fields).toHaveLength(1)
+    expect(keyDetails?.fields[0]).toMatchObject({ label: 'Property Address', value: 'Not identified in the uploaded document', confidence: null })
     expect(normalized.groups.find((g) => g.title === 'Notes')).toBeDefined()
   })
 
-  it('produces an empty groups array (never a fabricated empty section) when there is nothing at all to show', () => {
+  it('never produces a fabricated empty section — "Notes" is entirely absent (not an empty array entry) when there are no importantNotes, even though "Key Details" still always shows the Property Address placeholder', () => {
     const normalized = normalizeDocumentTypeAnalysis('Property Tax Document', baseRaw({ classification: { documentType: 'Property Tax Document', confidence: 'Low' }, applyFields: {}, importantNotes: [] }))
-    expect(normalized.groups).toEqual([])
+    expect(normalized.groups.find((g) => g.title === 'Notes')).toBeUndefined()
+    expect(normalized.groups).toEqual([{ title: 'Key Details', fields: [expect.objectContaining({ label: 'Property Address' })] }])
   })
 })
 
