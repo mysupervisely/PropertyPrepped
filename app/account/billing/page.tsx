@@ -9,13 +9,14 @@
 // session itself is created server-side after verifying the caller's
 // identity (see app/api/billing/portal/route.ts).
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { isSupabaseConfigured, supabase } from '../../../lib/supabase'
 import { useAuthUser } from '../../../lib/useAuthUser'
 import { useSubscription } from '../../../lib/useSubscription'
 import { PLANS, PUBLIC_PLAN_ORDER } from '../../../lib/billing/plans'
 import { openBillingPortal } from '../../../lib/billing/client'
+import { buildCheckoutSyncSchedule, shouldContinueCheckoutSync } from '../../../lib/billing/checkout-sync'
 import { AuthHeader } from '../../../components/AuthHeader'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -54,17 +55,32 @@ export default function BillingPage() {
     supabase.from('properties').select('id', { count: 'exact', head: true }).then(({ count }) => setPropertyCount(count ?? 0))
   }, [user?.id])
 
+  // Issue 5 fix: a single fixed-delay retry raced the Stripe webhook and,
+  // once it lost that race, never tried again — the page could show a
+  // stale Free plan indefinitely until manually reloaded. This is now a
+  // short BOUNDED sequence of retries (lib/billing/checkout-sync.ts)
+  // that stops the instant the paid plan is actually confirmed, and
+  // also stops on its own after ~19s if it never arrives — never an
+  // infinite loop, and never anything but a read of the real DB row
+  // (never a fabricated/optimistic paid state). Only ever runs when
+  // ?checkout=success is present; a normal visit to this page never
+  // schedules anything here.
+  const [checkoutSyncAttempts, setCheckoutSyncAttempts] = useState(0)
+  const checkoutSyncSchedule = useMemo(() => buildCheckoutSyncSchedule(), [])
+  const checkoutSyncing = shouldContinueCheckoutSync({
+    checkoutState, plan, attemptsFired: checkoutSyncAttempts, schedule: checkoutSyncSchedule,
+  })
+
   useEffect(() => {
-    // Give the webhook a moment to land, then refresh once so a freshly
-    // completed checkout shows up without a manual page reload. Stripe
-    // webhook state remains authoritative either way — this is only UX
-    // polish, never what grants access (Section 1).
-    if (checkoutState === 'success') {
-      const t = setTimeout(() => void refresh(), 2500)
-      return () => clearTimeout(t)
-    }
+    if (!checkoutSyncing) return
+    const step = checkoutSyncSchedule[checkoutSyncAttempts]
+    const t = setTimeout(() => {
+      void refresh()
+      setCheckoutSyncAttempts((n) => n + 1)
+    }, step.delayMs)
+    return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checkoutState])
+  }, [checkoutSyncing, checkoutSyncAttempts])
 
   async function handleManageSubscription() {
     if (!supabase) return
@@ -129,7 +145,14 @@ export default function BillingPage() {
       </section>
 
       {checkoutState === 'success' && (
-        <div className="statusMessage successMessage">Thanks! If you just subscribed, this page will update automatically within a few seconds once Stripe confirms the payment.</div>
+        <div className="statusMessage successMessage">
+          Thanks! If you just subscribed, this page will update automatically within a few seconds once Stripe confirms the payment.
+          {/* Issue 5: only shown while a bounded background re-check is
+              actually still in flight — never claims to be "confirming"
+              once that loop has stopped, whether because the paid plan
+              landed or because the bounded window ran out. */}
+          {checkoutSyncing && <><br /><span className="checkoutSyncingNote">Confirming your subscription…</span></>}
+        </div>
       )}
       {checkoutState === 'cancelled' && (
         <div className="statusMessage">Checkout was cancelled — your plan hasn&rsquo;t changed.</div>

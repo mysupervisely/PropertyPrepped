@@ -134,28 +134,25 @@ export default function HomePurchaseCalculatorPage() {
         <p>For buying a place to live — not a rental. Enter what you know; everything recalculates instantly. This is a calculator, not a loan offer or a commitment to lend.</p>
       </section>
 
+      {/* Pre-Launch Calculator + Billing UX Polish: .evaluatorResults was
+          rendered BEFORE .evaluatorInputs here, so it — not the input
+          form — landed in .evaluatorLayout's wide minmax(0,1fr) column,
+          while the actual form was squeezed into the narrow fixed 340px
+          column meant for a sticky results sidebar. The mobile-only
+          ".evaluatorResults { order: -1 }" override only makes sense if
+          results are normally SECOND in source order on desktop (so it
+          takes real work to pull them back to the top on mobile) —
+          confirming this DOM order was inverted from what the CSS was
+          authored for. Inside that 340px column, ModeField's %/$ toggle
+          left its value input so narrow that a typed number was present
+          in state (the calculation always used it correctly) but had
+          ~0px of space to actually render — exactly the "value not
+          visibly displayed" bug reported for Down Payment and Estimated
+          Closing Costs. Reordering below (inputs first/wide/left,
+          results second/narrow/sticky-right) fixes the display bug at
+          its root and restores the intended sticky-summary-while-you-
+          scroll-the-form layout; no CSS or calculation logic changed. */}
       <div className="evaluatorLayout">
-        <aside className="evaluatorResults">
-          <div className="resultsSummaryCard">
-            <p className="eyebrow">ESTIMATED TOTAL MONTHLY PAYMENT</p>
-            <div className="homePurchaseHero">{money(result.totalMonthlyPayment)}<small>/mo</small></div>
-            <div className="summaryTileGrid">
-              <div className="summaryTile"><span>Principal &amp; interest</span><strong>{money(result.principalAndInterestMonthly)}</strong></div>
-              <div className="summaryTile"><span>Property tax</span><strong>{money(result.propertyTaxMonthly)}</strong></div>
-              <div className="summaryTile"><span>Insurance</span><strong>{money(result.insuranceMonthly)}</strong></div>
-              <div className="summaryTile"><span>PMI</span><strong>{money(result.pmiMonthly)}</strong></div>
-              <div className="summaryTile"><span>HOA</span><strong>{money(result.hoaMonthly)}</strong></div>
-            </div>
-            <div className="homePurchaseCashRow">
-              <div><span>Loan amount</span><strong>{money(result.loanAmount)}</strong></div>
-              <div><span>Down payment</span><strong>{money(result.downPaymentAmount)}</strong></div>
-              <div><span>Est. closing costs</span><strong>{money(result.closingCostsAmount)}</strong></div>
-              <div><span>Cash needed to close</span><strong>{money(result.cashNeededToClose)}</strong></div>
-              <div><span>Loan-to-value</span><strong>{result.loanToValuePercent === null ? 'N/A' : `${result.loanToValuePercent.toFixed(1)}%`}</strong></div>
-            </div>
-          </div>
-        </aside>
-
         <div className="evaluatorInputs">
           <section className="evaluatorSection">
             <div className="evaluatorSectionHead"><h2>Property</h2><p>Optional — helps you keep track of what this estimate was for.</p></div>
@@ -208,6 +205,27 @@ export default function HomePurchaseCalculatorPage() {
             Estimate only, based on the figures you entered. Not a loan offer, pre-approval, or commitment to lend. Actual rates, taxes, insurance and fees vary by lender and location.
           </p>
         </div>
+
+        <aside className="evaluatorResults">
+          <div className="resultsSummaryCard">
+            <p className="eyebrow">ESTIMATED TOTAL MONTHLY PAYMENT</p>
+            <div className="homePurchaseHero">{money(result.totalMonthlyPayment)}<small>/mo</small></div>
+            <div className="summaryTileGrid">
+              <div className="summaryTile"><span>Principal &amp; interest</span><strong>{money(result.principalAndInterestMonthly)}</strong></div>
+              <div className="summaryTile"><span>Property tax</span><strong>{money(result.propertyTaxMonthly)}</strong></div>
+              <div className="summaryTile"><span>Insurance</span><strong>{money(result.insuranceMonthly)}</strong></div>
+              <div className="summaryTile"><span>PMI</span><strong>{money(result.pmiMonthly)}</strong></div>
+              <div className="summaryTile"><span>HOA</span><strong>{money(result.hoaMonthly)}</strong></div>
+            </div>
+            <div className="homePurchaseCashRow">
+              <div><span>Loan amount</span><strong>{money(result.loanAmount)}</strong></div>
+              <div><span>Down payment</span><strong>{money(result.downPaymentAmount)}</strong></div>
+              <div><span>Est. closing costs</span><strong>{money(result.closingCostsAmount)}</strong></div>
+              <div><span>Cash needed to close</span><strong>{money(result.cashNeededToClose)}</strong></div>
+              <div><span>Loan-to-value</span><strong>{result.loanToValuePercent === null ? 'N/A' : `${result.loanToValuePercent.toFixed(1)}%`}</strong></div>
+            </div>
+          </div>
+        </aside>
       </div>
     </main>
   )

@@ -584,38 +584,32 @@ function PropertyEvaluator() {
       {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
       {saveMessage && <div className="statusMessage successMessage">{saveMessage}</div>}
 
+      {/* Pre-Launch Calculator + Billing UX Polish: .evaluatorResults was
+          rendered BEFORE .evaluatorInputs here, so it — not the input
+          form — landed in .evaluatorLayout's wide minmax(0,1fr) column,
+          while the actual form was squeezed into the narrow fixed 340px
+          column meant for a sticky results sidebar (same root cause as
+          the Home Purchase Calculator's down-payment/closing-cost
+          display bug — see that page's own comment for the full
+          diagnosis). Inside that 340px column, ModeField's %/$ toggle
+          left its value input so narrow that a typed number was present
+          in state (the calculation always used it correctly) but had
+          ~0px of space to actually render. Reordering below (inputs
+          first/wide/left, results second/narrow/sticky-right) fixes the
+          display bug at its root; no CSS or calculation logic changed. */}
       <div className="evaluatorLayout">
-        <aside className="evaluatorResults">
-          <div className="resultsSummaryCard">
-            <p className="eyebrow">LIVE RESULTS</p>
-            <div className="summaryTileGrid">
-              {summaryTiles.map((tile) => (
-                <div key={tile.label} className="summaryTile">
-                  <span>{tile.label}</span>
-                  <strong className={tile.toneClass || ''}>{tile.value}</strong>
-                  {tile.hint && <small>{tile.hint}</small>}
-                </div>
-              ))}
-            </div>
-            <a href="#fullMetrics" className="summaryLink">See full breakdown ↓</a>
-            <div className="saveActions">
-              {user ? (
-                <>
-                  <button className="primary" disabled={saving} onClick={() => void saveAnalysis()}>{saving ? 'Saving…' : savedId ? 'Update Analysis' : 'Save Analysis'}</button>
-                  <button className="secondary" disabled={!savedId} title={savedId ? undefined : 'Save this analysis first'} onClick={openConvert}>Save as Property</button>
-                </>
-              ) : (
-                <Link href="/" className="secondary saveActionsLink">Sign in to save this analysis</Link>
-              )}
-              {linkedPropertyId && <p className="linkedNote">Linked to a saved property.</p>}
-            </div>
-          </div>
-        </aside>
-
         <div className="evaluatorInputs">
           <Section title="Property" description="What you're evaluating.">
             <TextField label="Analysis Name" value={form.name} onChange={(v) => set('name', v)} placeholder="e.g. Tampa Rental Deal" hint="Optional — your own label for this analysis." />
-            <label className="evalField">
+            {/* Issue 4: this was a plain half-width .evalField sharing a
+                row with Analysis Name in the 2-column .evalGrid, which —
+                combined with the layout bug above — left it too narrow
+                to read/enter a normal address on desktop. fullField
+                spans both columns (same class Home Purchase Calculator's
+                Address field already uses); .evalGrid already collapses
+                to one column on mobile regardless, so this doesn't
+                change mobile sizing. */}
+            <label className="evalField fullField">
               <span>Property Address</span>
               <div className="evalInputWrap">
                 <AddressAutocomplete value={form.address} onTextChange={(v) => set('address', v)} onSelect={(addr) => set('address', addr.formattedAddress)} placeholder="123 Example Street, Example City, FL 12345" />
@@ -714,6 +708,33 @@ function PropertyEvaluator() {
             </Section>
           )}
         </div>
+
+        <aside className="evaluatorResults">
+          <div className="resultsSummaryCard">
+            <p className="eyebrow">LIVE RESULTS</p>
+            <div className="summaryTileGrid">
+              {summaryTiles.map((tile) => (
+                <div key={tile.label} className="summaryTile">
+                  <span>{tile.label}</span>
+                  <strong className={tile.toneClass || ''}>{tile.value}</strong>
+                  {tile.hint && <small>{tile.hint}</small>}
+                </div>
+              ))}
+            </div>
+            <a href="#fullMetrics" className="summaryLink">See full breakdown ↓</a>
+            <div className="saveActions">
+              {user ? (
+                <>
+                  <button className="primary" disabled={saving} onClick={() => void saveAnalysis()}>{saving ? 'Saving…' : savedId ? 'Update Analysis' : 'Save Analysis'}</button>
+                  <button className="secondary" disabled={!savedId} title={savedId ? undefined : 'Save this analysis first'} onClick={openConvert}>Save as Property</button>
+                </>
+              ) : (
+                <Link href="/" className="secondary saveActionsLink">Sign in to save this analysis</Link>
+              )}
+              {linkedPropertyId && <p className="linkedNote">Linked to a saved property.</p>}
+            </div>
+          </div>
+        </aside>
       </div>
 
       <section id="fullMetrics" className="evaluatorSection">

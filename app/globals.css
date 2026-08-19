@@ -226,6 +226,10 @@ h2, h3, p { margin-top: 0; }
 .statusMessage { margin-top: 14px; border-radius: 10px; padding: 11px 12px; font-size: 13px; line-height: 1.45; }
 .errorMessage, .globalError { background: #fff2f1; border: 1px solid #efcbc7; color: #862d27; }
 .successMessage { background: var(--brand-soft); border: 1px solid #cadfd4; color: var(--brand); }
+/* Pre-Launch Calculator + Billing UX Polish, Issue 5: the bounded
+   post-checkout re-check's transient sub-line inside the (unchanged)
+   success message. */
+.checkoutSyncingNote { opacity: .75; font-style: italic; }
 .globalError { margin: 14px 0 0; border-radius: 10px; padding: 11px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .globalError button { border: 0; background: transparent; color: inherit; font-size: 20px; }
 .loadingState { color: var(--muted); }

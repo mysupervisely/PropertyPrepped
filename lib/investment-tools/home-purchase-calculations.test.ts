@@ -113,6 +113,34 @@ describe('buildHomePurchaseAnalysis — loan-to-value', () => {
   })
 })
 
+describe('buildHomePurchaseAnalysis — regression: $855,000 purchase, closing-costs percent (Issue 2)', () => {
+  // During QA an $855,000 purchase showed ~$273,600 in estimated closing
+  // costs and was flagged as "clearly incorrect." It wasn't a math bug:
+  // $273,600 is exactly 32% of $855,000 — mathematically correct for
+  // whatever percent was actually entered. The real defect (see
+  // evaluator-layout-order.test.ts) was a display bug that made the
+  // percent input's own typed value invisible, which is what let a
+  // mistyped "32" (instead of an intended "3.2") go unnoticed. These two
+  // cases pin both ends of that distinction so a future regression in
+  // either the math OR the decimal-point handling is caught immediately.
+  it('32% of $855,000 is $273,600 — confirms the formula itself was never wrong', () => {
+    const result = buildHomePurchaseAnalysis(baseInput({ purchasePrice: 855000, closingCostsMode: 'percent', closingCostsPercent: 32 }))
+    expect(result.closingCostsAmount).toBe(273600)
+  })
+
+  it('3.2% of $855,000 is $27,360 — the actually-intended value stays distinct from 32%, i.e. the decimal point is never silently dropped', () => {
+    const result = buildHomePurchaseAnalysis(baseInput({ purchasePrice: 855000, closingCostsMode: 'percent', closingCostsPercent: 3.2 }))
+    expect(result.closingCostsAmount).toBe(27360)
+  })
+
+  it('cash needed to close reflects whichever closing-costs value was actually entered, not a mix of the two', () => {
+    const at32 = buildHomePurchaseAnalysis(baseInput({ purchasePrice: 855000, downPaymentMode: 'percent', downPaymentPercent: 20, closingCostsMode: 'percent', closingCostsPercent: 32 }))
+    expect(at32.cashNeededToClose).toBe(171000 + 273600) // 20% down + 32% closing costs
+    const at3_2 = buildHomePurchaseAnalysis(baseInput({ purchasePrice: 855000, downPaymentMode: 'percent', downPaymentPercent: 20, closingCostsMode: 'percent', closingCostsPercent: 3.2 }))
+    expect(at3_2.cashNeededToClose).toBe(171000 + 27360)
+  })
+})
+
 describe('buildHomePurchaseAnalysis — never produces NaN/Infinity for any field', () => {
   it('handles a fully empty/zeroed input gracefully', () => {
     const result = buildHomePurchaseAnalysis({ purchasePrice: 0, downPaymentMode: 'percent', interestRatePercent: 0, loanTermYears: 0 })

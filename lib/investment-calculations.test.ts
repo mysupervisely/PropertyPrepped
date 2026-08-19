@@ -152,6 +152,50 @@ describe('buildAnalysis — 1. standard financed rental property', () => {
   })
 })
 
+describe('buildAnalysis — down payment mode ($/%) — Pre-Launch Calculator + Billing UX Polish, Issue 3', () => {
+  // Rental Property Analyzer's Down Payment field had the same display
+  // bug as Home Purchase Calculator's (see
+  // lib/investment-tools/evaluator-layout-order.test.ts for the shared
+  // root cause) — these pin the underlying math for both modes plus the
+  // zero/edge-case values called out for that page specifically.
+  it('percent mode: 20% of $350,000 is $70,000 down, $280,000 financed', () => {
+    const result = buildAnalysis({ ...baseInput, downPaymentMode: 'percent', downPaymentPercent: 20 })
+    expect(result.downPaymentAmount).toBeCloseTo(70000, 6)
+    expect(result.loanAmount).toBeCloseTo(280000, 6)
+    expect(result.monthlyMortgagePayment).toBeGreaterThan(0)
+  })
+
+  it('dollar mode: a flat $70,000 down payment produces the identical loan amount and P&I as the equivalent 20% above', () => {
+    const percentResult = buildAnalysis({ ...baseInput, downPaymentMode: 'percent', downPaymentPercent: 20 })
+    const amountResult = buildAnalysis({ ...baseInput, downPaymentMode: 'amount', downPaymentAmount: 70000 })
+    expect(amountResult.downPaymentAmount).toBe(70000)
+    expect(amountResult.loanAmount).toBeCloseTo(percentResult.loanAmount, 6)
+    expect(amountResult.monthlyMortgagePayment).toBeCloseTo(percentResult.monthlyMortgagePayment, 6)
+  })
+
+  it('zero down payment (percent mode): full purchase price financed, mortgage payment scales accordingly', () => {
+    const result = buildAnalysis({ ...baseInput, downPaymentMode: 'percent', downPaymentPercent: 0 })
+    expect(result.downPaymentAmount).toBe(0)
+    expect(result.loanAmount).toBe(350000)
+    expect(result.monthlyMortgagePayment).toBeGreaterThan(0)
+    assertAllFinite(result)
+  })
+
+  it('zero down payment (dollar mode): same result as 0% — the two modes agree at the boundary', () => {
+    const result = buildAnalysis({ ...baseInput, downPaymentMode: 'amount', downPaymentAmount: 0 })
+    expect(result.downPaymentAmount).toBe(0)
+    expect(result.loanAmount).toBe(350000)
+    assertAllFinite(result)
+  })
+
+  it('a dollar down payment larger than the purchase price is capped, never producing a negative loan amount', () => {
+    const result = buildAnalysis({ ...baseInput, downPaymentMode: 'amount', downPaymentAmount: 999999 })
+    expect(result.downPaymentAmount).toBe(350000)
+    expect(result.loanAmount).toBe(0)
+    assertAllFinite(result)
+  })
+})
+
 describe('buildAnalysis — 2. all-cash property', () => {
   const result = buildAnalysis({ ...baseInput, downPaymentMode: 'percent', downPaymentPercent: 100 })
 
