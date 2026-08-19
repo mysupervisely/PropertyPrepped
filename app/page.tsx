@@ -288,6 +288,12 @@ const compactMoney = (n: number) => {
 // existing user-preferences table to hang it on), just localStorage.
 const SNAPSHOT_EXPANDED_STORAGE_KEY = 'proproster:portfolioSnapshotExpanded'
 
+// PropWatch Mobile Compaction: the exact same lightweight localStorage
+// preference pattern as Portfolio Snapshot above, applied to PropWatch —
+// no new settings/preferences system, presentation-only, never sent to
+// the server, never affects which items are computed.
+const PROPWATCH_EXPANDED_STORAGE_KEY = 'proproster:propWatchExpanded'
+
 
 function EmptyModule({ title, text, action, onClick }: { title: string; text: string; action: string; onClick: () => void }) {
   return <div className="emptyModule"><strong>{title}</strong><span>{text}</span><button className="primary" onClick={onClick}>+ {action}</button></div>
@@ -417,6 +423,31 @@ export default function Home() {
       const next = !prev
       try {
         window.localStorage.setItem(SNAPSHOT_EXPANDED_STORAGE_KEY, String(next))
+      } catch {
+        // Best-effort persistence only — the toggle still works this session either way.
+      }
+      return next
+    })
+  }
+  // PropWatch Mobile Compaction — identical expand/collapse preference
+  // pattern to Portfolio Snapshot directly above. Presentation only:
+  // toggling this never touches attentionItems/vacancyItems/
+  // openMaintenanceItems/upcomingItems or how any of them are derived,
+  // only whether the already-computed PropWatch card is shown.
+  const [propWatchExpanded, setPropWatchExpanded] = useState(true)
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(PROPWATCH_EXPANDED_STORAGE_KEY)
+      if (stored !== null) setPropWatchExpanded(stored !== 'false')
+    } catch {
+      // Storage unavailable — fall back to the default expanded state, never throw.
+    }
+  }, [])
+  function togglePropWatchExpanded() {
+    setPropWatchExpanded((prev) => {
+      const next = !prev
+      try {
+        window.localStorage.setItem(PROPWATCH_EXPANDED_STORAGE_KEY, String(next))
       } catch {
         // Best-effort persistence only — the toggle still works this session either way.
       }
@@ -1747,85 +1778,105 @@ export default function Home() {
             plain uppercase — an explicit, deliberate exception for this
             one branded product name, not a change to the eyebrow style
             itself. */}
-        <div className="sectionHead"><div><p className="eyebrow">PropWatch</p><h2>Stay ahead of what needs attention.</h2></div></div>
-        {/* Small Launch Follow-up: ONE unified outer card (propWatchCard)
-            instead of two separate bordered panels — propWatchGrid is now
-            purely an internal layout (side by side on desktop, stacked
-            with a divider on mobile), not two independent cards. Content
-            below is unchanged, only re-wrapped. */}
-        <div className="propWatchCard">
-        <div className="propWatchGrid">
-          <div className="propWatchPanel">
-            <div className="propWatchPanelHead"><h3>Needs Your Attention</h3><p>{attentionItems.length ? `${attentionItems.length} item${attentionItems.length === 1 ? '' : 's'} need a look` : 'Rent, leases, insurance, mortgages and scheduled maintenance across your portfolio.'}</p></div>
-            {attentionItems.length === 0 ? (
-              <div className="emptyState"><strong>You&apos;re all caught up.</strong></div>
-            ) : (
-              <div className="dashboardItemList">
-                {attentionItems.map((item) => (
-                  <button key={`${item.type}-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
-                    <span className={`statusPill ${item.urgency === 'Expired' ? 'pillBad' : 'pillWarn'}`}>{item.urgency === 'Expired' ? 'Expired' : 'Due soon'}</span>
-                    <span className="dashboardItemBody">
-                      <strong>{item.label}</strong>
-                      <span>{item.description}</span>
-                      <span className="muted">{item.propertyLabel} · {dateOnly(item.date)}</span>
-                    </span>
-                  </button>
-                ))}
+        <div className="sectionHead">
+          <div><p className="eyebrow">PropWatch</p><h2>Stay ahead of what needs attention.</h2></div>
+          {/* PropWatch Mobile Compaction: same Hide/Show control/behavior
+              as Portfolio Snapshot above (.snapshotToggle, aria-expanded)
+              — the heading stays visible either way; only the card body
+              below is hidden when collapsed. */}
+          <button className="snapshotToggle" onClick={togglePropWatchExpanded} aria-expanded={propWatchExpanded}>{propWatchExpanded ? 'Hide' : 'Show'}</button>
+        </div>
+        {propWatchExpanded ? (
+          <div className="propWatchCard">
+            {/* PropWatch Mobile Compaction: when Upcoming has nothing,
+                its whole panel (heading, divider, empty message) is
+                skipped entirely rather than rendering an empty-state
+                placeholder — propWatchGridSingle drops the grid to one
+                column so Needs Your Attention naturally uses the full
+                card width/height instead of leaving a reserved blank
+                second column. Same on mobile and desktop, per Issues
+                2/4 — this was never a mobile-only special case. */}
+            <div className={`propWatchGrid${upcomingItems.length === 0 ? ' propWatchGridSingle' : ''}`}>
+              <div className="propWatchPanel">
+                <div className="propWatchPanelHead"><h3>Needs Your Attention</h3><p>{attentionItems.length ? `${attentionItems.length} item${attentionItems.length === 1 ? '' : 's'} need a look` : 'Rent, leases, insurance, mortgages and scheduled maintenance across your portfolio.'}</p></div>
+                {attentionItems.length === 0 ? (
+                  <div className="emptyState"><strong>You&apos;re all caught up.</strong></div>
+                ) : (
+                  <div className="dashboardItemList">
+                    {attentionItems.map((item) => (
+                      <button key={`${item.type}-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
+                        <span className={`statusPill ${item.urgency === 'Expired' ? 'pillBad' : 'pillWarn'}`}>{item.urgency === 'Expired' ? 'Expired' : 'Due soon'}</span>
+                        <span className="dashboardItemBody">
+                          <strong>{item.label}</strong>
+                          <span>{item.description}</span>
+                          <span className="muted">{item.propertyLabel} · {dateOnly(item.date)}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {vacancyItems.length > 0 && (
+                  <div className="dashboardItemList vacancyList">
+                    {vacancyItems.map((item: VacancyItem) => (
+                      <button key={item.id} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
+                        <span className="statusPill pillNeutral">Vacant</span>
+                        <span className="dashboardItemBody">
+                          <strong>{item.propertyLabel}</strong>
+                          <span>No current lease</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {openMaintenanceItems.length > 0 && (
+                  <>
+                    <div className="propWatchPanelHead propWatchPanelSubhead"><h3>Open Maintenance</h3><p>{openMaintenanceCount} open item{openMaintenanceCount === 1 ? '' : 's'} across your portfolio</p></div>
+                    <div className="dashboardItemList">
+                      {openMaintenanceItems.map((item) => (
+                        <button key={item.id} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
+                          <span className="statusPill pillWarn">{item.status}</span>
+                          <span className="dashboardItemBody">
+                            <strong>{item.description}</strong>
+                            <span>{[item.category, item.vendor].filter(Boolean).join(' · ')}</span>
+                            <span className="muted">{item.propertyLabel} · {dateOnly(item.date)}</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
-            )}
-            {vacancyItems.length > 0 && (
-              <div className="dashboardItemList vacancyList">
-                {vacancyItems.map((item: VacancyItem) => (
-                  <button key={item.id} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
-                    <span className="statusPill pillNeutral">Vacant</span>
-                    <span className="dashboardItemBody">
-                      <strong>{item.propertyLabel}</strong>
-                      <span>No current lease</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {openMaintenanceItems.length > 0 && (
-              <>
-                <div className="propWatchPanelHead propWatchPanelSubhead"><h3>Open Maintenance</h3><p>{openMaintenanceCount} open item{openMaintenanceCount === 1 ? '' : 's'} across your portfolio</p></div>
-                <div className="dashboardItemList">
-                  {openMaintenanceItems.map((item) => (
-                    <button key={item.id} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
-                      <span className="statusPill pillWarn">{item.status}</span>
-                      <span className="dashboardItemBody">
-                        <strong>{item.description}</strong>
-                        <span>{[item.category, item.vendor].filter(Boolean).join(' · ')}</span>
-                        <span className="muted">{item.propertyLabel} · {dateOnly(item.date)}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
 
-          <div className="propWatchPanel">
-            <div className="propWatchPanelHead"><h3>Upcoming</h3><p>Important dates coming up across your portfolio.</p></div>
-            {upcomingItems.length === 0 ? (
-              <div className="emptyState"><strong>No important dates coming up.</strong></div>
-            ) : (
-              <div className="dashboardItemList">
-                {upcomingItems.map((item) => (
-                  <button key={`${item.type}-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
-                    <span className="statusPill pillNeutral">{item.daysUntil === 0 ? 'Today' : `${item.daysUntil}d`}</span>
-                    <span className="dashboardItemBody">
-                      <strong>{item.label}</strong>
-                      <span>{item.description}</span>
-                      <span className="muted">{item.propertyLabel} · {dateOnly(item.date)}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
+              {upcomingItems.length > 0 && (
+                <div className="propWatchPanel">
+                  <div className="propWatchPanelHead"><h3>Upcoming</h3><p>Important dates coming up across your portfolio.</p></div>
+                  <div className="dashboardItemList">
+                    {upcomingItems.map((item) => (
+                      <button key={`${item.type}-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
+                        <span className="statusPill pillNeutral">{item.daysUntil === 0 ? 'Today' : `${item.daysUntil}d`}</span>
+                        <span className="dashboardItemBody">
+                          <strong>{item.label}</strong>
+                          <span>{item.description}</span>
+                          <span className="muted">{item.propertyLabel} · {dateOnly(item.date)}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-        </div>
+        ) : (
+          // Collapsed: a compact one-line summary, same treatment as
+          // Portfolio Snapshot's own collapsed state — built only from
+          // already-computed array lengths, no new derivation.
+          <p className="snapshotCollapsedSummary">
+            {(() => {
+              const count = attentionItems.length + openMaintenanceItems.length
+              return count > 0 ? `${count} item${count === 1 ? '' : 's'} need${count === 1 ? 's' : ''} a look` : "You're all caught up."
+            })()}
+          </p>
+        )}
       </section>
 
       <section><div className="sectionHead"><div><h2>My Properties</h2><p>{busy && !properties.length ? 'Loading your portfolio…' : `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} in your portfolio`}</p></div><button className="primary" onClick={() => openAddProperty()}>+ Add Property</button></div>
