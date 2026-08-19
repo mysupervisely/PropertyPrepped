@@ -226,6 +226,10 @@ h2, h3, p { margin-top: 0; }
 .statusMessage { margin-top: 14px; border-radius: 10px; padding: 11px 12px; font-size: 13px; line-height: 1.45; }
 .errorMessage, .globalError { background: #fff2f1; border: 1px solid #efcbc7; color: #862d27; }
 .successMessage { background: var(--brand-soft); border: 1px solid #cadfd4; color: var(--brand); }
+/* Pre-Launch Calculator + Billing UX Polish, Issue 5: the bounded
+   post-checkout re-check's transient sub-line inside the (unchanged)
+   success message. */
+.checkoutSyncingNote { opacity: .75; font-style: italic; }
 .globalError { margin: 14px 0 0; border-radius: 10px; padding: 11px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .globalError button { border: 0; background: transparent; color: inherit; font-size: 20px; }
 .loadingState { color: var(--muted); }
@@ -355,9 +359,19 @@ h2, h3, p { margin-top: 0; }
    tall as its own compact content. */
 .propWatchCard { border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: white; }
 .propWatchGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; align-items: start; }
+/* PropWatch Mobile Compaction: when Upcoming is empty its panel isn't
+   rendered at all (see app/page.tsx) — this single-column variant lets
+   Needs Your Attention use the full card width/height instead of
+   leaving an empty second column reserved for nothing. */
+.propWatchGrid.propWatchGridSingle { grid-template-columns: 1fr; }
 .propWatchPanel { min-width: 0; padding-left: 16px; }
 .propWatchPanel:first-child { padding-left: 0; }
-.propWatchPanel:last-child { padding-right: 0; border-left: 1px solid var(--line); }
+/* PropWatch Mobile Compaction: was `.propWatchPanel:last-child`, which
+   — now that Upcoming can be entirely absent — incorrectly gave a
+   divider/border to Needs Your Attention whenever it was the ONLY (and
+   therefore also last) panel. The adjacent-sibling form only matches a
+   second panel that actually follows a first one. */
+.propWatchPanel + .propWatchPanel { padding-right: 0; border-left: 1px solid var(--line); }
 .propWatchPanel .dashboardItemList { gap: 6px; }
 .propWatchPanel .dashboardItemRow { padding: 10px 12px; }
 /* Compact empty state inside a PropWatch panel — .emptyState's shared
@@ -372,7 +386,10 @@ h2, h3, p { margin-top: 0; }
 @media (max-width: 720px) {
   .propWatchGrid { grid-template-columns: 1fr; }
   .propWatchPanel { padding-left: 0; }
-  .propWatchPanel:last-child { border-left: none; border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
+  /* Same fix as the desktop rule above: only a genuine SECOND panel
+     (Upcoming, when it has items) gets the divider — a lone Needs Your
+     Attention panel (Upcoming empty/absent) never does. */
+  .propWatchPanel + .propWatchPanel { border-left: none; border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
 }
 
 /* Milestone 5: leases, mortgage, insurance & maintenance */
