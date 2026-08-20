@@ -38,6 +38,14 @@ h2, h3, p { margin-top: 0; }
 .welcomeIntro { padding: 30px 0 14px; }
 .welcomeIntro h1 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -0.6px; }
 .welcomeIntro > p:last-child { font-size: 15px; margin-top: 4px; }
+@media (max-width: 460px) {
+  /* Mobile Dashboard Spacing Micro-Fix: combined with .portfolioSnapshot's
+     own 460px rule below, this closes up the visibly wasted gap between
+     the greeting line and the Portfolio Snapshot card on mobile
+     (14px + 18px combined -> 6px + 8px) without touching desktop, where
+     the original 14px/18px values are untouched. */
+  .welcomeIntro { padding-bottom: 6px; }
+}
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 44px; }
 .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
 .stat span, .miniStats span, .heroMetrics span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 7px; }
@@ -321,7 +329,12 @@ h2, h3, p { margin-top: 0; }
   .snapshotMetric strong { white-space: normal; font-size: 18px; }
 }
 @media (max-width: 460px) {
-  .portfolioSnapshot { padding: 13px 16px 15px; }
+  /* Mobile Dashboard Spacing Micro-Fix: 18px top margin -> 8px on
+     mobile only (desktop keeps 18px via the base .portfolioSnapshot
+     rule above) — paired with .welcomeIntro's 460px rule above to close
+     up the wasted gap after the greeting, without touching the 30px
+     bottom margin (spacing before PropWatch) or any other value. */
+  .portfolioSnapshot { padding: 13px 16px 15px; margin-top: 8px; }
   .snapshotMetric strong { font-size: 17px; }
 }
 
@@ -330,6 +343,16 @@ h2, h3, p { margin-top: 0; }
    .statusPill/.pillGood/.pillWarn/.pillBad/.pillNeutral as-is; only the
    item-row layout below is new. */
 .commandCenterSection { margin-bottom: 28px; }
+@media (max-width: 460px) {
+  /* Mobile Dashboard Spacing Micro-Fix: My Properties (the plain
+     <section> right above this) has no bottom margin of its own, and
+     .commandCenterSection has no top margin — so on mobile this
+     heading began right at the bottom edge of the last property card.
+     Scoped to .recentActivitySection only, not .commandCenterSection
+     generally, so PropWatch's own spacing above Portfolio Snapshot is
+     completely unaffected. Desktop is untouched. */
+  .recentActivitySection { margin-top: 20px; }
+}
 .dashboardItemList { display: grid; gap: 8px; }
 .dashboardItemRow { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; width: 100%; text-align: left; border: 1px solid var(--line); border-radius: 12px; padding: 13px 14px; background: white; cursor: pointer; }
 .dashboardItemRow:hover { border-color: var(--brand); }
