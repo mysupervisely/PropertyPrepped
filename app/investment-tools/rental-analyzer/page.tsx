@@ -28,6 +28,9 @@ import { PricingNavLink } from '../../../components/PricingNavLink'
 import { Wordmark } from '../../../components/Wordmark'
 import { AuthHeader } from '../../../components/AuthHeader'
 import { AddressAutocomplete } from '../../../components/AddressAutocomplete'
+import { RealtorConnectCTA } from '../../../components/RealtorConnect/RealtorConnectCTA'
+import { RealtorConnectModal } from '../../../components/RealtorConnect/RealtorConnectModal'
+import { buildRentalAnalyzerLeadSnapshot } from '../../../lib/realtor-leads/snapshot'
 import {
   applyFinancingStatus,
   buildAnalysis,
@@ -263,6 +266,9 @@ export default function PropertyEvaluatorPage() {
 function PropertyEvaluator() {
   const { user } = useAuthUser()
   const { plan } = useSubscription(user)
+  // Realtor Connect V1 (Section 2) — the modal builds its own snapshot at
+  // open-time from the calculator's current form/result, never stale.
+  const [showRealtorConnect, setShowRealtorConnect] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
   const propertyId = searchParams.get('propertyId')
@@ -736,6 +742,29 @@ function PropertyEvaluator() {
           </div>
         </aside>
       </div>
+
+      {/* Realtor Connect V1 (Section 2) — placed right after the
+          calculator layout (near the results, per spec), before the
+          deeper "Full metric breakdown" section, so it never fights
+          .evaluatorResults' own fixed 2-column grid and stays a single
+          consistent position on both mobile and desktop. */}
+      <RealtorConnectCTA
+        headline="Need Help With This Investment?"
+        subheadline="Connect with a Real Estate Investment Specialist"
+        description="Send your property and investment analysis to PropRoster and we'll connect you with a real estate professional who can help you evaluate the opportunity and take the next step."
+        buttonLabel="Connect with an Investment Specialist"
+        onClick={() => setShowRealtorConnect(true)}
+      />
+      <RealtorConnectModal
+        open={showRealtorConnect}
+        onClose={() => setShowRealtorConnect(false)}
+        source="rental_analyzer"
+        propertyAddress={form.address}
+        analysisSnapshot={buildRentalAnalyzerLeadSnapshot(form.address, input, result)}
+        user={user}
+        supabase={supabase}
+        headline="Connect with a Real Estate Investment Specialist"
+      />
 
       <section id="fullMetrics" className="evaluatorSection">
         <div className="evaluatorSectionHead"><h2>Full metric breakdown</h2><p>All figures update instantly as you change the assumptions above.</p></div>

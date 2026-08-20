@@ -1043,6 +1043,36 @@ h2, h3, p { margin-top: 0; }
 .homePurchaseCashRow span { color: #cfe1d9; }
 .homePurchaseCashRow strong { font-weight: 700; }
 .calcDisclaimer { font-size: 12px; color: var(--muted); line-height: 1.6; padding: 4px 2px; }
+
+/* Realtor Connect V1 — internal Lead Center (app/admin/realtor-leads).
+   Reuses .recordCard/.recordTop/.recordRows/.statusPill/.formFieldset/
+   .formGrid as-is; only the list/expand wrapper below is new. */
+.realtorLeadList { display: grid; gap: 14px; }
+.realtorLeadCard { padding: 0; overflow: hidden; }
+.realtorLeadCardHead { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 20px 20px 0; cursor: pointer; }
+.realtorLeadCard .recordTop { border-bottom: 0; padding-bottom: 12px; }
+.realtorLeadCard .recordRows { padding: 0 20px 20px; }
+.realtorLeadDetail { border-top: 1px solid var(--line); padding: 18px 20px 20px; display: grid; gap: 14px; }
+.realtorLeadMessage { font-size: 13px; margin: 0; }
+.realtorLeadSnapshot pre { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; font-size: 11px; overflow-x: auto; margin-top: 6px; }
+
+/* Realtor Connect V1 — compact CTA near the calculator results. Reuses
+   .evaluatorSection's card look; realtorConnectCta only adds a soft
+   brand tint so it reads as a call-to-action, not a form section, while
+   staying the same size/weight as every other card on the page (Section
+   14: "CTA does not dominate the calculator"). */
+.realtorConnectCta { background: var(--brand-soft); border-color: #cadfd4; margin-top: 20px; }
+.realtorConnectCta h2 { font-size: 19px; margin-bottom: 6px; }
+.realtorConnectCtaSub { font-weight: 650; margin-bottom: 6px; }
+.realtorConnectCta .muted { margin-bottom: 14px; max-width: 620px; }
+.realtorConnectModal .formGrid { margin-top: 4px; }
+.realtorConnectFinePrint { font-size: 12px; margin-top: 12px; }
+/* Honeypot — present in the DOM for a naive bot to fill in, invisible
+   and unreachable (off-screen, not tab-focusable) for a real visitor. */
+.realtorConnectHoneypot { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+@media (max-width: 480px) {
+  .realtorConnectCta { padding: 16px; }
+}
 /* Address fields never need the $/%/mo suffix's reserved padding. */
 .evalInputWrap .addressAutocomplete input { padding-right: 12px; }
 @media (max-width: 560px) {
