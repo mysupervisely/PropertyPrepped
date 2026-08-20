@@ -1885,7 +1885,14 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="commandCenterSection">
+      {/* Mobile Dashboard Spacing Micro-Fix: recentActivitySection is a
+          styling-only hook (My Properties above has no bottom margin and
+          neither did .commandCenterSection have a top margin, so on
+          mobile this heading began right at the bottom edge of the last
+          property card) — scoped to Recent Activity alone so PropWatch's
+          own commandCenterSection spacing above Portfolio Snapshot is
+          untouched. */}
+      <section className="commandCenterSection recentActivitySection">
         <div className="sectionHead"><div><h2>Recent Activity</h2><p>What&apos;s changed across your portfolio lately.</p></div></div>
         {recentActivity.length === 0 ? (
           <div className="emptyState"><strong>Activity will appear here as you add information to your properties.</strong></div>
