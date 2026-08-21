@@ -17,9 +17,13 @@ import { AddressAutocomplete } from '../../../components/AddressAutocomplete'
 import { PricingNavLink } from '../../../components/PricingNavLink'
 import { Wordmark } from '../../../components/Wordmark'
 import { AuthHeader } from '../../../components/AuthHeader'
+import { RealtorConnectCTA } from '../../../components/RealtorConnect/RealtorConnectCTA'
+import { RealtorConnectModal } from '../../../components/RealtorConnect/RealtorConnectModal'
 import { useAuthUser } from '../../../lib/useAuthUser'
+import { supabase } from '../../../lib/supabase'
 import { num } from '../../../lib/investment-calculations'
 import { buildHomePurchaseAnalysis, type HomePurchaseInput, type PercentOrAmountMode } from '../../../lib/investment-tools/home-purchase-calculations'
+import { buildHomePurchaseLeadSnapshot } from '../../../lib/realtor-leads/snapshot'
 
 type FormState = {
   address: string
@@ -104,6 +108,9 @@ export default function HomePurchaseCalculatorPage() {
   const { user } = useAuthUser()
   const [form, setForm] = useState<FormState>(defaultForm())
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }))
+  // Realtor Connect V1 (Section 3) — the modal builds its own snapshot at
+  // open-time from the calculator's current form/result, never stale.
+  const [showRealtorConnect, setShowRealtorConnect] = useState(false)
 
   const input = useMemo(() => toHomePurchaseInput(form), [form])
   const result = useMemo(() => buildHomePurchaseAnalysis(input), [input])
@@ -227,6 +234,29 @@ export default function HomePurchaseCalculatorPage() {
           </div>
         </aside>
       </div>
+
+      {/* Realtor Connect V1 (Section 3) — placed right after the
+          calculator layout (near the results, per spec) rather than
+          inside .evaluatorResults' fixed 2-column grid, so it never
+          fights that grid's own column sizing and stays a single
+          consistent position on both mobile and desktop. */}
+      <RealtorConnectCTA
+        headline="Interested in This Property?"
+        subheadline="Connect with a Local Realtor"
+        description="Send your property and purchase scenario to PropRoster and we'll help connect you with a real estate professional for the next step."
+        buttonLabel="Connect with a Realtor"
+        onClick={() => setShowRealtorConnect(true)}
+      />
+      <RealtorConnectModal
+        open={showRealtorConnect}
+        onClose={() => setShowRealtorConnect(false)}
+        source="home_purchase"
+        propertyAddress={form.address}
+        analysisSnapshot={buildHomePurchaseLeadSnapshot(form.address, input, result)}
+        user={user}
+        supabase={supabase}
+        headline="Connect with a Local Realtor"
+      />
     </main>
   )
 }
