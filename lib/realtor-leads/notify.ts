@@ -1,27 +1,25 @@
 // PropRoster Milestone 21: Realtor Connect V1 — lead notification email.
 //
-// Section 10: "STOP before adding a paid/external email provider
-// automatically... Do not silently introduce a new paid service." This
-// codebase has NO email infrastructure at all today (checked: no
-// resend/sendgrid/nodemailer/SMTP dependency or code anywhere) — adding
-// one is a real product/infra decision (which provider, whose account,
-// whose billing) that isn't this milestone's call to make silently.
-//
-// So this module is split cleanly in two:
+// Resend is now configured for PropRoster (RESEND_API_KEY,
+// REALTOR_LEAD_NOTIFICATION_EMAIL, REALTOR_LEAD_FROM_EMAIL — all
+// server-side only, read here, never sent to the browser, never
+// hardcoded). This module stays split exactly as it was when no
+// provider existed:
 //   - buildLeadNotificationEmail(): pure, fully testable — builds the
-//     exact subject/body from a lead row. No network, no provider.
-//   - sendLeadNotificationEmail(): the ONLY place an external email
-//     provider would ever be wired in. Today it does not call one — it
-//     logs the built email server-side (visible in Netlify/server
-//     function logs) so a submitted lead is never silently lost even
-//     before a provider is chosen, and returns { sent: false, reason }
-//     so the API route can report accurately. Swapping in a real
-//     provider later is a one-function change here; nothing else in this
-//     module needs to change.
-//
-// REALTOR_LEAD_NOTIFICATION_EMAIL (server-side only, never sent to the
-// browser) is read here — see .env.example. Never hardcode a personal
-// email in source (Section 10).
+//     exact subject/body from a lead row. No network, no provider. Used
+//     unchanged from before Resend was wired in.
+//   - sendLeadNotificationEmail(): the one integration point. Calls
+//     Resend's HTTP API directly via fetch — same "plain fetch, no SDK
+//     dependency" convention this codebase already uses for its other
+//     third-party HTTP integrations (lib/address/providers/mapbox.ts,
+//     lib/valuation/providers/*.ts) — rather than adding the `resend`
+//     npm package for what is a single POST endpoint. Every failure mode
+//     (missing config, a non-2xx response, a thrown network error) is
+//     caught here and turned into a logged, non-throwing
+//     { sent: false, reason } — this function must NEVER throw, since
+//     lib/realtor-leads/handle-lead-submission.ts calls it only AFTER
+//     the lead is already durably persisted, and a notification failure
+//     must never take the successful submission down with it.
 
 import type { RealtorLeadRow } from './types'
 
@@ -115,36 +113,60 @@ export function buildLeadNotificationEmail(lead: RealtorLeadRow): LeadNotificati
   return { subject, body: lines.join('\n') }
 }
 
+/** True only when every env var Resend needs is present — a partial config is treated as unconfigured, never a partial/best-effort send. */
 export function isEmailNotificationConfigured(env: Record<string, string | undefined> = process.env): boolean {
-  return Boolean(env.REALTOR_LEAD_NOTIFICATION_EMAIL)
+  return Boolean(env.RESEND_API_KEY && env.REALTOR_LEAD_NOTIFICATION_EMAIL && env.REALTOR_LEAD_FROM_EMAIL)
 }
 
 export type SendResult = { sent: boolean; reason?: string }
 
+const RESEND_API_URL = 'https://api.resend.com/emails'
+
 /**
- * The one integration seam for an actual email provider. No provider is
- * configured in this codebase today, so this always logs the built
- * email server-side (never to the client, never to the browser console)
- * and returns sent: false — the lead itself is still safely persisted by
- * the caller regardless of this result (Section 10/11: submission
- * success must never depend on notification succeeding). See this file's
- * top comment for what changes here once a real provider is chosen.
+ * The one integration seam for the email provider — sends via Resend's
+ * HTTP API. Never throws: every failure (missing config, a non-2xx
+ * response, a network error) is caught, logged server-side only (never
+ * to the client — Resend's raw response body is never returned to the
+ * caller), and reported back as a non-throwing { sent: false, reason }.
+ * The lead itself is already durably persisted by the time this ever
+ * runs (see handle-lead-submission.ts) — this function's outcome can
+ * never take that back.
  */
 export async function sendLeadNotificationEmail(lead: RealtorLeadRow, env: Record<string, string | undefined> = process.env): Promise<SendResult> {
   if (!isEmailNotificationConfigured(env)) {
-    console.error('realtor-leads: REALTOR_LEAD_NOTIFICATION_EMAIL is not set — lead notification email was not sent.', { leadId: lead.id })
+    console.error('realtor-leads: email notification is not fully configured (RESEND_API_KEY / REALTOR_LEAD_NOTIFICATION_EMAIL / REALTOR_LEAD_FROM_EMAIL) — lead notification email was not sent.', { leadId: lead.id })
     return { sent: false, reason: 'not_configured' }
   }
 
   const { subject, body } = buildLeadNotificationEmail(lead)
-  // No email provider is wired into this codebase yet (Section 10) — log
-  // the fully-built notification server-side so it's never silently lost,
-  // rather than fabricating a "sent" result.
-  console.error('realtor-leads: no email provider configured — logging notification instead of sending.', {
-    leadId: lead.id,
-    to: env.REALTOR_LEAD_NOTIFICATION_EMAIL,
-    subject,
-    body,
-  })
-  return { sent: false, reason: 'no_provider_configured' }
+
+  try {
+    const response = await fetch(RESEND_API_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: env.REALTOR_LEAD_FROM_EMAIL,
+        to: env.REALTOR_LEAD_NOTIFICATION_EMAIL,
+        subject,
+        text: body,
+      }),
+    })
+
+    if (!response.ok) {
+      // Read defensively — Resend's error body is JSON, but never let a
+      // parse failure here turn into an uncaught throw. Logged, never
+      // returned to the caller.
+      const errorBody = await response.text().catch(() => '')
+      console.error('realtor-leads: Resend email send failed', { leadId: lead.id, status: response.status, body: errorBody })
+      return { sent: false, reason: 'provider_error' }
+    }
+
+    return { sent: true }
+  } catch (err) {
+    console.error('realtor-leads: Resend email send threw', { leadId: lead.id, err })
+    return { sent: false, reason: 'provider_error' }
+  }
 }

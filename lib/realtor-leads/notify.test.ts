@@ -65,15 +65,32 @@ describe('buildLeadNotificationEmail', () => {
   })
 })
 
-describe('isEmailNotificationConfigured / sendLeadNotificationEmail', () => {
-  afterEach(() => vi.restoreAllMocks())
+const FULL_ENV = {
+  RESEND_API_KEY: 're_test_123',
+  REALTOR_LEAD_NOTIFICATION_EMAIL: 'hello@proproster.com',
+  REALTOR_LEAD_FROM_EMAIL: 'notifications@proproster.com',
+}
 
-  it('is false when REALTOR_LEAD_NOTIFICATION_EMAIL is unset', () => {
+describe('isEmailNotificationConfigured', () => {
+  it('is false when nothing is set', () => {
     expect(isEmailNotificationConfigured({})).toBe(false)
   })
 
-  it('is true when REALTOR_LEAD_NOTIFICATION_EMAIL is set', () => {
-    expect(isEmailNotificationConfigured({ REALTOR_LEAD_NOTIFICATION_EMAIL: 'leads@example.com' })).toBe(true)
+  it('requires ALL three env vars — any single one missing is treated as fully unconfigured, never a partial send', () => {
+    expect(isEmailNotificationConfigured({ REALTOR_LEAD_NOTIFICATION_EMAIL: 'x@example.com', REALTOR_LEAD_FROM_EMAIL: 'y@example.com' })).toBe(false)
+    expect(isEmailNotificationConfigured({ RESEND_API_KEY: 're_x', REALTOR_LEAD_FROM_EMAIL: 'y@example.com' })).toBe(false)
+    expect(isEmailNotificationConfigured({ RESEND_API_KEY: 're_x', REALTOR_LEAD_NOTIFICATION_EMAIL: 'x@example.com' })).toBe(false)
+  })
+
+  it('is true when all three are set', () => {
+    expect(isEmailNotificationConfigured(FULL_ENV)).toBe(true)
+  })
+})
+
+describe('sendLeadNotificationEmail', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('never throws when unconfigured, and reports sent:false honestly rather than fabricating success', async () => {
@@ -83,11 +100,62 @@ describe('isEmailNotificationConfigured / sendLeadNotificationEmail', () => {
     spy.mockRestore()
   })
 
-  it('logs (does not silently drop) the built notification even when a recipient IS configured, since no provider is wired in yet', async () => {
+  it('never calls the network at all when unconfigured', async () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const result = await sendLeadNotificationEmail(baseLead(), { REALTOR_LEAD_NOTIFICATION_EMAIL: 'leads@example.com' })
-    expect(result).toEqual({ sent: false, reason: 'no_provider_configured' })
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    await sendLeadNotificationEmail(baseLead(), {})
+    expect(fetchMock).not.toHaveBeenCalled()
+    spy.mockRestore()
+  })
+
+  it('sends via Resend with the correct endpoint, headers, and body when fully configured', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init: Record<string, unknown>) => ({ ok: true, status: 200, text: async () => '' }) as Response)
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await sendLeadNotificationEmail(baseLead(), FULL_ENV)
+
+    expect(result).toEqual({ sent: true })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0] as [string, { method: string; headers: Record<string, string>; body: string }]
+    expect(url).toBe('https://api.resend.com/emails')
+    expect(init.method).toBe('POST')
+    expect(init.headers.Authorization).toBe('Bearer re_test_123')
+    expect(init.headers['Content-Type']).toBe('application/json')
+    const sentBody = JSON.parse(init.body)
+    expect(sentBody.from).toBe('notifications@proproster.com')
+    expect(sentBody.to).toBe('hello@proproster.com')
+    expect(sentBody.subject).toBe('New PropRoster Investment Lead - 17 Amaryllis Ln, Tampa, FL 33602')
+    expect(sentBody.text).toContain('Jamie Rivera')
+  })
+
+  it('reports sent:false (not a throw) on a non-2xx Resend response, and logs server-side without exposing the raw body to the caller', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fetchMock = vi.fn(async () => ({ ok: false, status: 422, text: async () => '{"message":"Invalid `from` field"}' }) as Response)
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await sendLeadNotificationEmail(baseLead(), FULL_ENV)
+
+    expect(result).toEqual({ sent: false, reason: 'provider_error' })
+    expect(JSON.stringify(result)).not.toContain('Invalid `from` field')
     expect(spy).toHaveBeenCalled()
     spy.mockRestore()
+  })
+
+  it('reports sent:false (not a throw) when the network call itself throws', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('getaddrinfo ENOTFOUND api.resend.com') }))
+
+    const result = await sendLeadNotificationEmail(baseLead(), FULL_ENV)
+
+    expect(result).toEqual({ sent: false, reason: 'provider_error' })
+    expect(JSON.stringify(result)).not.toContain('ENOTFOUND')
+    spy.mockRestore()
+  })
+
+  it('never leaks the API key into the returned result, whatever the outcome', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, text: async () => '' }) as Response))
+    const result = await sendLeadNotificationEmail(baseLead(), FULL_ENV)
+    expect(JSON.stringify(result)).not.toContain('re_test_123')
   })
 })

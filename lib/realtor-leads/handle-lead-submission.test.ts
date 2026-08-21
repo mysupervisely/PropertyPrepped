@@ -69,6 +69,13 @@ describe('handleLeadSubmission — happy paths', () => {
     expect(deps.inserted[0].analysis_snapshot).toEqual({ purchasePrice: 999, source: 'rental_analyzer' })
   })
 
+  it('notifies exactly once for one successfully inserted lead — never a duplicate send', async () => {
+    const deps = makeDeps()
+    await handleLeadSubmission(basePayload(), deps)
+    expect(deps.notified.length).toBe(1)
+    expect(deps.notified[0].name).toBe('Jamie Rivera')
+  })
+
   it('best-effort notifies after a successful insert, but a notification failure never fails the submission', async () => {
     const deps = makeDeps({ notify: async () => { throw new Error('smtp down') } })
     const result = await handleLeadSubmission(basePayload(), deps)
@@ -148,5 +155,15 @@ describe('handleLeadSubmission — duplicate-submit / rate-limit protection', ()
     const result = await handleLeadSubmission(basePayload(), deps)
     expect(result.status).toBe(500)
     expect((result.body as { error: string }).error).not.toMatch(/postgres|supabase|row-level|rls/i)
+  })
+
+  it('never sends a notification when persistence failed — notify only ever fires after a successful insert', async () => {
+    const failedInsert = makeDeps({ insertLead: async () => null })
+    await handleLeadSubmission(basePayload(), failedInsert)
+    expect(failedInsert.notified.length).toBe(0)
+
+    const thrownInsert = makeDeps({ insertLead: async () => { throw new Error('db down') } })
+    await handleLeadSubmission(basePayload(), thrownInsert)
+    expect(thrownInsert.notified.length).toBe(0)
   })
 })
