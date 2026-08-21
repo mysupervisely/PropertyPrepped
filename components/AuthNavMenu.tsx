@@ -40,6 +40,13 @@ const NAV_LINKS: { href: string; label: string }[] = [
   { href: '/rent-ledger', label: 'Rent Ledger' },
   { href: '/investment-tools', label: 'Investment Tools' },
   { href: '/propcrew', label: 'PropCrew' },
+  // Documents + Navigation + Realtor Connect Polish: the portfolio-wide
+  // document library — every property_documents row the caller owns,
+  // including ones Smart Upload/Portfolio Import left unassigned.
+  // Adjacent to Portfolio Import below since both are document-centric
+  // workflows; this is the page that lets a user finish what either one
+  // started.
+  { href: '/documents', label: 'Documents' },
   // Milestone 14: secondary to the header's own "+ Smart Upload" (also
   // linked from inside that modal's Entry screen) — onboarding an
   // existing portfolio of historical documents, not the everyday
@@ -53,7 +60,7 @@ const NAV_LINKS: { href: string; label: string }[] = [
   { href: '/pricing', label: 'Pricing' },
 ]
 
-export function AuthNavMenu() {
+export function AuthNavMenu({ onDashboardNavigate }: { onDashboardNavigate?: () => void } = {}) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const { user } = useAuthUser()
@@ -104,7 +111,35 @@ export function AuthNavMenu() {
       {open && (
         <nav className="authNavMenuPanel" aria-label="Main navigation">
           {NAV_LINKS.map((link) => (
-            <Link key={link.href} href={link.href} onClick={() => setOpen(false)}>{link.label}</Link>
+            <Link
+              key={link.href}
+              href={link.href}
+              onClick={(e) => {
+                setOpen(false)
+                // Dashboard Navigation Bug fix: the property workspace
+                // (app/page.tsx) is a single-page app living entirely at
+                // "/" — a normal Link to "/" while ALREADY on "/" is a
+                // same-route no-op in Next.js, so it never cleared the
+                // page's own selectedId state, and "Dashboard" silently
+                // failed to leave the property detail view (the user had
+                // to use "All Properties" instead, which calls
+                // setSelectedId(null) directly). onDashboardNavigate is
+                // that exact same reset — app/page.tsx passes its
+                // onBrandClick (already wired for the wordmark for this
+                // identical reason) down through AuthHeader only when
+                // it's rendering the property workspace, so this only
+                // ever fires there; every other page (Pricing, Profile,
+                // Search, …) has no callback and gets ordinary Link
+                // navigation to "/", which already works correctly since
+                // it's a real route change.
+                if (link.href === '/' && onDashboardNavigate) {
+                  e.preventDefault()
+                  onDashboardNavigate()
+                }
+              }}
+            >
+              {link.label}
+            </Link>
           ))}
           <Link href="/?add=property" className="authNavMenuAction" onClick={() => setOpen(false)}>+ Add Property</Link>
           <div className="authNavMenuDivider" role="separator" />

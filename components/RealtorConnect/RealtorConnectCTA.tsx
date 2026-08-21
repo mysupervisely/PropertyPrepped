@@ -19,7 +19,7 @@ export function RealtorConnectCTA({
 }: {
   /** The approved lead-in question, e.g. "Need Help With This Investment?" */
   headline: string
-  /** The approved bold sub-line, e.g. "Connect with a Real Estate Investment Specialist" */
+  /** The approved bold sub-line, e.g. "Connect with a local real estate agent" */
   subheadline: string
   description: string
   buttonLabel: string

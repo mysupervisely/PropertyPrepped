@@ -61,7 +61,11 @@ export function AuthHeader({ onBrandClick, onSmartUploadCompleted }: { onBrandCl
     <>
       <header className="topbar authHeader">
         <div className="topbarBrandGroup">
-          <AuthNavMenu />
+          {/* Dashboard Navigation Bug fix: reuse the exact same
+              onBrandClick this header already threads to the wordmark
+              below for the identical single-page-app reason — see
+              AuthNavMenu's own comment on onDashboardNavigate. */}
+          <AuthNavMenu onDashboardNavigate={onBrandClick} />
           {onBrandClick ? (
             <button className="brandButton" onClick={onBrandClick}>{brandContent}</button>
           ) : (

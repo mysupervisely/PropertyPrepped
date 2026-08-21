@@ -17,6 +17,18 @@ export type ActivityItem = {
   propertyId: string | null
   timestamp: string
   nav: NavTarget | null
+  // Documents + Navigation + Realtor Connect Polish: the safe identifier
+  // already available on a Document-type activity item — the document's
+  // own property_documents.id, never anything more sensitive (no storage
+  // path, no analysis content). Only Document activity items ever set
+  // this; every other activity type leaves it null. This is what lets an
+  // unassigned document's activity row link straight to /documents
+  // instead of staying a dead, unclickable row (Section 5) — the
+  // property-workspace `nav` mechanism above has no destination for a
+  // document that isn't on a property yet, so this is a second, smaller
+  // linkage rather than overloading `nav` with a shape it was never
+  // built for.
+  documentId: string | null
 }
 
 export type PropertyLabelLookup = Map<string, string>
@@ -45,6 +57,7 @@ export function documentActivity(rows: DocumentActivityInput[], propertyLabelByI
       description: label ? `Document uploaded to ${label}` : 'Document uploaded (not yet assigned to a property)',
       propertyId: d.property_id, timestamp: d.created_at,
       nav: d.property_id ? { tab: 'Documents', docsSubTab: 'Documents' } : null,
+      documentId: d.id,
     }
   })
 }
@@ -55,6 +68,7 @@ export function maintenanceActivity(rows: MaintenanceActivityInput[], propertyLa
     description: `Maintenance item added for ${propertyLabelById.get(m.property_id) || 'a property'}`,
     propertyId: m.property_id, timestamp: m.created_at,
     nav: { tab: 'Property', propSubTab: 'Maintenance' },
+    documentId: null,
   }))
 }
 
@@ -65,6 +79,7 @@ export function financialActivity(rows: FinancialActivityInput[], propertyLabelB
     description: `Financial transaction added to ${propertyLabelById.get(t.property_id) || 'a property'} (${t.category})`,
     propertyId: t.property_id, timestamp: t.created_at,
     nav: { tab: 'Financials' },
+    documentId: null,
   }))
 }
 
@@ -75,6 +90,7 @@ export function noteActivity(rows: NoteActivityInput[], propertyLabelById: Prope
     description: `Note added to ${propertyLabelById.get(n.property_id) || 'a property'}`,
     propertyId: n.property_id, timestamp: n.created_at,
     nav: { tab: 'Overview' },
+    documentId: null,
   }))
 }
 
@@ -84,6 +100,7 @@ export function leaseActivity(rows: LeaseActivityInput[], propertyLabelById: Pro
     description: `Lease added for ${propertyLabelById.get(l.property_id) || 'a property'}`,
     propertyId: l.property_id, timestamp: l.created_at,
     nav: { tab: 'Property', propSubTab: 'Lease' },
+    documentId: null,
   }))
 }
 
@@ -93,6 +110,7 @@ export function insuranceActivity(rows: InsuranceActivityInput[], propertyLabelB
     description: `Insurance policy added to ${propertyLabelById.get(i.property_id) || 'a property'}`,
     propertyId: i.property_id, timestamp: i.created_at,
     nav: { tab: 'Property', propSubTab: 'Insurance' },
+    documentId: null,
   }))
 }
 
@@ -102,6 +120,7 @@ export function mortgageActivity(rows: MortgageActivityInput[], propertyLabelByI
     description: `Mortgage added for ${propertyLabelById.get(m.property_id) || 'a property'}`,
     propertyId: m.property_id, timestamp: m.created_at,
     nav: { tab: 'Property', propSubTab: 'Mortgage' },
+    documentId: null,
   }))
 }
 
@@ -111,6 +130,7 @@ export function propertyActivity(rows: PropertyActivityInput[]): ActivityItem[] 
     description: `Property added: ${p.address}`,
     propertyId: p.id, timestamp: p.created_at,
     nav: { tab: 'Overview' },
+    documentId: null,
   }))
 }
 
@@ -121,6 +141,7 @@ export function propCrewActivity(rows: ContactActivityInput[], propertyLabelById
     description: `${c.business_name || c.name} added to PropCrew (${propertyLabelById.get(c.property_id) || 'a property'})`,
     propertyId: c.property_id, timestamp: c.created_at,
     nav: { tab: 'People', peopleSubTab: 'PropCrew' },
+    documentId: null,
   }))
 }
 

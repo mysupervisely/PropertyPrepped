@@ -132,7 +132,7 @@ export function RealtorConnectModal({
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal moduleModal realtorConnectModal">
         <div className="modalTop">
-          <div><p className="eyebrow">REALTOR CONNECT</p><h2>{headline}</h2></div>
+          <div><p className="eyebrow">AGENT CONNECT</p><h2>{headline}</h2></div>
           <button className="iconButton" onClick={onClose} aria-label="Close">×</button>
         </div>
 
