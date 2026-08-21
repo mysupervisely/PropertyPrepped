@@ -13,11 +13,23 @@ describe('documentActivity', () => {
     expect(items[0].nav).toEqual({ tab: 'Documents', docsSubTab: 'Documents' })
   })
 
-  it('labels an unassigned (Smart Import) document honestly, with no navigable target', () => {
+  it('labels an unassigned (Smart Import) document honestly, with no property-workspace navigable target', () => {
     const items = documentActivity([{ id: 'd1', property_id: null, name: 'scan.pdf', created_at: '2026-06-01T00:00:00Z' }], propertyLabelById)
     expect(items[0].description).toBe('Document uploaded (not yet assigned to a property)')
     expect(items[0].nav).toBeNull()
     expect(items[0].propertyId).toBeNull()
+  })
+
+  it('always carries the document\'s own safe id as documentId, assigned or not — the Recent Activity → /documents linkage', () => {
+    const assigned = documentActivity([{ id: 'd1', property_id: 'p1', name: 'Roof Invoice.pdf', created_at: '2026-06-01T00:00:00Z' }], propertyLabelById)
+    expect(assigned[0].documentId).toBe('d1')
+    const unassigned = documentActivity([{ id: 'd2', property_id: null, name: 'scan.pdf', created_at: '2026-06-01T00:00:00Z' }], propertyLabelById)
+    expect(unassigned[0].documentId).toBe('d2')
+  })
+
+  it('every non-Document activity type leaves documentId null', () => {
+    const items = maintenanceActivity([{ id: 'm1', property_id: 'p2', description: 'HVAC tune-up', created_at: '2026-06-01T00:00:00Z' }], propertyLabelById)
+    expect(items[0].documentId).toBeNull()
   })
 })
 

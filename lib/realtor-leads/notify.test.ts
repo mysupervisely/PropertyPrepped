@@ -1,4 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { buildLeadNotificationEmail, isEmailNotificationConfigured, sendLeadNotificationEmail } from './notify'
 import type { RealtorLeadRow } from './types'
 
@@ -157,5 +159,40 @@ describe('sendLeadNotificationEmail', () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, text: async () => '' }) as Response))
     const result = await sendLeadNotificationEmail(baseLead(), FULL_ENV)
     expect(JSON.stringify(result)).not.toContain('re_test_123')
+  })
+
+  it('always sends to whatever REALTOR_LEAD_NOTIFICATION_EMAIL resolves to, not a fixed address', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init: Record<string, unknown>) => ({ ok: true, status: 200, text: async () => '' }) as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    await sendLeadNotificationEmail(baseLead(), { ...FULL_ENV, REALTOR_LEAD_NOTIFICATION_EMAIL: 'proprosterteam@gmail.com' })
+    const [, init] = fetchMock.mock.calls[0] as [string, { body: string }]
+    expect(JSON.parse(init.body).to).toBe('proprosterteam@gmail.com')
+  })
+})
+
+describe('Documents + Navigation + Realtor Connect Polish, Section 9 — recipient is never hardcoded in source', () => {
+  // The production notification recipient changes (hello@proproster.com
+  // -> proprosterteam@gmail.com, a Netlify env var change made outside
+  // this repo, Section 17) without touching a single line of code —
+  // this file only ever reads process.env.REALTOR_LEAD_NOTIFICATION_EMAIL
+  // (see isEmailNotificationConfigured/sendLeadNotificationEmail above).
+  // This is a structural guard, same source-read technique as
+  // lib/investment-tools/evaluator-layout-order.test.ts: neither the old
+  // forwarding address nor the new direct inbox is ever literally present
+  // in source.
+  const ROOT = join(__dirname, '..', '..')
+  function readFile(relativePath: string): string {
+    return readFileSync(join(ROOT, relativePath), 'utf8')
+  }
+
+  it.each([
+    'lib/realtor-leads/notify.ts',
+    'app/api/realtor-leads/route.ts',
+    'components/RealtorConnect/RealtorConnectModal.tsx',
+    'components/RealtorConnect/RealtorConnectCTA.tsx',
+  ])('%s never hardcodes a notification recipient address', (path) => {
+    const source = readFile(path)
+    expect(source).not.toContain('proprosterteam@gmail.com')
+    expect(source).not.toContain('hello@proproster.com')
   })
 })

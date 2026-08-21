@@ -750,9 +750,9 @@ function PropertyEvaluator() {
           consistent position on both mobile and desktop. */}
       <RealtorConnectCTA
         headline="Need Help With This Investment?"
-        subheadline="Connect with a Real Estate Investment Specialist"
-        description="Send your property and investment analysis to PropRoster and we'll connect you with a real estate professional who can help you evaluate the opportunity and take the next step."
-        buttonLabel="Connect with an Investment Specialist"
+        subheadline="Connect with a real estate agent who specializes in investment properties"
+        description="Send your property and investment analysis to PropRoster and we'll connect you with a real estate agent who understands investment properties and can help you evaluate the opportunity and take the next step."
+        buttonLabel="Connect with an Investment Real Estate Agent"
         onClick={() => setShowRealtorConnect(true)}
       />
       <RealtorConnectModal
@@ -763,7 +763,7 @@ function PropertyEvaluator() {
         analysisSnapshot={buildRentalAnalyzerLeadSnapshot(form.address, input, result)}
         user={user}
         supabase={supabase}
-        headline="Connect with a Real Estate Investment Specialist"
+        headline="Connect with a real estate agent who specializes in investment properties"
       />
 
       <section id="fullMetrics" className="evaluatorSection">

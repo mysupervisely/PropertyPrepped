@@ -23,6 +23,7 @@ import { deriveTimeline } from '../lib/property-timeline/derive-timeline'
 import { resolveGreetingName, greetingTimeOfDay } from '../lib/user-profile/greeting'
 import type { UserProfile } from '../lib/user-profile/types'
 import { DOCUMENT_TYPES } from '../lib/document-intelligence/types'
+import { findDocumentLinks } from '../lib/documents/document-links'
 import {
   buildLeaseDateItems, buildInsuranceDateItems, buildMortgageDateItems, buildMaintenanceDateItems,
   buildOpenMaintenanceItems, splitAttentionAndUpcoming, sortByDaysUntilAscending, limitItems,
@@ -1077,23 +1078,11 @@ export default function Home() {
   // NOT a cascading migration (Part 2: "do not build a complicated
   // cascading record migration system") — the smallest safe behavior is
   // block-and-explain, not guess-and-move.
-  const DOCUMENT_LINK_CHECKS: { table: string; label: string }[] = [
-    { table: 'financial_transactions', label: 'a financial transaction' },
-    { table: 'maintenance_records', label: 'a maintenance record' },
-    { table: 'leases', label: 'a lease' },
-    { table: 'insurance_policies', label: 'an insurance policy' },
-    { table: 'mortgages', label: 'a mortgage' },
-    { table: 'property_system_documents', label: 'a property system' },
-  ]
-
-  async function findDocumentLinks(documentId: string): Promise<string[]> {
-    const client = supabase
-    if (!client) return []
-    const results = await Promise.all(
-      DOCUMENT_LINK_CHECKS.map(({ table }) => client.from(table).select('id', { count: 'exact', head: true }).eq('document_id', documentId)),
-    )
-    return DOCUMENT_LINK_CHECKS.filter((_, i) => (results[i].count || 0) > 0).map((c) => c.label)
-  }
+  // DOCUMENT_LINK_CHECKS/findDocumentLinks now live in
+  // lib/documents/document-links.ts (Documents + Navigation + Realtor
+  // Connect Polish) — shared, unchanged, so the new /documents page's
+  // Assign/Move actions use the exact same table list instead of a
+  // second, drifting copy.
 
   function openMoveDocument(doc: PropertyDocument) {
     setMoveDocId(doc.id)
@@ -1108,7 +1097,7 @@ export default function Home() {
     setBusy(true)
     setMoveError('')
     if (moveDraft.propertyId !== doc.property_id) {
-      const links = await findDocumentLinks(doc.id)
+      const links = await findDocumentLinks(supabase, doc.id)
       if (links.length) {
         setMoveError(`Can't move this document to a different property — it's linked to ${links.join(', ')} on the current property. Unlink it there first, or leave this document filed where it is.`)
         setBusy(false)
@@ -1903,6 +1892,18 @@ export default function Home() {
                 <button key={item.id} className="dashboardItemRow" onClick={() => goToNav(item.propertyId as string, item.nav as NavTarget)}>
                   <span className="dashboardItemBody"><strong>{item.description}</strong><span className="muted">{relativeTime(item.timestamp)}</span></span>
                 </button>
+              ) : item.type === 'Document' && !item.propertyId && item.documentId ? (
+                // Recent Activity → Documents linkage (Documents +
+                // Navigation + Realtor Connect Polish, Section 5): an
+                // unassigned document has no property workspace to open
+                // (the `nav` mechanism above has no destination for it),
+                // but its own id IS a safe identifier already on the
+                // activity item — link straight to the Documents library
+                // with that document highlighted, rather than leaving
+                // this row permanently dead.
+                <Link key={item.id} href={`/documents?highlight=${item.documentId}`} className="dashboardItemRow">
+                  <span className="dashboardItemBody"><strong>{item.description}</strong><span className="muted">{relativeTime(item.timestamp)}</span></span>
+                </Link>
               ) : (
                 <div key={item.id} className="dashboardItemRow dashboardItemRowStatic">
                   <span className="dashboardItemBody"><strong>{item.description}</strong><span className="muted">{relativeTime(item.timestamp)}</span></span>

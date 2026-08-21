@@ -242,9 +242,9 @@ export default function HomePurchaseCalculatorPage() {
           consistent position on both mobile and desktop. */}
       <RealtorConnectCTA
         headline="Interested in This Property?"
-        subheadline="Connect with a Local Realtor"
-        description="Send your property and purchase scenario to PropRoster and we'll help connect you with a real estate professional for the next step."
-        buttonLabel="Connect with a Realtor"
+        subheadline="Connect with a local real estate agent"
+        description="Send your property and purchase scenario to PropRoster and we'll help connect you with a local real estate agent who can help you take the next step."
+        buttonLabel="Connect with a Real Estate Agent"
         onClick={() => setShowRealtorConnect(true)}
       />
       <RealtorConnectModal
@@ -255,7 +255,7 @@ export default function HomePurchaseCalculatorPage() {
         analysisSnapshot={buildHomePurchaseLeadSnapshot(form.address, input, result)}
         user={user}
         supabase={supabase}
-        headline="Connect with a Local Realtor"
+        headline="Connect with a local real estate agent"
       />
     </main>
   )
