@@ -257,7 +257,7 @@ function Section({ id, title, description, children }: { id?: string; title: str
 
 export default function PropertyEvaluatorPage() {
   return (
-    <Suspense fallback={<main className="shell investmentShell"><div className="loadingState">Loading Rental Property Analyzer…</div></main>}>
+    <Suspense fallback={<main className="shell investmentShell rentalAnalyzerShell"><div className="loadingState">Loading Rental Property Analyzer…</div></main>}>
       <PropertyEvaluator />
     </Suspense>
   )
@@ -559,7 +559,7 @@ function PropertyEvaluator() {
   ]
 
   return (
-    <main className="shell investmentShell">
+    <main className="shell investmentShell rentalAnalyzerShell">
       {/* Core Experience Bundle, item 1: authenticated users get the same
           global header as the rest of the app; the "← Investment Tools"
           contextual link moves into the page content below instead of
