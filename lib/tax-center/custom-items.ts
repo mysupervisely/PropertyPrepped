@@ -100,3 +100,35 @@ export function capitalCustomItemsTotal(items: CustomTaxItem[]): number {
 export function financingCustomItemsTotal(items: CustomTaxItem[]): number {
   return sumCustomItems(items.filter((i) => i.group === 'financing'))
 }
+
+// -- Property panel group subtotals (components/property-profile/
+// PropertyTaxPanel.tsx) -----------------------------------------------
+//
+// The property Tax panel shows one collapsible section per
+// TaxCategoryGroup (income/operatingExpense/professional/travel/meals/
+// financing/capital — it has no "other" section of its own; a custom
+// item tagged "Other" is presented inside the "Other Tax Items" list,
+// but its DOLLAR AMOUNT must still land in the same place Tax Center's
+// real aggregate.ts puts it — folded into operatingExpenses via
+// isOperatingExpenseLikeGroup — so the panel's own "Property & Operating
+// Expenses" header is attributed the same "other"-tagged items too.
+// Without this, the panel could show a smaller group subtotal than what
+// Tax Center ultimately uses, which is exactly the bug this function
+// exists to prevent.
+
+/**
+ * Which of a property/year's custom items count toward ONE collapsible
+ * group's own displayed subtotal in the property panel. 'income' always
+ * returns [] — a custom item is always expense-shaped (see
+ * CUSTOM_ITEM_GROUPS), so there is nothing to attribute to Income.
+ * 'operatingExpense' additionally picks up every 'other'-tagged item,
+ * mirroring isOperatingExpenseLikeGroup's own treatment of "other"
+ * exactly. Every other group (professional/travel/meals/financing/
+ * capital) matches its own tag 1:1 — no group ever draws from more than
+ * one source, so no item can be attributed to two groups at once.
+ */
+export function customItemsForPanelGroup(items: CustomTaxItem[], group: TaxCategoryGroup): CustomTaxItem[] {
+  if (group === 'income') return []
+  if (group === 'operatingExpense') return items.filter((i) => i.group === 'operatingExpense' || i.group === 'other')
+  return items.filter((i) => i.group === group)
+}

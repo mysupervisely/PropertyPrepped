@@ -42,7 +42,7 @@ import {
   buildCategoryBreakdown, categoriesInGroup, emptyManualFields, emptyMileageFields,
   type ManualTaxFields, type MileageFields, type TaxCategoryGroup,
 } from '../../lib/tax-center/manual-entry'
-import { CUSTOM_ITEM_GROUPS, CUSTOM_ITEM_GROUP_LABELS, type CustomTaxItemGroup } from '../../lib/tax-center/custom-items'
+import { CUSTOM_ITEM_GROUPS, CUSTOM_ITEM_GROUP_LABELS, customItemsForPanelGroup, type CustomTaxItem, type CustomTaxItemGroup } from '../../lib/tax-center/custom-items'
 import { isIncomeCategory, isOperatingExpenseCategory, isCapitalExpenseCategory } from '../../lib/tax-center/categories'
 import type { TransactionInput, MaintenanceRecordInput as _MaintenanceRecordInput } from '../../lib/tax-center/types'
 
@@ -237,9 +237,31 @@ export function PropertyTaxPanel({
   const breakdown = useMemo(() => buildCategoryBreakdown(trackedByCategory, draftManualFields), [trackedByCategory, draftManualFields])
 
   const yearCustomItems = useMemo(() => customItems.filter((i) => i.property_id === propertyId && String(i.tax_year) === year), [customItems, propertyId, year])
+  // Mapped once to the same CustomTaxItem shape lib/tax-center's pure
+  // functions already use (aggregate.ts/custom-items.ts) — so
+  // customItemsForPanelGroup below is the EXACT SAME, already-tested
+  // function computePropertyTaxSummary uses to decide what counts toward
+  // operatingExpenses/capitalImprovements/financingOtherTotal, not a
+  // second, panel-local reimplementation of that rule.
+  const yearCustomItemsMapped: CustomTaxItem[] = useMemo(() => yearCustomItems.map((r) => ({
+    id: r.id, propertyId: r.property_id, taxYear: r.tax_year, description: r.description,
+    amount: Number(r.amount), group: r.category_group, notes: r.notes, documentId: r.document_id,
+  })), [yearCustomItems])
 
+  // The ONE place a group's displayed subtotal is computed — fixed
+  // categories' effective amounts plus any custom item tagged into this
+  // same group (via customItemsForPanelGroup, imported from
+  // custom-items.ts — see its own comment for the "other" → operatingExpense
+  // attribution), added exactly once each. This is presentational only
+  // (it never writes anywhere); the real Tax Center total this must
+  // match is computePropertyTaxSummary's own operatingExpenses/
+  // capitalImprovements/financingOtherTotal, which apply the identical
+  // rule via the same shared functions — never a second, competing
+  // calculation.
   function groupTotal(group: TaxCategoryGroup): number {
-    return categoriesInGroup(group).reduce((sum, c) => sum + breakdown[c.key].effective, 0)
+    const fixed = categoriesInGroup(group).reduce((sum, c) => sum + breakdown[c.key].effective, 0)
+    const custom = customItemsForPanelGroup(yearCustomItemsMapped, group).reduce((sum, i) => sum + i.amount, 0)
+    return fixed + custom
   }
 
   function invalidFields(): string[] {
@@ -430,6 +452,27 @@ export function PropertyTaxPanel({
                   </div>
                 )
               })}
+
+              {/* Custom items tagged into THIS group — read-only here
+                  (editing/removing stays in the single "Other Tax Items"
+                  section below, so there's only one place that writes
+                  to property_tax_custom_items) so the landlord can see
+                  exactly why this group's subtotal is what it is. Each
+                  item still contributes to the total exactly once —
+                  this list and groupTotal() above both read the SAME
+                  customItemsForPanelGroup(yearCustomItemsMapped, group)
+                  array; nothing here re-sums or duplicates it. */}
+              {customItemsForPanelGroup(yearCustomItemsMapped, group).length > 0 && (
+                <div className="taxCustomItemGroupList">
+                  <p className="muted taxPanelHint">Custom items counted in this total (manage them in Other Tax Items below):</p>
+                  {customItemsForPanelGroup(yearCustomItemsMapped, group).map((item) => (
+                    <div className="taxCustomItemGroupRow" key={item.id}>
+                      <span>{item.description}{item.group === 'other' ? ' · Other' : ''}</span>
+                      <strong>{moneyStr(item.amount)}</strong>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>}
           </div>
         )
@@ -449,7 +492,7 @@ export function PropertyTaxPanel({
         </button>
 
         {customItemsExpanded && <div className="taxPanelGroupBody">
-          <p className="muted taxPanelHint">For anything that doesn&apos;t fit a category above — each item counts once, on its own, and is never added to a standard category.</p>
+          <p className="muted taxPanelHint">For anything that doesn&apos;t fit a category above — add, edit, or remove items here. Each item counts exactly once, already included in its own group&apos;s total above (Property &amp; Operating Expenses, Professional &amp; Administrative, Travel &amp; Vehicle, Meals, Mortgage &amp; Financing, or Capital &amp; Depreciable Items) — never added a second time here.</p>
 
           {yearCustomItems.length > 0 && <div className="taxCustomItemList">
             {yearCustomItems.map((item) => (

@@ -1662,6 +1662,14 @@ h2, h3, p { margin-top: 0; }
 .taxCustomItemAmount { font-weight: 700; font-size: 14px; white-space: nowrap; }
 .taxCustomItemForm { border: 1px dashed var(--line); border-radius: 12px; padding: 16px; background: var(--surface); }
 
+/* Read-only reference list inside a fixed group (Property & Operating
+   Expenses, Professional & Administrative, etc.) showing which custom
+   items count toward THAT group's own total — editing stays in the one
+   "Other Tax Items" section below, this is display-only. */
+.taxCustomItemGroupList { display: grid; gap: 6px; margin-top: 4px; }
+.taxCustomItemGroupRow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 12.5px; padding: 8px 10px; background: var(--surface); border-radius: 8px; }
+.taxCustomItemGroupRow strong { font-size: 13px; white-space: nowrap; }
+
 /* Property detail (app/tax-center/page.tsx) — capital breakdown and
    custom items nested inside an already-expanded property card. */
 .taxPropertyCapitalDetail, .taxPropertyCustomItems { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 4px; }
