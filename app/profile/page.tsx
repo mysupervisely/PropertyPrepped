@@ -173,19 +173,26 @@ export default function ProfilePage() {
 
       <section className="intro evaluatorIntro">
         <p className="eyebrow">PROFILE</p>
-        <h1>Your identity, not your settings.</h1>
-        <p>This is how PropRoster greets you and identifies you — separate from billing and account settings.</p>
+        <h1>Profile</h1>
       </section>
 
       {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
       {saved && <div className="statusMessage successMessage">Profile saved.</div>}
 
       <section className="evaluatorSection profileFormSection">
-        <div className="evaluatorSectionHead"><h2>Identity</h2><p>A real name here is what PropRoster greets you with — never your email, once one of these is set.</p></div>
+        <div className="evaluatorSectionHead"><h2>Identity</h2></div>
         <div className="evalGrid">
           <label className="evalField"><span>First name</span><input value={draft.firstName} onChange={(e) => setDraft((d) => ({ ...d, firstName: e.target.value }))} placeholder="Jamie" /></label>
           <label className="evalField"><span>Last name</span><input value={draft.lastName} onChange={(e) => setDraft((d) => ({ ...d, lastName: e.target.value }))} placeholder="Rivera" /></label>
-          <label className="evalField fullField"><span>Preferred / display name<small>Optional — used instead of your first name if set (e.g. a nickname).</small></span><input value={draft.displayName} onChange={(e) => setDraft((d) => ({ ...d, displayName: e.target.value }))} placeholder="Kiro" /></label>
+          {/* Audit fix (Property-First Simplification V2): this field
+              must never carry a placeholder that looks like a real saved
+              value — an earlier placeholder here ("Kiro") was, in fact,
+              a real person's name, and on an account with no display
+              name saved, browsers render placeholder text solid enough
+              to be mistaken for a prefilled value. The hint text alone
+              (no name-shaped placeholder) is enough to explain the
+              field's purpose. */}
+          <label className="evalField fullField"><span>Preferred / display name<small>Optional — used instead of your first name if set (e.g. a nickname).</small></span><input value={draft.displayName} onChange={(e) => setDraft((d) => ({ ...d, displayName: e.target.value }))} /></label>
         </div>
       </section>
 
