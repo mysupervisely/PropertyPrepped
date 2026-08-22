@@ -18,7 +18,7 @@ import { PropertySystemsPanel, type PropertySystem } from '../components/propert
 import { PropertyNotesPanel, type PropertyNote } from '../components/property-profile/PropertyNotesPanel'
 import { PropertyOwnershipPanel, type PropertyOwnership } from '../components/property-profile/PropertyOwnershipPanel'
 import { PropertyTimelinePanel } from '../components/property-profile/PropertyTimelinePanel'
-import { PropertyTaxPanel, type PropertyTaxRecordRow } from '../components/property-profile/PropertyTaxPanel'
+import { PropertyTaxPanel, type PropertyTaxRecordRow, type CustomTaxItemRow } from '../components/property-profile/PropertyTaxPanel'
 import type { NormalizedAddress } from '../lib/address/types'
 import { deriveTimeline } from '../lib/property-timeline/derive-timeline'
 import { resolveGreetingName, greetingTimeOfDay } from '../lib/user-profile/greeting'
@@ -485,6 +485,7 @@ export default function Home() {
   const [insurancePolicies, setInsurancePolicies] = useState<InsuranceRecord[]>([])
   const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>([])
   const [taxRecords, setTaxRecords] = useState<PropertyTaxRecordRow[]>([])
+  const [taxCustomItems, setTaxCustomItems] = useState<CustomTaxItemRow[]>([])
   const [contacts, setContacts] = useState<PropertyContact[]>([])
   const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([])
   // Property Profile 2.0
@@ -706,6 +707,7 @@ export default function Home() {
   const selectedInsurance = insurancePolicies.filter((row) => row.property_id === selectedId)
   const selectedMaintenance = maintenanceRecords.filter((row) => row.property_id === selectedId)
   const selectedTaxRecords = taxRecords.filter((row) => row.property_id === selectedId)
+  const selectedTaxCustomItems = taxCustomItems.filter((row) => row.property_id === selectedId)
   const selectedContacts = contacts.filter((row) => row.property_id === selectedId)
   const selectedRequests = maintenanceRequests.filter((row) => row.property_id === selectedId)
   const openRequests = selectedRequests.filter((row) => row.status !== 'Completed')
@@ -735,7 +737,7 @@ export default function Home() {
       { data: insuranceRows, error: insuranceError }, { data: maintenanceRows, error: maintenanceError }, { data: contactRows, error: contactError },
       { data: requestRows, error: requestError }, { data: systemRows, error: systemError }, { data: noteRows, error: noteError },
       { data: ownershipRows, error: ownershipError }, { data: profileRow }, { data: rentPaymentRows, error: rentPaymentError },
-      { data: taxRecordRows, error: taxRecordError },
+      { data: taxRecordRows, error: taxRecordError }, { data: taxCustomItemRows, error: taxCustomItemError },
     ] = await Promise.all([
       client.from('properties').select('*').order('created_at', { ascending: true }),
       client.from('property_documents').select('*').order('created_at', { ascending: false }),
@@ -753,8 +755,9 @@ export default function Home() {
       client.from('user_profiles').select('*').eq('id', user.id).maybeSingle(),
       client.from('rent_payments').select('*').order('date_received', { ascending: false }),
       client.from('property_tax_records').select('*'),
+      client.from('property_tax_custom_items').select('*'),
     ])
-    const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError || contactError || requestError || systemError || noteError || ownershipError || rentPaymentError || taxRecordError
+    const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError || contactError || requestError || systemError || noteError || ownershipError || rentPaymentError || taxRecordError || taxCustomItemError
     if (firstError) {
       setError(firstError.message)
       setBusy(false)
@@ -777,6 +780,7 @@ export default function Home() {
     setInsurancePolicies((insuranceRows || []) as InsuranceRecord[])
     setMaintenanceRecords((maintenanceRows || []) as MaintenanceRecord[])
     setTaxRecords((taxRecordRows || []) as PropertyTaxRecordRow[])
+    setTaxCustomItems((taxCustomItemRows || []) as CustomTaxItemRow[])
     setContacts((contactRows || []) as PropertyContact[])
     setPropertySystems((systemRows || []) as PropertySystem[])
     setPropertyNotes((noteRows || []) as PropertyNote[])
@@ -1754,6 +1758,7 @@ export default function Home() {
             maintenanceRecords={selectedMaintenance}
             documents={selectedDocs}
             taxRecords={selectedTaxRecords}
+            customItems={selectedTaxCustomItems}
             onRefresh={() => void loadPortfolio()}
           />
           <p className="ledgerNote">Tax Center (the portfolio-wide view across every property) aggregates these same manual entries alongside your Rent ledger — see the <Link href="/tax-center">Tax Center</Link> page.</p>

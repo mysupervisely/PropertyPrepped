@@ -48,10 +48,16 @@ import { SCHEDULE_E_REFERENCE, SCHEDULE_E_CAPEX_NOTE, SCHEDULE_E_MORTGAGE_NOTE }
 import { computePortfolioTaxSummary, computePropertyTaxSummary, filterTransactionsForYear, getAvailableTaxYears } from '../../lib/tax-center/aggregate'
 import { countUnassignedTaxDocuments } from '../../lib/tax-center/readiness'
 import { buildTaxCenterCsv } from '../../lib/tax-center/csv-export'
-import { categoriesInGroup, type CategoryValue } from '../../lib/tax-center/manual-entry'
-import type { MaintenanceRecordInput, PropertyInput, PropertyTaxSummary, ReadinessStatus, TaxRecordInput, TransactionInput } from '../../lib/tax-center/types'
+import { categoriesInGroup, OPERATING_EXPENSE_LIKE_GROUPS, type CategoryValue } from '../../lib/tax-center/manual-entry'
+import { CUSTOM_ITEM_GROUP_LABELS } from '../../lib/tax-center/custom-items'
+import type { CustomTaxItemInput, MaintenanceRecordInput, PropertyInput, PropertyTaxSummary, ReadinessStatus, TaxRecordInput, TransactionInput } from '../../lib/tax-center/types'
 
-const EXPENSE_CATEGORIES = categoriesInGroup('operatingExpense')
+// V3: "Expense totals by category" (on-screen + print) now covers every
+// operating-expense-like group — operatingExpense (unchanged from V2)
+// plus the new professional/travel/meals groups — matching the exact
+// same rule aggregate.ts uses to compute operatingExpenses itself.
+const EXPENSE_CATEGORIES = OPERATING_EXPENSE_LIKE_GROUPS.flatMap((g) => categoriesInGroup(g))
+const CAPITAL_CATEGORIES = categoriesInGroup('capital')
 
 function money(n: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Number.isFinite(n) ? n : 0)
@@ -101,6 +107,7 @@ function TaxCenterWorkspace() {
   const [transactions, setTransactions] = useState<TransactionInput[]>([])
   const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecordInput[]>([])
   const [taxRecords, setTaxRecords] = useState<(TaxRecordInput & { property_id: string; tax_year: number })[]>([])
+  const [customItems, setCustomItems] = useState<CustomTaxItemInput[]>([])
   const [taxDocumentCount, setTaxDocumentCount] = useState(0)
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState('')
@@ -111,21 +118,27 @@ function TaxCenterWorkspace() {
     if (!supabase) return
     let cancelled = false
     async function load() {
-      const [propsRes, txRes, maintRes, docsRes, taxRes] = await Promise.all([
+      const [propsRes, txRes, maintRes, docsRes, taxRes, customItemsRes] = await Promise.all([
         supabase!.from('properties').select('id,address,city,property_type').order('address'),
         supabase!.from('financial_transactions').select('id,property_id,transaction_date,transaction_type,category,amount,document_id'),
         supabase!.from('maintenance_records').select('id,property_id,service_date,category,financial_transaction_id'),
         supabase!.from('property_documents').select('id,property_id,category'),
         supabase!.from('property_tax_records').select('*'),
+        supabase!.from('property_tax_custom_items').select('*'),
       ])
       if (cancelled) return
-      const firstError = propsRes.error || txRes.error || maintRes.error || docsRes.error || taxRes.error
+      const firstError = propsRes.error || txRes.error || maintRes.error || docsRes.error || taxRes.error || customItemsRes.error
       if (firstError) setError(firstError.message)
       setProperties(((propsRes.data as PropertyInput[]) || []).filter((p) => p.property_type === 'Rental Property'))
       setTransactions((txRes.data as TransactionInput[]) || [])
       setMaintenanceRecords((maintRes.data as MaintenanceRecordInput[]) || [])
       setTaxDocumentCount(countUnassignedTaxDocuments((docsRes.data as { id: string; property_id: string | null; category: string }[]) || []))
       setTaxRecords((taxRes.data as (TaxRecordInput & { property_id: string; tax_year: number })[]) || [])
+      type CustomItemRow = { id: string; property_id: string; tax_year: number; description: string; amount: number; category_group: CustomTaxItemInput['group']; notes: string | null; document_id: string | null }
+      setCustomItems(((customItemsRes.data as CustomItemRow[]) || []).map((r) => ({
+        id: r.id, propertyId: r.property_id, taxYear: r.tax_year, description: r.description,
+        amount: Number(r.amount), group: r.category_group, notes: r.notes, documentId: r.document_id,
+      })))
       setLoaded(true)
     }
     void load()
@@ -158,10 +171,11 @@ function TaxCenterWorkspace() {
     }
     return map
   }, [taxRecords, year])
+  const yearCustomItems = useMemo(() => customItems.filter((i) => String(i.taxYear) === year), [customItems, year])
 
   const propertySummaries: PropertyTaxSummary[] = useMemo(
-    () => properties.map((p) => computePropertyTaxSummary(p, yearTransactions, yearMaintenance, yearTaxRecordByProperty.get(p.id) || null)),
-    [properties, yearTransactions, yearMaintenance, yearTaxRecordByProperty],
+    () => properties.map((p) => computePropertyTaxSummary(p, yearTransactions, yearMaintenance, yearTaxRecordByProperty.get(p.id) || null, yearCustomItems)),
+    [properties, yearTransactions, yearMaintenance, yearTaxRecordByProperty, yearCustomItems],
   )
   const portfolio = useMemo(() => computePortfolioTaxSummary(year, propertySummaries), [year, propertySummaries])
 
@@ -227,7 +241,7 @@ function TaxCenterWorkspace() {
             <div className="sectionHead"><div><h2>Rental properties — {year}</h2><p>Every rental property at a glance. Select a property to review or edit its Tax &amp; Financials tab.</p></div></div>
             <div className="taxCategoryTableWrap">
               <table className="ledger taxPropertyTable">
-                <thead><tr><th>Property</th><th>Rental income</th><th>Operating expenses</th><th>Mortgage interest</th><th>Capital improvements</th><th>Net result</th><th>Status</th></tr></thead>
+                <thead><tr><th>Property</th><th>Rental income</th><th>Operating expenses</th><th>Mortgage interest</th><th>Capital improvements / items</th><th>Net result</th><th>Status</th></tr></thead>
                 <tbody>
                   {propertySummaries.map((p) => (
                     <tr key={p.propertyId}>
@@ -254,14 +268,16 @@ function TaxCenterWorkspace() {
               <div className="financialStat"><span>Properties included</span><strong>{portfolio.propertiesIncluded}</strong></div>
             </div>
             <div className="taxNonOperatingNotes">
-              <p><strong>Capital improvements:</strong> {money(portfolio.capitalImprovements)} — {SCHEDULE_E_CAPEX_NOTE}</p>
+              <p><strong>Capital &amp; depreciable items:</strong> {money(portfolio.capitalImprovements)} — {SCHEDULE_E_CAPEX_NOTE}</p>
               <p><strong>Mortgage interest (manual entry only):</strong> {money(portfolio.mortgageInterest)} — entered on each property&apos;s Tax &amp; Financials tab from a lender statement or Form 1098. Never calculated by PropRoster.</p>
+              <p><strong>Other financing (points, loan costs, etc.):</strong> {money(portfolio.financingOtherTotal)} — organizational only, never mortgage interest and never includes principal.</p>
               <p><strong>Mortgage payments logged:</strong> {money(portfolio.mortgagePayments)} — {SCHEDULE_E_MORTGAGE_NOTE}</p>
+              {portfolio.customItemsCount > 0 && <p><strong>Custom tax items recorded:</strong> {portfolio.customItemsCount} — already included in the totals above; see Property detail below or the CSV export for each one individually.</p>}
             </div>
           </section>
 
           <section className="noPrint">
-            <div className="sectionHead"><div><h2>Expense totals by category</h2><p>Ordinary operating expenses only — capital improvements, mortgage interest, and mortgage payments are shown separately above.</p></div></div>
+            <div className="sectionHead"><div><h2>Expense totals by category</h2><p>Property expenses, professional/administrative, travel, and meals — capital/depreciable items, mortgage interest, and mortgage payments are shown separately.</p></div></div>
             <div className="taxCategoryTableWrap">
               <table className="ledger taxCategoryTable">
                 <thead><tr><th>Category</th><th>Amount</th><th>Schedule E reference (informational only)</th></tr></thead>
@@ -271,6 +287,23 @@ function TaxCenterWorkspace() {
                       <td>{category.label}</td>
                       <td className="moneyCell">{money(portfolio.expenseByCategory[category.key] || 0)}</td>
                       <td className="muted">{category.trackedCategory ? SCHEDULE_E_REFERENCE[category.trackedCategory as keyof typeof SCHEDULE_E_REFERENCE] : 'Schedule E, Line 19 (Other) — no dedicated line'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="noPrint">
+            <div className="sectionHead"><div><h2>Capital &amp; depreciable items by category</h2><p>Never immediately deductible and never part of operating expenses — typically depreciated over time. Review the correct treatment with your tax professional.</p></div></div>
+            <div className="taxCategoryTableWrap">
+              <table className="ledger taxCategoryTable">
+                <thead><tr><th>Category</th><th>Amount</th></tr></thead>
+                <tbody>
+                  {CAPITAL_CATEGORIES.map((category) => (
+                    <tr key={category.key}>
+                      <td>{category.label}</td>
+                      <td className="moneyCell">{money(propertySummaries.reduce((sum, p) => sum + p.categoryBreakdown[category.key].effective, 0))}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -309,9 +342,42 @@ function TaxCenterWorkspace() {
                             )
                           })}
                           {p.mortgageInterest > 0 && <div><span>Mortgage interest (manual entry)</span><strong>{money(p.mortgageInterest)}</strong></div>}
-                          {p.capitalImprovements > 0 && <div><span>Capital improvements (not immediately deductible)</span><strong>{money(p.capitalImprovements)}</strong></div>}
+                          {p.financingOtherTotal > 0 && <div><span>Other financing (points, loan costs, etc. — organizational only)</span><strong>{money(p.financingOtherTotal)}</strong></div>}
                           {p.mortgagePayments > 0 && <div><span>Mortgage payments (reference only)</span><strong>{money(p.mortgagePayments)}</strong></div>}
+                          {p.businessMileage !== null && <div><span>Business mileage{p.businessMileageNotes ? ` — ${p.businessMileageNotes}` : ''}</span><strong>{p.businessMileage.toLocaleString()} mi</strong></div>}
                         </div>
+
+                        {p.capitalImprovements > 0 && (
+                          <div className="taxPropertyCapitalDetail">
+                            <h4>Capital &amp; depreciable items (not immediately deductible)</h4>
+                            <div className="recordRows">
+                              {CAPITAL_CATEGORIES.filter((c) => p.categoryBreakdown[c.key].effective > 0).map((c) => {
+                                const value = p.categoryBreakdown[c.key]
+                                return (
+                                  <div key={c.key}>
+                                    <span>{c.label} <span className={`statusPill taxSourcePill ${sourcePillClass(value.source)}`}>{sourceLabel(value.source)}</span></span>
+                                    <strong>{money(value.effective)}</strong>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {p.customItems.length > 0 && (
+                          <div className="taxPropertyCustomItems">
+                            <h4>Other tax items</h4>
+                            <div className="recordRows">
+                              {p.customItems.map((item) => (
+                                <div key={item.id}>
+                                  <span>{item.description} <span className="statusPill taxSourcePill pillNeutral">{CUSTOM_ITEM_GROUP_LABELS[item.group]} · Manual</span></span>
+                                  <strong>{money(item.amount)}</strong>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         {p.notes && <p className="muted taxPropertyNotes">Note: {p.notes}</p>}
                         {p.readiness.items.length > 0 && (
                           <ul className="taxReadinessItems">
@@ -347,9 +413,11 @@ function TaxCenterWorkspace() {
                 <tr><td>Gross rental income</td><td>{money(portfolio.grossIncome)}</td></tr>
                 <tr><td>Operating expenses</td><td>{money(portfolio.operatingExpenses)}</td></tr>
                 <tr><td>Net rental income (before tax-specific adjustments)</td><td>{money(portfolio.netOperatingResult)}</td></tr>
-                <tr><td>Capital improvements (not immediately deductible)</td><td>{money(portfolio.capitalImprovements)}</td></tr>
+                <tr><td>Capital &amp; depreciable items (not immediately deductible)</td><td>{money(portfolio.capitalImprovements)}</td></tr>
                 <tr><td>Mortgage interest (manual entry only, never estimated)</td><td>{money(portfolio.mortgageInterest)}</td></tr>
+                <tr><td>Other financing (points, loan costs — organizational only)</td><td>{money(portfolio.financingOtherTotal)}</td></tr>
                 <tr><td>Mortgage payments logged (reference only)</td><td>{money(portfolio.mortgagePayments)}</td></tr>
+                {portfolio.customItemsCount > 0 && <tr><td>Custom tax items recorded (already included above)</td><td>{portfolio.customItemsCount}</td></tr>}
               </tbody>
             </table>
 
@@ -359,6 +427,16 @@ function TaxCenterWorkspace() {
               <tbody>
                 {EXPENSE_CATEGORIES.map((c) => (
                   <tr key={c.key}><td>{c.label}</td><td>{money(portfolio.expenseByCategory[c.key] || 0)}</td></tr>
+                ))}
+              </tbody>
+            </table>
+
+            <h4>Portfolio capital &amp; depreciable items by category</h4>
+            <table>
+              <thead><tr><th>Category</th><th>Amount</th></tr></thead>
+              <tbody>
+                {CAPITAL_CATEGORIES.map((c) => (
+                  <tr key={c.key}><td>{c.label}</td><td>{money(propertySummaries.reduce((sum, p) => sum + p.categoryBreakdown[c.key].effective, 0))}</td></tr>
                 ))}
               </tbody>
             </table>
@@ -373,8 +451,10 @@ function TaxCenterWorkspace() {
                     <tr><td>Operating expenses</td><td>{money(p.operatingExpenses)}</td></tr>
                     <tr><td>Net operating result</td><td>{money(p.netOperatingResult)}</td></tr>
                     {p.mortgageInterest > 0 && <tr><td>Mortgage interest (manual entry only)</td><td>{money(p.mortgageInterest)}</td></tr>}
-                    {p.capitalImprovements > 0 && <tr><td>Capital improvements (not immediately deductible)</td><td>{money(p.capitalImprovements)}</td></tr>}
+                    {p.financingOtherTotal > 0 && <tr><td>Other financing (organizational only)</td><td>{money(p.financingOtherTotal)}</td></tr>}
+                    {p.capitalImprovements > 0 && <tr><td>Capital &amp; depreciable items (not immediately deductible)</td><td>{money(p.capitalImprovements)}</td></tr>}
                     {p.mortgagePayments > 0 && <tr><td>Mortgage payments (reference only, not deductible interest)</td><td>{money(p.mortgagePayments)}</td></tr>}
+                    {p.businessMileage !== null && <tr><td>Business mileage{p.businessMileageNotes ? ` — ${p.businessMileageNotes}` : ''}</td><td>{p.businessMileage.toLocaleString()} mi</td></tr>}
                   </tbody>
                 </table>
                 <table>
@@ -386,6 +466,27 @@ function TaxCenterWorkspace() {
                     })}
                   </tbody>
                 </table>
+                {CAPITAL_CATEGORIES.some((c) => p.categoryBreakdown[c.key].effective > 0) && (
+                  <table>
+                    <thead><tr><th>Capital / depreciable category</th><th>Amount</th><th>Source</th></tr></thead>
+                    <tbody>
+                      {CAPITAL_CATEGORIES.filter((c) => p.categoryBreakdown[c.key].effective > 0).map((c) => {
+                        const value = p.categoryBreakdown[c.key]
+                        return <tr key={c.key}><td>{c.label}</td><td>{money(value.effective)}</td><td>{sourceLabel(value.source)}</td></tr>
+                      })}
+                    </tbody>
+                  </table>
+                )}
+                {p.customItems.length > 0 && (
+                  <table>
+                    <thead><tr><th>Custom tax item</th><th>Amount</th><th>Group</th><th>Source</th></tr></thead>
+                    <tbody>
+                      {p.customItems.map((item) => (
+                        <tr key={item.id}><td>{item.description}</td><td>{money(item.amount)}</td><td>{CUSTOM_ITEM_GROUP_LABELS[item.group]}</td><td>Manual</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
                 {p.notes && <p className="muted">Note: {p.notes}</p>}
                 {p.readiness.items.length > 0 && (
                   <p className="muted">Readiness notes: {p.readiness.items.join(' ')}</p>
