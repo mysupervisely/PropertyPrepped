@@ -146,7 +146,13 @@ h2, h3, p { margin-top: 0; }
 .quickActions .eyebrow { color: #cfe1d9; }
 .quickActions h3 { margin-bottom: 0; }
 .quickActionButtons { display: flex; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }
-.quickActionButtons button { border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.1); color: white; border-radius: 9px; padding: 10px 12px; font-size: 13px; }
+.quickActionButtons button { border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.1); color: white; border-radius: 9px; padding: 10px 12px; font-size: 13px; display: inline-flex; align-items: center; gap: 7px; }
+/* Property-First Simplification and Visual Cleanup: inline count badge
+   for the merged Documents/Photos/Maintenance quick-action buttons
+   (previously separate "Property file" count-buttons) — a small pill,
+   not a second color, so it reads as a detail of the button rather than
+   a competing call to action. */
+.quickActionCount { background: rgba(255,255,255,.22); border-radius: 999px; padding: 1px 8px; font-size: 12px; font-weight: 700; }
 .documentLayout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 20px; align-items: start; }
 .categoryPanel { background: white; border: 1px solid var(--line); border-radius: 14px; padding: 10px; position: sticky; top: 12px; }
 .categoryPanel h3 { font-size: 14px; padding: 8px 9px 11px; margin-bottom: 0; }
@@ -1644,6 +1650,16 @@ h2, h3, p { margin-top: 0; }
 .taxPanelGroupTotal { color: var(--muted); font-size: 13px; font-weight: 650; white-space: nowrap; flex-shrink: 0; }
 .taxPanelGroupBody { display: grid; gap: 12px; padding: 0 18px 18px; }
 .taxManualRowNoTrack strong { color: var(--muted); font-size: 12.5px; font-weight: 650; }
+/* Property-First Simplification and Visual Cleanup: the concise annual
+   summary strip above the collapsible groups — three numbers composed
+   from the exact same groupTotal() calls the groups below already use,
+   so this is presentational only, never a second calculation. */
+.taxSummaryStrip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; background: white; border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+.taxSummaryStrip > div { border-left: 1px solid var(--line); padding-left: 16px; }
+.taxSummaryStrip > div:first-child { border-left: 0; padding-left: 0; }
+.taxSummaryStrip span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 5px; }
+.taxSummaryStrip strong { font-size: 19px; }
+.taxSummaryNet strong { color: var(--brand); }
 
 /* Business mileage: a QUANTITY, visually distinct from the dollar rows
    around it (no $ suffix, its own notes field) — never presented as a
@@ -1677,6 +1693,9 @@ h2, h3, p { margin-top: 0; }
 
 @media (max-width: 760px) {
   .taxPanelHead { flex-direction: column; align-items: stretch; }
+  .taxSummaryStrip { grid-template-columns: 1fr; gap: 10px; }
+  .taxSummaryStrip > div { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: 10px; }
+  .taxSummaryStrip > div:first-child { border-top: 0; padding-top: 0; }
   .taxManualRowBody { grid-template-columns: 1fr; gap: 10px; }
   .taxPanelSave { flex-wrap: wrap; justify-content: stretch; }
   .taxPanelSave button { width: 100%; }

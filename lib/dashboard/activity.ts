@@ -67,7 +67,7 @@ export function maintenanceActivity(rows: MaintenanceActivityInput[], propertyLa
     id: `maintenance-${m.id}`, type: 'Maintenance',
     description: `Maintenance item added for ${propertyLabelById.get(m.property_id) || 'a property'}`,
     propertyId: m.property_id, timestamp: m.created_at,
-    nav: { tab: 'Property', propSubTab: 'Maintenance' },
+    nav: { tab: 'Details', propSubTab: 'Maintenance' },
     documentId: null,
   }))
 }
@@ -109,7 +109,7 @@ export function insuranceActivity(rows: InsuranceActivityInput[], propertyLabelB
     id: `insurance-${i.id}`, type: 'Insurance',
     description: `Insurance policy added to ${propertyLabelById.get(i.property_id) || 'a property'}`,
     propertyId: i.property_id, timestamp: i.created_at,
-    nav: { tab: 'Property', propSubTab: 'Insurance' },
+    nav: { tab: 'Details', propSubTab: 'Insurance' },
     documentId: null,
   }))
 }
@@ -119,7 +119,7 @@ export function mortgageActivity(rows: MortgageActivityInput[], propertyLabelByI
     id: `mortgage-${m.id}`, type: 'Mortgage',
     description: `Mortgage added for ${propertyLabelById.get(m.property_id) || 'a property'}`,
     propertyId: m.property_id, timestamp: m.created_at,
-    nav: { tab: 'Property', propSubTab: 'Mortgage' },
+    nav: { tab: 'Details', propSubTab: 'Mortgage' },
     documentId: null,
   }))
 }

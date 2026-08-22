@@ -21,8 +21,8 @@ function readFile(relativePath: string): string {
 describe('Property-First UX Cleanup — app/page.tsx tab structure', () => {
   const source = readFile('app/page.tsx')
 
-  it('the property workspace tabs are Overview / Rent / Property / PropCrew / Documents / Tax', () => {
-    expect(source).toContain("const tabs: Tab[] = ['Overview', 'Rent', 'Property', 'PropCrew', 'Documents', 'Tax']")
+  it('the property workspace tabs are Overview / Rent / Details / PropCrew / Documents / Tax', () => {
+    expect(source).toContain("const tabs: Tab[] = ['Overview', 'Rent', 'Details', 'PropCrew', 'Documents', 'Tax']")
   })
 
   it('Financials and People no longer exist as top-level tabs', () => {
@@ -31,8 +31,8 @@ describe('Property-First UX Cleanup — app/page.tsx tab structure', () => {
     expect(source).not.toMatch(/activeTab === 'People'/)
   })
 
-  it('Property sub-tabs no longer include Lease (moved to Rent)', () => {
-    expect(source).toContain("const propertySubTabs: PropertySubTab[] = ['Mortgage', 'Insurance', 'Maintenance', 'Systems']")
+  it('Property sub-tabs no longer include Lease (moved to Rent), and now include Ownership (moved from Overview)', () => {
+    expect(source).toContain("const propertySubTabs: PropertySubTab[] = ['Mortgage', 'Insurance', 'Maintenance', 'Systems', 'Ownership']")
   })
 
   it('Rent has its own Lease / Ledger / Tenant sub-tabs', () => {
@@ -88,5 +88,55 @@ describe('Property-First UX Cleanup — nav targets updated everywhere Tab/RentS
     expect(source).not.toContain("nav: { tab: 'Financials' }")
     expect(source).not.toContain("nav: { tab: 'Property', propSubTab: 'Lease' }")
     expect(source).not.toContain("nav: { tab: 'People', peopleSubTab: 'PropCrew' }")
+  })
+})
+
+describe('Property-First Simplification and Visual Cleanup — Property tab renamed to Details', () => {
+  // The 'Property' Tab value reads as an odd echo once already inside a
+  // property workspace ("Property > Property?") — renamed to 'Details'.
+  // Only the Tab union member changes: PropertySubTab/propSubTab/
+  // openPropSubTab identifiers are deliberately untouched (never
+  // user-facing). Guards against silently reintroducing the old value
+  // anywhere a nav target still pointed at it.
+
+  it('app/page.tsx has no remaining activeTab === \'Property\' check, and Details sections carry the renamed aria-label', () => {
+    const source = readFile('app/page.tsx')
+    expect(source).not.toMatch(/activeTab === 'Property'/)
+    expect(source).toMatch(/activeTab === 'Details'/)
+    expect(source).toContain('aria-label="Details sections"')
+  })
+
+  it('Ownership/Entity recordkeeping moved from Overview into the Details tab\'s new Ownership sub-tab', () => {
+    const source = readFile('app/page.tsx')
+    expect(source).toContain("propertySubTab === 'Ownership' && <PropertyOwnershipPanel")
+  })
+
+  it('lib/dashboard/attention.ts routes Insurance/Mortgage/Maintenance date items to Details, not Property', () => {
+    const source = readFile('lib/dashboard/attention.ts')
+    expect(source).not.toContain("tab: 'Property'")
+    expect(source).toContain("nav: { tab: 'Details', propSubTab: 'Insurance' }")
+    expect(source).toContain("nav: { tab: 'Details', propSubTab: 'Mortgage' }")
+    expect(source).toContain("nav: { tab: 'Details', propSubTab: 'Maintenance' }")
+  })
+
+  it('lib/dashboard/activity.ts routes Insurance/Mortgage/Maintenance activity to Details — its unrelated ActivityType "Property" union member (meaning "a property was added") is untouched', () => {
+    const source = readFile('lib/dashboard/activity.ts')
+    expect(source).toContain("nav: { tab: 'Details', propSubTab: 'Insurance' }")
+    expect(source).toContain("nav: { tab: 'Details', propSubTab: 'Mortgage' }")
+    expect(source).toContain("nav: { tab: 'Details', propSubTab: 'Maintenance' }")
+    // The ActivityType union's own 'Property' member (a "property added" event, not a tab) must remain.
+    expect(source).toContain("export type ActivityType = 'Document' | 'Maintenance' | 'Financial' | 'Note' | 'Lease' | 'Insurance' | 'Mortgage' | 'Property' | 'PropCrew'")
+  })
+
+  it('lib/search/build-results.ts routes Systems/Maintenance/Mortgage/Insurance search results to Details — its unrelated SearchResultType "Property" union member is untouched', () => {
+    const source = readFile('lib/search/build-results.ts')
+    expect(source).not.toContain("tab: 'Property'")
+    expect(source).toContain("export type SearchResultType = 'Property' | 'Document' | 'PropCrew' | 'System' | 'Maintenance' | 'Financial' | 'Note' | 'Lease' | 'Mortgage' | 'Insurance' | 'Payment'")
+  })
+
+  it('lib/rent-ledger/ledger.ts routes system warranty items to Details, not Property', () => {
+    const source = readFile('lib/rent-ledger/ledger.ts')
+    expect(source).toContain("nav: { tab: 'Details', propSubTab: 'Systems' }")
+    expect(source).not.toContain("tab: 'Property'")
   })
 })

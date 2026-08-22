@@ -25,7 +25,11 @@ import { classifyDate, daysUntil, type Urgency } from './date-classification'
 // own top-level 'PropCrew' tab (no sub-tab needed, so no
 // NavPropCrewSubTab type). Property's sub-tabs lose 'Lease' (moved to
 // Rent) but otherwise are unchanged.
-export type NavTab = 'Overview' | 'Rent' | 'Property' | 'PropCrew' | 'Documents' | 'Tax'
+// Property-First Simplification and Visual Cleanup: the 'Property' tab
+// value is renamed to 'Details' (see app/page.tsx's Tab type comment) —
+// NavPropertySubTab/NavTarget's propSubTab field are unchanged, only the
+// tab string itself moves.
+export type NavTab = 'Overview' | 'Rent' | 'Details' | 'PropCrew' | 'Documents' | 'Tax'
 export type NavPropertySubTab = 'Mortgage' | 'Insurance' | 'Maintenance' | 'Systems'
 export type NavRentSubTab = 'Lease' | 'Ledger' | 'Tenant'
 export type NavDocsSubTab = 'Documents' | 'Photos'
@@ -99,7 +103,7 @@ export function buildInsuranceDateItems(policies: InsuranceInput[], propertyLabe
       label: urgency === 'Expired' ? 'Insurance expired' : urgency === 'Urgent' ? 'Insurance expiring soon' : 'Insurance expiring',
       description: policy.carrier, propertyId: policy.property_id, propertyLabel: labelFor(policy.property_id, propertyLabelById),
       date: policy.expiration_date as string, daysUntil: daysUntil(policy.expiration_date, now) as number, urgency,
-      nav: { tab: 'Property', propSubTab: 'Insurance' },
+      nav: { tab: 'Details', propSubTab: 'Insurance' },
     })
   }
   return items
@@ -116,7 +120,7 @@ export function buildMortgageDateItems(mortgages: MortgageInput[], propertyLabel
       label: urgency === 'Expired' ? 'Mortgage matured' : urgency === 'Urgent' ? 'Mortgage maturing soon' : 'Mortgage maturing',
       description: mortgage.lender, propertyId: mortgage.property_id, propertyLabel: labelFor(mortgage.property_id, propertyLabelById),
       date: mortgage.maturity_date as string, daysUntil: daysUntil(mortgage.maturity_date, now) as number, urgency,
-      nav: { tab: 'Property', propSubTab: 'Mortgage' },
+      nav: { tab: 'Details', propSubTab: 'Mortgage' },
     })
   }
   return items
@@ -147,7 +151,7 @@ export function buildMaintenanceDateItems(records: MaintenanceInput[], propertyL
       label: urgency === 'Expired' ? 'Maintenance overdue' : urgency === 'Urgent' ? 'Maintenance due soon' : 'Maintenance scheduled',
       description: record.description, propertyId: record.property_id, propertyLabel: labelFor(record.property_id, propertyLabelById),
       date: record.service_date, daysUntil: daysUntil(record.service_date, now) as number, urgency,
-      nav: { tab: 'Property', propSubTab: 'Maintenance' },
+      nav: { tab: 'Details', propSubTab: 'Maintenance' },
     })
   }
   return items
@@ -182,7 +186,7 @@ export function buildOpenMaintenanceItems(records: MaintenanceInput[], propertyL
       id: r.id, description: r.description, category: r.category, vendor: r.vendor,
       propertyId: r.property_id, propertyLabel: labelFor(r.property_id, propertyLabelById),
       date: r.service_date, status: r.status,
-      nav: { tab: 'Property', propSubTab: 'Maintenance' } as NavTarget,
+      nav: { tab: 'Details', propSubTab: 'Maintenance' } as NavTarget,
     }))
     .sort((a, b) => b.date.localeCompare(a.date))
 }
