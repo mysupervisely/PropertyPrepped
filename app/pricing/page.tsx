@@ -28,6 +28,7 @@ import {
 import { startCheckout } from '../../lib/billing/client'
 import { PricingNavLink } from '../../components/PricingNavLink'
 import { Wordmark } from '../../components/Wordmark'
+import { AuthHeader } from '../../components/AuthHeader'
 
 const LEGACY_PLAN_IDS = new Set(['investor', 'portfolio', 'portfolio_pro'])
 
@@ -52,19 +53,27 @@ export default function PricingPage() {
 
   return (
     <main className="shell investmentShell">
-      <header className="topbar">
-        <Link href="/" className="brandButton"><span className="brand"><Wordmark /></span><span className="tagline">Your real estate portfolio, all in one place.</span></Link>
-        <div className="accountActions">
-          <PricingNavLink />
-          {ready && user ? <Link className="secondary" href="/account/billing">Account &amp; Billing</Link> : null}
-          {ready && !user ? <Link className="primary" href="/">Sign In</Link> : null}
-        </div>
-      </header>
+      {/* Pricing Header Consistency: signed-in visitors get the SAME
+          authenticated header (avatar/hamburger menu) every other page
+          uses — no separate pricing-specific header. Signed-out
+          visitors (this page is a real, reachable-while-logged-out
+          acquisition page) keep the lightweight marketing header below,
+          since AuthNavMenu's destinations all assume an authenticated
+          account. */}
+      {ready && user ? <AuthHeader /> : (
+        <header className="topbar">
+          <Link href="/" className="brandButton"><span className="brand"><Wordmark /></span><span className="tagline">Your real estate portfolio, all in one place.</span></Link>
+          <div className="accountActions">
+            <PricingNavLink />
+            <Link className="primary" href="/">Sign In</Link>
+          </div>
+        </header>
+      )}
 
       <section className="intro">
         <p className="eyebrow">PRICING</p>
-        <h1>Plans built around what you need PropRoster to do.</h1>
-        <p>Start free to try it out. Upgrade for AI-powered document handling, rent tracking, and PropWatch — not just more property slots.</p>
+        <h1>Simple pricing for your properties.</h1>
+        <p>Start free with one property. Upgrade when your portfolio grows.</p>
       </section>
 
       {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}

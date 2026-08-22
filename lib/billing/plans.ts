@@ -242,13 +242,23 @@ export const NEXT_PLAN: Record<PlanId, PurchasablePlanId | null> = {
 // ("the primary reason to upgrade should be capabilities, NOT simply the
 // number of properties"). Only plans actually rendered on /pricing
 // (PUBLIC_PLAN_ORDER + COMING_SOON_PLAN_ORDER) need an entry.
+// Property-First Simplification V2 ("Simplify Pricing"): shorter,
+// truthful to what each plan actually grants today
+// (lib/billing/entitlements.ts) — Smart Upload/PropWatch/rent-ledger
+// status stay Manage-only bullets since Organize doesn't actually have
+// them yet; Global Search is no longer a headline bullet on any plan
+// (every plan already gets it — not a meaningful differentiator).
+// "Tenant & Lease Management" is renamed "Rent & lease tracking" —
+// narrower, organize-and-track language rather than sounding like a
+// full-service property-management/payment product.
 export const PLAN_FEATURE_HIGHLIGHTS: Partial<Record<PlanId, string[]>> = {
-  free: ['1 property', 'Property profile & documents', 'Global Search'],
+  free: ['1 property', 'Property profile', 'Documents', 'Basic portfolio organization'],
   organize: [
     'Up to 5 properties',
-    'Documents, PropCrew & Global Search',
+    'Documents & PropCrew',
+    'Tax Center',
+    'Rent & lease tracking',
     'Investment Tools',
-    'Tenant & Lease Management',
   ],
   manage: [
     'Everything in Organize',

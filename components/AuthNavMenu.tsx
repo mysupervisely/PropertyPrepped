@@ -27,18 +27,28 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthUser } from '../lib/useAuthUser'
 
-// Property-First UX Cleanup: audited down to a small set of MAJOR
-// destinations at the top (Dashboard/Documents/Tax Center are the
-// visible-navigation priorities the spec calls out — "Home, Properties,
-// Documents, Tax"; Dashboard already IS the properties view, so a
-// separate "Properties" entry would just duplicate it — see the
-// completion report's navigation section), then a secondary group for
-// tools that stay reachable but don't need equal top-level weight
-// (Rent Ledger, PropCrew, Portfolio Import, Investment Tools), then
-// account-level pages. Nothing was removed — every route below still
-// exists and works; Search moved out of this list entirely (now a
-// header icon — see components/AuthHeader.tsx) since it no longer needs
-// a list entry once it has its own always-visible action.
+// Property-First Simplification V2: pared down further to the
+// hierarchy the milestone specifies — Dashboard/Documents/Tax
+// Center/PropCrew/Investment Tools as the major, equal-weight
+// destinations (properties themselves dominate Dashboard; Documents,
+// Tax Center and PropCrew are the portfolio-wide views that genuinely
+// need one, per the "property is the center of the product" principle),
+// then Profile/Pricing visually de-emphasized as account-level
+// destinations (see .authNavMenuSecondary in globals.css).
+//
+// REMOVED from this list (not deleted from the app — see each route's
+// own file for what's preserved):
+// - Rent Ledger: rent management now belongs inside a property's own
+//   Rent tab (app/page.tsx). /rent-ledger still exists and works as a
+//   compatibility route for old links/bookmarks; it's just no longer a
+//   primary navigation destination.
+// - Portfolio Import: no longer a permanent top-level feature. Its
+//   functionality (and AI pipeline) is untouched — it's now offered
+//   contextually from the Add Property flow ("Import existing
+//   portfolio" — see app/page.tsx's Add Property modal) instead of
+//   living in this menu.
+// Search stays out of this list entirely (a header icon — see
+// components/AuthHeader.tsx).
 const NAV_LINKS: { href: string; label: string }[] = [
   { href: '/', label: 'Dashboard' },
   // Documents + Navigation + Realtor Connect Polish: the portfolio-wide
@@ -48,24 +58,17 @@ const NAV_LINKS: { href: string; label: string }[] = [
   // Tax Center V1: organizes the SAME ledger data property-level Rent
   // ledgers write to, by tax year.
   { href: '/tax-center', label: 'Tax Center' },
-  // -- secondary tools: reachable, but not equal top-level weight --
-  // Milestone 18: Rent Ledger — a recordkeeping tool, not a payment
-  // processor (see lib/rent-ledger/). The property-level Rent tab is the
-  // primary place this data lives now; this remains the de-emphasized
-  // portfolio-wide view for the "legitimate use" the spec allows.
-  { href: '/rent-ledger', label: 'Rent Ledger' },
+  // PropCrew stays portfolio-wide (Part 3): the same provider can serve
+  // multiple properties, so a single master directory — distinct from
+  // Rent Ledger, which genuinely duplicated property-level data.
   { href: '/propcrew', label: 'PropCrew' },
   { href: '/investment-tools', label: 'Investment Tools' },
-  // Milestone 14: secondary to the header's own "+ Smart Upload" (also
-  // linked from inside that modal's Entry screen and each property's
-  // Documents tab) — onboarding an existing portfolio of historical
-  // documents, not the everyday add-one-thing action.
-  // Final Launch Fixes: customer-facing label only — "Portfolio Import"
-  // is the approved name for onboarding/bulk organization of existing
-  // property records. The route, table, and internal identifiers stay
-  // /smart-import / smart_upload_items / SmartImport (unchanged).
-  { href: '/smart-import', label: 'Portfolio Import' },
-  // -- account-level --
+]
+
+// Account-level destinations — visually separated/lower priority (its
+// own divider + .authNavMenuSecondary styling), never equal-weight
+// top-level destinations.
+const ACCOUNT_LINKS: { href: string; label: string }[] = [
   { href: '/profile', label: 'Profile' },
   { href: '/pricing', label: 'Pricing' },
 ]
@@ -150,6 +153,10 @@ export function AuthNavMenu({ onDashboardNavigate }: { onDashboardNavigate?: () 
             >
               {link.label}
             </Link>
+          ))}
+          <div className="authNavMenuDivider" role="separator" />
+          {ACCOUNT_LINKS.map((link) => (
+            <Link key={link.href} href={link.href} className="authNavMenuSecondary" onClick={() => setOpen(false)}>{link.label}</Link>
           ))}
           <Link href="/?add=property" className="authNavMenuAction" onClick={() => setOpen(false)}>+ Add Property</Link>
           <div className="authNavMenuDivider" role="separator" />
