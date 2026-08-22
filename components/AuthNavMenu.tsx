@@ -38,6 +38,11 @@ const NAV_LINKS: { href: string; label: string }[] = [
   // same reasoning as Search above: reachable from every authenticated
   // page via the hamburger, never in the global header.
   { href: '/rent-ledger', label: 'Rent Ledger' },
+  // Tax Center V1: organizes the SAME Financials ledger Rent Ledger's
+  // payments ultimately land in, by tax year — adjacent to Rent Ledger
+  // since both are financial recordkeeping tools, not payment
+  // processors or tax filing services.
+  { href: '/tax-center', label: 'Tax Center' },
   { href: '/investment-tools', label: 'Investment Tools' },
   { href: '/propcrew', label: 'PropCrew' },
   // Documents + Navigation + Realtor Connect Polish: the portfolio-wide
