@@ -1,15 +1,19 @@
-// PropRoster — Tax Center V1: aggregation.
+// PropRoster — Tax Center: aggregation.
 //
-// Pure functions only — no Supabase, no React. Every number here is a
-// sum of financial_transactions rows that already exist (the SAME
-// ledger app/page.tsx's Financials tab reads/writes); this module never
-// invents, estimates, or infers a value for missing data (Section "Data
-// Integrity") — a category with zero matching transactions simply
-// totals to 0 / doesn't appear, it is never backfilled with a guess.
+// Pure functions only — no Supabase, no React. Every "tracked" number is
+// a sum of financial_transactions rows that already exist (the SAME
+// ledger app/page.tsx's Financials tab reads/writes); every "effective"
+// number additionally applies the V2 manual-override rule
+// (lib/tax-center/manual-entry.ts's computeCategoryValue) when a
+// property_tax_records row exists for that property/year. This module
+// never invents, estimates, or infers a value for missing data (Section
+// "Data Integrity") — a category with zero matching transactions and no
+// manual entry simply totals to 0, it is never backfilled with a guess.
 
 import { isIncomeCategory, isOperatingExpenseCategory, isCapitalExpenseCategory, isNonOperatingCategory } from './categories'
 import { computePropertyReadiness } from './readiness'
-import type { MaintenanceRecordInput, PortfolioTaxSummary, PropertyInput, PropertyTaxSummary, TransactionInput } from './types'
+import { buildCategoryBreakdown, categoriesInGroup } from './manual-entry'
+import type { MaintenanceRecordInput, PortfolioTaxSummary, PropertyInput, PropertyTaxSummary, TaxRecordInput, TransactionInput } from './types'
 
 /** Newest first is irrelevant here — always returned sorted descending (most recent tax year first), current year always included even with zero data yet, matching app/page.tsx's own existing `years` derivation for its Financials tab. */
 export function getAvailableTaxYears(transactions: TransactionInput[], now: Date = new Date()): string[] {
@@ -30,14 +34,11 @@ export function sumByCategory(transactions: TransactionInput[]): Record<string, 
   return totals
 }
 
-function sumWhere(transactions: TransactionInput[], predicate: (t: TransactionInput) => boolean): number {
-  return transactions.filter(predicate).reduce((sum, t) => sum + Number(t.amount), 0)
-}
-
 export function computePropertyTaxSummary(
   property: PropertyInput,
   yearTransactions: TransactionInput[],
   yearMaintenanceRecords: MaintenanceRecordInput[],
+  taxRecord: TaxRecordInput | null = null,
 ): PropertyTaxSummary {
   const propertyTransactions = yearTransactions.filter((t) => t.property_id === property.id)
   const propertyMaintenance = yearMaintenanceRecords.filter((m) => m.property_id === property.id)
@@ -47,10 +48,22 @@ export function computePropertyTaxSummary(
   const capitalTx = propertyTransactions.filter((t) => t.transaction_type === 'Expense' && isCapitalExpenseCategory(t.category))
   const mortgageTx = propertyTransactions.filter((t) => t.transaction_type === 'Expense' && isNonOperatingCategory(t.category))
 
-  const grossIncome = incomeTx.reduce((sum, t) => sum + Number(t.amount), 0)
-  const operatingExpenses = operatingExpenseTx.reduce((sum, t) => sum + Number(t.amount), 0)
-  const capitalImprovements = capitalTx.reduce((sum, t) => sum + Number(t.amount), 0)
+  const trackedByCategory: Record<string, number> = {}
+  for (const t of [...incomeTx, ...operatingExpenseTx, ...capitalTx]) {
+    trackedByCategory[t.category] = (trackedByCategory[t.category] || 0) + Number(t.amount)
+  }
+  const categoryBreakdown = buildCategoryBreakdown(trackedByCategory, taxRecord)
+
+  const grossIncome = categoriesInGroup('income').reduce((sum, c) => sum + categoryBreakdown[c.key].effective, 0)
+  const operatingExpenses = categoriesInGroup('operatingExpense').reduce((sum, c) => sum + categoryBreakdown[c.key].effective, 0)
+  const capitalImprovements = categoriesInGroup('capital').reduce((sum, c) => sum + categoryBreakdown[c.key].effective, 0)
+  const mortgageInterest = categoriesInGroup('financing').reduce((sum, c) => sum + categoryBreakdown[c.key].effective, 0)
   const mortgagePayments = mortgageTx.reduce((sum, t) => sum + Number(t.amount), 0)
+
+  const incomeByCategory: Record<string, number> = {}
+  for (const c of categoriesInGroup('income')) incomeByCategory[c.key] = categoryBreakdown[c.key].effective
+  const expenseByCategory: Record<string, number> = {}
+  for (const c of categoriesInGroup('operatingExpense')) expenseByCategory[c.key] = categoryBreakdown[c.key].effective
 
   return {
     propertyId: property.id,
@@ -61,10 +74,15 @@ export function computePropertyTaxSummary(
     netOperatingResult: grossIncome - operatingExpenses,
     capitalImprovements,
     mortgagePayments,
-    incomeByCategory: sumByCategory(incomeTx),
-    expenseByCategory: sumByCategory(operatingExpenseTx),
+    mortgageInterest,
+    categoryBreakdown,
+    hasManualRecord: taxRecord !== null,
+    notes: taxRecord?.notes ?? null,
+    documentId: taxRecord?.document_id ?? null,
+    incomeByCategory,
+    expenseByCategory,
     transactionCount: propertyTransactions.length,
-    readiness: computePropertyReadiness(propertyTransactions, propertyMaintenance),
+    readiness: computePropertyReadiness(propertyTransactions, propertyMaintenance, taxRecord),
   }
 }
 
@@ -84,6 +102,7 @@ export function computePortfolioTaxSummary(year: string, propertySummaries: Prop
     netOperatingResult: propertySummaries.reduce((sum, p) => sum + p.netOperatingResult, 0),
     capitalImprovements: propertySummaries.reduce((sum, p) => sum + p.capitalImprovements, 0),
     mortgagePayments: propertySummaries.reduce((sum, p) => sum + p.mortgagePayments, 0),
+    mortgageInterest: propertySummaries.reduce((sum, p) => sum + p.mortgageInterest, 0),
     expenseByCategory,
     propertiesNeedingAttention: propertySummaries
       .filter((p) => p.readiness.status !== 'Ready')

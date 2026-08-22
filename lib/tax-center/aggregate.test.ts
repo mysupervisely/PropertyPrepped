@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { computePortfolioTaxSummary, computePropertyTaxSummary, filterTransactionsForYear, getAvailableTaxYears, sumByCategory } from './aggregate'
-import type { PropertyInput, TransactionInput } from './types'
+import { emptyManualFields } from './manual-entry'
+import type { PropertyInput, TaxRecordInput, TransactionInput } from './types'
+
+function taxRecord(overrides: Partial<TaxRecordInput> = {}): TaxRecordInput {
+  return { ...emptyManualFields(), notes: null, document_id: null, ...overrides }
+}
 
 const propA: PropertyInput = { id: 'p1', address: '5531 Turtle Crossing Loop', city: 'Tampa', property_type: 'Rental Property' }
 const propB: PropertyInput = { id: 'p2', address: '17 Amaryllis Ln', city: 'Brandon', property_type: 'Rental Property' }
@@ -141,7 +146,8 @@ describe('computePortfolioTaxSummary', () => {
     expect(portfolio.grossIncome).toBe(2500)
     expect(portfolio.operatingExpenses).toBe(300)
     expect(portfolio.netOperatingResult).toBe(2200)
-    expect(portfolio.expenseByCategory).toEqual({ Repairs: 300 })
+    expect(portfolio.expenseByCategory.repairs).toBe(300)
+    expect(Object.values(portfolio.expenseByCategory).reduce((a, b) => a + b, 0)).toBe(300) // every other category totals to 0 — nothing fabricated
   })
 
   it('lists properties needing attention (anything not Ready), by status', () => {
@@ -149,5 +155,82 @@ describe('computePortfolioTaxSummary', () => {
     const missing = computePropertyTaxSummary(propB, [], [])
     const portfolio = computePortfolioTaxSummary('2026', [ready, missing])
     expect(portfolio.propertiesNeedingAttention).toEqual([{ propertyId: 'p2', address: '17 Amaryllis Ln', status: 'Missing Information' }])
+  })
+})
+
+describe('computePropertyTaxSummary — Tax Center V2 manual override', () => {
+  it('with no manual record at all, totals are identical to V1 (tracked-only) behavior', () => {
+    const rows = [tx({ category: 'Rent', amount: 2000 }), tx({ transaction_type: 'Expense', category: 'Repairs', amount: 300 })]
+    const summary = computePropertyTaxSummary(propA, rows, [], null)
+    expect(summary.grossIncome).toBe(2000)
+    expect(summary.operatingExpenses).toBe(300)
+    expect(summary.hasManualRecord).toBe(false)
+    expect(summary.mortgageInterest).toBe(0)
+  })
+
+  it('a manual value overrides (replaces, never adds to) the tracked value for that category', () => {
+    const rows = [tx({ transaction_type: 'Expense', category: 'Taxes', amount: 500 })]
+    const record = taxRecord({ property_taxes: 6400 })
+    const summary = computePropertyTaxSummary(propA, rows, [], record)
+    expect(summary.categoryBreakdown.propertyTaxes).toEqual({ tracked: 500, manual: 6400, effective: 6400, source: 'manual' })
+    expect(summary.operatingExpenses).toBe(6400) // never 500 + 6400
+  })
+
+  it('blank manual fields never disturb a category that has real tracked data', () => {
+    const rows = [tx({ transaction_type: 'Expense', category: 'Repairs', amount: 300 })]
+    const summary = computePropertyTaxSummary(propA, rows, [], taxRecord()) // every field null
+    expect(summary.operatingExpenses).toBe(300)
+  })
+
+  it('mortgage interest is manual-only and never derived from mortgage payment transactions', () => {
+    const rows = [tx({ transaction_type: 'Expense', category: 'Mortgage', amount: 1800 })]
+    const withoutInterest = computePropertyTaxSummary(propA, rows, [], null)
+    expect(withoutInterest.mortgageInterest).toBe(0)
+    expect(withoutInterest.mortgagePayments).toBe(1800)
+
+    const withInterest = computePropertyTaxSummary(propA, rows, [], taxRecord({ mortgage_interest: 4800 }))
+    expect(withInterest.mortgageInterest).toBe(4800)
+    expect(withInterest.mortgagePayments).toBe(1800) // unchanged — the two never mix
+    expect(withInterest.operatingExpenses).toBe(0) // interest is financing, never operating expense
+  })
+
+  it('capital improvements: manual override replaces tracked CapEx, and stays out of operatingExpenses', () => {
+    const rows = [tx({ transaction_type: 'Expense', category: 'CapEx', amount: 5000 })]
+    const summary = computePropertyTaxSummary(propA, rows, [], taxRecord({ capital_improvements: 15000 }))
+    expect(summary.capitalImprovements).toBe(15000)
+    expect(summary.operatingExpenses).toBe(0)
+  })
+
+  it('manual-only categories (Cleaning, Landscaping, Pest control, Advertising) contribute to operatingExpenses only when manually entered', () => {
+    const summary = computePropertyTaxSummary(propA, [], [], taxRecord({ cleaning: 150, landscaping: 200, pest_control: 75, advertising: 50 }))
+    expect(summary.operatingExpenses).toBe(475)
+  })
+
+  it('hasManualRecord is true whenever a tax record exists, even if every field is blank', () => {
+    const summary = computePropertyTaxSummary(propA, [], [], taxRecord())
+    expect(summary.hasManualRecord).toBe(true)
+  })
+
+  it('surfaces notes and documentId from the tax record', () => {
+    const summary = computePropertyTaxSummary(propA, [], [], taxRecord({ notes: 'From lender statement', document_id: 'doc-1' }))
+    expect(summary.notes).toBe('From lender statement')
+    expect(summary.documentId).toBe('doc-1')
+  })
+})
+
+describe('computePortfolioTaxSummary — aggregation using effective values', () => {
+  it('sums effective (post-override) amounts across properties, not raw tracked amounts', () => {
+    const summaryA = computePropertyTaxSummary(propA, [tx({ property_id: 'p1', transaction_type: 'Expense', category: 'Taxes', amount: 500 })], [], taxRecord({ property_taxes: 6400 }))
+    const summaryB = computePropertyTaxSummary(propB, [tx({ property_id: 'p2', transaction_type: 'Expense', category: 'Taxes', amount: 800 })], [], null)
+    const portfolio = computePortfolioTaxSummary('2026', [summaryA, summaryB])
+    expect(portfolio.expenseByCategory.propertyTaxes).toBe(7200) // 6400 (manual, replacing 500) + 800 (tracked) — never 500+6400+800
+    expect(portfolio.mortgageInterest).toBe(0)
+  })
+
+  it('sums mortgage interest across properties, independent of mortgage payments', () => {
+    const summaryA = computePropertyTaxSummary(propA, [], [], taxRecord({ mortgage_interest: 4800 }))
+    const summaryB = computePropertyTaxSummary(propB, [], [], taxRecord({ mortgage_interest: 3200 }))
+    const portfolio = computePortfolioTaxSummary('2026', [summaryA, summaryB])
+    expect(portfolio.mortgageInterest).toBe(8000)
   })
 })

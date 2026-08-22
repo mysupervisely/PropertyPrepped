@@ -18,6 +18,7 @@ import { PropertySystemsPanel, type PropertySystem } from '../components/propert
 import { PropertyNotesPanel, type PropertyNote } from '../components/property-profile/PropertyNotesPanel'
 import { PropertyOwnershipPanel, type PropertyOwnership } from '../components/property-profile/PropertyOwnershipPanel'
 import { PropertyTimelinePanel } from '../components/property-profile/PropertyTimelinePanel'
+import { PropertyTaxPanel, type PropertyTaxRecordRow } from '../components/property-profile/PropertyTaxPanel'
 import type { NormalizedAddress } from '../lib/address/types'
 import { deriveTimeline } from '../lib/property-timeline/derive-timeline'
 import { resolveGreetingName, greetingTimeOfDay } from '../lib/user-profile/greeting'
@@ -194,6 +195,11 @@ type MaintenanceRequest = {
   assigned_contact_id: string | null
 }
 
+// Tax Center V2: one row per (property, tax_year) — see
+// supabase/milestone-22-tax-center-v2.sql. Re-exported from
+// PropertyTaxPanel so this file and the panel never define two slightly
+// different shapes for the same table.
+
 // Property Profile 2.0, Section 4: consolidated from 10 top-level tabs
 // down to 5 ("Avoid creating 15+ top-level tabs... Overview / Financials
 // / Property / People / Documents") — Lease/Mortgage/Insurance/
@@ -202,7 +208,12 @@ type MaintenanceRequest = {
 // "People"; Photos now lives as a sub-section of "Documents". Nothing
 // was removed — every previous tab's content is still reachable, just
 // regrouped.
-type Tab = 'Overview' | 'Financials' | 'Property' | 'People' | 'Documents'
+// Tax Center V2: 'Tax' is a new top-level tab — its own pill just reads
+// "Tax" (matching every other tab's single-word style, and keeping
+// ?openTab=Tax deep links plain-ASCII/unencoded); the tab's own content
+// heads with an <h2>Tax & Financials</h2>, the section name this
+// milestone's spec actually asks for.
+type Tab = 'Overview' | 'Financials' | 'Tax' | 'Property' | 'People' | 'Documents'
 type PropertySubTab = 'Lease' | 'Mortgage' | 'Insurance' | 'Maintenance' | 'Systems'
 // TenantConnectPanel stays bundled inside the Landlord sub-tab, exactly
 // where it already rendered before this reorganization — not a separate
@@ -210,7 +221,7 @@ type PropertySubTab = 'Lease' | 'Mortgage' | 'Insurance' | 'Maintenance' | 'Syst
 type PeopleSubTab = 'PropCrew' | 'Landlord'
 type DocumentsSubTab = 'Documents' | 'Photos'
 
-const tabs: Tab[] = ['Overview', 'Financials', 'Property', 'People', 'Documents']
+const tabs: Tab[] = ['Overview', 'Financials', 'Tax', 'Property', 'People', 'Documents']
 const propertySubTabs: PropertySubTab[] = ['Lease', 'Mortgage', 'Insurance', 'Maintenance', 'Systems']
 const docCategories = ['All', ...DOCUMENT_CATEGORIES]
 const requestPriorities = ['Low', 'Normal', 'High', 'Urgent']
@@ -463,6 +474,7 @@ export default function Home() {
   const [mortgages, setMortgages] = useState<MortgageRecord[]>([])
   const [insurancePolicies, setInsurancePolicies] = useState<InsuranceRecord[]>([])
   const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>([])
+  const [taxRecords, setTaxRecords] = useState<PropertyTaxRecordRow[]>([])
   const [contacts, setContacts] = useState<PropertyContact[]>([])
   const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([])
   // Property Profile 2.0
@@ -652,6 +664,7 @@ export default function Home() {
   const selectedMortgages = mortgages.filter((row) => row.property_id === selectedId)
   const selectedInsurance = insurancePolicies.filter((row) => row.property_id === selectedId)
   const selectedMaintenance = maintenanceRecords.filter((row) => row.property_id === selectedId)
+  const selectedTaxRecords = taxRecords.filter((row) => row.property_id === selectedId)
   const selectedContacts = contacts.filter((row) => row.property_id === selectedId)
   const selectedRequests = maintenanceRequests.filter((row) => row.property_id === selectedId)
   const openRequests = selectedRequests.filter((row) => row.status !== 'Completed')
@@ -681,6 +694,7 @@ export default function Home() {
       { data: insuranceRows, error: insuranceError }, { data: maintenanceRows, error: maintenanceError }, { data: contactRows, error: contactError },
       { data: requestRows, error: requestError }, { data: systemRows, error: systemError }, { data: noteRows, error: noteError },
       { data: ownershipRows, error: ownershipError }, { data: profileRow }, { data: rentPaymentRows, error: rentPaymentError },
+      { data: taxRecordRows, error: taxRecordError },
     ] = await Promise.all([
       client.from('properties').select('*').order('created_at', { ascending: true }),
       client.from('property_documents').select('*').order('created_at', { ascending: false }),
@@ -697,8 +711,9 @@ export default function Home() {
       client.from('property_ownership').select('*').order('created_at', { ascending: true }),
       client.from('user_profiles').select('*').eq('id', user.id).maybeSingle(),
       client.from('rent_payments').select('*').order('date_received', { ascending: false }),
+      client.from('property_tax_records').select('*'),
     ])
-    const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError || contactError || requestError || systemError || noteError || ownershipError || rentPaymentError
+    const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError || contactError || requestError || systemError || noteError || ownershipError || rentPaymentError || taxRecordError
     if (firstError) {
       setError(firstError.message)
       setBusy(false)
@@ -720,6 +735,7 @@ export default function Home() {
     setMortgages((mortgageRows || []) as MortgageRecord[])
     setInsurancePolicies((insuranceRows || []) as InsuranceRecord[])
     setMaintenanceRecords((maintenanceRows || []) as MaintenanceRecord[])
+    setTaxRecords((taxRecordRows || []) as PropertyTaxRecordRow[])
     setContacts((contactRows || []) as PropertyContact[])
     setPropertySystems((systemRows || []) as PropertySystem[])
     setPropertyNotes((noteRows || []) as PropertyNote[])
@@ -1554,6 +1570,20 @@ export default function Home() {
             <p className="ledgerNote">NOI is shown as income less operating expenses and excludes transactions categorized as Mortgage or CapEx. PropRoster is an organization tool, not tax or accounting advice.</p>
           </section>
         })()}
+
+        {activeTab === 'Tax' && selected && user && supabase && <section className="workspaceContent">
+          <PropertyTaxPanel
+            supabase={supabase}
+            propertyId={selected.id}
+            ownerId={user.id}
+            transactions={selectedTransactions}
+            maintenanceRecords={selectedMaintenance}
+            documents={selectedDocs}
+            taxRecords={selectedTaxRecords}
+            onRefresh={() => void loadPortfolio()}
+          />
+          <p className="ledgerNote">Tax Center (the portfolio-wide view across every property) aggregates these same manual entries alongside your Financials ledger — see the <Link href="/tax-center">Tax Center</Link> page.</p>
+        </section>}
 
         {activeTab === 'Property' && <section className="workspaceContent moduleWorkspace">
           <div className="subTabs" role="tablist" aria-label="Property sections">{propertySubTabs.map((sub) => <button key={sub} role="tab" aria-selected={propertySubTab === sub} className={propertySubTab === sub ? 'active' : ''} onClick={() => setPropertySubTab(sub)}>{sub}</button>)}</div>
