@@ -201,7 +201,7 @@ type MaintenanceRequest = {
 // different shapes for the same table.
 
 // Property-First UX Cleanup: the property workspace is reorganized
-// around the property itself — Overview / Rent / Property / PropCrew /
+// around the property itself — Overview / Rent / Details / PropCrew /
 // Documents / Tax. Nothing was removed, only regrouped and renamed:
 // - "Rent" is new and consolidates everything a landlord actually means
 //   by "the rent side of this property" that used to be scattered
@@ -220,8 +220,22 @@ type MaintenanceRequest = {
 //   away from a sidebar-category-picker into a categorized library (see
 //   the Documents tab's own JSX below).
 // - "Tax" is unchanged (Tax Center V2's PropertyTaxPanel).
-type Tab = 'Overview' | 'Rent' | 'Property' | 'PropCrew' | 'Documents' | 'Tax'
-type PropertySubTab = 'Mortgage' | 'Insurance' | 'Maintenance' | 'Systems'
+//
+// Property-First Simplification and Visual Cleanup: the "Property" tab
+// is renamed to "Details" — inside a screen the user already opened BY
+// selecting a property, a tab literally called "Property" read as an
+// odd echo ("Property > Property?"); "Details" says plainly what's
+// inside (Mortgage/Insurance/Maintenance/Systems, plus Ownership/Entity
+// moved here from Overview below) without restating the container.
+// Purely a renamed Tab value — the internal PropertySubTab/propSubTab/
+// openPropSubTab identifiers are unchanged (implementation detail, never
+// user-facing) and every existing sub-tab/record is untouched.
+type Tab = 'Overview' | 'Rent' | 'Details' | 'PropCrew' | 'Documents' | 'Tax'
+// 'Ownership' added here (moved from Overview — see the Overview JSX's
+// own comment) — Ownership/Entity recordkeeping is exactly the kind of
+// "actual property information that doesn't naturally belong in
+// Overview" this tab already exists for.
+type PropertySubTab = 'Mortgage' | 'Insurance' | 'Maintenance' | 'Systems' | 'Ownership'
 // Lease & tenant terms / the full income+expense ledger / tenant
 // requests+Tenant Connect — three genuinely different workflows that all
 // belong under "Rent," so they get their own lightweight sub-tabs rather
@@ -230,8 +244,8 @@ type PropertySubTab = 'Mortgage' | 'Insurance' | 'Maintenance' | 'Systems'
 type RentSubTab = 'Lease' | 'Ledger' | 'Tenant'
 type DocumentsSubTab = 'Documents' | 'Photos'
 
-const tabs: Tab[] = ['Overview', 'Rent', 'Property', 'PropCrew', 'Documents', 'Tax']
-const propertySubTabs: PropertySubTab[] = ['Mortgage', 'Insurance', 'Maintenance', 'Systems']
+const tabs: Tab[] = ['Overview', 'Rent', 'Details', 'PropCrew', 'Documents', 'Tax']
+const propertySubTabs: PropertySubTab[] = ['Mortgage', 'Insurance', 'Maintenance', 'Systems', 'Ownership']
 const rentSubTabs: RentSubTab[] = ['Lease', 'Ledger', 'Tenant']
 const docCategories = ['All', ...DOCUMENT_CATEGORIES]
 const requestPriorities = ['Low', 'Normal', 'High', 'Urgent']
@@ -1194,10 +1208,10 @@ export default function Home() {
   // so AI extraction never silently modifies a property record.
   function applyExtractedToModule(action: ApplyAction, values: Record<string, string>) {
     setShowDocIntelId(null)
-    if (action === 'Insurance') { setInsuranceDraft((d) => ({ ...d, ...values })); setShowModuleForm('Insurance'); setActiveTab('Property'); setPropertySubTab('Insurance') }
-    else if (action === 'Mortgage') { setMortgageDraft((d) => ({ ...d, ...values })); setShowModuleForm('Mortgage'); setActiveTab('Property'); setPropertySubTab('Mortgage') }
+    if (action === 'Insurance') { setInsuranceDraft((d) => ({ ...d, ...values })); setShowModuleForm('Insurance'); setActiveTab('Details'); setPropertySubTab('Insurance') }
+    else if (action === 'Mortgage') { setMortgageDraft((d) => ({ ...d, ...values })); setShowModuleForm('Mortgage'); setActiveTab('Details'); setPropertySubTab('Mortgage') }
     else if (action === 'Lease') { setEditingLeaseId(null); setLeaseDraft((d) => ({ ...d, ...values })); setShowModuleForm('Lease'); setActiveTab('Rent'); setRentSubTab('Lease') }
-    else if (action === 'Maintenance') { setMaintenanceDraft((d) => ({ ...d, ...values })); setShowModuleForm('Maintenance'); setActiveTab('Property'); setPropertySubTab('Maintenance') }
+    else if (action === 'Maintenance') { setMaintenanceDraft((d) => ({ ...d, ...values })); setShowModuleForm('Maintenance'); setActiveTab('Details'); setPropertySubTab('Maintenance') }
     else if (action === 'FinancialExpense') { setTransactionDraft((d) => ({ ...d, ...values })); setShowTransaction(true); setActiveTab('Rent'); setRentSubTab('Ledger') }
     else if (action === 'Contact') { setPropCrewPrefill({ name: values.name || values.businessName || 'New contact', businessName: values.businessName, phone: values.phone, email: values.email, website: values.website }); setActiveTab('PropCrew') }
     else if (action === 'EstimatedValue' && selected) { openEditProperty(selected); setEditDraft((d) => ({ ...d, value: values.value || d.value })) }
@@ -1528,23 +1542,22 @@ export default function Home() {
         <nav className="tabs" aria-label="Property sections">{tabs.map((tab) => <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
 
         {activeTab === 'Overview' && <section className="workspaceContent">
-          <div className="sectionHead workspaceHeading"><div><p className="eyebrow">PROPERTY OVERVIEW</p><h2>At a glance</h2></div><button className="secondary" onClick={() => openEditProperty(selected)}>Edit property facts</button></div>
+          <div className="sectionHead workspaceHeading"><div><p className="eyebrow">OVERVIEW</p><h2>At a glance</h2></div><button className="secondary" onClick={() => openEditProperty(selected)}>Edit property facts</button></div>
+
+          {/* Property-First Simplification and Visual Cleanup: a true
+              snapshot, not a second copy of everything. Value/Mortgage/
+              Equity/Rent already appear in the hero above on every tab,
+              so they're not repeated here — this panel only shows what
+              the hero doesn't: purchase price, appreciation, expenses,
+              tax/HOA, and cash flow. Ownership/Entity moved to the
+              Details tab (it's administrative recordkeeping, not an
+              at-a-glance fact) and "Property file"/"Quick actions" —
+              two panels that opened the same two destinations — are now
+              one. */}
           <div className="overviewGrid">
-            <div className="overviewPanel"><h3>Financial snapshot</h3><div className="detailRows">
-              <div><span>Purchase price</span><strong>{money(selected.purchase_price)}</strong></div><div><span>Estimated value</span><strong>{money(selected.estimated_value)}</strong></div><div><span>Mortgage balance</span><strong>{money(selected.mortgage_balance)}</strong></div><div><span>Estimated equity</span><strong>{money(equity)}</strong></div>{appreciation && <div className={appreciation.amount >= 0 ? 'metricTone-good' : 'metricTone-bad'}><span>Appreciation</span><strong>{signedMoney(appreciation.amount)} <small>({signedPercent(appreciation.percent)})</small></strong></div>}<div><span>Monthly rent</span><strong>{money(selected.monthly_rent)}</strong></div><div><span>Monthly property expenses</span><strong>{money(selected.monthly_expenses)}</strong></div>{selected.property_tax_annual != null && <div><span>Annual property tax</span><strong>{money(selected.property_tax_annual)}</strong></div>}{selected.hoa_monthly != null && <div><span>HOA / month</span><strong>{money(selected.hoa_monthly)}</strong></div>}<div className="highlightRow"><span>Estimated cash flow</span><strong>{money(monthlyCashFlow)}/mo</strong></div>
+            <div className="overviewPanel"><h3>Financial details</h3><div className="detailRows">
+              <div><span>Purchase price</span><strong>{money(selected.purchase_price)}</strong></div>{appreciation && <div className={appreciation.amount >= 0 ? 'metricTone-good' : 'metricTone-bad'}><span>Appreciation</span><strong>{signedMoney(appreciation.amount)} <small>({signedPercent(appreciation.percent)})</small></strong></div>}<div><span>Monthly property expenses</span><strong>{money(selected.monthly_expenses)}</strong></div>{selected.property_tax_annual != null && <div><span>Annual property tax</span><strong>{money(selected.property_tax_annual)}</strong></div>}{selected.hoa_monthly != null && <div><span>HOA / month</span><strong>{money(selected.hoa_monthly)}</strong></div>}<div className="highlightRow"><span>Estimated cash flow</span><strong>{money(monthlyCashFlow)}/mo</strong></div>
             </div></div>
-            {/* Core Experience Bundle, item 5 audit: automatic enrichment
-                from an existing provider was investigated and intentionally
-                NOT implemented here — RentCast's AVM Value endpoint (the
-                only property-data integration this app currently calls)
-                never returns the SUBJECT property's own facts, only
-                comparable (other, nearby) properties' facts; the subject's
-                own facts require RentCast's separate Property Records
-                endpoint, a new billed request not added without approval
-                (see the completion report). Whenever that IS wired in, the
-                merge precedence must be: explicit user-confirmed value >
-                reliable provider value > blank — never silently overwrite
-                a value the user already entered/confirmed below. */}
             <div className="overviewPanel"><h3>Property facts</h3><div className="detailRows">
               {selected.beds != null && <div><span>Beds</span><strong>{selected.beds}</strong></div>}
               {selected.baths != null && <div><span>Baths</span><strong>{selected.baths}</strong></div>}
@@ -1552,16 +1565,10 @@ export default function Home() {
               {selected.year_built != null && <div><span>Year built</span><strong>{selected.year_built}</strong></div>}
               {selected.lot_size_sqft != null && <div><span>Lot size</span><strong>{selected.lot_size_sqft.toLocaleString()} sqft</strong></div>}
               {selected.purchase_date && <div><span>Purchase date</span><strong>{new Date(`${selected.purchase_date}T12:00:00`).toLocaleDateString()}</strong></div>}
-              {selected.beds == null && selected.baths == null && selected.square_feet == null && selected.year_built == null && selected.lot_size_sqft == null && !selected.purchase_date && <p className="muted">No property facts added yet — add beds, baths, square footage and more from Edit property facts.</p>}
+              {selected.beds == null && selected.baths == null && selected.square_feet == null && selected.year_built == null && selected.lot_size_sqft == null && !selected.purchase_date && <p className="muted">Add beds, baths, square footage and more from Edit property facts.</p>}
             </div></div>
           </div>
 
-          {/* Property-First UX Cleanup: a compact tenant/rent snapshot —
-              the exact facts the spec calls out for Overview
-              ("tenant/occupancy, monthly rent, lease dates,
-              payment/rent status") — kept intentionally brief here; the
-              full lease history, payment history and general ledger all
-              now live one click away on the Rent tab, not duplicated here. */}
           {selected.property_type === 'Rental Property' && (
             <div className="overviewPanel">
               <h3>Rent &amp; tenant</h3>
@@ -1575,16 +1582,12 @@ export default function Home() {
             </div>
           )}
 
-          <PropertyOwnershipPanel propertyId={selected.id} ownerId={user.id} records={selectedOwnership} onRefresh={() => void loadPortfolio()} />
-
           <div className="overviewGrid">
             <div className="overviewPanel"><h3>Notes</h3><PropertyNotesPanel propertyId={selected.id} ownerId={user.id} notes={selectedNotes} onRefresh={() => void loadPortfolio()} compact /></div>
             <div className="overviewPanel"><h3>Timeline</h3><PropertyTimelinePanel events={selectedTimeline} limit={6} /></div>
           </div>
 
-          <div className="overviewPanel"><h3>Property file</h3><div className="fileSummary"><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Documents') }}><strong>{selectedDocs.length}</strong><span>Documents</span><small>Closing, insurance, taxes and more</small></button><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Photos') }}><strong>{selectedPhotos.length}</strong><span>Photos</span><small>Property gallery and records</small></button><button onClick={() => { setActiveTab('Property'); setPropertySubTab('Maintenance') }}><strong>{selectedMaintenance.length}</strong><span>Maintenance records</span><small>Repairs, vendors and warranties</small></button></div></div>
-
-          <div className="quickActions"><div><p className="eyebrow">QUICK ACTIONS</p><h3>Keep this property prepped.</h3></div><div className="quickActionButtons"><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Documents') }}>Upload document</button><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Photos') }}>Add photos</button><button onClick={() => { setActiveTab('Rent'); setRentSubTab('Ledger') }}>Add transaction</button></div></div>
+          <div className="quickActions"><div><p className="eyebrow">QUICK ACTIONS</p></div><div className="quickActionButtons"><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Documents') }}>Documents <span className="quickActionCount">{selectedDocs.length}</span></button><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Photos') }}>Photos <span className="quickActionCount">{selectedPhotos.length}</span></button><button onClick={() => { setActiveTab('Details'); setPropertySubTab('Maintenance') }}>Maintenance <span className="quickActionCount">{selectedMaintenance.length}</span></button><button onClick={() => { setActiveTab('Rent'); setRentSubTab('Ledger') }}>Add transaction</button></div></div>
         </section>}
 
         {activeTab === 'Documents' && <section className="workspaceContent">
@@ -1602,7 +1605,7 @@ export default function Home() {
               upload path nor Smart Upload's own AI pipeline is rebuilt;
               this only changes how the entry point is presented. */}
           {documentsSubTab === 'Documents' && <>
-          <div className="sectionHead workspaceHeading"><div><p className="eyebrow">DOCUMENT CENTER</p><h2>Everything important, filed correctly</h2><p>Files are stored in a private Supabase bucket and opened with short-lived signed links.</p></div><button className="primary" onClick={() => setShowAddDocumentChooser(true)}>+ Add Document</button></div>
+          <div className="sectionHead workspaceHeading"><div><p className="eyebrow">DOCUMENTS</p><h2>Everything important, filed correctly</h2></div><button className="primary" onClick={() => setShowAddDocumentChooser(true)}>+ Add Document</button></div>
           <div className="docFilterChips" role="tablist" aria-label="Filter documents by category">{docCategories.map((category) => <button key={category} role="tab" aria-selected={docCategory === category} className={docCategory === category ? 'active' : ''} onClick={() => setDocCategory(category)}>{category}<small>{category === 'All' ? selectedDocs.length : selectedDocs.filter((d) => d.category === category).length}</small></button>)}</div>
           <div className="documentCardGrid">{filteredDocs.length ? filteredDocs.map((doc) => <div className="documentCard" key={doc.id}>
             <div className="documentCardTop">
@@ -1764,8 +1767,8 @@ export default function Home() {
           <p className="ledgerNote">Tax Center (the portfolio-wide view across every property) aggregates these same manual entries alongside your Rent ledger — see the <Link href="/tax-center">Tax Center</Link> page.</p>
         </section>}
 
-        {activeTab === 'Property' && <section className="workspaceContent moduleWorkspace">
-          <div className="subTabs" role="tablist" aria-label="Property sections">{propertySubTabs.map((sub) => <button key={sub} role="tab" aria-selected={propertySubTab === sub} className={propertySubTab === sub ? 'active' : ''} onClick={() => setPropertySubTab(sub)}>{sub}</button>)}</div>
+        {activeTab === 'Details' && <section className="workspaceContent moduleWorkspace">
+          <div className="subTabs" role="tablist" aria-label="Details sections">{propertySubTabs.map((sub) => <button key={sub} role="tab" aria-selected={propertySubTab === sub} className={propertySubTab === sub ? 'active' : ''} onClick={() => setPropertySubTab(sub)}>{sub}</button>)}</div>
 
           {propertySubTab === 'Mortgage' && <><div className="sectionHead workspaceHeading"><div><p className="eyebrow">MORTGAGE</p><h2>Loan details</h2><p>Track your lender, balance, rate, payment and loan documents.</p></div><button className="primary" onClick={() => setShowModuleForm('Mortgage')}>+ Add mortgage</button></div>{selectedMortgages.length ? <div className="moduleGrid">{selectedMortgages.map((loan) => { const doc=selectedDocs.find(d=>d.id===loan.document_id); return <article className="recordCard" key={loan.id}><div className="recordTop"><div><span className="statusPill">Mortgage</span><h3>{loan.lender}</h3><p>{loan.loan_number ? `Loan ••••${loan.loan_number.slice(-4)}` : 'Loan number not added'}</p></div><button className="recordDelete" onClick={() => void removeModuleRecord('mortgages', loan.id)}>×</button></div><div className="recordMetrics"><div><span>Current balance</span><strong>{money(loan.current_balance)}</strong></div><div><span>Monthly payment</span><strong>{money(loan.monthly_payment)}</strong></div><div><span>Rate</span><strong>{Number(loan.interest_rate).toFixed(3)}%</strong></div></div><div className="recordRows"><div><span>Original balance</span><strong>{money(loan.original_balance)}</strong></div><div><span>Escrow / month</span><strong>{money(loan.escrow_amount)}</strong></div>{loan.maturity_date && <div><span>Maturity</span><strong>{new Date(`${loan.maturity_date}T12:00:00`).toLocaleDateString()}</strong></div>}{doc && <div><span>Loan document</span><button onClick={() => void openDocument(doc)}>{doc.name}</button></div>}</div></article>})}</div> : <EmptyModule title="No mortgage details yet" text="Add the lender, balance, rate, monthly payment and loan document." action="Add mortgage" onClick={() => setShowModuleForm('Mortgage')} />}</>}
 
@@ -1774,6 +1777,14 @@ export default function Home() {
           {propertySubTab === 'Maintenance' && <><div className="sectionHead workspaceHeading"><div><p className="eyebrow">MAINTENANCE</p><h2>Property service history</h2><p>Repairs, preventative work, vendors, costs and receipts in one timeline.</p></div><button className="primary" onClick={() => setShowModuleForm('Maintenance')}>+ Add maintenance</button></div>{selectedMaintenance.length ? <div className="maintenanceList">{selectedMaintenance.map((item) => { const doc=selectedDocs.find(d=>d.id===item.document_id); return <article className="maintenanceRow" key={item.id}><div className="maintenanceDate"><strong>{new Date(`${item.service_date}T12:00:00`).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(`${item.service_date}T12:00:00`).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div><span className="statusPill">{item.status}</span><h3>{item.description}</h3><p>{item.category}{item.vendor ? ` · ${item.vendor}` : ''}</p></div><strong>{money(item.cost)}</strong></div><div className="maintenanceActions">{doc && <button onClick={() => void openDocument(doc)}>Open {doc.name}</button>}{item.financial_transaction_id && <span>Linked to Ledger</span>}<button className="dangerLink" onClick={() => void removeModuleRecord('maintenance_records', item.id, item.financial_transaction_id)}>Remove</button></div></div></article>})}</div> : <EmptyModule title="No maintenance records yet" text="Add repairs, service calls, vendors, costs and receipts as they happen." action="Add maintenance" onClick={() => setShowModuleForm('Maintenance')} />}</>}
 
           {propertySubTab === 'Systems' && <PropertySystemsPanel propertyId={selected.id} ownerId={user.id} systems={selectedSystems} contacts={selectedContacts} documents={selectedDocs} onRefresh={() => void loadPortfolio()} />}
+
+          {/* Moved from Overview (Property-First Simplification and
+              Visual Cleanup) — Ownership/Entity is exactly the kind of
+              property information that doesn't belong on a true
+              "at a glance" snapshot; it now lives here alongside the
+              rest of this property's administrative facts. Same
+              component, same data, same RLS — pure relocation. */}
+          {propertySubTab === 'Ownership' && <PropertyOwnershipPanel propertyId={selected.id} ownerId={user.id} records={selectedOwnership} onRefresh={() => void loadPortfolio()} />}
         </section>}
 
         {activeTab === 'PropCrew' && <section className="workspaceContent moduleWorkspace">

@@ -71,3 +71,31 @@ describe('PropertyTaxPanel — group totals include custom items exactly once', 
     expect(PANEL_SOURCE.split("supabase.from('property_tax_custom_items').delete(").length - 1).toBe(1)
   })
 })
+
+describe('Property-First Simplification and Visual Cleanup — concise annual summary strip', () => {
+  // "Prioritize at first glance: tax year, a concise annual property tax
+  // summary..." — this must be composed from the SAME groupTotal() the
+  // collapsible groups below already use, never a second calculation
+  // that could drift from them.
+
+  it('summaryGrossIncome is exactly groupTotal(\'income\'), never a separate re-derivation', () => {
+    expect(PANEL_SOURCE).toContain("const summaryGrossIncome = groupTotal('income')")
+  })
+
+  it('summaryOperatingExpenses sums groupTotal() over OPERATING_EXPENSE_LIKE_GROUPS — the same "operating-expense-like" definition lib/tax-center/manual-entry.ts already establishes', () => {
+    expect(PANEL_SOURCE).toContain('const summaryOperatingExpenses = OPERATING_EXPENSE_LIKE_GROUPS.reduce((sum, g) => sum + groupTotal(g), 0)')
+  })
+
+  it('summaryNetResult is gross income minus operating expenses — no third input', () => {
+    expect(PANEL_SOURCE).toContain('const summaryNetResult = summaryGrossIncome - summaryOperatingExpenses')
+  })
+
+  it('the summary strip renders all three figures above the collapsible groups', () => {
+    expect(PANEL_SOURCE).toContain('<div className="taxSummaryStrip">')
+    expect(PANEL_SOURCE).toContain('<span>Gross income</span><strong>{moneyStr(summaryGrossIncome)}</strong>')
+    expect(PANEL_SOURCE).toContain('<span>Operating expenses</span><strong>{moneyStr(summaryOperatingExpenses)}</strong>')
+    expect(PANEL_SOURCE).toContain('<span>Net result</span><strong>{moneyStr(summaryNetResult)}</strong>')
+    // the strip must appear before the collapsible GROUP_ORDER.map render
+    expect(PANEL_SOURCE.indexOf('taxSummaryStrip')).toBeLessThan(PANEL_SOURCE.indexOf('{GROUP_ORDER.map((group) => {'))
+  })
+})

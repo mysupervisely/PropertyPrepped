@@ -173,7 +173,7 @@ export function buildSystemWarrantyDateItems(systems: SystemForLedger[], propert
       label: urgency === 'Expired' ? 'Warranty expired' : urgency === 'Urgent' ? 'Warranty expiring soon' : 'Warranty expiring',
       description: system.name || system.system_type, propertyId: system.property_id, propertyLabel: propertyLabelById.get(system.property_id) || '',
       date: system.warranty_expiration as string, daysUntil: daysUntil(system.warranty_expiration, now) as number, urgency,
-      nav: { tab: 'Property', propSubTab: 'Systems' },
+      nav: { tab: 'Details', propSubTab: 'Systems' },
     })
   }
   return items

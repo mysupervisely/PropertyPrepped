@@ -102,6 +102,6 @@ describe('buildSystemWarrantyDateItems', () => {
     ]
     const items = buildSystemWarrantyDateItems(systems, labelById, NOW)
     expect(items).toHaveLength(1)
-    expect(items[0]).toMatchObject({ type: 'System', label: 'Warranty expiring soon', urgency: 'Urgent', nav: { tab: 'Property', propSubTab: 'Systems' } })
+    expect(items[0]).toMatchObject({ type: 'System', label: 'Warranty expiring soon', urgency: 'Urgent', nav: { tab: 'Details', propSubTab: 'Systems' } })
   })
 })

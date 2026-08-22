@@ -96,7 +96,7 @@ describe('searchSystems', () => {
     expect(results[0].title).toBe('Water Heater')
     expect(results[0].subtitle).toBe('12109 Rustic River Way')
     expect(results[0].detail).toBe('Rheem XE50')
-    expect(results[0].href).toBe('/?openProperty=p2&openTab=Property&openPropSubTab=Systems')
+    expect(results[0].href).toBe('/?openProperty=p2&openTab=Details&openPropSubTab=Systems')
   })
 
   it('matches on manufacturer', () => {
@@ -109,7 +109,7 @@ describe('searchMaintenance', () => {
 
   it('matches on description and routes to the Property/Maintenance tab', () => {
     const results = searchMaintenance(rows, ['roof', 'repair'], propertyById)
-    expect(results[0].href).toBe('/?openProperty=p1&openTab=Property&openPropSubTab=Maintenance')
+    expect(results[0].href).toBe('/?openProperty=p1&openTab=Details&openPropSubTab=Maintenance')
   })
 })
 
@@ -154,7 +154,7 @@ describe('searchLeases / searchMortgages / searchInsurance', () => {
 
   it('mortgage matches on lender and routes to the Mortgage sub-tab', () => {
     const results = searchMortgages([{ id: 'm1', property_id: 'p1', lender: 'Wells Fargo', loan_number: null }], ['wells'], propertyById)
-    expect(results[0].href).toBe('/?openProperty=p1&openTab=Property&openPropSubTab=Mortgage')
+    expect(results[0].href).toBe('/?openProperty=p1&openTab=Details&openPropSubTab=Mortgage')
   })
 
   it('rent payment matches on reference_number and routes to the Rent tab (Milestone 18)', () => {
@@ -170,6 +170,6 @@ describe('searchLeases / searchMortgages / searchInsurance', () => {
 
   it('insurance matches on carrier and routes to the Insurance sub-tab', () => {
     const results = searchInsurance([{ id: 'i1', property_id: 'p1', carrier: 'State Farm', policy_number: null }], ['state', 'farm'], propertyById)
-    expect(results[0].href).toBe('/?openProperty=p1&openTab=Property&openPropSubTab=Insurance')
+    expect(results[0].href).toBe('/?openProperty=p1&openTab=Details&openPropSubTab=Insurance')
   })
 })

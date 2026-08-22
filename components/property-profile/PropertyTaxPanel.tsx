@@ -40,7 +40,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { filterTransactionsForYear, getAvailableTaxYears, sumByCategory } from '../../lib/tax-center/aggregate'
 import {
   buildCategoryBreakdown, categoriesInGroup, emptyManualFields, emptyMileageFields,
-  type ManualTaxFields, type MileageFields, type TaxCategoryGroup,
+  OPERATING_EXPENSE_LIKE_GROUPS, type ManualTaxFields, type MileageFields, type TaxCategoryGroup,
 } from '../../lib/tax-center/manual-entry'
 import { CUSTOM_ITEM_GROUPS, CUSTOM_ITEM_GROUP_LABELS, customItemsForPanelGroup, type CustomTaxItem, type CustomTaxItemGroup } from '../../lib/tax-center/custom-items'
 import { isIncomeCategory, isOperatingExpenseCategory, isCapitalExpenseCategory } from '../../lib/tax-center/categories'
@@ -264,6 +264,18 @@ export function PropertyTaxPanel({
     return fixed + custom
   }
 
+  // Property-First Simplification and Visual Cleanup: "Prioritize at
+  // first glance: tax year, a concise annual property tax summary...".
+  // Not a new calculation — just composing the SAME groupTotal() calls
+  // the collapsible groups below already use, the same way
+  // OPERATING_EXPENSE_LIKE_GROUPS already defines "operating-expense-like"
+  // for lib/tax-center/manual-entry.ts's own aggregation. If this ever
+  // drifts from the groups' own totals, that's a bug in groupTotal, not
+  // a second source of truth.
+  const summaryGrossIncome = groupTotal('income')
+  const summaryOperatingExpenses = OPERATING_EXPENSE_LIKE_GROUPS.reduce((sum, g) => sum + groupTotal(g), 0)
+  const summaryNetResult = summaryGrossIncome - summaryOperatingExpenses
+
   function invalidFields(): string[] {
     const problems: string[] = []
     for (const key of MANUAL_FIELD_KEYS) {
@@ -389,6 +401,16 @@ export function PropertyTaxPanel({
             {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
         </label>
+      </div>
+
+      {/* Concise annual summary — the comprehensive category list below
+          stays exactly as comprehensive as V3 built it, but the FIRST
+          thing a landlord sees is three numbers, not seven collapsible
+          groups. */}
+      <div className="taxSummaryStrip">
+        <div><span>Gross income</span><strong>{moneyStr(summaryGrossIncome)}</strong></div>
+        <div><span>Operating expenses</span><strong>{moneyStr(summaryOperatingExpenses)}</strong></div>
+        <div className="taxSummaryNet"><span>Net result</span><strong>{moneyStr(summaryNetResult)}</strong></div>
       </div>
 
       {GROUP_ORDER.map((group) => {

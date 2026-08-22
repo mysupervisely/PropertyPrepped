@@ -114,7 +114,7 @@ export function searchSystems(rows: SystemRow[], words: string[], propertyById: 
         id: s.id, type: 'System', title: s.name || s.system_type,
         subtitle: property?.address || '',
         detail: [s.manufacturer, s.model].filter(Boolean).join(' ') || s.system_type,
-        href: propertyHref(s.property_id, { tab: 'Property', propSubTab: 'Systems' }),
+        href: propertyHref(s.property_id, { tab: 'Details', propSubTab: 'Systems' }),
       }
     })
 }
@@ -132,7 +132,7 @@ export function searchMaintenance(rows: MaintenanceRow[], words: string[], prope
       return {
         id: m.id, type: 'Maintenance', title: m.description,
         subtitle: property?.address || '', detail: [m.category, m.vendor].filter(Boolean).join(' · '),
-        href: propertyHref(m.property_id, { tab: 'Property', propSubTab: 'Maintenance' }),
+        href: propertyHref(m.property_id, { tab: 'Details', propSubTab: 'Maintenance' }),
       }
     })
 }
@@ -200,7 +200,7 @@ export function searchMortgages(rows: MortgageRow[], words: string[], propertyBy
     .filter((m) => matchesAllWords(words, [m.lender, m.loan_number]))
     .map((m) => {
       const property = propertyById.get(m.property_id)
-      return { id: m.id, type: 'Mortgage', title: m.lender, subtitle: property?.address || '', detail: 'Mortgage', href: propertyHref(m.property_id, { tab: 'Property', propSubTab: 'Mortgage' }) }
+      return { id: m.id, type: 'Mortgage', title: m.lender, subtitle: property?.address || '', detail: 'Mortgage', href: propertyHref(m.property_id, { tab: 'Details', propSubTab: 'Mortgage' }) }
     })
 }
 
@@ -212,7 +212,7 @@ export function searchInsurance(rows: InsuranceRow[], words: string[], propertyB
     .filter((i) => matchesAllWords(words, [i.carrier, i.policy_number]))
     .map((i) => {
       const property = propertyById.get(i.property_id)
-      return { id: i.id, type: 'Insurance', title: i.carrier, subtitle: property?.address || '', detail: 'Insurance', href: propertyHref(i.property_id, { tab: 'Property', propSubTab: 'Insurance' }) }
+      return { id: i.id, type: 'Insurance', title: i.carrier, subtitle: property?.address || '', detail: 'Insurance', href: propertyHref(i.property_id, { tab: 'Details', propSubTab: 'Insurance' }) }
     })
 }
 

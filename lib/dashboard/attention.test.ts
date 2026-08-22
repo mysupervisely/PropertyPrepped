@@ -36,7 +36,7 @@ describe('buildInsuranceDateItems', () => {
 
   it('flags an expiring policy within the Upcoming window', () => {
     const items = buildInsuranceDateItems([{ id: 'i1', property_id: 'p1', carrier: 'State Farm', expiration_date: dateStr(20) }], propertyLabelById, TODAY)
-    expect(items[0]).toMatchObject({ label: 'Insurance expiring', urgency: 'Upcoming', description: 'State Farm', nav: { tab: 'Property', propSubTab: 'Insurance' } })
+    expect(items[0]).toMatchObject({ label: 'Insurance expiring', urgency: 'Upcoming', description: 'State Farm', nav: { tab: 'Details', propSubTab: 'Insurance' } })
   })
 })
 
@@ -47,7 +47,7 @@ describe('buildMortgageDateItems', () => {
 
   it('flags a mortgage maturing soon (rare, but same logic as every other date)', () => {
     const items = buildMortgageDateItems([{ id: 'm1', property_id: 'p1', lender: 'Wells Fargo', maturity_date: dateStr(2) }], propertyLabelById, TODAY)
-    expect(items[0]).toMatchObject({ urgency: 'Urgent', nav: { tab: 'Property', propSubTab: 'Mortgage' } })
+    expect(items[0]).toMatchObject({ urgency: 'Urgent', nav: { tab: 'Details', propSubTab: 'Mortgage' } })
   })
 })
 
