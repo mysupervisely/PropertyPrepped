@@ -104,10 +104,19 @@ function DocumentsWorkspace() {
   // document's dashboard activity row links here as
   // /documents?highlight=<documentId> — the document's own safe id,
   // already present on the activity item (lib/dashboard/activity.ts).
+  //
+  // Tax Center V1: /documents?filter=Unassigned lets its Tax Readiness
+  // area deep-link straight to the Unassigned tab instead of just
+  // "/documents" — same query-param convention, additive, ignored if
+  // absent/invalid (falls back to the existing default 'All').
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
     const id = params.get('highlight')
+    const requestedFilter = params.get('filter')
+    if (requestedFilter && (FILTERS as readonly string[]).includes(requestedFilter)) {
+      setFilter(requestedFilter as DocumentFilter)
+    }
     if (!id) return
     window.history.replaceState(null, '', window.location.pathname)
     setHighlightId(id)
