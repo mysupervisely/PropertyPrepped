@@ -79,10 +79,15 @@ h2, h3, p { margin-top: 0; }
 .cardBody h3 { margin-bottom: 3px; font-size: 19px; }
 .muted { color: var(--muted); font-size: 14px; }
 .titleButton p { margin-bottom: 0; }
-.miniStats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 16px 0; margin-top: 14px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+/* Property-First UX Cleanup: property cards now show exactly two stat
+   slots (Rent, and either this month's rent status or Value when Rent
+   Ledger isn't on the plan) — 2 columns, not 3, so the row never leaves
+   an empty third cell. */
+.miniStats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 16px 0; margin-top: 14px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .miniStats strong { font-size: 14px; }
 .cardActions { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 14px; }
 .cardActions button, .rowActions button { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 8px 10px; font-size: 12px; color: var(--text); }
+.cardAlertBadge { display: block; width: 100%; text-align: left; border: 1px solid #e7c9a9; background: #fdf3e7; color: #8a5a1f; border-radius: 8px; padding: 8px 10px; font-size: 12px; font-weight: 650; margin-top: 12px; }
 .overlay { position: fixed; inset: 0; background: rgba(13, 24, 19, .42); display: grid; place-items: center; padding: 22px; z-index: 10; }
 .modal { width: min(700px, 100%); max-height: 92vh; overflow: auto; background: white; border-radius: 20px; padding: 24px; }
 .modalTop { display: flex; justify-content: space-between; align-items: start; }
@@ -106,7 +111,11 @@ h2, h3, p { margin-top: 0; }
 .heroPlaceholder span { font-size: 18px; color: var(--text); font-weight: 700; }
 .heroPlaceholder small { font-size: 13px; }
 .heroInfo h1 { font-size: clamp(32px, 5vw, 52px); }
-.heroCity { color: var(--muted); margin: 8px 0 25px; font-size: 17px; }
+.heroCity { color: var(--muted); margin: 8px 0 12px; font-size: 17px; }
+/* Property-First UX Cleanup: occupancy + this-month rent status, right
+   under the address — the "at a glance" tenant/rent context the spec
+   asks the property workspace to surface immediately. */
+.heroStatusPills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 13px; }
 .heroMetrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 .heroMetrics > div { border-left: 1px solid var(--line); padding-left: 15px; }
 .heroMetrics > div:first-child { border-left: 0; padding-left: 0; }
@@ -163,6 +172,22 @@ h2, h3, p { margin-top: 0; }
 .fileName strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
 .fileName span { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; }
 .rowActions { display: flex; gap: 7px; }
+
+/* Property-First UX Cleanup: the property Documents tab's redesigned
+   categorized library — chips filter by category (reusing the existing
+   docCategory state, just a different control than the old sidebar),
+   and documents render as a scannable card grid instead of a sidebar +
+   flat-row layout. Deliberately reuses .fileIcon/.fileName/.rowActions/
+   .aiStatusPill as-is (same look as the old row), just inside a card. */
+.docFilterChips { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 18px; scrollbar-width: none; }
+.docFilterChips::-webkit-scrollbar { display: none; }
+.docFilterChips button { white-space: nowrap; display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; background: white; color: var(--muted); font-weight: 650; font-size: 12.5px; }
+.docFilterChips button.active { background: var(--brand); color: white; border-color: var(--brand); }
+.docFilterChips button small { color: inherit; opacity: .75; font-weight: 700; }
+.documentCardGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.documentCard { display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--line); border-radius: 14px; background: white; padding: 16px; }
+.documentCardTop { display: flex; gap: 12px; align-items: center; }
+.documentCardActions { flex-wrap: wrap; margin-top: auto; }
 
 /* Documents + Navigation + Realtor Connect Polish: the portfolio-wide
    Documents library (app/documents/page.tsx). Deliberately its own small
@@ -512,6 +537,22 @@ h2, h3, p { margin-top: 0; }
 .formFieldset { border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 0; }
 .formFieldset legend { padding: 0 6px; font-size: 12px; font-weight: 750; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
 .formFieldset .formGrid { margin: 0; }
+
+/* Property-First UX Cleanup: the Documents tab's "+ Add Document"
+   chooser — Upload normally (the existing per-property category +
+   drop-zone flow) side by side with Smart Upload (which just calls the
+   existing global modal via openSmartUpload(); no second upload
+   pipeline lives here). */
+.addDocumentModal { width: min(720px, 100%); }
+.addDocumentChooser { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 6px; }
+.addDocumentOption { border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+.addDocumentOption h3 { margin: 0; font-size: 15px; }
+.addDocumentOption p { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.addDocumentOption label { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.addDocumentOptionSmart { background: var(--brand-soft); border-color: #cadfd4; justify-content: space-between; }
+@media (max-width: 700px) {
+  .addDocumentChooser { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 800px) {
   .currentLeaseCard { max-width: none; }
@@ -1166,6 +1207,12 @@ h2, h3, p { margin-top: 0; }
 
 /* Section 3: authenticated navigation foundation */
 .topbarBrandGroup { display: flex; align-items: center; gap: 12px; }
+/* Property-First UX Cleanup: the header's right side now holds a Search
+   icon alongside the existing Smart Upload button, instead of Search
+   living only inside the hamburger. */
+.topbarActions { display: flex; align-items: center; gap: 10px; }
+.headerSearchButton { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 999px; border: 1px solid var(--line); background: white; font-size: 16px; text-decoration: none; flex-shrink: 0; }
+.headerSearchButton:hover { border-color: #c9d2cd; }
 .authNavMenu { position: relative; }
 .authNavMenuButton { border: 1px solid var(--line); background: white; color: var(--text); width: 40px; height: 40px; border-radius: 10px; font-size: 17px; display: grid; place-items: center; }
 .authNavMenuButton:hover { border-color: var(--brand); color: var(--brand); }
@@ -1303,6 +1350,8 @@ h2, h3, p { margin-top: 0; }
 .smartUploadButton { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
 @media (max-width: 430px) {
   .smartUploadButton { padding: 10px 12px; font-size: 12.5px; gap: 5px; }
+  .topbarActions { gap: 7px; }
+  .headerSearchButton { width: 36px; height: 36px; font-size: 14px; }
 }
 
 /* Hamburger menu additions: "+ Add Property" reads as an action (brand
@@ -1520,6 +1569,12 @@ h2, h3, p { margin-top: 0; }
 .taxNonOperatingNotes p { margin: 0; }
 .taxCategoryTableWrap { overflow-x: auto; margin-bottom: 32px; }
 .taxCategoryTable { width: 100%; min-width: 480px; }
+/* Tax Center portfolio table (Property-First UX Cleanup) — one row per
+   rental property, scannable at a glance; scrolls horizontally inside
+   .taxCategoryTableWrap on narrow screens rather than squeezing 7
+   columns down, same pattern the category table above already uses. */
+.taxPropertyTable { width: 100%; min-width: 640px; }
+.taxPropertyTable td:first-child a { font-weight: 650; }
 .taxPropertyList { display: grid; gap: 14px; margin-bottom: 32px; }
 .taxPropertyToggle { display: block; width: 100%; border: 0; background: transparent; padding: 0; text-align: left; cursor: pointer; }
 .taxReadinessItems { margin: 14px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--muted); line-height: 1.6; }

@@ -228,6 +228,28 @@ function TaxCenterWorkspace() {
           </section>
 
           <section className="noPrint">
+            <div className="sectionHead"><div><h2>Rental properties — {year}</h2><p>Every rental property at a glance. Select a property to review or edit its Tax &amp; Financials tab.</p></div></div>
+            <div className="taxCategoryTableWrap">
+              <table className="ledger taxPropertyTable">
+                <thead><tr><th>Property</th><th>Rental income</th><th>Operating expenses</th><th>Mortgage interest</th><th>Capital improvements</th><th>Net result</th><th>Status</th></tr></thead>
+                <tbody>
+                  {propertySummaries.map((p) => (
+                    <tr key={p.propertyId}>
+                      <td><Link href={`/?openProperty=${p.propertyId}&openTab=Tax`}>{p.address}</Link></td>
+                      <td className="moneyCell">{money(p.grossIncome)}</td>
+                      <td className="moneyCell">{money(p.operatingExpenses)}</td>
+                      <td className="moneyCell">{p.mortgageInterest > 0 ? money(p.mortgageInterest) : '—'}</td>
+                      <td className="moneyCell">{p.capitalImprovements > 0 ? money(p.capitalImprovements) : '—'}</td>
+                      <td className="moneyCell">{money(p.netOperatingResult)}</td>
+                      <td><span className={`statusPill ${readinessPillClass(p.readiness.status)}`}>{p.readiness.status}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="noPrint">
             <div className="sectionHead"><div><h2>Expense totals by category</h2><p>Ordinary operating expenses only — capital improvements, mortgage interest, and mortgage payments are shown separately above.</p></div></div>
             <div className="taxCategoryTableWrap">
               <table className="ledger taxCategoryTable">
@@ -267,7 +289,7 @@ function TaxCenterWorkspace() {
           </section>
 
           <section className="noPrint">
-            <div className="sectionHead"><div><h2>Property-by-property breakdown</h2><p>Expand a property to see its full annual detail, or jump into Tax &amp; Financials to enter manual amounts.</p></div></div>
+            <div className="sectionHead"><div><h2>Property detail</h2><p>Expand a property to see its full category-by-category breakdown, or jump into Tax &amp; Financials to enter manual amounts.</p></div></div>
             <div className="taxPropertyList">
               {propertySummaries.map((p) => {
                 const expanded = expandedPropertyId === p.propertyId
@@ -308,7 +330,7 @@ function TaxCenterWorkspace() {
                         )}
                         <div className="maintenanceActions">
                           <Link href={`/?openProperty=${p.propertyId}&openTab=Tax`}>{p.hasManualRecord ? 'Edit manual tax entries' : 'Add manual tax entries'}</Link>
-                          <Link href={`/?openProperty=${p.propertyId}&openTab=Financials`}>Review in Financials</Link>
+                          <Link href={`/?openProperty=${p.propertyId}&openTab=Rent&openRentSubTab=Ledger`}>Review in Ledger</Link>
                           <Link href="/documents">Review documents</Link>
                         </div>
                       </>

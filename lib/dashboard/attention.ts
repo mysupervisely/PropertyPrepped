@@ -9,25 +9,32 @@
 
 import { classifyDate, daysUntil, type Urgency } from './date-classification'
 
-// Mirrors app/page.tsx's Tab / PropertySubTab / PeopleSubTab /
+// Mirrors app/page.tsx's Tab / PropertySubTab / RentSubTab /
 // DocumentsSubTab literal unions — duplicated here rather than imported,
 // since app/page.tsx is a page component, not a shared module. Deep
 // links are built as this small, page-agnostic NavTarget instead of a
 // URL string: every dashboard item lives on the SAME page as
 // openProperty() (app/page.tsx), so the page just calls
 // openProperty(item.propertyId, nav.tab, nav.docsSubTab, nav.propSubTab,
-// nav.peopleSubTab) directly — reusing the exact Milestone 15 mechanism
+// nav.rentSubTab) directly — reusing the exact Milestone 15 mechanism
 // without a URL round-trip that a same-page click doesn't need.
-export type NavTab = 'Overview' | 'Financials' | 'Property' | 'People' | 'Documents'
-export type NavPropertySubTab = 'Lease' | 'Mortgage' | 'Insurance' | 'Maintenance' | 'Systems'
-export type NavPeopleSubTab = 'PropCrew' | 'Landlord'
+//
+// Property-First UX Cleanup: 'Financials' and 'People' no longer exist
+// as top-level tabs — Lease/rent ledger/tenant requests now live under
+// the new 'Rent' tab (NavRentSubTab), and PropCrew is promoted to its
+// own top-level 'PropCrew' tab (no sub-tab needed, so no
+// NavPropCrewSubTab type). Property's sub-tabs lose 'Lease' (moved to
+// Rent) but otherwise are unchanged.
+export type NavTab = 'Overview' | 'Rent' | 'Property' | 'PropCrew' | 'Documents' | 'Tax'
+export type NavPropertySubTab = 'Mortgage' | 'Insurance' | 'Maintenance' | 'Systems'
+export type NavRentSubTab = 'Lease' | 'Ledger' | 'Tenant'
 export type NavDocsSubTab = 'Documents' | 'Photos'
 
 export type NavTarget = {
   tab: NavTab
   docsSubTab?: NavDocsSubTab
   propSubTab?: NavPropertySubTab
-  peopleSubTab?: NavPeopleSubTab
+  rentSubTab?: NavRentSubTab
 }
 
 export type PropertyLabelLookup = Map<string, string>
@@ -75,7 +82,7 @@ export function buildLeaseDateItems(leases: LeaseInput[], propertyLabelById: Pro
       label: urgency === 'Expired' ? 'Lease expired' : urgency === 'Urgent' ? 'Lease expiring soon' : 'Lease expiring',
       description: lease.tenant_name, propertyId: lease.property_id, propertyLabel: labelFor(lease.property_id, propertyLabelById),
       date: lease.end_date, daysUntil: daysUntil(lease.end_date, now) as number, urgency,
-      nav: { tab: 'Property', propSubTab: 'Lease' },
+      nav: { tab: 'Rent', rentSubTab: 'Lease' },
     })
   }
   return items

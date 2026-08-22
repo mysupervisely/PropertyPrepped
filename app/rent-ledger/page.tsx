@@ -303,7 +303,7 @@ function RentLedgerWorkspace({ user }: { user: User }) {
                       {row.remaining > 0 && <div><span>Remaining</span><strong>{money(row.remaining)}</strong></div>}
                     </div>
                     {row.dueDate === null && (
-                      <p className="muted">Rent due day not entered for this lease. <Link href={`/?openProperty=${row.propertyId}&openTab=Property&openPropSubTab=Lease`}>Edit Lease</Link> to add one.</p>
+                      <p className="muted">Rent due day not entered for this lease. <Link href={`/?openProperty=${row.propertyId}&openTab=Rent&openRentSubTab=Lease`}>Edit Lease</Link> to add one.</p>
                     )}
                     {rowPayments.length > 0 && (
                       <div className="rentPaymentList">
@@ -320,7 +320,7 @@ function RentLedgerWorkspace({ user }: { user: User }) {
                     )}
                     <div className="rentLedgerRowDetailActions">
                       <button className="primary" onClick={() => { const lease = leases.find((l) => l.id === row.leaseId); openRecordPayment(lease) }}>+ Record Payment</button>
-                      <Link href={`/?openProperty=${row.propertyId}&openTab=Financials`}>View Financials</Link>
+                      <Link href={`/?openProperty=${row.propertyId}&openTab=Rent&openRentSubTab=Ledger`}>View Ledger</Link>
                     </div>
                   </div>
                 )}

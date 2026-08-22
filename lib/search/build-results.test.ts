@@ -116,9 +116,9 @@ describe('searchMaintenance', () => {
 describe('searchFinancials', () => {
   const rows = [{ id: 't1', property_id: 'p1', description: 'August rent', category: 'Rent', vendor: null }]
 
-  it('matches on description and routes to the Financials tab', () => {
+  it('matches on description and routes to the Rent tab Ledger sub-tab', () => {
     const results = searchFinancials(rows, ['august'], propertyById)
-    expect(results[0].href).toBe('/?openProperty=p1&openTab=Financials')
+    expect(results[0].href).toBe('/?openProperty=p1&openTab=Rent&openRentSubTab=Ledger')
   })
 })
 
@@ -137,9 +137,9 @@ describe('searchNotes', () => {
 })
 
 describe('searchLeases / searchMortgages / searchInsurance', () => {
-  it('lease matches on tenant name and routes to the Lease sub-tab', () => {
+  it('lease matches on tenant name and routes to the Rent tab Lease sub-tab', () => {
     const results = searchLeases([{ id: 'l1', property_id: 'p1', tenant_name: 'Sean Urban', tenant_email: null }], ['sean'], propertyById)
-    expect(results[0].href).toBe('/?openProperty=p1&openTab=Property&openPropSubTab=Lease')
+    expect(results[0].href).toBe('/?openProperty=p1&openTab=Rent&openRentSubTab=Lease')
   })
 
   it('lease matches on tenant_phone (Milestone 17)', () => {
@@ -157,10 +157,10 @@ describe('searchLeases / searchMortgages / searchInsurance', () => {
     expect(results[0].href).toBe('/?openProperty=p1&openTab=Property&openPropSubTab=Mortgage')
   })
 
-  it('rent payment matches on reference_number and routes to the Financials tab (Milestone 18)', () => {
+  it('rent payment matches on reference_number and routes to the Rent tab (Milestone 18)', () => {
     const results = searchRentPayments([{ id: 'pay1', property_id: 'p1', reference_number: 'ZELLE-4471', amount: 2400, date_received: '2026-08-01' }], ['4471'], propertyById)
     expect(results).toHaveLength(1)
-    expect(results[0].href).toBe('/?openProperty=p1&openTab=Financials')
+    expect(results[0].href).toBe('/?openProperty=p1&openTab=Rent&openRentSubTab=Lease')
   })
 
   it('rent payment never matches on amount or date (not searchable fields)', () => {

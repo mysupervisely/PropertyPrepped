@@ -9,8 +9,14 @@
 //
 // Deep links reuse app/page.tsx's EXISTING ?openProperty=<id> mechanism
 // (extended with ?openTab / ?openDocsSubTab / ?openPropSubTab /
-// ?openPeopleSubTab — see app/page.tsx's openProperty()/its resolving
+// ?openRentSubTab — see app/page.tsx's openProperty()/its resolving
 // effect) — not a second navigation architecture.
+//
+// Property-First UX Cleanup: 'Financials' is gone (Lease/rent
+// ledger/tenant requests now live under 'Rent', via rentSubTab), and
+// PropCrew per-property results still route to the portfolio-wide
+// /propcrew page (unchanged) rather than a 'peopleSubTab', which no
+// longer exists.
 
 import { matchesAllWords } from './query'
 
@@ -27,12 +33,12 @@ export type SearchResult = {
   href: string
 }
 
-function propertyHref(propertyId: string, opts?: { tab?: string; docsSubTab?: string; propSubTab?: string; peopleSubTab?: string }): string {
+function propertyHref(propertyId: string, opts?: { tab?: string; docsSubTab?: string; propSubTab?: string; rentSubTab?: string }): string {
   const params = new URLSearchParams({ openProperty: propertyId })
   if (opts?.tab) params.set('openTab', opts.tab)
   if (opts?.docsSubTab) params.set('openDocsSubTab', opts.docsSubTab)
   if (opts?.propSubTab) params.set('openPropSubTab', opts.propSubTab)
-  if (opts?.peopleSubTab) params.set('openPeopleSubTab', opts.peopleSubTab)
+  if (opts?.rentSubTab) params.set('openRentSubTab', opts.rentSubTab)
   return `/?${params.toString()}`
 }
 
@@ -144,7 +150,7 @@ export function searchFinancials(rows: TransactionRow[], words: string[], proper
       return {
         id: t.id, type: 'Financial', title: t.description,
         subtitle: property?.address || '', detail: [t.category, t.vendor].filter(Boolean).join(' · '),
-        href: propertyHref(t.property_id, { tab: 'Financials' }),
+        href: propertyHref(t.property_id, { tab: 'Rent', rentSubTab: 'Ledger' }),
       }
     })
 }
@@ -182,7 +188,7 @@ export function searchLeases(rows: LeaseRow[], words: string[], propertyById: Ma
     .filter((l) => matchesAllWords(words, [l.tenant_name, l.tenant_email, l.tenant_phone]))
     .map((l) => {
       const property = propertyById.get(l.property_id)
-      return { id: l.id, type: 'Lease', title: l.tenant_name, subtitle: property?.address || '', detail: 'Lease', href: propertyHref(l.property_id, { tab: 'Property', propSubTab: 'Lease' }) }
+      return { id: l.id, type: 'Lease', title: l.tenant_name, subtitle: property?.address || '', detail: 'Lease', href: propertyHref(l.property_id, { tab: 'Rent', rentSubTab: 'Lease' }) }
     })
 }
 
@@ -227,7 +233,7 @@ export function searchRentPayments(rows: RentPaymentRow[], words: string[], prop
       return {
         id: r.id, type: 'Payment', title: r.reference_number || 'Rent payment', subtitle: property?.address || '',
         detail: `Rent payment · ${new Date(`${r.date_received}T12:00:00`).toLocaleDateString()}`,
-        href: propertyHref(r.property_id, { tab: 'Financials' }),
+        href: propertyHref(r.property_id, { tab: 'Rent', rentSubTab: 'Lease' }),
       }
     })
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from 'react'
+import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import type { User } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
@@ -200,29 +200,39 @@ type MaintenanceRequest = {
 // PropertyTaxPanel so this file and the panel never define two slightly
 // different shapes for the same table.
 
-// Property Profile 2.0, Section 4: consolidated from 10 top-level tabs
-// down to 5 ("Avoid creating 15+ top-level tabs... Overview / Financials
-// / Property / People / Documents") — Lease/Mortgage/Insurance/
-// Maintenance/Systems now live as sub-sections of "Property"; Contacts
-// (now PropCrew)/Landlord/Tenant Connect live as sub-sections of
-// "People"; Photos now lives as a sub-section of "Documents". Nothing
-// was removed — every previous tab's content is still reachable, just
-// regrouped.
-// Tax Center V2: 'Tax' is a new top-level tab — its own pill just reads
-// "Tax" (matching every other tab's single-word style, and keeping
-// ?openTab=Tax deep links plain-ASCII/unencoded); the tab's own content
-// heads with an <h2>Tax & Financials</h2>, the section name this
-// milestone's spec actually asks for.
-type Tab = 'Overview' | 'Financials' | 'Tax' | 'Property' | 'People' | 'Documents'
-type PropertySubTab = 'Lease' | 'Mortgage' | 'Insurance' | 'Maintenance' | 'Systems'
-// TenantConnectPanel stays bundled inside the Landlord sub-tab, exactly
-// where it already rendered before this reorganization — not a separate
-// sub-tab of its own.
-type PeopleSubTab = 'PropCrew' | 'Landlord'
+// Property-First UX Cleanup: the property workspace is reorganized
+// around the property itself — Overview / Rent / Property / PropCrew /
+// Documents / Tax. Nothing was removed, only regrouped and renamed:
+// - "Rent" is new and consolidates everything a landlord actually means
+//   by "the rent side of this property" that used to be scattered
+//   across two other tabs: Lease/tenant terms (previously a Property
+//   sub-tab), the rent-status-this-month card and the full income/
+//   expense ledger (previously the "Financials" tab), and tenant
+//   maintenance requests + Tenant Connect (previously a "People" >
+//   "Landlord" sub-tab) — all genuinely about the tenant/rent
+//   relationship for this one property.
+// - "PropCrew" is promoted from a "People" sub-tab to its own top-level
+//   tab — PropCrewPanel already supports being scoped to one property
+//   (scopePropertyId), so this is a pure relocation, not a rebuild.
+// - "Property" keeps Mortgage/Insurance/Maintenance/Systems (Lease moved
+//   to Rent above).
+// - "Documents" keeps Photos as a lightweight second segment, redesigned
+//   away from a sidebar-category-picker into a categorized library (see
+//   the Documents tab's own JSX below).
+// - "Tax" is unchanged (Tax Center V2's PropertyTaxPanel).
+type Tab = 'Overview' | 'Rent' | 'Property' | 'PropCrew' | 'Documents' | 'Tax'
+type PropertySubTab = 'Mortgage' | 'Insurance' | 'Maintenance' | 'Systems'
+// Lease & tenant terms / the full income+expense ledger / tenant
+// requests+Tenant Connect — three genuinely different workflows that all
+// belong under "Rent," so they get their own lightweight sub-tabs rather
+// than one long scroll (the same pattern Property's own sub-tabs already
+// use, not a new UI concept).
+type RentSubTab = 'Lease' | 'Ledger' | 'Tenant'
 type DocumentsSubTab = 'Documents' | 'Photos'
 
-const tabs: Tab[] = ['Overview', 'Financials', 'Tax', 'Property', 'People', 'Documents']
-const propertySubTabs: PropertySubTab[] = ['Lease', 'Mortgage', 'Insurance', 'Maintenance', 'Systems']
+const tabs: Tab[] = ['Overview', 'Rent', 'Property', 'PropCrew', 'Documents', 'Tax']
+const propertySubTabs: PropertySubTab[] = ['Mortgage', 'Insurance', 'Maintenance', 'Systems']
+const rentSubTabs: RentSubTab[] = ['Lease', 'Ledger', 'Tenant']
 const docCategories = ['All', ...DOCUMENT_CATEGORIES]
 const requestPriorities = ['Low', 'Normal', 'High', 'Urgent']
 const requestStatuses = ['Submitted', 'Scheduled', 'In Progress', 'Completed']
@@ -493,9 +503,22 @@ export default function Home() {
   const [rentPayments, setRentPayments] = useState<RentPaymentRecord[]>([])
   const [propertyNotes, setPropertyNotes] = useState<PropertyNote[]>([])
   const [propertyOwnership, setPropertyOwnership] = useState<PropertyOwnership[]>([])
-  const [propertySubTab, setPropertySubTab] = useState<PropertySubTab>('Lease')
-  const [peopleSubTab, setPeopleSubTab] = useState<PeopleSubTab>('PropCrew')
+  const [propertySubTab, setPropertySubTab] = useState<PropertySubTab>('Mortgage')
+  const [rentSubTab, setRentSubTab] = useState<RentSubTab>('Lease')
   const [documentsSubTab, setDocumentsSubTab] = useState<DocumentsSubTab>('Documents')
+  // Documents redesign: which category chip is active in the "Add
+  // Document" flow chooser (Upload normally vs Smart Upload) — separate
+  // from docCategory (the filter chip below) so opening the chooser
+  // never disturbs whatever the user was already filtering by.
+  const [showAddDocumentChooser, setShowAddDocumentChooser] = useState(false)
+  // Set by AuthHeader (registerSmartUploadTrigger) to its own "open Smart
+  // Upload" function — a ref, not state, since it never needs to trigger
+  // a re-render, only to be called later from the Documents tab's own
+  // chooser. openSmartUpload() below is the one call site that uses it.
+  const smartUploadTriggerRef = useRef<() => void>(() => {})
+  function openSmartUpload() {
+    smartUploadTriggerRef.current()
+  }
   const [propCrewPrefill, setPropCrewPrefill] = useState<{ name: string; businessName?: string; phone?: string; email?: string; website?: string } | null>(null)
   const [showTransaction, setShowTransaction] = useState(false)
   const [showModuleForm, setShowModuleForm] = useState<'Lease'|'Mortgage'|'Insurance'|'Maintenance'|null>(null)
@@ -603,7 +626,7 @@ export default function Home() {
 
   const propertyLabelById = useMemo(() => new Map(properties.map((p) => [p.id, p.address])), [properties])
 
-  const { attentionItems, upcomingItems, openMaintenanceItems, recentActivity, vacancyItems } = useMemo(() => {
+  const { attentionItems, upcomingItems, openMaintenanceItems, recentActivity, vacancyItems, attentionCountByProperty, rentStatusByProperty } = useMemo(() => {
     // Milestone 18: PropWatch's rent + warranty signals fold into the
     // SAME dateItems list Milestone 16 already builds — same
     // classifyDate() thresholds, same Needs Attention/Upcoming split,
@@ -627,6 +650,22 @@ export default function Home() {
     const { needsAttention, upcoming } = splitAttentionAndUpcoming(dateItems)
     const vacancy = entitlements.canUsePropWatch ? buildVacancyItems(properties, leases, propertyLabelById) : []
 
+    // Property-First UX Cleanup: property cards show "one or two
+    // important alerts if applicable" — a per-property count of the SAME
+    // needsAttention items above (before NEEDS_ATTENTION_LIMIT truncates
+    // the portfolio-wide list), so a card's own count is never wrong just
+    // because some other property's alerts filled up the top-10 list.
+    const attentionCounts = new Map<string, number>()
+    for (const item of needsAttention) attentionCounts.set(item.propertyId, (attentionCounts.get(item.propertyId) || 0) + 1)
+
+    // Same current-month rent-status source Rent Ledger/the property
+    // Rent tab already use (buildRentLedgerRows) — gated behind
+    // canUseRentLedger, the same entitlement the property-level "Rent
+    // this month" card already requires, so a card never shows a status
+    // pill for a capability the plan doesn't include.
+    const rentRows = entitlements.canUseRentLedger ? buildRentLedgerRows(properties, leases, rentPayments, currentPeriod, propertyLabelById) : []
+    const rentByProperty = new Map(rentRows.map((r) => [r.propertyId, r]))
+
     const activity: ActivityItem[] = sortByTimestampDescending([
       ...documentActivity(documents, propertyLabelById),
       ...maintenanceActivity(maintenanceRecords, propertyLabelById),
@@ -645,13 +684,15 @@ export default function Home() {
       openMaintenanceItems: limitItems(buildOpenMaintenanceItems(maintenanceRecords, propertyLabelById), OPEN_MAINTENANCE_LIMIT),
       recentActivity: limitItems(activity, RECENT_ACTIVITY_LIMIT),
       vacancyItems: vacancy,
+      attentionCountByProperty: attentionCounts,
+      rentStatusByProperty: rentByProperty,
     }
   }, [leases, insurancePolicies, mortgages, maintenanceRecords, documents, transactions, propertyNotes, properties, contacts, propertyLabelById, rentPayments, propertySystems, entitlements])
 
   const openMaintenanceCount = useMemo(() => maintenanceRecords.filter((m) => m.status !== 'Completed').length, [maintenanceRecords])
 
   function goToNav(propertyId: string, nav: NavTarget) {
-    openProperty(propertyId, nav.tab, nav.docsSubTab, nav.propSubTab, nav.peopleSubTab)
+    openProperty(propertyId, nav.tab, nav.docsSubTab, nav.propSubTab, nav.rentSubTab)
   }
 
   const selected = properties.find((property) => property.id === selectedId) || null
@@ -935,12 +976,12 @@ export default function Home() {
     setBusy(false)
   }
 
-  const openProperty = (id: string, tab: Tab = 'Overview', docsSubTab?: DocumentsSubTab, propSubTab?: PropertySubTab, peopleSubTab?: PeopleSubTab) => {
+  const openProperty = (id: string, tab: Tab = 'Overview', docsSubTab?: DocumentsSubTab, propSubTab?: PropertySubTab, rentSubTab?: RentSubTab) => {
     setSelectedId(id)
     setActiveTab(tab)
     if (docsSubTab) setDocumentsSubTab(docsSubTab)
     if (propSubTab) setPropertySubTab(propSubTab)
-    if (peopleSubTab) setPeopleSubTab(peopleSubTab)
+    if (rentSubTab) setRentSubTab(rentSubTab)
     setDocCategory('All')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -959,7 +1000,7 @@ export default function Home() {
   // here just fails to match any card render and shows nothing.
   //
   // Milestone 15 (Global Search): extended with optional ?openTab /
-  // ?openDocsSubTab / ?openPropSubTab / ?openPeopleSubTab params so
+  // ?openDocsSubTab / ?openPropSubTab / ?openRentSubTab params so
   // app/search/page.tsx can deep-link into any tab a search result
   // points at, reusing this SAME mechanism rather than a second
   // navigation architecture. When none of the new params are present
@@ -974,9 +1015,9 @@ export default function Home() {
     const tab = (params.get('openTab') as Tab | null) || 'Documents'
     const docsSubTab = (params.get('openDocsSubTab') as DocumentsSubTab | null) || (tab === 'Documents' ? 'Documents' : undefined)
     const propSubTab = (params.get('openPropSubTab') as PropertySubTab | null) || undefined
-    const peopleSubTab = (params.get('openPeopleSubTab') as PeopleSubTab | null) || undefined
+    const rentSubTab = (params.get('openRentSubTab') as RentSubTab | null) || undefined
     window.history.replaceState(null, '', window.location.pathname)
-    openProperty(id, tab, docsSubTab, propSubTab, peopleSubTab)
+    openProperty(id, tab, docsSubTab, propSubTab, rentSubTab)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authReady, user])
 
@@ -1151,10 +1192,10 @@ export default function Home() {
     setShowDocIntelId(null)
     if (action === 'Insurance') { setInsuranceDraft((d) => ({ ...d, ...values })); setShowModuleForm('Insurance'); setActiveTab('Property'); setPropertySubTab('Insurance') }
     else if (action === 'Mortgage') { setMortgageDraft((d) => ({ ...d, ...values })); setShowModuleForm('Mortgage'); setActiveTab('Property'); setPropertySubTab('Mortgage') }
-    else if (action === 'Lease') { setEditingLeaseId(null); setLeaseDraft((d) => ({ ...d, ...values })); setShowModuleForm('Lease'); setActiveTab('Property'); setPropertySubTab('Lease') }
+    else if (action === 'Lease') { setEditingLeaseId(null); setLeaseDraft((d) => ({ ...d, ...values })); setShowModuleForm('Lease'); setActiveTab('Rent'); setRentSubTab('Lease') }
     else if (action === 'Maintenance') { setMaintenanceDraft((d) => ({ ...d, ...values })); setShowModuleForm('Maintenance'); setActiveTab('Property'); setPropertySubTab('Maintenance') }
-    else if (action === 'FinancialExpense') { setTransactionDraft((d) => ({ ...d, ...values })); setShowTransaction(true); setActiveTab('Financials') }
-    else if (action === 'Contact') { setPropCrewPrefill({ name: values.name || values.businessName || 'New contact', businessName: values.businessName, phone: values.phone, email: values.email, website: values.website }); setActiveTab('People'); setPeopleSubTab('PropCrew') }
+    else if (action === 'FinancialExpense') { setTransactionDraft((d) => ({ ...d, ...values })); setShowTransaction(true); setActiveTab('Rent'); setRentSubTab('Ledger') }
+    else if (action === 'Contact') { setPropCrewPrefill({ name: values.name || values.businessName || 'New contact', businessName: values.businessName, phone: values.phone, email: values.email, website: values.website }); setActiveTab('PropCrew') }
     else if (action === 'EstimatedValue' && selected) { openEditProperty(selected); setEditDraft((d) => ({ ...d, value: values.value || d.value })) }
   }
 
@@ -1430,9 +1471,31 @@ export default function Home() {
     const equity = Number(selected.estimated_value) - Number(selected.mortgage_balance)
     const appreciation = appreciationFor(Number(selected.estimated_value), Number(selected.purchase_price))
 
+    // Property-First UX Cleanup: the same tenant/occupancy + current-month
+    // rent-status context Overview and the Rent tab both need to show "at
+    // a glance" — computed once here (not duplicated per-section) from
+    // data already loaded above. occupancy/currentLease reuse Milestone
+    // 17's derivation exactly; rentThisMonth reuses the SAME
+    // buildRentLedgerRows() call the former Financials tab already made
+    // (Milestone 18) — no new rent-status logic anywhere in this
+    // milestone.
+    const occupancy = selected.property_type === 'Rental Property' ? deriveOccupancy(selectedLeases) : null
+    const currentLease = selectCurrentLease(selectedLeases)
+    const currentRentPeriod = periodFromDate(new Date())
+    const rentThisMonth = selected.property_type === 'Rental Property' && entitlements.canUseRentLedger
+      ? buildRentLedgerRows([selected], selectedLeases, rentPayments, currentRentPeriod, new Map([[selected.id, selected.address]]))
+      : []
+    const currentRentRow = rentThisMonth[0] || null
+    // Rent Payment History (Rent tab): every recorded payment for this
+    // property, newest first — the exact rent_payments rows
+    // loadPortfolio() already fetches, just filtered to this property.
+    // Reuses the data Rent Ledger itself is built from rather than a
+    // second query or a re-derivation.
+    const selectedRentPayments = rentPayments.filter((p) => p.property_id === selectedId).sort((a, b) => b.date_received.localeCompare(a.date_received))
+
     return (
       <main className="shell workspaceShell">
-        <AuthHeader onBrandClick={() => setSelectedId(null)} onSmartUploadCompleted={() => void loadPortfolio()} />
+        <AuthHeader onBrandClick={() => setSelectedId(null)} onSmartUploadCompleted={() => void loadPortfolio()} registerSmartUploadTrigger={(fn) => { smartUploadTriggerRef.current = fn }} />
         {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
 
         {/* Contextual, property-scoped controls live here now, not in the
@@ -1446,7 +1509,12 @@ export default function Home() {
           <div className="heroPhoto">{selected.coverUrl ? <img src={selected.coverUrl} alt={selected.address} /> : <div className="heroPlaceholder"><span>Property photo</span><small>Add photos in the Photos tab</small></div>}</div>
           <div className="heroInfo">
             <div className="heroInfoHead">
-              <div><p className="eyebrow">{selected.property_type.toUpperCase()}</p><h1>{selected.address}</h1><p className="heroCity">{selected.city}</p></div>
+              <div><p className="eyebrow">{selected.property_type.toUpperCase()}</p><h1>{selected.address}</h1><p className="heroCity">{selected.city}</p>
+                <div className="heroStatusPills">
+                  {occupancy && <span className={`statusPill ${occupancyPillClass(occupancy)}`}>{occupancy === 'Occupancy unknown' ? 'Unknown' : occupancy === 'Upcoming tenancy' ? 'Upcoming' : occupancy}</span>}
+                  {currentRentRow && <span className={`statusPill ${rentStatusPillClass(currentRentRow.status)}`}>Rent {currentRentRow.status}</span>}
+                </div>
+              </div>
               <div className="heroInfoActions"><button className="secondary" onClick={() => openEditProperty(selected)}>Edit</button><Link className="secondary" href={`/investment-tools/property-evaluator?propertyId=${selected.id}`}>Investment Analysis</Link></div>
             </div>
             <div className="heroMetrics"><div><span>Value</span><strong>{money(selected.estimated_value)}</strong></div><div><span>Mortgage</span><strong>{money(selected.mortgage_balance)}</strong></div><div><span>Equity</span><strong>{money(equity)}</strong></div><div><span>Rent</span><strong>{money(selected.monthly_rent)}/mo</strong></div></div>
@@ -1484,6 +1552,25 @@ export default function Home() {
             </div></div>
           </div>
 
+          {/* Property-First UX Cleanup: a compact tenant/rent snapshot —
+              the exact facts the spec calls out for Overview
+              ("tenant/occupancy, monthly rent, lease dates,
+              payment/rent status") — kept intentionally brief here; the
+              full lease history, payment history and general ledger all
+              now live one click away on the Rent tab, not duplicated here. */}
+          {selected.property_type === 'Rental Property' && (
+            <div className="overviewPanel">
+              <h3>Rent &amp; tenant</h3>
+              <div className="detailRows">
+                <div><span>Occupancy</span><strong>{occupancy === 'Occupancy unknown' ? 'Unknown' : occupancy || 'Vacant'}</strong></div>
+                {currentLease && <div><span>Tenant</span><strong>{currentLease.tenant_name}</strong></div>}
+                {currentLease && <div><span>Lease term</span><strong>{new Date(`${currentLease.start_date}T12:00:00`).toLocaleDateString()} – {new Date(`${currentLease.end_date}T12:00:00`).toLocaleDateString()}</strong></div>}
+                {currentRentRow && <div><span>{formatPeriodLabel(currentRentPeriod)} rent</span><strong>{money(currentRentRow.expectedAmount)}</strong> <span className={`statusPill ${rentStatusPillClass(currentRentRow.status)}`}>{currentRentRow.status}</span></div>}
+              </div>
+              <button className="secondary" onClick={() => { setActiveTab('Rent'); setRentSubTab('Lease') }}>Open Rent</button>
+            </div>
+          )}
+
           <PropertyOwnershipPanel propertyId={selected.id} ownerId={user.id} records={selectedOwnership} onRefresh={() => void loadPortfolio()} />
 
           <div className="overviewGrid">
@@ -1493,24 +1580,34 @@ export default function Home() {
 
           <div className="overviewPanel"><h3>Property file</h3><div className="fileSummary"><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Documents') }}><strong>{selectedDocs.length}</strong><span>Documents</span><small>Closing, insurance, taxes and more</small></button><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Photos') }}><strong>{selectedPhotos.length}</strong><span>Photos</span><small>Property gallery and records</small></button><button onClick={() => { setActiveTab('Property'); setPropertySubTab('Maintenance') }}><strong>{selectedMaintenance.length}</strong><span>Maintenance records</span><small>Repairs, vendors and warranties</small></button></div></div>
 
-          <div className="quickActions"><div><p className="eyebrow">QUICK ACTIONS</p><h3>Keep this property prepped.</h3></div><div className="quickActionButtons"><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Documents') }}>Upload document</button><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Photos') }}>Add photos</button><button onClick={() => setActiveTab('Financials')}>Add transaction</button></div></div>
+          <div className="quickActions"><div><p className="eyebrow">QUICK ACTIONS</p><h3>Keep this property prepped.</h3></div><div className="quickActionButtons"><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Documents') }}>Upload document</button><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Photos') }}>Add photos</button><button onClick={() => { setActiveTab('Rent'); setRentSubTab('Ledger') }}>Add transaction</button></div></div>
         </section>}
 
         {activeTab === 'Documents' && <section className="workspaceContent">
           <div className="subTabs" role="tablist" aria-label="Documents sections">{(['Documents', 'Photos'] as DocumentsSubTab[]).map((sub) => <button key={sub} role="tab" aria-selected={documentsSubTab === sub} className={documentsSubTab === sub ? 'active' : ''} onClick={() => setDocumentsSubTab(sub)}>{sub}</button>)}</div>
 
+          {/* Documents redesign (Property-First UX Cleanup, "Major
+              Cleanup Priority"): a categorized library, not a sidebar +
+              flat list. Category chips filter the SAME documentList data
+              as before (docCategory/docCategories are unchanged state);
+              "+ Add Document" opens a small chooser between the existing
+              per-property upload (category + drop zone, unchanged
+              addDocumentFiles) and Smart Upload (the SAME global modal
+              every other page already uses, triggered here via
+              openSmartUpload — see AuthHeader wiring below). Neither
+              upload path nor Smart Upload's own AI pipeline is rebuilt;
+              this only changes how the entry point is presented. */}
           {documentsSubTab === 'Documents' && <>
-          <div className="sectionHead workspaceHeading"><div><p className="eyebrow">DOCUMENT CENTER</p><h2>Everything important, filed correctly</h2><p>Files are stored in a private Supabase bucket and opened with short-lived signed links.</p></div></div>
-          <div className="documentLayout">
-            <aside className="categoryPanel"><h3>Categories</h3>{docCategories.map((category) => <button key={category} className={docCategory === category ? 'active' : ''} onClick={() => setDocCategory(category)}><span>{category}</span><small>{category === 'All' ? selectedDocs.length : selectedDocs.filter((d) => d.category === category).length}</small></button>)}</aside>
-            <div className="documentMain">
-              <div className="uploadControls"><label>File category<select value={uploadCategory} onChange={(e) => setUploadCategory(e.target.value)}>{DOCUMENT_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></label>
-                <label className={`dropZone ${isDragging ? 'dragging' : ''}`} onDragEnter={(e) => { e.preventDefault(); setIsDragging(true) }} onDragOver={(e) => e.preventDefault()} onDragLeave={() => setIsDragging(false)} onDrop={(e: DragEvent<HTMLLabelElement>) => { e.preventDefault(); setIsDragging(false); void addDocumentFiles(e.dataTransfer.files) }}><span className="uploadIcon">↑</span><strong>{busy ? 'Uploading…' : 'Drop documents here or choose files'}</strong><small>PDF, spreadsheets, receipts, contracts and more · up to 50 MB each</small><input type="file" multiple disabled={busy} onChange={(e) => e.target.files && void addDocumentFiles(e.target.files)} /></label>
-              </div>
-              <div className="documentHeader"><h3>{docCategory === 'All' ? 'All documents' : docCategory}</h3><span>{filteredDocs.length} file{filteredDocs.length === 1 ? '' : 's'}</span></div>
-              <div className="documentList">{filteredDocs.length ? filteredDocs.map((doc) => <div className="documentRow" key={doc.id}><div className="fileIcon">{doc.name.split('.').pop()?.toUpperCase().slice(0, 4) || 'FILE'}</div><div className="fileName"><strong>{doc.name}</strong><span>{doc.category} · {formatSize(doc.size_bytes)} · {new Date(doc.created_at).toLocaleDateString()}{doc.document_type ? ` · ${doc.document_type}` : ''}{doc.analysis_status && doc.analysis_status !== 'Not Analyzed' && <span className={`aiStatusPill ${doc.analysis_status === 'Completed' ? 'pillGood' : doc.analysis_status === 'Failed' ? 'pillBad' : 'pillWarn'}`}>{doc.analysis_status === 'Completed' ? 'AI Analyzed' : doc.analysis_status}</span>}</span></div><div className="rowActions"><button onClick={() => void openDocument(doc)}>Open</button><button className="aiButton" onClick={() => setShowDocIntelId(doc.id)}>{doc.analysis_status === 'Completed' ? 'View AI Analysis' : 'Analyze with PropRoster AI'}</button><button onClick={() => openMoveDocument(doc)}>Move</button><button onClick={() => void removeDocument(doc)}>Remove</button></div></div>) : <div className="emptyState"><strong>No documents here yet</strong><span>Upload a file above and PropRoster will keep it with this property.</span></div>}</div>
+          <div className="sectionHead workspaceHeading"><div><p className="eyebrow">DOCUMENT CENTER</p><h2>Everything important, filed correctly</h2><p>Files are stored in a private Supabase bucket and opened with short-lived signed links.</p></div><button className="primary" onClick={() => setShowAddDocumentChooser(true)}>+ Add Document</button></div>
+          <div className="docFilterChips" role="tablist" aria-label="Filter documents by category">{docCategories.map((category) => <button key={category} role="tab" aria-selected={docCategory === category} className={docCategory === category ? 'active' : ''} onClick={() => setDocCategory(category)}>{category}<small>{category === 'All' ? selectedDocs.length : selectedDocs.filter((d) => d.category === category).length}</small></button>)}</div>
+          <div className="documentCardGrid">{filteredDocs.length ? filteredDocs.map((doc) => <div className="documentCard" key={doc.id}>
+            <div className="documentCardTop">
+              <div className="fileIcon">{doc.name.split('.').pop()?.toUpperCase().slice(0, 4) || 'FILE'}</div>
+              <div className="fileName"><strong>{doc.name}</strong><span>{doc.category}{doc.document_type ? ` · ${doc.document_type}` : ''} · {new Date(doc.created_at).toLocaleDateString()}</span></div>
             </div>
-          </div>
+            {doc.analysis_status && doc.analysis_status !== 'Not Analyzed' && <span className={`aiStatusPill ${doc.analysis_status === 'Completed' ? 'pillGood' : doc.analysis_status === 'Failed' ? 'pillBad' : 'pillWarn'}`}>{doc.analysis_status === 'Completed' ? 'AI Analyzed' : doc.analysis_status === 'Failed' ? 'Needs attention' : doc.analysis_status}</span>}
+            <div className="rowActions documentCardActions"><button onClick={() => void openDocument(doc)}>Open</button><button className="aiButton" onClick={() => setShowDocIntelId(doc.id)}>{doc.analysis_status === 'Completed' ? 'View AI Analysis' : 'Analyze with PropRoster AI'}</button><button onClick={() => openMoveDocument(doc)}>Move</button><button onClick={() => void removeDocument(doc)}>Remove</button></div>
+          </div>) : <div className="emptyState"><strong>{docCategory === 'All' ? 'No documents here yet' : `No ${docCategory} documents yet`}</strong><span>Use + Add Document above to upload a file or run Smart Upload.</span></div>}</div>
           </>}
 
           {documentsSubTab === 'Photos' && <>
@@ -1520,91 +1617,49 @@ export default function Home() {
           </>}
         </section>}
 
-        {activeTab === 'Financials' && (() => {
-          const income = selectedYearTransactions.filter((t) => t.transaction_type === 'Income').reduce((sum, t) => sum + Number(t.amount), 0)
-          const expenses = selectedYearTransactions.filter((t) => t.transaction_type === 'Expense').reduce((sum, t) => sum + Number(t.amount), 0)
-          const noiExpenses = selectedYearTransactions.filter((t) => t.transaction_type === 'Expense' && t.category !== 'Mortgage' && t.category !== 'CapEx').reduce((sum, t) => sum + Number(t.amount), 0)
-          const noi = income - noiExpenses
-          const cashFlow = income - expenses
-          const monthKey = new Date().toISOString().slice(0,7)
-          const monthRows = selectedTransactions.filter((t) => t.transaction_date.startsWith(monthKey))
-          const monthCashFlow = monthRows.reduce((sum, t) => sum + (t.transaction_type === 'Income' ? Number(t.amount) : -Number(t.amount)), 0)
-          const years = Array.from(new Set([String(new Date().getFullYear()), ...selectedTransactions.map((t) => t.transaction_date.slice(0,4))])).sort().reverse()
-          // Milestone 18: compact "Rent this month" — Section 10's
-          // preferred integration point (a Rent subsection within
-          // Financials, not a new major property tab). Reuses the exact
-          // same buildRentLedgerRows() the /rent-ledger page and
-          // PropWatch both call — one canonical rent-status source.
-          const currentRentPeriod = periodFromDate(new Date())
-          // Launch Pricing: this card is a live current-month PREVIEW (not
-          // stored history) that only makes sense alongside the ability to
-          // act on it — hidden entirely for a plan without canUseRentLedger,
-          // never shown half-functional. Existing recorded payments remain
-          // fully visible on the /rent-ledger page itself regardless of
-          // plan (Section: Downgrade Safety — read-only history, never
-          // hidden data).
-          const rentThisMonth = selected.property_type === 'Rental Property' && entitlements.canUseRentLedger
-            ? buildRentLedgerRows([selected], selectedLeases, rentPayments, currentRentPeriod, new Map([[selected.id, selected.address]]))
-            : []
-          return <section className="workspaceContent financialWorkspace">
-            <div className="sectionHead workspaceHeading financialHeading"><div><p className="eyebrow">FINANCIALS</p><h2>Property ledger</h2><p>Track every dollar with receipts and source documents attached to the transaction.</p></div><div className="financialActions"><select aria-label="Financial year" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)}>{years.map((year) => <option key={year}>{year}</option>)}</select><label className="secondary csvButton">Import CSV<input type="file" accept=".csv,text/csv" onChange={(e) => { const file = e.target.files?.[0]; if (file) void importTransactionsCsv(file); e.target.value = '' }} /></label><button className="secondary" onClick={exportTransactionsCsv}>Export CSV</button><button className="primary" onClick={() => setShowTransaction(true)}>+ Add transaction</button></div></div>
-            {rentThisMonth.length > 0 && rentThisMonth.map((row) => (
-              <div className="rentThisMonthCard" key={row.leaseId}>
-                <div className="rentThisMonthHead">
-                  <div><p className="eyebrow">RENT — {formatPeriodLabel(currentRentPeriod).toUpperCase()}</p><h3>{row.tenantName}</h3></div>
-                  <span className={`statusPill ${rentStatusPillClass(row.status)}`}>{row.status}</span>
+        {showAddDocumentChooser && (
+          <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowAddDocumentChooser(false)}>
+            <div className="modal addDocumentModal">
+              <div className="modalTop"><div><p className="eyebrow">DOCUMENT CENTER</p><h2>Add a document</h2></div><button className="iconButton" onClick={() => setShowAddDocumentChooser(false)}>×</button></div>
+              <div className="addDocumentChooser">
+                <div className="addDocumentOption">
+                  <h3>Upload normally</h3>
+                  <p>Choose a category, then drop in a file — no AI involved.</p>
+                  <label>File category<select value={uploadCategory} onChange={(e) => setUploadCategory(e.target.value)}>{DOCUMENT_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></label>
+                  <label className={`dropZone ${isDragging ? 'dragging' : ''}`} onDragEnter={(e) => { e.preventDefault(); setIsDragging(true) }} onDragOver={(e) => e.preventDefault()} onDragLeave={() => setIsDragging(false)} onDrop={(e: DragEvent<HTMLLabelElement>) => { e.preventDefault(); setIsDragging(false); void addDocumentFiles(e.dataTransfer.files) }}><span className="uploadIcon">↑</span><strong>{busy ? 'Uploading…' : 'Drop a file here or choose one'}</strong><small>PDF, spreadsheets, receipts, contracts and more · up to 50 MB each</small><input type="file" multiple disabled={busy} onChange={(e) => e.target.files && void addDocumentFiles(e.target.files)} /></label>
                 </div>
-                <div className="recordMetrics">
-                  <div><span>Expected</span><strong>{money(row.expectedAmount)}</strong></div>
-                  <div><span>Received</span><strong>{money(row.totalPaid)}</strong></div>
-                  {row.remaining > 0 && <div><span>Remaining</span><strong>{money(row.remaining)}</strong></div>}
-                </div>
-                <div className="rentThisMonthActions">
-                  <Link href={`/rent-ledger?lease=${row.leaseId}`} className="primary">+ Record Payment</Link>
-                  <Link href="/rent-ledger" className="secondary">View Rent Ledger</Link>
+                <div className="addDocumentOption addDocumentOptionSmart">
+                  <h3>Smart Upload</h3>
+                  <p>Take a photo or upload a file and PropRoster&apos;s AI reads it, classifies it, and suggests what to fill in — you still confirm everything before it saves.</p>
+                  <button className="primary" onClick={() => { setShowAddDocumentChooser(false); openSmartUpload() }}>Use Smart Upload</button>
                 </div>
               </div>
-            ))}
-            <div className="financialStats"><div className="financialStat"><span>{financialYear} income</span><strong>{money(income)}</strong></div><div className="financialStat"><span>{financialYear} expenses</span><strong>{money(expenses)}</strong></div><div className="financialStat"><span>NOI</span><strong>{money(noi)}</strong><small>Excludes mortgage & CapEx</small></div><div className="financialStat"><span>Net cash flow</span><strong>{money(cashFlow)}</strong><small>{money(monthCashFlow)} this month</small></div></div>
-            <div className="ledgerWrap"><table className="ledger"><thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Vendor</th><th>Description</th><th>Income</th><th>Expense</th><th>Attachment</th><th></th></tr></thead><tbody>{selectedYearTransactions.length ? selectedYearTransactions.map((tx) => { const doc = selectedDocs.find((d) => d.id === tx.document_id); return <tr key={tx.id}><td>{new Date(`${tx.transaction_date}T12:00:00`).toLocaleDateString()}</td><td><span className={`transactionType ${tx.transaction_type.toLowerCase()}`}>{tx.transaction_type}</span>{tx.is_recurring && <small className="recurringLabel">Recurring</small>}</td><td>{tx.category}</td><td>{tx.vendor || '—'}</td><td className="descriptionCell">{tx.description}</td><td className="moneyCell incomeCell">{tx.transaction_type === 'Income' ? money(tx.amount) : '—'}</td><td className="moneyCell">{tx.transaction_type === 'Expense' ? money(tx.amount) : '—'}</td><td>{doc ? <button className="attachmentButton" onClick={() => void openDocument(doc)}>{doc.name}</button> : <span className="muted">—</span>}</td><td><button className="deleteTransaction" aria-label={`Delete ${tx.description}`} onClick={() => void removeTransaction(tx.id)}>×</button></td></tr>}) : <tr><td colSpan={9}><div className="emptyLedger"><strong>No {financialYear} transactions yet</strong><span>Add your first rent payment or expense, or import a CSV.</span><button className="primary" onClick={() => setShowTransaction(true)}>+ Add transaction</button></div></td></tr>}</tbody></table></div>
-            <p className="ledgerNote">NOI is shown as income less operating expenses and excludes transactions categorized as Mortgage or CapEx. PropRoster is an organization tool, not tax or accounting advice.</p>
-          </section>
-        })()}
+            </div>
+          </div>
+        )}
 
-        {activeTab === 'Tax' && selected && user && supabase && <section className="workspaceContent">
-          <PropertyTaxPanel
-            supabase={supabase}
-            propertyId={selected.id}
-            ownerId={user.id}
-            transactions={selectedTransactions}
-            maintenanceRecords={selectedMaintenance}
-            documents={selectedDocs}
-            taxRecords={selectedTaxRecords}
-            onRefresh={() => void loadPortfolio()}
-          />
-          <p className="ledgerNote">Tax Center (the portfolio-wide view across every property) aggregates these same manual entries alongside your Financials ledger — see the <Link href="/tax-center">Tax Center</Link> page.</p>
-        </section>}
+        {activeTab === 'Rent' && <section className="workspaceContent moduleWorkspace">
+          <div className="subTabs" role="tablist" aria-label="Rent sections">{rentSubTabs.map((sub) => <button key={sub} role="tab" aria-selected={rentSubTab === sub} className={rentSubTab === sub ? 'active' : ''} onClick={() => setRentSubTab(sub)}>{sub === 'Tenant' ? 'Tenant Requests' : sub === 'Ledger' ? 'Ledger' : 'Lease & Rent'}</button>)}</div>
 
-        {activeTab === 'Property' && <section className="workspaceContent moduleWorkspace">
-          <div className="subTabs" role="tablist" aria-label="Property sections">{propertySubTabs.map((sub) => <button key={sub} role="tab" aria-selected={propertySubTab === sub} className={propertySubTab === sub ? 'active' : ''} onClick={() => setPropertySubTab(sub)}>{sub}</button>)}</div>
-
-          {propertySubTab === 'Lease' && (() => {
-            const occupancy = deriveOccupancy(selectedLeases)
-            const current = selectCurrentLease(selectedLeases)
-            const history = sortLeaseHistory(selectedLeases).filter((l) => l.id !== current?.id)
+          {rentSubTab === 'Lease' && (() => {
+            // Ungated by property_type (unlike the hero/Overview occupancy
+            // badge above) — a lease record has always been addable on
+            // any property type, and this preserves that exactly.
+            const leaseOccupancy = deriveOccupancy(selectedLeases)
+            const history = sortLeaseHistory(selectedLeases).filter((l) => l.id !== currentLease?.id)
             return <>
-              <div className="sectionHead workspaceHeading"><div><p className="eyebrow">TENANTS &amp; LEASE</p><h2>Tenants &amp; lease terms</h2><p>Keep rent, deposits, renewal dates and the signed lease together.</p></div><button className="primary" onClick={() => openLeaseForm()}>+ Add lease</button></div>
+              <div className="sectionHead workspaceHeading"><div><p className="eyebrow">RENT &amp; LEASE</p><h2>Tenants &amp; lease terms</h2><p>Keep rent, deposits, renewal dates and the signed lease together.</p></div><button className="primary" onClick={() => openLeaseForm()}>+ Add lease</button></div>
 
-              {current ? (
+              {currentLease ? (
                 <LeaseCard
-                  lease={current}
-                  doc={selectedDocs.find((d) => d.id === current.document_id)}
-                  heading={occupancy === 'Upcoming tenancy' ? 'Upcoming tenancy' : 'Current lease'}
-                  onEdit={() => openLeaseForm(current)}
-                  onDelete={() => void removeModuleRecord('leases', current.id)}
+                  lease={currentLease}
+                  doc={selectedDocs.find((d) => d.id === currentLease.document_id)}
+                  heading={leaseOccupancy === 'Upcoming tenancy' ? 'Upcoming tenancy' : 'Current lease'}
+                  onEdit={() => openLeaseForm(currentLease)}
+                  onDelete={() => void removeModuleRecord('leases', currentLease.id)}
                   onOpenDocument={(doc) => void openDocument(doc)}
                 />
-              ) : occupancy === 'Occupancy unknown' ? (
+              ) : leaseOccupancy === 'Occupancy unknown' ? (
                 <EmptyModule title="Occupancy unknown" text="This property has lease records whose dates we can't reliably read. Open a lease below to fix its dates." action="Add lease" onClick={() => openLeaseForm()} />
               ) : (
                 <EmptyModule title="Currently vacant" text="No active lease on file for this property yet." action="Add lease" onClick={() => openLeaseForm()} />
@@ -1623,39 +1678,108 @@ export default function Home() {
                   />)}
                 </div>
               </div>}
+
+              {/* Milestone 18's "Rent this month" preview, relocated here
+                  from the former Financials tab (Section 10's own
+                  preferred integration point — a Rent subsection, not a
+                  Financials one) — same buildRentLedgerRows() call, same
+                  card, unchanged. */}
+              {rentThisMonth.length > 0 && rentThisMonth.map((row) => (
+                <div className="rentThisMonthCard" key={row.leaseId}>
+                  <div className="rentThisMonthHead">
+                    <div><p className="eyebrow">RENT — {formatPeriodLabel(currentRentPeriod).toUpperCase()}</p><h3>{row.tenantName}</h3></div>
+                    <span className={`statusPill ${rentStatusPillClass(row.status)}`}>{row.status}</span>
+                  </div>
+                  <div className="recordMetrics">
+                    <div><span>Expected</span><strong>{money(row.expectedAmount)}</strong></div>
+                    <div><span>Received</span><strong>{money(row.totalPaid)}</strong></div>
+                    {row.remaining > 0 && <div><span>Remaining</span><strong>{money(row.remaining)}</strong></div>}
+                  </div>
+                  <div className="rentThisMonthActions">
+                    <Link href={`/rent-ledger?lease=${row.leaseId}`} className="primary">+ Record Payment</Link>
+                    <Link href="/rent-ledger" className="secondary">View Full Rent Ledger</Link>
+                  </div>
+                </div>
+              ))}
+
+              {/* Rent Payment History — every rent_payments row already
+                  loaded for this property (loadPortfolio()), surfaced
+                  directly rather than re-derived; recording a NEW payment
+                  still goes through the one Rent Ledger implementation
+                  (the "+ Record Payment" link above/on each history row)
+                  so nothing here duplicates that mutation logic. */}
+              {selectedRentPayments.length > 0 && <div className="overviewPanel">
+                <h3>Rent payment history</h3>
+                <div className="rentPaymentList">
+                  {selectedRentPayments.map((p) => (
+                    <div className="rentPaymentEntry" key={p.id}>
+                      <span>{money(p.amount)} · {p.payment_method}<span className="muted">{new Date(`${p.date_received}T12:00:00`).toLocaleDateString()}{p.reference_number ? ` · Ref ${p.reference_number}` : ''}{p.notes ? ` · ${p.notes}` : ''}</span></span>
+                    </div>
+                  ))}
+                </div>
+              </div>}
             </>
           })()}
+
+          {rentSubTab === 'Ledger' && (() => {
+            const income = selectedYearTransactions.filter((t) => t.transaction_type === 'Income').reduce((sum, t) => sum + Number(t.amount), 0)
+            const expenses = selectedYearTransactions.filter((t) => t.transaction_type === 'Expense').reduce((sum, t) => sum + Number(t.amount), 0)
+            const noiExpenses = selectedYearTransactions.filter((t) => t.transaction_type === 'Expense' && t.category !== 'Mortgage' && t.category !== 'CapEx').reduce((sum, t) => sum + Number(t.amount), 0)
+            const noi = income - noiExpenses
+            const cashFlow = income - expenses
+            const monthKey = new Date().toISOString().slice(0,7)
+            const monthRows = selectedTransactions.filter((t) => t.transaction_date.startsWith(monthKey))
+            const monthCashFlow = monthRows.reduce((sum, t) => sum + (t.transaction_type === 'Income' ? Number(t.amount) : -Number(t.amount)), 0)
+            const years = Array.from(new Set([String(new Date().getFullYear()), ...selectedTransactions.map((t) => t.transaction_date.slice(0,4))])).sort().reverse()
+            return <>
+              <div className="sectionHead workspaceHeading financialHeading"><div><p className="eyebrow">LEDGER</p><h2>Income &amp; expense ledger</h2><p>Track every dollar with receipts and source documents attached to the transaction.</p></div><div className="financialActions"><select aria-label="Financial year" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)}>{years.map((year) => <option key={year}>{year}</option>)}</select><label className="secondary csvButton">Import CSV<input type="file" accept=".csv,text/csv" onChange={(e) => { const file = e.target.files?.[0]; if (file) void importTransactionsCsv(file); e.target.value = '' }} /></label><button className="secondary" onClick={exportTransactionsCsv}>Export CSV</button><button className="primary" onClick={() => setShowTransaction(true)}>+ Add transaction</button></div></div>
+              <div className="financialStats"><div className="financialStat"><span>{financialYear} income</span><strong>{money(income)}</strong></div><div className="financialStat"><span>{financialYear} expenses</span><strong>{money(expenses)}</strong></div><div className="financialStat"><span>NOI</span><strong>{money(noi)}</strong><small>Excludes mortgage & CapEx</small></div><div className="financialStat"><span>Net cash flow</span><strong>{money(cashFlow)}</strong><small>{money(monthCashFlow)} this month</small></div></div>
+              <div className="ledgerWrap"><table className="ledger"><thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Vendor</th><th>Description</th><th>Income</th><th>Expense</th><th>Attachment</th><th></th></tr></thead><tbody>{selectedYearTransactions.length ? selectedYearTransactions.map((tx) => { const doc = selectedDocs.find((d) => d.id === tx.document_id); return <tr key={tx.id}><td>{new Date(`${tx.transaction_date}T12:00:00`).toLocaleDateString()}</td><td><span className={`transactionType ${tx.transaction_type.toLowerCase()}`}>{tx.transaction_type}</span>{tx.is_recurring && <small className="recurringLabel">Recurring</small>}</td><td>{tx.category}</td><td>{tx.vendor || '—'}</td><td className="descriptionCell">{tx.description}</td><td className="moneyCell incomeCell">{tx.transaction_type === 'Income' ? money(tx.amount) : '—'}</td><td className="moneyCell">{tx.transaction_type === 'Expense' ? money(tx.amount) : '—'}</td><td>{doc ? <button className="attachmentButton" onClick={() => void openDocument(doc)}>{doc.name}</button> : <span className="muted">—</span>}</td><td><button className="deleteTransaction" aria-label={`Delete ${tx.description}`} onClick={() => void removeTransaction(tx.id)}>×</button></td></tr>}) : <tr><td colSpan={9}><div className="emptyLedger"><strong>No {financialYear} transactions yet</strong><span>Add your first rent payment or expense, or import a CSV.</span><button className="primary" onClick={() => setShowTransaction(true)}>+ Add transaction</button></div></td></tr>}</tbody></table></div>
+              <p className="ledgerNote">NOI is shown as income less operating expenses and excludes transactions categorized as Mortgage or CapEx. PropRoster is an organization tool, not tax or accounting advice.</p>
+            </>
+          })()}
+
+          {rentSubTab === 'Tenant' && (selected.property_type === 'Rental Property' ? <>
+            <div className="sectionHead workspaceHeading"><div><p className="eyebrow">TENANT REQUESTS</p><h2>Maintenance requests</h2><p>Owner-side tracking for tenant maintenance requests.</p></div><button className="primary" onClick={() => setShowRequestForm(true)}>+ Log request</button></div><div className="financialStats landlordStats"><div className="financialStat"><span>Open requests</span><strong>{openRequests.length}</strong></div><div className="financialStat"><span>Completed requests</span><strong>{completedRequests.length}</strong></div></div>{selectedRequests.length ? <div className="maintenanceList">{selectedRequests.map((req) => <article className="maintenanceRow requestRow" key={req.id}><div className="maintenanceDate"><strong>{new Date(req.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(req.created_at).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div><span className={`statusPill priority${req.priority}`}>{req.priority}</span><h3>{req.title}</h3><p>{req.tenant_name}{req.tenant_email ? ` · ${req.tenant_email}` : ''}</p></div></div>{req.description && <p className="requestDescription">{req.description}</p>}<div className="maintenanceActions"><select aria-label={`Status for ${req.title}`} value={req.status} onChange={(e) => void updateRequestStatus(req.id, e.target.value)}>{requestStatuses.map((s) => <option key={s}>{s}</option>)}</select><button className="dangerLink" onClick={() => void removeRequest(req.id)}>Remove</button></div></div></article>)}</div> : <EmptyModule title="No maintenance requests yet" text="Log tenant requests as they come in by phone, email or in person." action="Log request" onClick={() => setShowRequestForm(true)} />}
+            <TenantConnectPanel propertyId={selected.id} ownerId={user.id} tenantConnectEnabled={entitlementsFor(plan).tenantConnect} />
+          </> : <div className="emptyState"><strong>Tenant requests apply to Rental Property only.</strong><span>Change this property's type from Edit property facts if that's not correct.</span></div>)}
+        </section>}
+
+        {activeTab === 'Tax' && selected && user && supabase && <section className="workspaceContent">
+          <PropertyTaxPanel
+            supabase={supabase}
+            propertyId={selected.id}
+            ownerId={user.id}
+            transactions={selectedTransactions}
+            maintenanceRecords={selectedMaintenance}
+            documents={selectedDocs}
+            taxRecords={selectedTaxRecords}
+            onRefresh={() => void loadPortfolio()}
+          />
+          <p className="ledgerNote">Tax Center (the portfolio-wide view across every property) aggregates these same manual entries alongside your Rent ledger — see the <Link href="/tax-center">Tax Center</Link> page.</p>
+        </section>}
+
+        {activeTab === 'Property' && <section className="workspaceContent moduleWorkspace">
+          <div className="subTabs" role="tablist" aria-label="Property sections">{propertySubTabs.map((sub) => <button key={sub} role="tab" aria-selected={propertySubTab === sub} className={propertySubTab === sub ? 'active' : ''} onClick={() => setPropertySubTab(sub)}>{sub}</button>)}</div>
 
           {propertySubTab === 'Mortgage' && <><div className="sectionHead workspaceHeading"><div><p className="eyebrow">MORTGAGE</p><h2>Loan details</h2><p>Track your lender, balance, rate, payment and loan documents.</p></div><button className="primary" onClick={() => setShowModuleForm('Mortgage')}>+ Add mortgage</button></div>{selectedMortgages.length ? <div className="moduleGrid">{selectedMortgages.map((loan) => { const doc=selectedDocs.find(d=>d.id===loan.document_id); return <article className="recordCard" key={loan.id}><div className="recordTop"><div><span className="statusPill">Mortgage</span><h3>{loan.lender}</h3><p>{loan.loan_number ? `Loan ••••${loan.loan_number.slice(-4)}` : 'Loan number not added'}</p></div><button className="recordDelete" onClick={() => void removeModuleRecord('mortgages', loan.id)}>×</button></div><div className="recordMetrics"><div><span>Current balance</span><strong>{money(loan.current_balance)}</strong></div><div><span>Monthly payment</span><strong>{money(loan.monthly_payment)}</strong></div><div><span>Rate</span><strong>{Number(loan.interest_rate).toFixed(3)}%</strong></div></div><div className="recordRows"><div><span>Original balance</span><strong>{money(loan.original_balance)}</strong></div><div><span>Escrow / month</span><strong>{money(loan.escrow_amount)}</strong></div>{loan.maturity_date && <div><span>Maturity</span><strong>{new Date(`${loan.maturity_date}T12:00:00`).toLocaleDateString()}</strong></div>}{doc && <div><span>Loan document</span><button onClick={() => void openDocument(doc)}>{doc.name}</button></div>}</div></article>})}</div> : <EmptyModule title="No mortgage details yet" text="Add the lender, balance, rate, monthly payment and loan document." action="Add mortgage" onClick={() => setShowModuleForm('Mortgage')} />}</>}
 
           {propertySubTab === 'Insurance' && <><div className="sectionHead workspaceHeading"><div><p className="eyebrow">INSURANCE</p><h2>Coverage records</h2><p>Keep policy details, premiums, deductibles and expiration dates visible.</p></div><button className="primary" onClick={() => setShowModuleForm('Insurance')}>+ Add policy</button></div>{selectedInsurance.length ? <div className="moduleGrid">{selectedInsurance.map((policy) => { const doc=selectedDocs.find(d=>d.id===policy.document_id); const days=policy.expiration_date ? Math.ceil((new Date(`${policy.expiration_date}T12:00:00`).getTime()-Date.now())/86400000) : null; return <article className="recordCard" key={policy.id}><div className="recordTop"><div><span className={`statusPill ${days !== null && days < 45 ? 'warning' : ''}`}>{days !== null && days < 0 ? 'Expired' : days !== null && days < 45 ? 'Renew soon' : 'Active'}</span><h3>{policy.carrier}</h3><p>{policy.policy_number || 'Policy number not added'}</p></div><button className="recordDelete" onClick={() => void removeModuleRecord('insurance_policies', policy.id)}>×</button></div><div className="recordMetrics"><div><span>Annual premium</span><strong>{money(policy.annual_premium)}</strong></div><div><span>Deductible</span><strong>{money(policy.deductible)}</strong></div></div><div className="recordRows">{policy.effective_date && <div><span>Effective</span><strong>{new Date(`${policy.effective_date}T12:00:00`).toLocaleDateString()}</strong></div>}{policy.expiration_date && <div><span>Expires</span><strong>{new Date(`${policy.expiration_date}T12:00:00`).toLocaleDateString()}</strong></div>}{doc && <div><span>Policy document</span><button onClick={() => void openDocument(doc)}>{doc.name}</button></div>}</div></article>})}</div> : <EmptyModule title="No insurance policies yet" text="Add your carrier, policy, premium, deductible and declaration page." action="Add policy" onClick={() => setShowModuleForm('Insurance')} />}</>}
 
-          {propertySubTab === 'Maintenance' && <><div className="sectionHead workspaceHeading"><div><p className="eyebrow">MAINTENANCE</p><h2>Property service history</h2><p>Repairs, preventative work, vendors, costs and receipts in one timeline.</p></div><button className="primary" onClick={() => setShowModuleForm('Maintenance')}>+ Add maintenance</button></div>{selectedMaintenance.length ? <div className="maintenanceList">{selectedMaintenance.map((item) => { const doc=selectedDocs.find(d=>d.id===item.document_id); return <article className="maintenanceRow" key={item.id}><div className="maintenanceDate"><strong>{new Date(`${item.service_date}T12:00:00`).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(`${item.service_date}T12:00:00`).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div><span className="statusPill">{item.status}</span><h3>{item.description}</h3><p>{item.category}{item.vendor ? ` · ${item.vendor}` : ''}</p></div><strong>{money(item.cost)}</strong></div><div className="maintenanceActions">{doc && <button onClick={() => void openDocument(doc)}>Open {doc.name}</button>}{item.financial_transaction_id && <span>Linked to Financials</span>}<button className="dangerLink" onClick={() => void removeModuleRecord('maintenance_records', item.id, item.financial_transaction_id)}>Remove</button></div></div></article>})}</div> : <EmptyModule title="No maintenance records yet" text="Add repairs, service calls, vendors, costs and receipts as they happen." action="Add maintenance" onClick={() => setShowModuleForm('Maintenance')} />}</>}
+          {propertySubTab === 'Maintenance' && <><div className="sectionHead workspaceHeading"><div><p className="eyebrow">MAINTENANCE</p><h2>Property service history</h2><p>Repairs, preventative work, vendors, costs and receipts in one timeline.</p></div><button className="primary" onClick={() => setShowModuleForm('Maintenance')}>+ Add maintenance</button></div>{selectedMaintenance.length ? <div className="maintenanceList">{selectedMaintenance.map((item) => { const doc=selectedDocs.find(d=>d.id===item.document_id); return <article className="maintenanceRow" key={item.id}><div className="maintenanceDate"><strong>{new Date(`${item.service_date}T12:00:00`).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(`${item.service_date}T12:00:00`).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div><span className="statusPill">{item.status}</span><h3>{item.description}</h3><p>{item.category}{item.vendor ? ` · ${item.vendor}` : ''}</p></div><strong>{money(item.cost)}</strong></div><div className="maintenanceActions">{doc && <button onClick={() => void openDocument(doc)}>Open {doc.name}</button>}{item.financial_transaction_id && <span>Linked to Ledger</span>}<button className="dangerLink" onClick={() => void removeModuleRecord('maintenance_records', item.id, item.financial_transaction_id)}>Remove</button></div></div></article>})}</div> : <EmptyModule title="No maintenance records yet" text="Add repairs, service calls, vendors, costs and receipts as they happen." action="Add maintenance" onClick={() => setShowModuleForm('Maintenance')} />}</>}
 
           {propertySubTab === 'Systems' && <PropertySystemsPanel propertyId={selected.id} ownerId={user.id} systems={selectedSystems} contacts={selectedContacts} documents={selectedDocs} onRefresh={() => void loadPortfolio()} />}
         </section>}
 
-        {activeTab === 'People' && <section className="workspaceContent moduleWorkspace">
-          <div className="subTabs" role="tablist" aria-label="People sections">
-            <button role="tab" aria-selected={peopleSubTab === 'PropCrew'} className={peopleSubTab === 'PropCrew' ? 'active' : ''} onClick={() => setPeopleSubTab('PropCrew')}>PropCrew</button>
-            {selected.property_type === 'Rental Property' && <button role="tab" aria-selected={peopleSubTab === 'Landlord'} className={peopleSubTab === 'Landlord' ? 'active' : ''} onClick={() => setPeopleSubTab('Landlord')}>Landlord</button>}
-          </div>
-
-          {peopleSubTab === 'PropCrew' && (
-            <PropCrewPanel
-              ownerId={user.id}
-              properties={properties.map((p) => ({ id: p.id, address: p.address, city: p.city }))}
-              scopePropertyId={selected.id}
-              onChanged={() => void loadPortfolio()}
-              prefill={propCrewPrefill}
-              onPrefillConsumed={() => setPropCrewPrefill(null)}
-            />
-          )}
-
-          {peopleSubTab === 'Landlord' && selected.property_type === 'Rental Property' && <>
-            <div className="sectionHead workspaceHeading"><div><p className="eyebrow">LANDLORD CENTER</p><h2>Maintenance requests</h2><p>Owner-side tracking for tenant maintenance requests.</p></div><button className="primary" onClick={() => setShowRequestForm(true)}>+ Log request</button></div><div className="financialStats landlordStats"><div className="financialStat"><span>Open requests</span><strong>{openRequests.length}</strong></div><div className="financialStat"><span>Completed requests</span><strong>{completedRequests.length}</strong></div></div>{selectedRequests.length ? <div className="maintenanceList">{selectedRequests.map((req) => <article className="maintenanceRow requestRow" key={req.id}><div className="maintenanceDate"><strong>{new Date(req.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(req.created_at).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div><span className={`statusPill priority${req.priority}`}>{req.priority}</span><h3>{req.title}</h3><p>{req.tenant_name}{req.tenant_email ? ` · ${req.tenant_email}` : ''}</p></div></div>{req.description && <p className="requestDescription">{req.description}</p>}<div className="maintenanceActions"><select aria-label={`Status for ${req.title}`} value={req.status} onChange={(e) => void updateRequestStatus(req.id, e.target.value)}>{requestStatuses.map((s) => <option key={s}>{s}</option>)}</select><button className="dangerLink" onClick={() => void removeRequest(req.id)}>Remove</button></div></div></article>)}</div> : <EmptyModule title="No maintenance requests yet" text="Log tenant requests as they come in by phone, email or in person." action="Log request" onClick={() => setShowRequestForm(true)} />}
-            <TenantConnectPanel propertyId={selected.id} ownerId={user.id} tenantConnectEnabled={entitlementsFor(plan).tenantConnect} />
-          </>}
+        {activeTab === 'PropCrew' && <section className="workspaceContent moduleWorkspace">
+          <PropCrewPanel
+            ownerId={user.id}
+            properties={properties.map((p) => ({ id: p.id, address: p.address, city: p.city }))}
+            scopePropertyId={selected.id}
+            onChanged={() => void loadPortfolio()}
+            prefill={propCrewPrefill}
+            onPrefillConsumed={() => setPropCrewPrefill(null)}
+          />
         </section>}
 
         {showModuleForm && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowModuleForm(null)}><div className="modal moduleModal"><div className="modalTop"><div><p className="eyebrow">{showModuleForm.toUpperCase()}</p><h2>{showModuleForm === 'Lease' ? (editingLeaseId ? 'Edit lease' : 'Add lease') : `Add ${showModuleForm.toLowerCase()}`}</h2></div><button className="iconButton" onClick={() => setShowModuleForm(null)}>×</button></div>
@@ -1686,13 +1810,13 @@ export default function Home() {
           {showModuleForm === 'Maintenance' && <div className="formGrid"><label>Service date<input type="date" value={maintenanceDraft.serviceDate} onChange={e=>setMaintenanceDraft({...maintenanceDraft,serviceDate:e.target.value})} /></label><label>Status<select value={maintenanceDraft.status} onChange={e=>setMaintenanceDraft({...maintenanceDraft,status:e.target.value})}><option>Completed</option><option>Scheduled</option><option>In progress</option><option>Needs follow-up</option></select></label><label>Category<select value={maintenanceDraft.category} onChange={e=>setMaintenanceDraft({...maintenanceDraft,category:e.target.value})}>{MAINTENANCE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></label><label>Vendor<input value={maintenanceDraft.vendor} onChange={e=>setMaintenanceDraft({...maintenanceDraft,vendor:e.target.value})} /></label><label>Cost<input inputMode="decimal" value={maintenanceDraft.cost} onChange={e=>setMaintenanceDraft({...maintenanceDraft,cost:e.target.value})} /></label><label>Receipt / invoice<select value={maintenanceDraft.documentId} onChange={e=>setMaintenanceDraft({...maintenanceDraft,documentId:e.target.value})}><option value="">No attachment</option>{selectedDocs.filter(d=>['Receipts','Warranties','Other'].includes(d.category)).map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><label className="fullField">Description<input value={maintenanceDraft.description} onChange={e=>setMaintenanceDraft({...maintenanceDraft,description:e.target.value})} placeholder="HVAC repair, annual service, roof inspection…" /></label><label className="recurringCheck fullField"><input type="checkbox" checked={maintenanceDraft.addToFinancials} onChange={e=>setMaintenanceDraft({...maintenanceDraft,addToFinancials:e.target.checked})} /><span>Add this cost to Financials</span><small>PropRoster creates a linked Maintenance expense so you only enter the cost once.</small></label></div>}
           <div className="modalActions"><button className="secondary" onClick={() => setShowModuleForm(null)}>Cancel</button><button className="primary" disabled={busy} onClick={() => void (showModuleForm==='Lease'?saveLease():showModuleForm==='Mortgage'?saveMortgage():showModuleForm==='Insurance'?saveInsurance():saveMaintenance())}>{busy?'Saving…':'Save'}</button></div></div></div>}
 
-        {showRequestForm && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowRequestForm(false)}><div className="modal moduleModal"><div className="modalTop"><div><p className="eyebrow">LANDLORD CENTER</p><h2>Log maintenance request</h2></div><button className="iconButton" onClick={() => setShowRequestForm(false)}>×</button></div><div className="formGrid"><label>Tenant name<input value={requestDraft.tenantName} onChange={e=>setRequestDraft({...requestDraft,tenantName:e.target.value})} placeholder="Taylor Morgan" /></label><label>Tenant email<input type="email" value={requestDraft.tenantEmail} onChange={e=>setRequestDraft({...requestDraft,tenantEmail:e.target.value})} placeholder="tenant@example.com" /></label><label>Priority<select value={requestDraft.priority} onChange={e=>setRequestDraft({...requestDraft,priority:e.target.value})}>{requestPriorities.map(p=><option key={p}>{p}</option>)}</select></label><label>Status<select value={requestDraft.status} onChange={e=>setRequestDraft({...requestDraft,status:e.target.value})}>{requestStatuses.map(s=><option key={s}>{s}</option>)}</select></label><label className="fullField">Issue / title<input value={requestDraft.title} onChange={e=>setRequestDraft({...requestDraft,title:e.target.value})} placeholder="Leaking kitchen faucet" /></label><label className="fullField">Description<input value={requestDraft.description} onChange={e=>setRequestDraft({...requestDraft,description:e.target.value})} placeholder="Details the tenant shared…" /></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowRequestForm(false)}>Cancel</button><button className="primary" disabled={busy || !requestDraft.tenantName.trim() || !requestDraft.title.trim()} onClick={() => void saveRequest()}>{busy?'Saving…':'Save request'}</button></div></div></div>}
+        {showRequestForm && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowRequestForm(false)}><div className="modal moduleModal"><div className="modalTop"><div><p className="eyebrow">TENANT REQUESTS</p><h2>Log maintenance request</h2></div><button className="iconButton" onClick={() => setShowRequestForm(false)}>×</button></div><div className="formGrid"><label>Tenant name<input value={requestDraft.tenantName} onChange={e=>setRequestDraft({...requestDraft,tenantName:e.target.value})} placeholder="Taylor Morgan" /></label><label>Tenant email<input type="email" value={requestDraft.tenantEmail} onChange={e=>setRequestDraft({...requestDraft,tenantEmail:e.target.value})} placeholder="tenant@example.com" /></label><label>Priority<select value={requestDraft.priority} onChange={e=>setRequestDraft({...requestDraft,priority:e.target.value})}>{requestPriorities.map(p=><option key={p}>{p}</option>)}</select></label><label>Status<select value={requestDraft.status} onChange={e=>setRequestDraft({...requestDraft,status:e.target.value})}>{requestStatuses.map(s=><option key={s}>{s}</option>)}</select></label><label className="fullField">Issue / title<input value={requestDraft.title} onChange={e=>setRequestDraft({...requestDraft,title:e.target.value})} placeholder="Leaking kitchen faucet" /></label><label className="fullField">Description<input value={requestDraft.description} onChange={e=>setRequestDraft({...requestDraft,description:e.target.value})} placeholder="Details the tenant shared…" /></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowRequestForm(false)}>Cancel</button><button className="primary" disabled={busy || !requestDraft.tenantName.trim() || !requestDraft.title.trim()} onClick={() => void saveRequest()}>{busy?'Saving…':'Save request'}</button></div></div></div>}
 
         {showEdit && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowEdit(false)}><div className="modal"><div className="modalTop"><div><p className="eyebrow">PROPERTY SETTINGS</p><h2>Edit property</h2></div><button className="iconButton" onClick={() => setShowEdit(false)}>×</button></div><div className="formGrid"><label>Street address<AddressAutocomplete value={editDraft.address} onTextChange={(v) => setEditDraft({ ...editDraft, address: v })} onSelect={(addr) => setEditDraft((d) => ({ ...d, ...applyNormalizedAddress(addr, d.address) }))} placeholder="123 Example Street" /></label><label>City, state & ZIP<input value={editDraft.city} onChange={(e) => setEditDraft({ ...editDraft, city: e.target.value })} placeholder="Example City, FL 12345" /></label><label>Property type<select value={editDraft.type} onChange={(e) => setEditDraft({ ...editDraft, type: e.target.value })}><option>Rental Property</option><option>Primary Residence</option><option>Vacation Home</option><option>Commercial</option><option>Land</option><option>Other</option></select></label><label>Purchase price<input inputMode="decimal" value={editDraft.purchasePrice} onChange={(e) => setEditDraft({ ...editDraft, purchasePrice: e.target.value })} placeholder="390000" /></label><label>Estimated value<input inputMode="decimal" value={editDraft.value} onChange={(e) => setEditDraft({ ...editDraft, value: e.target.value })} placeholder="520000" /></label><label>Mortgage balance<input inputMode="decimal" value={editDraft.mortgage} onChange={(e) => setEditDraft({ ...editDraft, mortgage: e.target.value })} placeholder="310000" /></label><label>Financing status<select value={editDraft.financingStatus} onChange={(e) => setEditDraft({ ...editDraft, financingStatus: e.target.value })}>{FINANCING_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label><label>Monthly rent<input inputMode="decimal" value={editDraft.rent} onChange={(e) => setEditDraft({ ...editDraft, rent: e.target.value })} placeholder="2950" /></label><label>Monthly property expenses<input inputMode="decimal" value={editDraft.monthlyExpenses} onChange={(e) => setEditDraft({ ...editDraft, monthlyExpenses: e.target.value })} placeholder="1925" /></label><label>Purchase date<input type="date" value={editDraft.purchaseDate} onChange={(e) => setEditDraft({ ...editDraft, purchaseDate: e.target.value })} /></label><label>Beds<input inputMode="numeric" value={editDraft.beds} onChange={(e) => setEditDraft({ ...editDraft, beds: e.target.value })} placeholder="3" /></label><label>Baths<input inputMode="decimal" value={editDraft.baths} onChange={(e) => setEditDraft({ ...editDraft, baths: e.target.value })} placeholder="2.5" /></label><label>Square feet<input inputMode="numeric" value={editDraft.squareFeet} onChange={(e) => setEditDraft({ ...editDraft, squareFeet: e.target.value })} placeholder="1850" /></label><label>Year built<input inputMode="numeric" value={editDraft.yearBuilt} onChange={(e) => setEditDraft({ ...editDraft, yearBuilt: e.target.value })} placeholder="1998" /></label><label>Lot size (sqft)<input inputMode="numeric" value={editDraft.lotSizeSqft} onChange={(e) => setEditDraft({ ...editDraft, lotSizeSqft: e.target.value })} placeholder="6500" /></label><label>Annual property tax<input inputMode="decimal" value={editDraft.propertyTaxAnnual} onChange={(e) => setEditDraft({ ...editDraft, propertyTaxAnnual: e.target.value })} placeholder="4200" /></label><label>HOA / month<input inputMode="decimal" value={editDraft.hoaMonthly} onChange={(e) => setEditDraft({ ...editDraft, hoaMonthly: e.target.value })} placeholder="0" /></label></div><div className="editPropertyFooter"><button className="dangerButton" onClick={() => setShowDeleteConfirm(true)}>Delete Property</button><div className="modalActions compactActions"><button className="secondary" onClick={() => setShowEdit(false)}>Cancel</button><button className="primary" disabled={busy || !editDraft.address.trim() || !editDraft.city.trim()} onClick={() => void updateProperty()}>{busy ? 'Saving…' : 'Save Changes'}</button></div></div></div></div>}
 
         {showDeleteConfirm && <div className="overlay deleteOverlay" onMouseDown={(e) => e.target === e.currentTarget && setShowDeleteConfirm(false)}><div className="modal deleteModal"><div className="modalTop"><div><p className="eyebrow dangerEyebrow">PERMANENT ACTION</p><h2>Delete this property?</h2></div><button className="iconButton" onClick={() => setShowDeleteConfirm(false)}>×</button></div><p className="deleteWarning">This permanently removes <strong>{selected.address}</strong> and its associated documents, photos, financial transactions, lease, mortgage, insurance, maintenance records, contacts, and maintenance requests. This cannot be undone.</p><div className="modalActions"><button className="secondary" onClick={() => setShowDeleteConfirm(false)}>Keep Property</button><button className="dangerButton solidDanger" disabled={busy} onClick={() => void deleteProperty()}>{busy ? 'Deleting…' : 'Delete Permanently'}</button></div></div></div>}
 
-        {showTransaction && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowTransaction(false)}><div className="modal transactionModal"><div className="modalTop"><div><p className="eyebrow">FINANCIALS</p><h2>Add transaction</h2></div><button className="iconButton" onClick={() => setShowTransaction(false)}>×</button></div><div className="formGrid transactionGrid"><label>Date<input type="date" value={transactionDraft.date} onChange={(e) => setTransactionDraft({ ...transactionDraft, date: e.target.value })} /></label><label>Type<select value={transactionDraft.type} onChange={(e) => setTransactionDraft({ ...transactionDraft, type: e.target.value as 'Income' | 'Expense', category: e.target.value === 'Income' ? 'Rent' : 'Repairs' })}><option>Income</option><option>Expense</option></select></label><label>Category<select value={transactionDraft.category} onChange={(e) => setTransactionDraft({ ...transactionDraft, category: e.target.value })}>{FINANCIAL_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></label><label>Amount<input inputMode="decimal" value={transactionDraft.amount} onChange={(e) => setTransactionDraft({ ...transactionDraft, amount: e.target.value })} placeholder="1250.00" /></label><label>Vendor / payer<input value={transactionDraft.vendor} onChange={(e) => setTransactionDraft({ ...transactionDraft, vendor: e.target.value })} placeholder={transactionDraft.type === 'Income' ? 'Tenant name' : 'Vendor or company'} /></label><label>Attach document<select value={transactionDraft.documentId} onChange={(e) => setTransactionDraft({ ...transactionDraft, documentId: e.target.value })}><option value="">No attachment</option>{selectedDocs.map((doc) => <option value={doc.id} key={doc.id}>{doc.name}</option>)}</select></label><label className="fullField">Description<input value={transactionDraft.description} onChange={(e) => setTransactionDraft({ ...transactionDraft, description: e.target.value })} placeholder="August rent, HVAC repair, property tax…" /></label><label className="recurringCheck fullField"><input type="checkbox" checked={transactionDraft.recurring} onChange={(e) => setTransactionDraft({ ...transactionDraft, recurring: e.target.checked })} /><span>Mark as recurring monthly</span><small>This labels the transaction as recurring; automatic future posting can be enabled in a later milestone.</small></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowTransaction(false)}>Cancel</button><button className="primary" disabled={busy || !transactionDraft.description.trim() || Number(transactionDraft.amount) <= 0} onClick={() => void addTransaction()}>{busy ? 'Saving…' : 'Save transaction'}</button></div></div></div>}
+        {showTransaction && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowTransaction(false)}><div className="modal transactionModal"><div className="modalTop"><div><p className="eyebrow">LEDGER</p><h2>Add transaction</h2></div><button className="iconButton" onClick={() => setShowTransaction(false)}>×</button></div><div className="formGrid transactionGrid"><label>Date<input type="date" value={transactionDraft.date} onChange={(e) => setTransactionDraft({ ...transactionDraft, date: e.target.value })} /></label><label>Type<select value={transactionDraft.type} onChange={(e) => setTransactionDraft({ ...transactionDraft, type: e.target.value as 'Income' | 'Expense', category: e.target.value === 'Income' ? 'Rent' : 'Repairs' })}><option>Income</option><option>Expense</option></select></label><label>Category<select value={transactionDraft.category} onChange={(e) => setTransactionDraft({ ...transactionDraft, category: e.target.value })}>{FINANCIAL_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></label><label>Amount<input inputMode="decimal" value={transactionDraft.amount} onChange={(e) => setTransactionDraft({ ...transactionDraft, amount: e.target.value })} placeholder="1250.00" /></label><label>Vendor / payer<input value={transactionDraft.vendor} onChange={(e) => setTransactionDraft({ ...transactionDraft, vendor: e.target.value })} placeholder={transactionDraft.type === 'Income' ? 'Tenant name' : 'Vendor or company'} /></label><label>Attach document<select value={transactionDraft.documentId} onChange={(e) => setTransactionDraft({ ...transactionDraft, documentId: e.target.value })}><option value="">No attachment</option>{selectedDocs.map((doc) => <option value={doc.id} key={doc.id}>{doc.name}</option>)}</select></label><label className="fullField">Description<input value={transactionDraft.description} onChange={(e) => setTransactionDraft({ ...transactionDraft, description: e.target.value })} placeholder="August rent, HVAC repair, property tax…" /></label><label className="recurringCheck fullField"><input type="checkbox" checked={transactionDraft.recurring} onChange={(e) => setTransactionDraft({ ...transactionDraft, recurring: e.target.checked })} /><span>Mark as recurring monthly</span><small>This labels the transaction as recurring; automatic future posting can be enabled in a later milestone.</small></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowTransaction(false)}>Cancel</button><button className="primary" disabled={busy || !transactionDraft.description.trim() || Number(transactionDraft.amount) <= 0} onClick={() => void addTransaction()}>{busy ? 'Saving…' : 'Save transaction'}</button></div></div></div>}
 
         {showDocIntelId && (() => {
           const activeDoc = selectedDocs.find((d) => d.id === showDocIntelId)
@@ -1899,7 +2023,39 @@ export default function Home() {
       </section>
 
       <section><div className="sectionHead"><div><h2>My Properties</h2><p>{busy && !properties.length ? 'Loading your portfolio…' : `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} in your portfolio`}</p></div><button className="primary" onClick={() => openAddProperty()}>+ Add Property</button></div>
-        <div className="grid">{properties.map((property) => { const propertyOccupancy = property.property_type === 'Rental Property' ? deriveOccupancy(leases.filter((l) => l.property_id === property.id)) : null; return <article className="propertyCard" key={property.id}><button className="cardOpen" onClick={() => openProperty(property.id)}><div className="photo">{property.coverUrl ? <img src={property.coverUrl} alt={property.address} /> : <div className="photoPlaceholder"><span>⌂</span><small>Add property photos</small></div>}<span className="badge">{property.property_type}</span>{propertyOccupancy && <span className={`occupancyBadge ${occupancyPillClass(propertyOccupancy)}`}>{propertyOccupancy === 'Occupancy unknown' ? 'Unknown' : propertyOccupancy === 'Upcoming tenancy' ? 'Upcoming' : propertyOccupancy}</span>}</div></button><div className="cardBody"><button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button><div className="miniStats"><div><span>Value</span><strong>{money(property.estimated_value)}</strong></div><div><span>Equity</span><strong>{money(Number(property.estimated_value) - Number(property.mortgage_balance))}</strong></div><div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div></div><div className="cardActions"><button onClick={() => openProperty(property.id, 'Documents', 'Documents')}>Documents</button><button onClick={() => openProperty(property.id, 'Documents', 'Photos')}>Photos</button><button onClick={() => openProperty(property.id, 'Financials')}>Financials</button></div></div></article> })}
+        {/* Property-First UX Cleanup: property cards are the dashboard's
+            dominant, most-scannable element — address/image, occupancy,
+            rent + this-month's rent status, and up to one alert count,
+            nothing more (Value/Equity moved off the card; that level of
+            investment detail already lives one tap away on Overview).
+            Card actions are down to the two destinations the spec calls
+            out as the natural property-level home for money and files:
+            Rent and Documents. */}
+        <div className="grid">{properties.map((property) => {
+          const propertyOccupancy = property.property_type === 'Rental Property' ? deriveOccupancy(leases.filter((l) => l.property_id === property.id)) : null
+          const propertyRentRow = rentStatusByProperty.get(property.id)
+          const propertyAlertCount = attentionCountByProperty.get(property.id) || 0
+          return <article className="propertyCard" key={property.id}>
+            <button className="cardOpen" onClick={() => openProperty(property.id)}>
+              <div className="photo">{property.coverUrl ? <img src={property.coverUrl} alt={property.address} /> : <div className="photoPlaceholder"><span>⌂</span><small>Add property photos</small></div>}
+                <span className="badge">{property.property_type}</span>
+                {propertyOccupancy && <span className={`occupancyBadge ${occupancyPillClass(propertyOccupancy)}`}>{propertyOccupancy === 'Occupancy unknown' ? 'Unknown' : propertyOccupancy === 'Upcoming tenancy' ? 'Upcoming' : propertyOccupancy}</span>}
+              </div>
+            </button>
+            <div className="cardBody">
+              <button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button>
+              <div className="miniStats">
+                <div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div>
+                {propertyRentRow ? <div><span>Rent status</span><strong><span className={`statusPill ${rentStatusPillClass(propertyRentRow.status)}`}>{propertyRentRow.status}</span></strong></div> : <div><span>Value</span><strong>{money(property.estimated_value)}</strong></div>}
+              </div>
+              {propertyAlertCount > 0 && <button className="cardAlertBadge" onClick={() => openProperty(property.id, 'Overview')}>{propertyAlertCount} alert{propertyAlertCount === 1 ? '' : 's'} need{propertyAlertCount === 1 ? 's' : ''} attention</button>}
+              <div className="cardActions">
+                <button onClick={() => openProperty(property.id, 'Rent', undefined, undefined, 'Lease')}>Rent</button>
+                <button onClick={() => openProperty(property.id, 'Documents', 'Documents')}>Documents</button>
+              </div>
+            </div>
+          </article>
+        })}
           {!busy && properties.length === 0 && <button className="emptyPropertyCard" onClick={() => openAddProperty()}><strong>+ Add your first property</strong><span>Start building your organized property file.</span></button>}
         </div>
       </section>

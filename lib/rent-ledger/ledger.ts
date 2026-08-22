@@ -130,7 +130,7 @@ export function buildRentDateItems(leases: LeaseForLedger[], properties: Propert
       description: row.remaining > 0 ? `${row.tenantName} · $${row.remaining.toLocaleString()} outstanding` : row.tenantName,
       propertyId: row.propertyId, propertyLabel: row.propertyLabel, date: row.dueDate,
       daysUntil: (daysUntil(row.dueDate, now) as number) ?? 0, urgency,
-      nav: { tab: 'Financials' },
+      nav: { tab: 'Rent', rentSubTab: 'Lease' },
     })
   }
   return items
@@ -154,7 +154,7 @@ export function buildVacancyItems(properties: PropertyForLedger[], leases: Lease
   return properties
     .filter((p) => p.property_type === 'Rental Property')
     .filter((p) => deriveOccupancy(leasesByProperty.get(p.id) || []) === 'Vacant')
-    .map((p) => ({ id: p.id, propertyId: p.id, propertyLabel: propertyLabelById.get(p.id) || '', nav: { tab: 'Property', propSubTab: 'Lease' } as NavTarget }))
+    .map((p) => ({ id: p.id, propertyId: p.id, propertyLabel: propertyLabelById.get(p.id) || '', nav: { tab: 'Rent', rentSubTab: 'Lease' } as NavTarget }))
 }
 
 // -- Property Systems warranty expiration (Section 13's "warranty

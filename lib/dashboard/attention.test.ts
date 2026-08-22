@@ -15,7 +15,7 @@ describe('buildLeaseDateItems', () => {
   it('flags an expired lease with the correct label and days', () => {
     const items = buildLeaseDateItems([{ id: 'l1', property_id: 'p1', tenant_name: 'Sean Urban', end_date: dateStr(-3) }], propertyLabelById, TODAY)
     expect(items).toHaveLength(1)
-    expect(items[0]).toMatchObject({ label: 'Lease expired', urgency: 'Expired', daysUntil: -3, propertyLabel: '5531 Turtle Crossing Loop', nav: { tab: 'Property', propSubTab: 'Lease' } })
+    expect(items[0]).toMatchObject({ label: 'Lease expired', urgency: 'Expired', daysUntil: -3, propertyLabel: '5531 Turtle Crossing Loop', nav: { tab: 'Rent', rentSubTab: 'Lease' } })
   })
 
   it('flags a lease expiring within 7 days as Urgent', () => {
