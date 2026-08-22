@@ -10,7 +10,15 @@
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { margin: 0; background: var(--bg); color: var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+/* PWA/Mobile Installability V1: viewport-fit=cover (app/layout.tsx's
+   `viewport` export) lets standalone/home-screen launches draw
+   edge-to-edge on notch/home-indicator devices — these env()s reserve
+   exactly that space back so content/nav never sits under the notch or
+   the home indicator. env() resolves to 0 on every device without a
+   safe area (i.e. everywhere today, browser tab or standalone), so this
+   is a no-op everywhere except an actual notched/home-indicator device
+   running standalone. */
+body { margin: 0; background: var(--bg); color: var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
 .shell { max-width: 1220px; margin: 0 auto; padding: 0 28px 70px; }
@@ -1484,4 +1492,19 @@ h2, h3, p { margin-top: 0; }
   .rentLedgerMonthNav h2 { min-width: 0; font-size: 17px; }
   .rentLedgerRowAmount { margin-left: 0; }
   .rentThisMonthActions .primary, .rentThisMonthActions .secondary { flex: 1; text-align: center; }
+}
+
+/* ============================================================
+   PWA/Mobile Installability V1 — install guidance bar
+   (components/InstallPrompt.tsx). Deliberately NOT a popup/modal: a
+   slim, dismissible bar pinned near the bottom of the viewport, never
+   covering more than one line of content, respecting the home-indicator
+   safe area on notch devices.
+   ============================================================ */
+.installHint { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 40; display: flex; align-items: center; gap: 10px; background: var(--brand); color: white; border-radius: 12px; padding: 10px 14px; font-size: 13px; line-height: 1.4; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+.installHint strong { font-weight: 700; }
+.installHint button { border: 0; background: rgba(255,255,255,.18); color: white; border-radius: 8px; padding: 6px 10px; font-weight: 650; font-size: 12px; white-space: nowrap; }
+.installHintDismiss { margin-left: auto; background: transparent !important; padding: 2px 6px !important; font-size: 18px; line-height: 1; }
+@media (max-width: 480px) {
+  .installHint { font-size: 12.5px; padding: 9px 12px; }
 }
