@@ -1626,9 +1626,67 @@ h2, h3, p { margin-top: 0; }
 .taxPanelSavedNote { font-size: 12.5px; }
 .taxSourcePill { margin-left: 8px; font-size: 9.5px; padding: 3px 7px; vertical-align: middle; }
 .taxPropertyNotes { margin: 10px 0 0; }
+
+/* ============================================================
+   Tax Center V3 — expanded manual tax categories: collapsible groups,
+   mileage quantity input, Other Tax Items (custom items). "More
+   capability, less visible complexity" — every group below is a real
+   disclosure control (a <button aria-expanded>), never dozens of inputs
+   shown at once. Reuses .taxManualRow/.taxManualRowBody/.evalField/
+   .formGrid/.modalActions as-is — no second input styling system.
+   ============================================================ */
+.taxPanelGroupCollapsible { gap: 0; border: 1px solid var(--line); border-radius: 14px; background: white; overflow: hidden; }
+.taxPanelGroupToggle { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%; border: 0; background: transparent; padding: 16px 18px; text-align: left; cursor: pointer; }
+.taxPanelGroupToggleTitle { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.taxPanelGroupToggleTitle h4 { margin: 0; font-size: 15px; }
+.taxPanelChevron { display: inline-block; color: var(--muted); font-size: 13px; transition: transform .15s ease; flex-shrink: 0; }
+.taxPanelChevron.open { transform: rotate(90deg); }
+.taxPanelGroupTotal { color: var(--muted); font-size: 13px; font-weight: 650; white-space: nowrap; flex-shrink: 0; }
+.taxPanelGroupBody { display: grid; gap: 12px; padding: 0 18px 18px; }
+.taxManualRowNoTrack strong { color: var(--muted); font-size: 12.5px; font-weight: 650; }
+
+/* Business mileage: a QUANTITY, visually distinct from the dollar rows
+   around it (no $ suffix, its own notes field) — never presented as a
+   dollar amount anywhere in this panel. */
+.taxMileageRow { border-color: #cadfd4; background: var(--brand-soft); }
+.taxMileageRowBody { display: grid; grid-template-columns: 1fr 2fr; gap: 14px; align-items: end; }
+.taxMileageInput input { text-align: right; }
+.taxMileageNotes input { width: 100%; }
+
+/* Other Tax Items (custom, property_tax_custom_items) */
+.taxCustomItemList { display: grid; gap: 10px; }
+.taxCustomItemRow { display: grid; grid-template-columns: 1fr auto auto; gap: 14px; align-items: center; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--surface); }
+.taxCustomItemMain { display: grid; gap: 3px; min-width: 0; }
+.taxCustomItemMain strong { font-size: 13.5px; }
+.taxCustomItemMain span { font-size: 11.5px; }
+.taxCustomItemAmount { font-weight: 700; font-size: 14px; white-space: nowrap; }
+.taxCustomItemForm { border: 1px dashed var(--line); border-radius: 12px; padding: 16px; background: var(--surface); }
+
+/* Read-only reference list inside a fixed group (Property & Operating
+   Expenses, Professional & Administrative, etc.) showing which custom
+   items count toward THAT group's own total — editing stays in the one
+   "Other Tax Items" section below, this is display-only. */
+.taxCustomItemGroupList { display: grid; gap: 6px; margin-top: 4px; }
+.taxCustomItemGroupRow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 12.5px; padding: 8px 10px; background: var(--surface); border-radius: 8px; }
+.taxCustomItemGroupRow strong { font-size: 13px; white-space: nowrap; }
+
+/* Property detail (app/tax-center/page.tsx) — capital breakdown and
+   custom items nested inside an already-expanded property card. */
+.taxPropertyCapitalDetail, .taxPropertyCustomItems { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 4px; }
+.taxPropertyCapitalDetail h4, .taxPropertyCustomItems h4 { margin: 0 0 10px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+
 @media (max-width: 760px) {
   .taxPanelHead { flex-direction: column; align-items: stretch; }
   .taxManualRowBody { grid-template-columns: 1fr; gap: 10px; }
   .taxPanelSave { flex-wrap: wrap; justify-content: stretch; }
   .taxPanelSave button { width: 100%; }
+  .taxPanelGroupToggle { padding: 14px; }
+  .taxPanelGroupBody { padding: 0 14px 14px; }
+  .taxMileageRowBody { grid-template-columns: 1fr; gap: 10px; }
+  .taxCustomItemRow { grid-template-columns: 1fr; }
+  .taxCustomItemAmount { order: -1; font-size: 16px; }
+}
+@media (max-width: 390px) {
+  .taxPanelGroupTotal { font-size: 11.5px; }
+  .taxPanelGroupToggleTitle h4 { font-size: 13.5px; }
 }

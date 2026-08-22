@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCategoryBreakdown, computeCategoryValue, emptyManualFields, TAX_CATEGORIES, MANUAL_ONLY_CATEGORY_KEYS } from './manual-entry'
+import { buildCategoryBreakdown, computeCategoryValue, emptyManualFields, emptyMileageFields, TAX_CATEGORIES, MANUAL_ONLY_CATEGORY_KEYS, categoriesInGroup, OPERATING_EXPENSE_LIKE_GROUPS } from './manual-entry'
 import { OPERATING_EXPENSE_CATEGORIES } from './categories'
 
 describe('computeCategoryValue — the override rule', () => {
@@ -76,7 +76,58 @@ describe('category list consistency', () => {
     }
   })
 
-  it('lists exactly the four categories with no ledger equivalent as manual-only', () => {
-    expect(MANUAL_ONLY_CATEGORY_KEYS.sort()).toEqual(['advertising', 'cleaning', 'landscaping', 'mortgageInterest', 'pestControl'].sort())
+  it('lists exactly the V2 categories with no ledger equivalent, plus every V3 category (all of which are manual-only too), as manual-only', () => {
+    const v2ManualOnly = ['advertising', 'cleaning', 'landscaping', 'mortgageInterest', 'pestControl']
+    const v3ManualOnly = [
+      'permitsLicenses', 'bankFees',
+      'profLegalFees', 'profAccountingFees', 'profTaxPrepFees', 'profBookkeeping', 'profSoftwareSubscriptions',
+      'profOfficeExpenses', 'profPhoneInternet', 'profMemberships', 'profEducation', 'profOther',
+      'travelParking', 'travelTolls', 'travelAirfare', 'travelRentalCar', 'travelLodging', 'travelOther',
+      'mealsBusiness',
+      'financingPoints', 'financingOther',
+      'capitalAppliances', 'capitalFurniture', 'capitalEquipment', 'capitalMajorRenovations', 'capitalRoof', 'capitalHvac', 'capitalOther',
+    ]
+    expect(MANUAL_ONLY_CATEGORY_KEYS.sort()).toEqual([...v2ManualOnly, ...v3ManualOnly].sort())
+  })
+})
+
+describe('V3 expanded categories — groups', () => {
+  it('every new group (professional/travel/meals) contains only manual-only categories — no invented tracked amounts', () => {
+    for (const group of ['professional', 'travel', 'meals'] as const) {
+      for (const def of categoriesInGroup(group)) {
+        expect(def.trackedCategory).toBeNull()
+      }
+    }
+  })
+
+  it('OPERATING_EXPENSE_LIKE_GROUPS is exactly operatingExpense/professional/travel/meals — financing and capital are excluded', () => {
+    expect(OPERATING_EXPENSE_LIKE_GROUPS.sort()).toEqual(['meals', 'operatingExpense', 'professional', 'travel'].sort())
+  })
+
+  it('mortgageInterest is the only "financing" category with no tracked source and is never grouped with the new financing categories for its own field (verified in aggregate.test.ts) — here we just confirm all three financing categories exist and are manual-only', () => {
+    const financing = categoriesInGroup('financing').map((c) => c.key).sort()
+    expect(financing).toEqual(['financingOther', 'financingPoints', 'mortgageInterest'].sort())
+    for (const def of categoriesInGroup('financing')) expect(def.trackedCategory).toBeNull()
+  })
+
+  it('capital keeps capitalImprovements tracked from CapEx, but every new capital category is manual-only', () => {
+    const capital = categoriesInGroup('capital')
+    const improvements = capital.find((c) => c.key === 'capitalImprovements')
+    expect(improvements?.trackedCategory).toBe('CapEx')
+    for (const def of capital) {
+      if (def.key !== 'capitalImprovements') expect(def.trackedCategory).toBeNull()
+    }
+  })
+})
+
+describe('mileage fields — a quantity, never a dollar amount', () => {
+  it('emptyMileageFields() starts blank (null), never zero', () => {
+    expect(emptyMileageFields()).toEqual({ business_mileage: null, business_mileage_notes: null })
+  })
+
+  it('mileage is not one of the dollar-category manual fields', () => {
+    const manualFieldNames = TAX_CATEGORIES.map((c) => c.manualField)
+    expect(manualFieldNames).not.toContain('business_mileage')
+    expect(manualFieldNames).not.toContain('business_mileage_notes')
   })
 })

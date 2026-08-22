@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { computePropertyReadiness, countUnassignedTaxDocuments } from './readiness'
-import { emptyManualFields } from './manual-entry'
+import { emptyManualFields, emptyMileageFields } from './manual-entry'
 import type { MaintenanceRecordInput, TaxRecordInput, TransactionInput } from './types'
 
 function taxRecord(overrides: Partial<TaxRecordInput> = {}): TaxRecordInput {
-  return { ...emptyManualFields(), notes: null, document_id: null, ...overrides }
+  return { ...emptyManualFields(), ...emptyMileageFields(), notes: null, document_id: null, ...overrides }
 }
 
 function tx(overrides: Partial<TransactionInput> = {}): TransactionInput {
@@ -143,6 +143,37 @@ describe('computePropertyReadiness — Tax Center V2 manual records', () => {
   it('never marks every blank manual field as an error — an otherwise-clean year with one manual entry and a note is Ready', () => {
     const rentTx: TransactionInput = { id: 'tx1', property_id: 'p1', transaction_date: '2026-01-01', transaction_type: 'Income', category: 'Rent', amount: 2000, document_id: 'doc-1' }
     const result = computePropertyReadiness([rentTx], [], taxRecord({ property_taxes: 6400, notes: 'County bill' }))
+    expect(result.status).toBe('Ready')
+  })
+})
+
+describe('computePropertyReadiness — Tax Center V3 expanded categories never produce spurious warnings', () => {
+  const cleanRentTx: TransactionInput = { id: 'tx1', property_id: 'p1', transaction_date: '2026-01-01', transaction_type: 'Income', category: 'Rent', amount: 2000, document_id: 'doc-1' }
+
+  it('an otherwise-clean year is still Ready even though every new travel/meals/professional/financing/capital category is blank', () => {
+    const result = computePropertyReadiness([cleanRentTx], [], taxRecord())
+    expect(result.status).toBe('Ready')
+  })
+
+  it('blank mileage fields never produce a readiness item — mileage is optional and its own kind of field entirely', () => {
+    const result = computePropertyReadiness([cleanRentTx], [], taxRecord({ business_mileage: null, business_mileage_notes: null }))
+    expect(result.status).toBe('Ready')
+  })
+
+  it('entering only a travel/meals/professional category (with a note) does not itself trigger "Missing Information" or any new warning type', () => {
+    const result = computePropertyReadiness([], [], taxRecord({ travel_parking: 45, prof_legal_fees: 400, meals_business: 65, notes: 'Trip to inspect the property' }))
+    expect(result.status).toBe('Ready')
+  })
+
+  it('a manual override in a brand-new V3 category without a note still gets the SAME existing "no note or document" nudge — not a new, separate warning type', () => {
+    const result = computePropertyReadiness([], [], taxRecord({ travel_parking: 45 }))
+    expect(result.status).toBe('Needs Review')
+    expect(result.items.some((i) => i.toLowerCase().includes('note or attached document'))).toBe(true)
+    expect(result.items.length).toBe(1) // exactly the one existing nudge, nothing extra invented for V3
+  })
+
+  it('mileage entered alongside its own notes does not trigger the "no note or document" nudge on its own (mileage has its own dedicated notes field)', () => {
+    const result = computePropertyReadiness([cleanRentTx], [], taxRecord({ business_mileage: 500, business_mileage_notes: 'Trips to the property' }))
     expect(result.status).toBe('Ready')
   })
 })

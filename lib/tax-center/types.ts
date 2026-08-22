@@ -5,7 +5,8 @@
 // the fields it actually needs, so a caller can pass in exactly the
 // already-loaded RLS-scoped rows it has without reshaping them first.
 
-import type { CategoryValue, ManualTaxFields } from './manual-entry'
+import type { CategoryValue, ManualTaxFields, MileageFields } from './manual-entry'
+import type { CustomTaxItem } from './custom-items'
 
 export type TransactionInput = {
   id: string
@@ -38,11 +39,14 @@ export type TaxDocumentInput = {
   category: string
 }
 
-/** The manual tax record for one property + one tax year — mirrors supabase/milestone-22-tax-center-v2.sql's property_tax_records row shape (minus id/property_id/owner_id/tax_year, which the caller already has separately). */
-export type TaxRecordInput = ManualTaxFields & {
+/** The manual tax record for one property + one tax year — mirrors property_tax_records' row shape (minus id/property_id/owner_id/tax_year, which the caller already has separately). V3 adds MileageFields (business_mileage is a quantity, never a dollar amount — see manual-entry.ts). */
+export type TaxRecordInput = ManualTaxFields & MileageFields & {
   notes: string | null
   document_id: string | null
 }
+
+/** A property/tax-year's custom tax items, as computePropertyTaxSummary needs them — mirrors CustomTaxItem (lib/tax-center/custom-items.ts) exactly; already filtered to one property/year by the caller. */
+export type CustomTaxItemInput = CustomTaxItem
 
 export type ReadinessStatus = 'Ready' | 'Needs Review' | 'Missing Information'
 
@@ -65,10 +69,17 @@ export type PropertyTaxSummary = {
   capitalImprovements: number
   /** Sum of Mortgage-categorized ledger transactions — reference only (principal+interest+escrow lumped together), never treated as a deductible expense or as interest. Unchanged from V1. */
   mortgagePayments: number
-  /** Manual-entry-only mortgage interest for the year (Section "Mortgage Interest") — 0 if never entered, never estimated. */
+  /** Manual-entry-only mortgage interest for the year (Section "Mortgage Interest") — 0 if never entered, never estimated. Never includes financingOtherTotal below or any custom "Financing" item — this stays a pure, specific figure. */
   mortgageInterest: number
-  /** Per-category breakdown (lib/tax-center/manual-entry.ts's TAX_CATEGORIES, keyed by category key) — tracked/manual/effective/source for every category, income and expense alike. */
+  /** V3: points/loan costs + other financing (fixed categories) + any custom items tagged "Financing" — organizational detail only, shown separately from mortgageInterest (never merged into it) and excluded from operatingExpenses/netOperatingResult, same treatment mortgageInterest itself already has. */
+  financingOtherTotal: number
+  /** Per-category breakdown (lib/tax-center/manual-entry.ts's TAX_CATEGORIES, keyed by category key) — tracked/manual/effective/source for every category, income and expense alike. Includes every V3 category (professional/travel/meals/new financing/new capital). */
   categoryBreakdown: Record<string, CategoryValue>
+  /** V3: business mileage (a quantity — miles, never a dollar amount) and its own notes, straight from the property_tax_records row. Null when never entered; never estimated, never converted to a dollar figure anywhere in this codebase. */
+  businessMileage: number | null
+  businessMileageNotes: string | null
+  /** V3: every property_tax_custom_items row for this property/year — already summed into operatingExpenses/capitalImprovements/financingOtherTotal above (see custom-items.ts), and surfaced here as-is so the UI/CSV/print can list each one individually without a second query or re-derivation. */
+  customItems: CustomTaxItemInput[]
   /** True if a property_tax_records row exists for this property/year at all (regardless of which fields are populated) — used by readiness and the property page to know whether to show "no manual entry yet". */
   hasManualRecord: boolean
   /** Present only when hasManualRecord — surfaced so the UI/CSV/print can show it without a second query. */
@@ -89,6 +100,10 @@ export type PortfolioTaxSummary = {
   capitalImprovements: number
   mortgagePayments: number
   mortgageInterest: number
+  /** V3: sum of every property's financingOtherTotal (points/loan costs/other financing, fixed + custom) — organizational detail, excluded from operatingExpenses/netOperatingResult across the whole portfolio too. */
+  financingOtherTotal: number
+  /** V3: total count of custom tax items recorded across every included property/year — a count, not a dollar figure (the dollar amounts are already folded into operatingExpenses/capitalImprovements/financingOtherTotal above; a second dollar total here would just invite double-counting confusion). */
+  customItemsCount: number
   expenseByCategory: Record<string, number>
   propertiesNeedingAttention: { propertyId: string; address: string; status: ReadinessStatus }[]
 }
