@@ -25,7 +25,7 @@
 // no-reload behavior while every other page renders the exact same
 // markup/CSS.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Wordmark } from './Wordmark'
 import { AuthNavMenu } from './AuthNavMenu'
@@ -37,7 +37,7 @@ import { useAuthUser } from '../lib/useAuthUser'
 import { useSubscription } from '../lib/useSubscription'
 import { entitlementsFor } from '../lib/billing/entitlements'
 
-export function AuthHeader({ onBrandClick, onSmartUploadCompleted }: { onBrandClick?: () => void; onSmartUploadCompleted?: () => void }) {
+export function AuthHeader({ onBrandClick, onSmartUploadCompleted, registerSmartUploadTrigger }: { onBrandClick?: () => void; onSmartUploadCompleted?: () => void; registerSmartUploadTrigger?: (fn: () => void) => void }) {
   const [smartUploadOpen, setSmartUploadOpen] = useState(false)
   // Launch Pricing: Smart Upload's entry point is global (this header
   // renders on every authenticated page), so the gate lives here rather
@@ -49,6 +49,18 @@ export function AuthHeader({ onBrandClick, onSmartUploadCompleted }: { onBrandCl
   const { user } = useAuthUser()
   const { plan } = useSubscription(user)
   const canUseSmartUpload = entitlementsFor(plan).canUseSmartUpload
+
+  // Property-First UX Cleanup: exposes an external trigger for opening
+  // THIS SAME Smart Upload modal — no second implementation, no rebuilt
+  // AI pipeline — so a property's Documents tab can offer "Smart Upload"
+  // as one path inside its own "+ Add Document" flow (the spec's "not a
+  // completely separate top-level product") while every other page keeps
+  // using the header button exactly as before. Re-registers whenever the
+  // plan-gated behavior it wraps changes, so the exposed function is
+  // never stale.
+  useEffect(() => {
+    registerSmartUploadTrigger?.(() => (canUseSmartUpload ? setSmartUploadOpen(true) : setShowUpgrade(true)))
+  }, [registerSmartUploadTrigger, canUseSmartUpload])
 
   const brandContent = (
     <>
@@ -72,7 +84,14 @@ export function AuthHeader({ onBrandClick, onSmartUploadCompleted }: { onBrandCl
             <Link href="/" className="brandButton">{brandContent}</Link>
           )}
         </div>
-        <SmartUploadButton onClick={() => (canUseSmartUpload ? setSmartUploadOpen(true) : setShowUpgrade(true))} />
+        <div className="topbarActions">
+          {/* Property-First UX Cleanup: Search moves out of the hamburger
+              list and becomes a real header action/icon — "represented as
+              a search action/icon rather than a large primary navigation
+              destination." Same /search route and page, unchanged. */}
+          <Link href="/search" className="headerSearchButton" aria-label="Search">🔍</Link>
+          <SmartUploadButton onClick={() => (canUseSmartUpload ? setSmartUploadOpen(true) : setShowUpgrade(true))} />
+        </div>
       </header>
       <SmartUploadModal open={smartUploadOpen} onClose={() => setSmartUploadOpen(false)} onCompleted={onSmartUploadCompleted} />
       {showUpgrade && supabase && (

@@ -65,7 +65,7 @@ describe('buildRentDateItems (PropWatch rent signals)', () => {
     ]
     const items = buildRentDateItems(leases, properties, [], AUG_2026, labelById, NOW)
     expect(items).toHaveLength(1)
-    expect(items[0]).toMatchObject({ type: 'Rent', label: 'Rent overdue', propertyId: 'prop-1', urgency: 'Expired', nav: { tab: 'Financials' } })
+    expect(items[0]).toMatchObject({ type: 'Rent', label: 'Rent overdue', propertyId: 'prop-1', urgency: 'Expired', nav: { tab: 'Rent', rentSubTab: 'Lease' } })
   })
 
   it('a partial payment with a remaining balance still surfaces (Urgent) with the outstanding amount in the description', () => {

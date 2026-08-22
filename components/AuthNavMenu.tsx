@@ -27,40 +27,45 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthUser } from '../lib/useAuthUser'
 
+// Property-First UX Cleanup: audited down to a small set of MAJOR
+// destinations at the top (Dashboard/Documents/Tax Center are the
+// visible-navigation priorities the spec calls out — "Home, Properties,
+// Documents, Tax"; Dashboard already IS the properties view, so a
+// separate "Properties" entry would just duplicate it — see the
+// completion report's navigation section), then a secondary group for
+// tools that stay reachable but don't need equal top-level weight
+// (Rent Ledger, PropCrew, Portfolio Import, Investment Tools), then
+// account-level pages. Nothing was removed — every route below still
+// exists and works; Search moved out of this list entirely (now a
+// header icon — see components/AuthHeader.tsx) since it no longer needs
+// a list entry once it has its own always-visible action.
 const NAV_LINKS: { href: string; label: string }[] = [
   { href: '/', label: 'Dashboard' },
-  // Milestone 15: Global Search — secondary to the header itself (no
-  // clutter there), reachable from every authenticated page via the
-  // hamburger, same as every other destination here.
-  { href: '/search', label: 'Search' },
-  // Milestone 18: Rent Ledger — a recordkeeping tool, not a payment
-  // processor (see lib/rent-ledger/). Secondary to the header itself,
-  // same reasoning as Search above: reachable from every authenticated
-  // page via the hamburger, never in the global header.
-  { href: '/rent-ledger', label: 'Rent Ledger' },
-  // Tax Center V1: organizes the SAME Financials ledger Rent Ledger's
-  // payments ultimately land in, by tax year — adjacent to Rent Ledger
-  // since both are financial recordkeeping tools, not payment
-  // processors or tax filing services.
-  { href: '/tax-center', label: 'Tax Center' },
-  { href: '/investment-tools', label: 'Investment Tools' },
-  { href: '/propcrew', label: 'PropCrew' },
   // Documents + Navigation + Realtor Connect Polish: the portfolio-wide
   // document library — every property_documents row the caller owns,
   // including ones Smart Upload/Portfolio Import left unassigned.
-  // Adjacent to Portfolio Import below since both are document-centric
-  // workflows; this is the page that lets a user finish what either one
-  // started.
   { href: '/documents', label: 'Documents' },
+  // Tax Center V1: organizes the SAME ledger data property-level Rent
+  // ledgers write to, by tax year.
+  { href: '/tax-center', label: 'Tax Center' },
+  // -- secondary tools: reachable, but not equal top-level weight --
+  // Milestone 18: Rent Ledger — a recordkeeping tool, not a payment
+  // processor (see lib/rent-ledger/). The property-level Rent tab is the
+  // primary place this data lives now; this remains the de-emphasized
+  // portfolio-wide view for the "legitimate use" the spec allows.
+  { href: '/rent-ledger', label: 'Rent Ledger' },
+  { href: '/propcrew', label: 'PropCrew' },
+  { href: '/investment-tools', label: 'Investment Tools' },
   // Milestone 14: secondary to the header's own "+ Smart Upload" (also
-  // linked from inside that modal's Entry screen) — onboarding an
-  // existing portfolio of historical documents, not the everyday
-  // add-one-thing action, so it lives here rather than in the header.
+  // linked from inside that modal's Entry screen and each property's
+  // Documents tab) — onboarding an existing portfolio of historical
+  // documents, not the everyday add-one-thing action.
   // Final Launch Fixes: customer-facing label only — "Portfolio Import"
   // is the approved name for onboarding/bulk organization of existing
   // property records. The route, table, and internal identifiers stay
   // /smart-import / smart_upload_items / SmartImport (unchanged).
   { href: '/smart-import', label: 'Portfolio Import' },
+  // -- account-level --
   { href: '/profile', label: 'Profile' },
   { href: '/pricing', label: 'Pricing' },
 ]

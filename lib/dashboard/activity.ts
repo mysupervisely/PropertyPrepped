@@ -78,7 +78,7 @@ export function financialActivity(rows: FinancialActivityInput[], propertyLabelB
     id: `financial-${t.id}`, type: 'Financial',
     description: `Financial transaction added to ${propertyLabelById.get(t.property_id) || 'a property'} (${t.category})`,
     propertyId: t.property_id, timestamp: t.created_at,
-    nav: { tab: 'Financials' },
+    nav: { tab: 'Rent', rentSubTab: 'Ledger' },
     documentId: null,
   }))
 }
@@ -99,7 +99,7 @@ export function leaseActivity(rows: LeaseActivityInput[], propertyLabelById: Pro
     id: `lease-${l.id}`, type: 'Lease',
     description: `Lease added for ${propertyLabelById.get(l.property_id) || 'a property'}`,
     propertyId: l.property_id, timestamp: l.created_at,
-    nav: { tab: 'Property', propSubTab: 'Lease' },
+    nav: { tab: 'Rent', rentSubTab: 'Lease' },
     documentId: null,
   }))
 }
@@ -140,7 +140,7 @@ export function propCrewActivity(rows: ContactActivityInput[], propertyLabelById
     id: `propcrew-${c.id}`, type: 'PropCrew',
     description: `${c.business_name || c.name} added to PropCrew (${propertyLabelById.get(c.property_id) || 'a property'})`,
     propertyId: c.property_id, timestamp: c.created_at,
-    nav: { tab: 'People', peopleSubTab: 'PropCrew' },
+    nav: { tab: 'PropCrew' },
     documentId: null,
   }))
 }
