@@ -212,21 +212,17 @@ function TaxCenterWorkspace() {
         </div>
       ) : (
         <>
-          <section className="noPrint">
-            <div className="sectionHead"><div><h2>Portfolio summary — {year}</h2><p>Tracked from your Financials ledger, replaced by a manual entry wherever one exists on a property&apos;s Tax &amp; Financials tab — never both added together.</p></div></div>
-            <div className="financialStats">
-              <div className="financialStat"><span>Gross rental income</span><strong>{money(portfolio.grossIncome)}</strong></div>
-              <div className="financialStat"><span>Operating expenses</span><strong>{money(portfolio.operatingExpenses)}</strong></div>
-              <div className="financialStat"><span>Net rental income</span><strong>{money(portfolio.netOperatingResult)}</strong><small>Before tax-specific adjustments</small></div>
-              <div className="financialStat"><span>Properties included</span><strong>{portfolio.propertiesIncluded}</strong></div>
-            </div>
-            <div className="taxNonOperatingNotes">
-              <p><strong>Capital improvements:</strong> {money(portfolio.capitalImprovements)} — {SCHEDULE_E_CAPEX_NOTE}</p>
-              <p><strong>Mortgage interest (manual entry only):</strong> {money(portfolio.mortgageInterest)} — entered on each property&apos;s Tax &amp; Financials tab from a lender statement or Form 1098. Never calculated by PropRoster.</p>
-              <p><strong>Mortgage payments logged:</strong> {money(portfolio.mortgagePayments)} — {SCHEDULE_E_MORTGAGE_NOTE}</p>
-            </div>
-          </section>
-
+          {/* Correction (Property-First UX Cleanup, Tax Center ordering):
+              Property by Property is now the first substantive section —
+              the centerpiece of this page — with Portfolio Summary
+              following it, per the approved required order. The standalone
+              portfolio-level "Tax Readiness" section (formerly here) was
+              removed as redundant/cluttered; the SAME readiness
+              calculation (computePropertyTaxSummary's readiness field,
+              lib/tax-center/readiness.ts — completely untouched) still
+              drives each property's own Status pill below and in Property
+              detail — nothing about the underlying calculation changed,
+              only this one duplicate summary display. */}
           <section className="noPrint">
             <div className="sectionHead"><div><h2>Rental properties — {year}</h2><p>Every rental property at a glance. Select a property to review or edit its Tax &amp; Financials tab.</p></div></div>
             <div className="taxCategoryTableWrap">
@@ -250,6 +246,21 @@ function TaxCenterWorkspace() {
           </section>
 
           <section className="noPrint">
+            <div className="sectionHead"><div><h2>Portfolio summary — {year}</h2><p>Tracked from your Financials ledger, replaced by a manual entry wherever one exists on a property&apos;s Tax &amp; Financials tab — never both added together.</p></div></div>
+            <div className="financialStats">
+              <div className="financialStat"><span>Gross rental income</span><strong>{money(portfolio.grossIncome)}</strong></div>
+              <div className="financialStat"><span>Operating expenses</span><strong>{money(portfolio.operatingExpenses)}</strong></div>
+              <div className="financialStat"><span>Net rental income</span><strong>{money(portfolio.netOperatingResult)}</strong><small>Before tax-specific adjustments</small></div>
+              <div className="financialStat"><span>Properties included</span><strong>{portfolio.propertiesIncluded}</strong></div>
+            </div>
+            <div className="taxNonOperatingNotes">
+              <p><strong>Capital improvements:</strong> {money(portfolio.capitalImprovements)} — {SCHEDULE_E_CAPEX_NOTE}</p>
+              <p><strong>Mortgage interest (manual entry only):</strong> {money(portfolio.mortgageInterest)} — entered on each property&apos;s Tax &amp; Financials tab from a lender statement or Form 1098. Never calculated by PropRoster.</p>
+              <p><strong>Mortgage payments logged:</strong> {money(portfolio.mortgagePayments)} — {SCHEDULE_E_MORTGAGE_NOTE}</p>
+            </div>
+          </section>
+
+          <section className="noPrint">
             <div className="sectionHead"><div><h2>Expense totals by category</h2><p>Ordinary operating expenses only — capital improvements, mortgage interest, and mortgage payments are shown separately above.</p></div></div>
             <div className="taxCategoryTableWrap">
               <table className="ledger taxCategoryTable">
@@ -265,27 +276,6 @@ function TaxCenterWorkspace() {
                 </tbody>
               </table>
             </div>
-          </section>
-
-          <section className="noPrint">
-            <div className="sectionHead"><div><h2>Tax Readiness</h2><p>Not a warning system — just what&apos;s worth a second look before sending records to a CPA.</p></div></div>
-            {portfolio.propertiesNeedingAttention.length === 0 && taxDocumentCount === 0 ? (
-              <div className="emptyState"><strong>Everything looks ready for {year}.</strong><span>No obvious gaps found in your rental property records.</span></div>
-            ) : (
-              <div className="dashboardItemList">
-                {taxDocumentCount > 0 && (
-                  <Link href="/documents?filter=Unassigned" className="dashboardItemRow">
-                    <span className="dashboardItemBody"><strong>{taxDocumentCount} tax document{taxDocumentCount === 1 ? '' : 's'} not yet assigned to a property</strong><span className="muted">Review in Documents</span></span>
-                  </Link>
-                )}
-                {portfolio.propertiesNeedingAttention.map((p) => (
-                  <div key={p.propertyId} className="dashboardItemRow dashboardItemRowStatic">
-                    <span className="dashboardItemBody"><strong>{p.address}</strong><span className="muted">See property detail below</span></span>
-                    <span className={`statusPill ${readinessPillClass(p.status)}`}>{p.status}</span>
-                  </div>
-                ))}
-              </div>
-            )}
           </section>
 
           <section className="noPrint">
