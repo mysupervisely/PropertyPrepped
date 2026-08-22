@@ -1547,3 +1547,33 @@ h2, h3, p { margin-top: 0; }
   .taxYearActions { width: 100%; }
   .taxYearActions button { flex: 1; }
 }
+
+/* ============================================================
+   Tax Center V2 — property-level "Tax & Financials" manual entry panel
+   (components/property-profile/PropertyTaxPanel.tsx)
+   ============================================================ */
+.taxPanel { display: grid; gap: 26px; }
+.taxPanelHead { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.taxPanelHead > div:first-child { max-width: 560px; }
+.taxPanelHead p.muted { margin: 6px 0 0; }
+.taxPanelYear { font-size: 13px; font-weight: 650; display: flex; flex-direction: column; gap: 6px; }
+.taxPanelYear select { border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; background: white; color: var(--text); min-width: 120px; }
+.taxPanelGroup { display: grid; gap: 12px; }
+.taxPanelGroup h4 { margin: 0; font-size: 15px; }
+.taxPanelHint { margin: -4px 0 0; font-size: 12px; line-height: 1.5; max-width: 640px; }
+.taxManualRow { background: white; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.taxManualRowHead { font-weight: 650; font-size: 13.5px; margin-bottom: 10px; }
+.taxManualRowBody { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 14px; align-items: end; }
+.taxManualRowStat span { display: block; color: var(--muted); font-size: 11px; margin-bottom: 5px; }
+.taxManualRowStat strong { font-size: 14px; }
+.taxManualRowEffective strong { color: var(--brand); }
+.taxPanelSave { display: flex; align-items: center; justify-content: flex-end; gap: 12px; position: sticky; bottom: 12px; background: var(--bg); padding: 10px 0; }
+.taxPanelSavedNote { font-size: 12.5px; }
+.taxSourcePill { margin-left: 8px; font-size: 9.5px; padding: 3px 7px; vertical-align: middle; }
+.taxPropertyNotes { margin: 10px 0 0; }
+@media (max-width: 760px) {
+  .taxPanelHead { flex-direction: column; align-items: stretch; }
+  .taxManualRowBody { grid-template-columns: 1fr; gap: 10px; }
+  .taxPanelSave { flex-wrap: wrap; justify-content: stretch; }
+  .taxPanelSave button { width: 100%; }
+}
