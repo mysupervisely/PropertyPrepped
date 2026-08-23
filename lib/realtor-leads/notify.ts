@@ -68,10 +68,14 @@ const SNAPSHOT_LABELS: Array<{ key: keyof NonNullable<RealtorLeadRow['analysis_s
  */
 export function buildLeadNotificationEmail(lead: RealtorLeadRow): LeadNotificationEmail {
   const isHomePurchase = lead.source === 'home_purchase'
-  const addressForSubject = lead.property_address || 'address not provided'
-  const subject = isHomePurchase
-    ? `New PropRoster Home Buyer Lead - ${addressForSubject}`
-    : `New PropRoster Investment Lead - ${addressForSubject}`
+  const baseLabel = isHomePurchase ? 'New PropRoster Home Buyer Lead' : 'New PropRoster Investment Lead'
+  // Only append " - <address>" when the visitor actually supplied one —
+  // a blank/missing property_address is a real, legitimate case (e.g. a
+  // home buyer running the calculator before they've picked a specific
+  // property), never fabricated. Previously this always appended a
+  // literal "- address not provided" suffix, which read as broken
+  // rather than as the honest "no address given" case it actually was.
+  const subject = lead.property_address ? `${baseLabel} - ${lead.property_address}` : baseLabel
 
   const lines: string[] = []
   lines.push(`Calculator: ${SOURCE_LABEL[lead.source] || lead.source}`)
@@ -118,7 +122,7 @@ export function isEmailNotificationConfigured(env: Record<string, string | undef
   return Boolean(env.RESEND_API_KEY && env.REALTOR_LEAD_NOTIFICATION_EMAIL && env.REALTOR_LEAD_FROM_EMAIL)
 }
 
-export type SendResult = { sent: boolean; reason?: string }
+export type SendResult = { sent: boolean; reason?: string; messageId?: string }
 
 const RESEND_API_URL = 'https://api.resend.com/emails'
 
@@ -131,6 +135,16 @@ const RESEND_API_URL = 'https://api.resend.com/emails'
  * The lead itself is already durably persisted by the time this ever
  * runs (see handle-lead-submission.ts) — this function's outcome can
  * never take that back.
+ *
+ * Logs on BOTH outcomes now, always keyed by leadId (never by the
+ * lead's own email/phone/message content) so a specific production
+ * submission can be traced end-to-end without exposing anything
+ * personal: a success logs Resend's own message id (the key needed to
+ * look this exact send up in Resend's dashboard/API afterwards — a 200
+ * here only means Resend ACCEPTED the message, not that it reached an
+ * inbox; delivered/bounced/complained status lands in Resend
+ * asynchronously after this call returns), a failure logs the status
+ * and Resend's error body.
  */
 export async function sendLeadNotificationEmail(lead: RealtorLeadRow, env: Record<string, string | undefined> = process.env): Promise<SendResult> {
   if (!isEmailNotificationConfigured(env)) {
@@ -152,19 +166,36 @@ export async function sendLeadNotificationEmail(lead: RealtorLeadRow, env: Recor
         to: env.REALTOR_LEAD_NOTIFICATION_EMAIL,
         subject,
         text: body,
+        // Lets whoever reads the notification hit "Reply" and email the
+        // lead directly, instead of copying their address out of the
+        // body by hand. Only set when the lead actually gave an email —
+        // never sent as an empty/undefined value.
+        ...(lead.email ? { reply_to: lead.email } : {}),
       }),
     })
 
+    // Read once, defensively — Resend returns a JSON body on both
+    // success ({ id: "..." }) and failure; never let a parse failure
+    // here turn into an uncaught throw either way.
+    const responseText = await response.text().catch(() => '')
+    let responseJson: { id?: string } = {}
+    try {
+      responseJson = responseText ? JSON.parse(responseText) : {}
+    } catch {
+      // Non-JSON body (e.g. an upstream proxy error page) — fall
+      // through with responseJson = {}, handled the same as "no id".
+    }
+
     if (!response.ok) {
-      // Read defensively — Resend's error body is JSON, but never let a
-      // parse failure here turn into an uncaught throw. Logged, never
-      // returned to the caller.
-      const errorBody = await response.text().catch(() => '')
-      console.error('realtor-leads: Resend email send failed', { leadId: lead.id, status: response.status, body: errorBody })
+      // Logged, never returned to the caller — the raw body can include
+      // Resend's own error detail (e.g. "Invalid `from` field"), which
+      // is useful for tracing but not something to surface to the user.
+      console.error('realtor-leads: Resend email send failed', { leadId: lead.id, status: response.status, body: responseText })
       return { sent: false, reason: 'provider_error' }
     }
 
-    return { sent: true }
+    console.log('realtor-leads: Resend accepted the lead notification email', { leadId: lead.id, resendMessageId: responseJson.id })
+    return { sent: true, messageId: responseJson.id }
   } catch (err) {
     console.error('realtor-leads: Resend email send threw', { leadId: lead.id, err })
     return { sent: false, reason: 'provider_error' }

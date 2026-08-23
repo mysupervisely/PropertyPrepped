@@ -81,6 +81,13 @@ describe('handleLeadSubmission — happy paths', () => {
     const result = await handleLeadSubmission(basePayload(), deps)
     expect(result.status).toBe(200)
   })
+
+  it('the lead is never lost when notify resolves sent:false (not_configured/provider_error) rather than throwing — persistence already succeeded and the submission still reports success', async () => {
+    const deps = makeDeps({ notify: async (lead) => { void lead; return { sent: false, reason: 'provider_error' } } })
+    const result = await handleLeadSubmission(basePayload(), deps)
+    expect(result).toEqual({ status: 200, body: { ok: true } })
+    expect(deps.inserted.length).toBe(1)
+  })
 })
 
 describe('handleLeadSubmission — validation', () => {
