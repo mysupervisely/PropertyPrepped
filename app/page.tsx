@@ -1579,35 +1579,29 @@ export default function Home() {
             (activeTab/setActiveTab, ?tab= deep links) are unchanged. */}
         <nav className="tabs" role="tablist" aria-label="Property sections">{tabs.map((tab) => <button key={tab} role="tab" aria-selected={activeTab === tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
 
-        {activeTab === 'Overview' && <section className="workspaceContent">
-          <div className="sectionHead workspaceHeading"><div><p className="eyebrow">OVERVIEW</p><h2>At a glance</h2></div><button className="secondary" onClick={() => openEditProperty(selected)}>Edit property facts</button></div>
+        {activeTab === 'Overview' && <section className="workspaceContent workspaceContentTight">
+          <div className="sectionHead workspaceHeading workspaceHeadingTight"><div><p className="eyebrow">OVERVIEW</p><h2>At a glance</h2></div><button className="secondary" onClick={() => openEditProperty(selected)}>Edit property facts</button></div>
 
-          {/* Property-First Simplification and Visual Cleanup, updated by
-              Property Profile Mobile Redesign V2 (Section 5, "Financial
-              Details card"): Value/Mortgage/Equity/Rent/Tax now appear
-              here too, in the reference-mockup's labeled card format —
-              not new duplication of content, an intentional second,
-              fuller presentation of the same hero numbers (the hero
-              strip is a glance; this card is the readable one, with a
-              path to Investment Analysis). Estimated cash flow is the
-              SAME monthlyCashFlow value already computed above (rent −
-              expenses) — no new calculation. Purchase price/appreciation/
-              expenses/HOA are the pre-existing rows this panel already
-              had; "Annual property tax" was folded into the new "Tax
-              (Annual)" row above rather than shown twice. Ownership/
-              Entity moved to the Details tab (it's administrative
-              recordkeeping, not an at-a-glance fact) and "Property
-              file"/"Quick actions" — two panels that opened the same two
-              destinations — are now one. */}
+          {/* Property Profile Mobile Polish V3 (Section 3): this card no
+              longer repeats Value/Mortgage/Equity/Rent/Tax — those are
+              already answered by the hero metric strip immediately
+              above, on every tab. This card now answers a DIFFERENT
+              question ("how is this property actually performing?"):
+              the carrying costs and cash-flow context the hero strip
+              doesn't show. Estimated cash flow is still the SAME
+              monthlyCashFlow value computed above (rent − expenses) —
+              no new calculation, no new formula. No cap-rate figure is
+              shown: no existing canonical cap-rate calculation exists
+              anywhere on this page to reuse, and Section 3 explicitly
+              forbids inventing one here. Every row below already existed
+              in the pre-V3 card (nothing new was added, only the
+              Value/Mortgage/Equity/Rent(Monthly)/Tax(Annual) rows that
+              purely duplicated the hero were removed). */}
           <div className="overviewGrid">
             <div className="overviewPanel financialDetailsCard"><h3>Financial details</h3><div className="detailRows">
-              <div><span>Value</span><strong>{money(selected.estimated_value)}</strong></div>
-              <div><span>Mortgage</span><strong>{money(selected.mortgage_balance)}</strong></div>
-              <div><span>Equity</span><strong>{money(equity)}</strong></div>
-              <div><span>Rent (Monthly)</span><strong>{money(selected.monthly_rent)}</strong></div>
-              <div><span>Tax (Annual)</span><strong>{selected.property_tax_annual != null ? money(selected.property_tax_annual) : 'Not entered'}</strong></div>
+              <div><span>Monthly property expenses</span><strong>{money(selected.monthly_expenses)}</strong></div>
               <div className="highlightRow"><span>Estimated cash flow</span><strong>{money(monthlyCashFlow)}/mo</strong></div>
-              <div><span>Purchase price</span><strong>{money(selected.purchase_price)}</strong></div>{appreciation && <div className={appreciation.amount >= 0 ? 'metricTone-good' : 'metricTone-bad'}><span>Appreciation</span><strong>{signedMoney(appreciation.amount)} <small>({signedPercent(appreciation.percent)})</small></strong></div>}<div><span>Monthly property expenses</span><strong>{money(selected.monthly_expenses)}</strong></div>{selected.hoa_monthly != null && <div><span>HOA / month</span><strong>{money(selected.hoa_monthly)}</strong></div>}
+              <div><span>Purchase price</span><strong>{money(selected.purchase_price)}</strong></div>{appreciation && <div className={appreciation.amount >= 0 ? 'metricTone-good' : 'metricTone-bad'}><span>Appreciation</span><strong>{signedMoney(appreciation.amount)} <small>({signedPercent(appreciation.percent)})</small></strong></div>}<div><span>Annual property tax</span><strong>{selected.property_tax_annual != null ? money(selected.property_tax_annual) : 'Not entered'}</strong></div>{selected.hoa_monthly != null && <div><span>HOA / month</span><strong>{money(selected.hoa_monthly)}</strong></div>}
             </div>
               <Link className="secondary financialDetailsLink" href={`/investment-tools/property-evaluator?propertyId=${selected.id}`}>View full Investment Analysis →</Link>
             </div>

@@ -103,12 +103,17 @@ describe('Financial Details card (Overview)', () => {
   const overviewIndex = pageSource.indexOf('financialDetailsCard')
   const cardSlice = pageSource.slice(overviewIndex, overviewIndex + 2200)
 
-  it('shows Value / Mortgage / Equity / Rent (Monthly) / Tax (Annual), all from real data', () => {
-    expect(cardSlice).toContain('<span>Value</span><strong>{money(selected.estimated_value)}</strong>')
-    expect(cardSlice).toContain('<span>Mortgage</span><strong>{money(selected.mortgage_balance)}</strong>')
-    expect(cardSlice).toContain('<span>Equity</span><strong>{money(equity)}</strong>')
-    expect(cardSlice).toContain('<span>Rent (Monthly)</span>')
-    expect(cardSlice).toContain('<span>Tax (Annual)</span>')
+  // Superseded by Property Profile Mobile Polish V3 (Section 3): the
+  // card no longer repeats Value/Mortgage/Equity/Rent/Tax — those are
+  // already visible in the hero strip immediately above. See
+  // property-profile-mobile-polish-v3.test.ts for the current,
+  // authoritative assertions on this card's content.
+  it('no longer repeats the bare hero metrics (Value/Mortgage/Equity/Rent(Monthly)/Tax(Annual) rows) — superseded by Mobile Polish V3', () => {
+    expect(cardSlice).not.toContain('<span>Value</span><strong>{money(selected.estimated_value)}</strong>')
+    expect(cardSlice).not.toContain('<span>Mortgage</span><strong>{money(selected.mortgage_balance)}</strong>')
+    expect(cardSlice).not.toContain('<span>Equity</span><strong>{money(equity)}</strong>')
+    expect(cardSlice).not.toContain('<span>Rent (Monthly)</span>')
+    expect(cardSlice).not.toContain('<span>Tax (Annual)</span>')
   })
 
   it('reuses the pre-existing monthlyCashFlow calculation — no new cash-flow formula was introduced', () => {
