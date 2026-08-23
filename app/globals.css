@@ -134,13 +134,21 @@ h2, h3, p { margin-top: 0; }
    under the address — the "at a glance" tenant/rent context the spec
    asks the property workspace to surface immediately. */
 .heroStatusPills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 13px; }
-.heroMetrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+/* Property Profile Mobile Redesign V2: Tax joins Value/Mortgage/Equity/
+   Rent as a 5th metric — 5 columns on wide layouts, wrapping to 3+2 on
+   narrower ones (see the @media rules below) rather than shrinking
+   text to force 5 into one row forever. */
+.heroMetrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
 .heroMetrics > div { border-left: 1px solid var(--line); padding-left: 15px; }
 .heroMetrics > div:first-child { border-left: 0; padding-left: 0; }
 .heroMetrics strong { font-size: 17px; }
-.tabs { display: flex; gap: 4px; overflow-x: auto; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 8px 0; scrollbar-width: none; }
-.tabs::-webkit-scrollbar { display: none; }
-.tabs button { white-space: nowrap; border: 0; border-radius: 9px; padding: 10px 13px; background: transparent; color: var(--muted); font-weight: 650; font-size: 13px; }
+/* Property Profile Mobile Redesign V2: a non-scrolling grid — all six
+   property sections visible together, never a horizontally swiping
+   row (the previous `display: flex; overflow-x: auto` let Documents/
+   Tax scroll out of view, which this redesign specifically removes).
+   One row of 6 by default; 3x2 under the @media rule below. */
+.tabs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 8px 0; }
+.tabs button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 0; border-radius: 9px; padding: 10px 8px; background: transparent; color: var(--muted); font-weight: 650; font-size: 13px; text-align: center; }
 .tabs button.active { background: var(--brand-soft); color: var(--brand); }
 .workspaceContent { padding-top: 32px; }
 .workspaceHeading { align-items: flex-start; margin-bottom: 22px; }
@@ -155,6 +163,24 @@ h2, h3, p { margin-top: 0; }
 .detailRows strong { font-size: 14px; }
 .detailRows .highlightRow { margin-top: 4px; padding: 14px 12px; border: 0; border-radius: 10px; background: var(--brand-soft); color: var(--brand); }
 .detailRows .highlightRow span { color: var(--brand); }
+
+/* Property Profile Mobile Redesign V2, Section 5: the Financial Details
+   card's own link out to the existing Investment Analysis workflow —
+   just a full-width secondary action under the card's rows. */
+.financialDetailsCard { display: flex; flex-direction: column; }
+.financialDetailsLink { margin-top: 16px; text-align: center; }
+
+/* Property Profile Mobile Redesign V2, Sections 7-9: the Tax tab's own
+   header (mirrors .sectionHead/.workspaceHeading elsewhere) and its
+   lightweight supporting-documents list — plain rows, not a second
+   document library/grid. */
+.taxSectionHead { margin-bottom: 20px; }
+.taxDocList { display: grid; gap: 8px; }
+.taxDocRow { display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: #fff; text-align: left; width: 100%; }
+.taxDocRow .fileIcon { flex-shrink: 0; }
+.taxDocRowBody { min-width: 0; display: grid; gap: 2px; }
+.taxDocRowBody strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
+.taxDocRowBody small { color: var(--muted); font-size: 12px; }
 .fileSummary { display: grid; gap: 10px; }
 .fileSummary button { display: grid; grid-template-columns: 48px 1fr; column-gap: 12px; align-items: center; text-align: left; border: 1px solid var(--line); background: #fff; border-radius: 12px; padding: 14px; color: var(--text); }
 .fileSummary button > strong { grid-row: span 2; font-size: 27px; color: var(--brand); }
@@ -256,8 +282,10 @@ h2, h3, p { margin-top: 0; }
 @media (max-width: 900px) {
   .propertyHero { grid-template-columns: 1fr; gap: 22px; }
   .heroPhoto { height: 340px; }
-  .heroMetrics { grid-template-columns: repeat(2, 1fr); }
-  .heroMetrics > div:nth-child(3) { border-left: 0; padding-left: 0; }
+  /* 5 metrics wrap to 3+2 rather than 2+2+1 — a cleaner, more balanced
+     shape, and it matches the six-tab nav's own 3-column wrap below. */
+  .heroMetrics { grid-template-columns: repeat(3, 1fr); }
+  .heroMetrics > div:nth-child(4) { border-left: 0; padding-left: 0; }
   .overviewGrid { grid-template-columns: 1fr; }
   .documentLayout { grid-template-columns: 1fr; }
   .categoryPanel { position: static; display: flex; overflow-x: auto; gap: 5px; }
@@ -275,6 +303,10 @@ h2, h3, p { margin-top: 0; }
   .photo { height: 205px; }
   .heroPhoto { height: 245px; }
   .heroMetrics { gap: 12px; }
+  /* All six property sections at once, 3 per row, never a horizontal
+     swipe — the hard requirement this redesign exists for. */
+  .tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+  .tabs button { padding: 10px 6px; font-size: 12.5px; }
   .quickActions { align-items: flex-start; flex-direction: column; }
   .quickActionButtons { justify-content: flex-start; }
   .uploadControls { grid-template-columns: 1fr; }
@@ -286,9 +318,14 @@ h2, h3, p { margin-top: 0; }
 }
 @media (max-width: 460px) {
   .stats { grid-template-columns: 1fr; }
-  .heroMetrics { grid-template-columns: 1fr 1fr; }
+  /* Stays 3 columns (not 2) at the narrowest widths too — keeps the
+     same balanced 3+2 wrap as the 900px rule above rather than
+     reshuffling to 2+2+1 again right when space is tightest. */
+  .heroMetrics { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .heroMetrics strong { font-size: 15px; }
   .topbar .secondary { padding: 9px 11px; font-size: 12px; }
   .photoUploader { grid-template-columns: 36px minmax(0, 1fr); justify-content: start; }
+  .tabs button { font-size: 11.5px; padding: 9px 4px; }
 }
 
 /* Shared "Pricing" nav item (components/PricingNavLink.tsx) — same

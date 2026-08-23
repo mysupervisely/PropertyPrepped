@@ -1560,29 +1560,57 @@ export default function Home() {
               </div>
               <div className="heroInfoActions"><button className="secondary" onClick={() => openEditProperty(selected)}>Edit</button><Link className="secondary" href={`/investment-tools/property-evaluator?propertyId=${selected.id}`}>Investment Analysis</Link></div>
             </div>
-            <div className="heroMetrics"><div><span>Value</span><strong>{money(selected.estimated_value)}</strong></div><div><span>Mortgage</span><strong>{money(selected.mortgage_balance)}</strong></div><div><span>Equity</span><strong>{money(equity)}</strong></div><div><span>Rent</span><strong>{money(selected.monthly_rent)}/mo</strong></div></div>
+            {/* Property Profile Mobile Redesign V2: Tax joins the existing
+                Value/Mortgage/Equity/Rent snapshot as a 5th metric — the
+                same property_tax_annual value the Overview panel already
+                shows, never a Tax Center deductible total. It's nullable
+                (unlike the other four, which default to 0), so it gets an
+                explicit "Not entered" rather than a misleading $0. */}
+            <div className="heroMetrics"><div><span>Value</span><strong>{money(selected.estimated_value)}</strong></div><div><span>Mortgage</span><strong>{money(selected.mortgage_balance)}</strong></div><div><span>Equity</span><strong>{money(equity)}</strong></div><div><span>Rent</span><strong>{money(selected.monthly_rent)}/mo</strong></div><div><span>Tax</span><strong>{selected.property_tax_annual != null ? `${money(selected.property_tax_annual)}/yr` : 'Not entered'}</strong></div></div>
           </div>
         </section>
 
-        <nav className="tabs" aria-label="Property sections">{tabs.map((tab) => <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
+        {/* Property Profile Mobile Redesign V2: a non-scrolling grid, not
+            the old horizontally-swiping flex row — all six sections are
+            always visible together (3x2 on mobile via .tabs' own
+            @media rule, one row on wider layouts). role="tablist"/"tab"
+            matches the same semantic pattern the Rent/Documents/Details
+            sub-tabs below already use. Tab identity, state and routing
+            (activeTab/setActiveTab, ?tab= deep links) are unchanged. */}
+        <nav className="tabs" role="tablist" aria-label="Property sections">{tabs.map((tab) => <button key={tab} role="tab" aria-selected={activeTab === tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
 
         {activeTab === 'Overview' && <section className="workspaceContent">
           <div className="sectionHead workspaceHeading"><div><p className="eyebrow">OVERVIEW</p><h2>At a glance</h2></div><button className="secondary" onClick={() => openEditProperty(selected)}>Edit property facts</button></div>
 
-          {/* Property-First Simplification and Visual Cleanup: a true
-              snapshot, not a second copy of everything. Value/Mortgage/
-              Equity/Rent already appear in the hero above on every tab,
-              so they're not repeated here — this panel only shows what
-              the hero doesn't: purchase price, appreciation, expenses,
-              tax/HOA, and cash flow. Ownership/Entity moved to the
-              Details tab (it's administrative recordkeeping, not an
-              at-a-glance fact) and "Property file"/"Quick actions" —
-              two panels that opened the same two destinations — are now
-              one. */}
+          {/* Property-First Simplification and Visual Cleanup, updated by
+              Property Profile Mobile Redesign V2 (Section 5, "Financial
+              Details card"): Value/Mortgage/Equity/Rent/Tax now appear
+              here too, in the reference-mockup's labeled card format —
+              not new duplication of content, an intentional second,
+              fuller presentation of the same hero numbers (the hero
+              strip is a glance; this card is the readable one, with a
+              path to Investment Analysis). Estimated cash flow is the
+              SAME monthlyCashFlow value already computed above (rent −
+              expenses) — no new calculation. Purchase price/appreciation/
+              expenses/HOA are the pre-existing rows this panel already
+              had; "Annual property tax" was folded into the new "Tax
+              (Annual)" row above rather than shown twice. Ownership/
+              Entity moved to the Details tab (it's administrative
+              recordkeeping, not an at-a-glance fact) and "Property
+              file"/"Quick actions" — two panels that opened the same two
+              destinations — are now one. */}
           <div className="overviewGrid">
-            <div className="overviewPanel"><h3>Financial details</h3><div className="detailRows">
-              <div><span>Purchase price</span><strong>{money(selected.purchase_price)}</strong></div>{appreciation && <div className={appreciation.amount >= 0 ? 'metricTone-good' : 'metricTone-bad'}><span>Appreciation</span><strong>{signedMoney(appreciation.amount)} <small>({signedPercent(appreciation.percent)})</small></strong></div>}<div><span>Monthly property expenses</span><strong>{money(selected.monthly_expenses)}</strong></div>{selected.property_tax_annual != null && <div><span>Annual property tax</span><strong>{money(selected.property_tax_annual)}</strong></div>}{selected.hoa_monthly != null && <div><span>HOA / month</span><strong>{money(selected.hoa_monthly)}</strong></div>}<div className="highlightRow"><span>Estimated cash flow</span><strong>{money(monthlyCashFlow)}/mo</strong></div>
-            </div></div>
+            <div className="overviewPanel financialDetailsCard"><h3>Financial details</h3><div className="detailRows">
+              <div><span>Value</span><strong>{money(selected.estimated_value)}</strong></div>
+              <div><span>Mortgage</span><strong>{money(selected.mortgage_balance)}</strong></div>
+              <div><span>Equity</span><strong>{money(equity)}</strong></div>
+              <div><span>Rent (Monthly)</span><strong>{money(selected.monthly_rent)}</strong></div>
+              <div><span>Tax (Annual)</span><strong>{selected.property_tax_annual != null ? money(selected.property_tax_annual) : 'Not entered'}</strong></div>
+              <div className="highlightRow"><span>Estimated cash flow</span><strong>{money(monthlyCashFlow)}/mo</strong></div>
+              <div><span>Purchase price</span><strong>{money(selected.purchase_price)}</strong></div>{appreciation && <div className={appreciation.amount >= 0 ? 'metricTone-good' : 'metricTone-bad'}><span>Appreciation</span><strong>{signedMoney(appreciation.amount)} <small>({signedPercent(appreciation.percent)})</small></strong></div>}<div><span>Monthly property expenses</span><strong>{money(selected.monthly_expenses)}</strong></div>{selected.hoa_monthly != null && <div><span>HOA / month</span><strong>{money(selected.hoa_monthly)}</strong></div>}
+            </div>
+              <Link className="secondary financialDetailsLink" href={`/investment-tools/property-evaluator?propertyId=${selected.id}`}>View full Investment Analysis →</Link>
+            </div>
             <div className="overviewPanel"><h3>Property facts</h3><div className="detailRows">
               {selected.beds != null && <div><span>Beds</span><strong>{selected.beds}</strong></div>}
               {selected.baths != null && <div><span>Baths</span><strong>{selected.baths}</strong></div>}
@@ -1788,6 +1816,44 @@ export default function Home() {
         </section>}
 
         {activeTab === 'Tax' && selected && user && supabase && <section className="workspaceContent">
+          {/* Property Profile Mobile Redesign V2, Sections 7-9: "+ Add Tax
+              Document" reuses the EXACT SAME add-document infrastructure
+              as the Documents tab (showAddDocumentChooser/
+              addDocumentFiles/openSmartUpload — no new upload path, no
+              new storage bucket, no second document table, no parallel
+              AI pipeline). Setting uploadCategory to 'Tax' here only
+              pre-selects that option in the existing, still-editable
+              category dropdown inside the chooser modal (Section 7: "do
+              not silently assign incorrect metadata" — the user still
+              sees and can change it before saving). PropertyTaxPanel
+              itself (calculation engine, override semantics, collapsible
+              groups, manual entry) is completely untouched below. */}
+          <div className="sectionHead workspaceHeading taxSectionHead">
+            <div><p className="eyebrow">TAX</p><h2>Property tax workspace</h2></div>
+            <button className="primary" onClick={() => { setUploadCategory('Tax'); setShowAddDocumentChooser(true) }}>+ Add Tax Document</button>
+          </div>
+
+          {/* A lightweight, property-scoped list of already-uploaded Tax
+              documents (Section 9) — not a second document library, just
+              the existing selectedDocs already filtered to category
+              'Tax', each opening through the same openDocument() flow
+              the Documents tab itself uses. Documents don't carry a tax
+              year, so this stays property-wide rather than inventing a
+              year-filtered data model. */}
+          {selectedDocs.filter((d) => d.category === 'Tax').length > 0 && (
+            <div className="overviewPanel taxSupportingDocs">
+              <h3>Supporting documents</h3>
+              <div className="taxDocList">
+                {selectedDocs.filter((d) => d.category === 'Tax').map((doc) => (
+                  <button key={doc.id} className="taxDocRow" onClick={() => void openDocument(doc)}>
+                    <span className="fileIcon">{doc.name.split('.').pop()?.toUpperCase().slice(0, 4) || 'FILE'}</span>
+                    <span className="taxDocRowBody"><strong>{doc.name}</strong><small>{new Date(doc.created_at).toLocaleDateString()}</small></span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <PropertyTaxPanel
             supabase={supabase}
             propertyId={selected.id}
