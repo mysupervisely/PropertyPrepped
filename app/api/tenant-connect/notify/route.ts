@@ -46,7 +46,12 @@ export async function POST(req: NextRequest) {
       const { data: access } = await supabase.from('tenant_property_access').select('property_id, tenant_email').eq('id', body.accessId).maybeSingle()
       if (!access) return NextResponse.json({ sent: false }, { status: 200 })
       const { data: property } = await supabase.from('properties').select('address').eq('id', access.property_id).maybeSingle()
-      const result = await sendTenantConnectEmail(access.tenant_email, buildInviteEmail(property?.address || 'your property'))
+      // Onboarding V2: the invite email's CTA links to /tenant?invite=<id>
+      // using this SAME accessId — already re-fetched above via the
+      // caller's own RLS-scoped client, never trusted from the body
+      // beyond "which row," and it grants nothing on its own (see
+      // buildInviteEmail's own comment).
+      const result = await sendTenantConnectEmail(access.tenant_email, buildInviteEmail(property?.address || 'your property', body.accessId))
       return NextResponse.json(result, { status: 200 })
     }
 

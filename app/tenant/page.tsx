@@ -33,7 +33,6 @@
 // views/policies already allow, never bypass them.
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
@@ -51,26 +50,93 @@ function money(n: number | null | undefined) {
 
 export default function TenantPortalPage() {
   const { user, ready } = useAuthUser()
+  // Tenant Connect Onboarding V2: read manually via window.location.search
+  // (the same deliberate choice app/page.tsx/app/rent-ledger/page.tsx/
+  // app/account/billing/page.tsx already make) rather than next/
+  // navigation's useSearchParams, so this page never needs a Suspense
+  // boundary. This id is the SAME opaque tenant_property_access.id the
+  // invite email's CTA links to — see lib/tenant-connect/notify.ts's own
+  // comment for why carrying it in the URL is safe (it grants nothing by
+  // itself; RLS and accept_tenant_invite() both re-derive identity from
+  // the signed-in session every time).
+  const [inviteId, setInviteId] = useState<string | null>(null)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    setInviteId(new URLSearchParams(window.location.search).get('invite'))
+  }, [])
 
   if (!ready) return <main className="authShell"><div className="loadingState">Loading…</div></main>
 
-  if (!user) {
-    return (
-      <main className="authShell">
-        <section className="authCard">
-          <p className="eyebrow">PROPROSTER</p>
-          <h1>Sign in required</h1>
-          <p className="authIntro">Sign in to view your Tenant Portal.</p>
-          <Link className="primary authSubmit" href="/">Go to sign in</Link>
-        </section>
-      </main>
-    )
-  }
+  if (!user) return <TenantAuthGate hasInvite={Boolean(inviteId)} />
 
-  return <TenantPortal userId={user.id} />
+  return <TenantPortal userId={user.id} inviteId={inviteId} />
 }
 
-function TenantPortal({ userId }: { userId: string }) {
+// Tenant Connect Onboarding V2, Section 3/10: a tenant arriving from an
+// invitation email is very likely a first-time, non-landlord visitor —
+// sending them to "/" would land them on the full landlord marketing
+// LandingPage (components/LandingPage.tsx), which this milestone
+// explicitly must not do (no giant marketing hero, no landlord nav).
+// This is a small, self-contained sign-in/sign-up form scoped to this
+// page only — every other secondary route in this app (Documents, Tax
+// Center, Rent Ledger, etc.) keeps its existing "Sign in required -> Go
+// to sign in" link to "/" unchanged; that's the right behavior for an
+// existing landlord user who already knows the app, just not for this
+// specific, tenant-facing entry point. Same real Supabase calls
+// (signInWithPassword/signUp) LandingPage itself uses — no new auth
+// logic, no new provider.
+function TenantAuthGate({ hasInvite }: { hasInvite: boolean }) {
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+
+  function switchMode(mode: 'signin' | 'signup') {
+    setAuthMode(mode)
+    setError('')
+    setMessage('')
+  }
+
+  async function submit() {
+    if (!supabase || !email.trim() || password.length < 6) return
+    setBusy(true)
+    setError('')
+    setMessage('')
+    if (authMode === 'signin') {
+      const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+      if (err) setError(err.message)
+    } else {
+      const { data, error: err } = await supabase.auth.signUp({ email: email.trim(), password })
+      if (err) setError(err.message)
+      else if (!data.session) setMessage('Account created. Check your email to confirm your address, then sign in.')
+    }
+    setBusy(false)
+  }
+
+  return (
+    <main className="authShell">
+      <section className="authCard">
+        <p className="eyebrow">PROPROSTER &middot; TENANT PORTAL</p>
+        <h1>{authMode === 'signin' ? 'Sign in to connect' : 'Create your account'}</h1>
+        <p className="authIntro">
+          {hasInvite
+            ? 'Sign in or create an account using the email address that received your invitation.'
+            : 'Sign in to view your Tenant Portal.'}
+        </p>
+        <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="you@example.com" /></label>
+        <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={authMode === 'signin' ? 'current-password' : 'new-password'} onKeyDown={(e) => e.key === 'Enter' && void submit()} placeholder="Your password" /></label>
+        {error && <p className="errorMessage">{error}</p>}
+        {message && <p className="statusMessage successMessage">{message}</p>}
+        <button className="primary authSubmit" disabled={busy || !email.trim() || password.length < 6} onClick={() => void submit()}>{busy ? 'Working…' : authMode === 'signin' ? 'Sign in' : 'Create account'}</button>
+        <button className="authSwitch" onClick={() => switchMode(authMode === 'signin' ? 'signup' : 'signin')}>{authMode === 'signin' ? 'New here? Create an account' : 'Already have an account? Sign in'}</button>
+      </section>
+    </main>
+  )
+}
+
+function TenantPortal({ userId, inviteId }: { userId: string; inviteId: string | null }) {
   const [access, setAccess] = useState<TenantPropertyAccess[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedAccessId, setSelectedAccessId] = useState<string | null>(null)
@@ -79,6 +145,14 @@ function TenantPortal({ userId }: { userId: string }) {
   const [view, setView] = useState<'Lease' | 'Requests'>('Requests')
   const [error, setError] = useState('')
   const [acceptBusy, setAcceptBusy] = useState<string | null>(null)
+  // Tenant Connect Onboarding V2, Section 7: set right after a successful
+  // acceptInvite() call, cleared the moment the tenant taps through — a
+  // one-time interstitial, never a multi-step wizard.
+  const [justAcceptedId, setJustAcceptedId] = useState<string | null>(null)
+  // Section 3/5: a wrong-account (or revoked/expired/nonexistent) denial
+  // can be dismissed only when the signed-in account ALSO has other,
+  // genuinely its own access — see the render logic below.
+  const [dismissWrongInvite, setDismissWrongInvite] = useState(false)
 
   async function load() {
     if (!supabase) return
@@ -122,9 +196,65 @@ function TenantPortal({ userId }: { userId: string }) {
     setAcceptBusy(null)
     if (err) { setError(err.message); return }
     await load()
+    // Explicit, not relying on load()'s own "prev || firstActive"
+    // default — guarantees the newly accepted property is the one shown
+    // next, even if the tenant already had other active access
+    // elsewhere.
+    setSelectedAccessId(accessId)
+    setJustAcceptedId(accessId)
   }
 
   if (loading) return <main className="tenantPortalShell"><div className="loadingState">Loading your Tenant Portal…</div></main>
+
+  // Section 3/5: the invitation link named a specific access id, but it
+  // isn't anywhere in what THIS signed-in account can see. RLS
+  // (tenant_access_select) already makes "wrong account," "revoked,"
+  // "already claimed by someone else," and "doesn't exist" all look
+  // identical from here — deliberately, so this page can't be used to
+  // probe which case applies (the same zero-disclosure design
+  // accept_tenant_invite()'s own error message already uses). One
+  // honest, generic message covers all of them without guessing.
+  const wrongInvite = Boolean(inviteId) && !access.some((a) => a.id === inviteId)
+  if (wrongInvite && !dismissWrongInvite) {
+    return (
+      <main className="tenantPortalShell">
+        <header className="tenantPortalHeader">
+          <span className="brand"><Wordmark /></span>
+          <span className="tenantPortalHeaderLabel">Tenant Portal</span>
+        </header>
+        <section className="tenantPortalEmpty">
+          <p className="eyebrow">INVITATION NOT FOUND</p>
+          <h1>This invitation isn&rsquo;t available for this account</h1>
+          <p className="muted">We couldn&rsquo;t find that invitation for your signed-in account. If your landlord invited a different email address, sign out and sign back in with that email. If you believe this is a mistake, contact your landlord.</p>
+          <div className="tenantPortalEmptyActions">
+            <button type="button" className="primary" onClick={() => void supabase?.auth.signOut()}>Sign out</button>
+            {access.length > 0 && <button type="button" className="secondary" onClick={() => setDismissWrongInvite(true)}>Continue to your Tenant Portal</button>}
+          </div>
+        </section>
+      </main>
+    )
+  }
+
+  // Section 6/7: a lightweight, one-time "you're connected" confirmation
+  // right after acceptance — never a multi-step wizard, no profile
+  // questionnaire. Reuses the SAME property/selected state already being
+  // fetched below for the normal portal; no extra query.
+  if (justAcceptedId && selected?.id === justAcceptedId) {
+    return (
+      <main className="tenantPortalShell">
+        <header className="tenantPortalHeader">
+          <span className="brand"><Wordmark /></span>
+          <span className="tenantPortalHeaderLabel">Tenant Portal</span>
+        </header>
+        <section className="tenantPortalWelcome">
+          <p className="eyebrow">YOU&rsquo;RE CONNECTED</p>
+          <h1>{property?.address || 'Your property'}</h1>
+          <p className="muted">You can now view your lease details and submit requests to your landlord.</p>
+          <button type="button" className="primary" onClick={() => setJustAcceptedId(null)}>View Tenant Portal</button>
+        </section>
+      </main>
+    )
+  }
 
   return (
     <main className="tenantPortalShell">

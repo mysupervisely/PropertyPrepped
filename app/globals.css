@@ -1839,6 +1839,20 @@ h2, h3, p { margin-top: 0; }
 .tenantPortalInviteCard p { margin: 0; font-weight: 600; }
 
 .tenantPortalEmpty { margin-top: 40px; text-align: center; color: var(--muted); }
+.tenantPortalEmpty h1 { font-size: clamp(22px, 6vw, 28px); color: var(--text); margin: 10px 0 12px; }
+.tenantPortalEmpty p.muted { max-width: 420px; margin: 0 auto; line-height: 1.55; }
+/* Tenant Connect Onboarding V2, Section 3: the wrong-account/invite-not-
+   found denial state's own actions (Sign out / Continue to your Tenant
+   Portal) — centered, stacking on narrow widths, never side-scrolling. */
+.tenantPortalEmptyActions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 22px; }
+
+/* Section 6/7: the one-time "You're connected" confirmation right after
+   accepting an invitation — same centered, minimal treatment as
+   .tenantPortalEmpty, not a new visual language. */
+.tenantPortalWelcome { margin-top: 48px; text-align: center; }
+.tenantPortalWelcome .eyebrow { color: var(--brand); }
+.tenantPortalWelcome h1 { font-size: clamp(22px, 6vw, 30px); margin: 10px 0 12px; }
+.tenantPortalWelcome p.muted { max-width: 420px; margin: 0 auto 24px; line-height: 1.55; }
 
 .tenantPortalPropertySwitch { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 20px; }
 .tenantPortalPropertySwitch button { border: 1px solid var(--line); background: white; border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 650; color: var(--muted); }
@@ -1864,4 +1878,6 @@ h2, h3, p { margin-top: 0; }
 @media (max-width: 430px) {
   .tenantPortalShell { padding: 0 14px 50px; }
   .tenantPortalSectionHead button { width: 100%; }
+  .tenantPortalEmptyActions { flex-direction: column; }
+  .tenantPortalEmptyActions button { width: 100%; }
 }
