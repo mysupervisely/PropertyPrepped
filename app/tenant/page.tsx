@@ -9,13 +9,28 @@
 // landlord's Dashboard/Documents/Tax Center/PropCrew/Investment Tools/
 // Profile/Pricing — none of which belong here) — just a minimal
 // "PropRoster · Tenant Portal" header and Log out. Least-privilege by
-// construction: every read here goes through the tenant-scoped RLS
-// added in supabase/milestone-24-tenant-connect-v1.sql
-// (properties_select_active_tenant / leases_select_active_tenant) plus
-// the tenant_property_access/property_conversations/property_messages/
-// tenant_requests policies M10 and this migration already define — this
-// page never has a service-role key, and a bug here can only ever
-// surface what those policies already allow, never bypass them.
+// construction: every read here goes through tenant-scoped surfaces
+// defined in supabase/milestone-24-tenant-connect-v1.sql — this page
+// NEVER queries public.properties or public.leases (the owner-facing
+// base tables) directly. Property/lease reads go through
+// public.tenant_property_view / public.tenant_lease_view instead — two
+// narrow, column-limited views that expose only address/city and
+// tenant_name/monthly_rent/start_date/end_date/rent_due_day
+// respectively, scoped to the caller's own active tenant_property_access
+// row. This is a deliberate, database-level fix (Round 6, Concern 2):
+// RLS on the base tables is row-level only, so a policy letting a
+// tenant read "their" property/lease row would still hand back every
+// column on it, including landlord-only financial/valuation/private
+// fields (estimated_value, mortgage_balance, purchase_price,
+// monthly_expenses, purchase_date, property_tax_annual, hoa_monthly,
+// financing_status, leases.notes) — neither base table has ANY
+// tenant-facing SELECT policy any more; the views are the only tenant
+// read path, and they can never return a column they don't select.
+// tenant_property_access/property_conversations/property_messages/
+// tenant_requests policies M10 and this migration already define cover
+// everything else this page queries. This page never has a
+// service-role key, and a bug here can only ever surface what these
+// views/policies already allow, never bypass them.
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -85,9 +100,15 @@ function TenantPortal({ userId }: { userId: string }) {
 
   useEffect(() => {
     if (!supabase || !selected) { setProperty(null); setLease(null); return }
-    supabase.from('properties').select('id, address, city').eq('id', selected.property_id).maybeSingle().then(({ data }) => setProperty((data as PropertyRef) || null))
+    // Reads go through the restricted tenant views, never the
+    // owner-facing public.properties/public.leases base tables — see
+    // the file header. Both views already carry exactly this column
+    // set, so select('*') is equivalent to naming them explicitly and
+    // stays correct automatically if the view's own column list ever
+    // changes.
+    supabase.from('tenant_property_view').select('*').eq('id', selected.property_id).maybeSingle().then(({ data }) => setProperty((data as PropertyRef) || null))
     if (selected.lease_id) {
-      supabase.from('leases').select('id, tenant_name, monthly_rent, start_date, end_date, rent_due_day').eq('id', selected.lease_id).maybeSingle().then(({ data }) => setLease((data as LeaseRef) || null))
+      supabase.from('tenant_lease_view').select('*').eq('id', selected.lease_id).maybeSingle().then(({ data }) => setLease((data as LeaseRef) || null))
     } else {
       setLease(null)
     }

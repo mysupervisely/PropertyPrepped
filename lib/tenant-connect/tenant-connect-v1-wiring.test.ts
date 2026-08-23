@@ -81,12 +81,17 @@ describe('Tenant Portal (app/tenant/page.tsx) is isolated from the landlord appl
     }
   })
 
-  it('only ever queries the tenant-scoped tables (tenant_property_access, properties, leases, tenant_requests, property_messages, property_message_attachments)', () => {
+  it('only ever queries the tenant-scoped tables/views (tenant_property_access, tenant_property_view, tenant_lease_view, tenant_requests, property_messages, property_message_attachments)', () => {
     expect(source).toContain("from('tenant_property_access')")
-    expect(source).toContain("from('properties')")
-    expect(source).toContain("from('leases')")
+    expect(source).toContain("from('tenant_property_view')")
+    expect(source).toContain("from('tenant_lease_view')")
     expect(source).toContain("from('tenant_requests')")
     expect(source).toContain("from('property_messages')")
+  })
+
+  it('NEVER queries the owner-facing properties/leases base tables directly (Round 6, Concern 2 — those carry landlord-only financial/valuation/private columns with no tenant-facing RLS policy any more; the restricted views above are the only tenant read path)', () => {
+    expect(source).not.toMatch(/\.from\(['"]properties['"]\)/)
+    expect(source).not.toMatch(/\.from\(['"]leases['"]\)/)
   })
 
   it('accepts an invite via the SECURITY DEFINER RPC, never a direct client UPDATE of tenant_property_access', () => {
@@ -113,5 +118,62 @@ describe('Tenant Connect V1 notify route re-derives data via the caller\'s own R
 
   it('uses the admin client only to resolve an email address (auth.users), never to bypass the RLS-scoped read above', () => {
     expect(source).toContain('admin.auth.admin.getUserById(')
+  })
+
+  it('the new_request kind (triggered by the TENANT, from app/tenant/page.tsx) looks up the property through tenant_property_view, never the owner-facing properties base table the tenant has no access to', () => {
+    const idx = source.indexOf("body.kind === 'new_request'")
+    expect(idx).toBeGreaterThan(-1)
+    const block = source.slice(idx, source.indexOf("body.kind === 'landlord_update'"))
+    expect(block).toContain(".from('tenant_property_view').select('address')")
+    expect(block).not.toMatch(/\.from\(['"]properties['"]\)/)
+  })
+
+  it('the invite/landlord_update kinds (both owner-triggered) still read the owner-facing properties table directly — the owner keeps full base-table access', () => {
+    const idx = source.indexOf("body.kind === 'landlord_update'")
+    expect(idx).toBeGreaterThan(-1)
+    expect(source.slice(idx)).toContain(".from('properties').select('address')")
+  })
+})
+
+describe('Tenant Connect V1 migration (supabase/milestone-24-tenant-connect-v1.sql) — Round 6 database-level fixes', () => {
+  const sql = readFile('supabase/milestone-24-tenant-connect-v1.sql')
+
+  it('locks every tenant_requests column except status/updated_at with a BEFORE UPDATE trigger, not just an application convention', () => {
+    expect(sql).toContain('create or replace function public.tenant_requests_lock_immutable_fields()')
+    expect(sql).toContain('before update on public.tenant_requests')
+    expect(sql).toContain('execute function public.tenant_requests_lock_immutable_fields()')
+    for (const col of ['property_id', 'owner_id', 'tenant_access_id', 'conversation_id', 'category', 'title', 'description', 'created_at']) {
+      expect(sql).toContain(`new.${col} := old.${col};`)
+    }
+  })
+
+  it('replaces base-table tenant SELECT access on properties/leases with two column-limited views', () => {
+    expect(sql).toContain('create view public.tenant_property_view as')
+    expect(sql).toContain('create view public.tenant_lease_view as')
+    expect(sql).toContain('drop policy if exists "properties_select_active_tenant" on public.properties')
+    expect(sql).toContain('drop policy if exists "leases_select_active_tenant" on public.leases')
+    // The view definitions themselves must never select a landlord-only
+    // financial/valuation/private column.
+    const propViewIdx = sql.indexOf('create view public.tenant_property_view as')
+    const propViewSql = sql.slice(propViewIdx, sql.indexOf(';', propViewIdx))
+    for (const col of ['estimated_value', 'mortgage_balance', 'purchase_price', 'monthly_expenses', 'purchase_date', 'property_tax_annual', 'hoa_monthly', 'financing_status']) {
+      expect(propViewSql).not.toContain(col)
+    }
+    const leaseViewIdx = sql.indexOf('create view public.tenant_lease_view as')
+    const leaseViewSql = sql.slice(leaseViewIdx, sql.indexOf(';', leaseViewIdx))
+    expect(leaseViewSql).not.toContain('notes')
+  })
+
+  it('grants the tenant views to authenticated only, never anon or public', () => {
+    expect(sql).toContain('grant select on public.tenant_property_view to authenticated;')
+    expect(sql).toContain('grant select on public.tenant_lease_view to authenticated;')
+    expect(sql).not.toMatch(/grant select on public\.tenant_(property|lease)_view to (anon|public)/)
+  })
+
+  it('hardens tenant_access_id/conversation_id to ON DELETE RESTRICT while property_id/owner_id stay ON DELETE CASCADE (repo-wide whole-property-deletion convention)', () => {
+    expect(sql).toContain('tenant_access_id uuid not null references public.tenant_property_access(id) on delete restrict')
+    expect(sql).toContain('conversation_id uuid not null references public.property_conversations(id) on delete restrict')
+    expect(sql).toContain('property_id uuid not null references public.properties(id) on delete cascade')
+    expect(sql).toContain('owner_id uuid not null references auth.users(id) on delete cascade')
   })
 })

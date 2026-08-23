@@ -53,10 +53,15 @@ export async function POST(req: NextRequest) {
     if (body.kind === 'new_request' && body.requestId) {
       // RLS (tenant_requests_select) only returns this row to its owner
       // or its own active tenant — here it's the tenant who just
-      // created it, re-fetched (never trusted from the body).
+      // created it, re-fetched (never trusted from the body). The
+      // caller here is the TENANT, so the property re-fetch below goes
+      // through tenant_property_view, not the owner-facing properties
+      // base table — that base table has no tenant-facing SELECT
+      // policy any more (Round 6, Concern 2), so a tenant's own
+      // RLS-scoped client would get nothing from it.
       const { data: request } = await supabase.from('tenant_requests').select('property_id, owner_id, category, title').eq('id', body.requestId).maybeSingle()
       if (!request) return NextResponse.json({ sent: false }, { status: 200 })
-      const { data: property } = await supabase.from('properties').select('address').eq('id', request.property_id).maybeSingle()
+      const { data: property } = await supabase.from('tenant_property_view').select('address').eq('id', request.property_id).maybeSingle()
       const admin = createAdminClient()
       if (!admin) return NextResponse.json({ sent: false }, { status: 200 })
       const { data: ownerUser } = await admin.auth.admin.getUserById(request.owner_id)
