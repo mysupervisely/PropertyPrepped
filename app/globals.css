@@ -153,6 +153,14 @@ h2, h3, p { margin-top: 0; }
 .workspaceContent { padding-top: 32px; }
 .workspaceHeading { align-items: flex-start; margin-bottom: 22px; }
 .workspaceHeading h2 { font-size: 27px; letter-spacing: -.5px; }
+/* Property Profile Mobile Polish V3 (Section 4): the Overview tab only —
+   less setup between the tab nav and the first useful card, without
+   losing the OVERVIEW / At a glance identity or cramping the page.
+   Scoped to Overview alone (an extra class, not a change to
+   .workspaceContent/.workspaceHeading themselves), so every other
+   tab's heading spacing is untouched. */
+.workspaceContentTight { padding-top: 20px; }
+.workspaceHeadingTight { margin-bottom: 14px; }
 .overviewGrid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 20px; }
 .overviewPanel { background: white; border: 1px solid var(--line); border-radius: 16px; padding: 22px; }
 .overviewPanel h3 { margin-bottom: 18px; }
@@ -282,9 +290,15 @@ h2, h3, p { margin-top: 0; }
 @media (max-width: 900px) {
   .propertyHero { grid-template-columns: 1fr; gap: 22px; }
   .heroPhoto { height: 340px; }
-  /* 5 metrics wrap to 3+2 rather than 2+2+1 — a cleaner, more balanced
-     shape, and it matches the six-tab nav's own 3-column wrap below. */
-  .heroMetrics { grid-template-columns: repeat(3, 1fr); }
+  /* Property Profile Mobile Polish V3: 5 metrics on a 6-column track —
+     Value/Mortgage/Equity each span 2 (three equal thirds filling row
+     1), Rent/Tax each span 3 (two equal halves filling row 2 exactly,
+     no empty trailing cell the way a plain 3-column grid with 5 items
+     would leave). Same technique at every width ≤900px; the 460px rule
+     below only adjusts gap/font-size, not the column layout itself. */
+  .heroMetrics { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .heroMetrics > div:nth-child(1), .heroMetrics > div:nth-child(2), .heroMetrics > div:nth-child(3) { grid-column: span 2; }
+  .heroMetrics > div:nth-child(4), .heroMetrics > div:nth-child(5) { grid-column: span 3; }
   .heroMetrics > div:nth-child(4) { border-left: 0; padding-left: 0; }
   .overviewGrid { grid-template-columns: 1fr; }
   .documentLayout { grid-template-columns: 1fr; }
@@ -318,10 +332,11 @@ h2, h3, p { margin-top: 0; }
 }
 @media (max-width: 460px) {
   .stats { grid-template-columns: 1fr; }
-  /* Stays 3 columns (not 2) at the narrowest widths too — keeps the
-     same balanced 3+2 wrap as the 900px rule above rather than
-     reshuffling to 2+2+1 again right when space is tightest. */
-  .heroMetrics { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  /* Keeps the same balanced thirds-then-halves layout from the 900px
+     rule at the narrowest widths too — only gap/type size shrink here,
+     never the column arrangement (which would reintroduce the
+     unbalanced trailing empty cell right when space is tightest). */
+  .heroMetrics { gap: 10px; }
   .heroMetrics strong { font-size: 15px; }
   .topbar .secondary { padding: 9px 11px; font-size: 12px; }
   .photoUploader { grid-template-columns: 36px minmax(0, 1fr); justify-content: start; }
