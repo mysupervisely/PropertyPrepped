@@ -62,3 +62,26 @@ export type PropertyMessageAttachment = {
   size_bytes: number
   created_at: string
 }
+
+// Tenant Connect V1 (Milestone 24) — mirrors
+// supabase/milestone-24-tenant-connect-v1.sql's CHECK constraints
+// exactly, same convention as everything above.
+export const TENANT_REQUEST_CATEGORIES = ['Plumbing', 'Electrical', 'HVAC', 'Appliance', 'General Maintenance', 'Other'] as const
+export type TenantRequestCategory = (typeof TENANT_REQUEST_CATEGORIES)[number]
+
+export const TENANT_REQUEST_STATUSES = ['New', 'In Progress', 'Resolved'] as const
+export type TenantRequestStatus = (typeof TENANT_REQUEST_STATUSES)[number]
+
+export type TenantRequest = {
+  id: string
+  property_id: string
+  owner_id: string
+  tenant_access_id: string
+  conversation_id: string
+  category: TenantRequestCategory
+  title: string
+  description: string
+  status: TenantRequestStatus
+  created_at: string
+  updated_at: string
+}

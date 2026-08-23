@@ -7,7 +7,6 @@ import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { DOCUMENT_CATEGORIES, FINANCIAL_CATEGORIES, MAINTENANCE_CATEGORIES, RENT_PAYMENT_METHODS } from '../lib/property-categories'
 import { useSubscription } from '../lib/useSubscription'
 import { canCreateProperty, entitlementsFor } from '../lib/billing/entitlements'
-import { TenantConnectPanel } from '../components/TenantConnectPanel'
 import { UpgradePrompt } from '../components/UpgradePrompt'
 import LandingPage from '../components/LandingPage'
 import { AuthHeader } from '../components/AuthHeader'
@@ -43,6 +42,10 @@ import { periodFromDate, formatPeriodLabel, type RentStatus } from '../lib/rent-
 import {
   buildRentLedgerRows, buildRentDateItems, buildVacancyItems, buildSystemWarrantyDateItems, type VacancyItem,
 } from '../lib/rent-ledger/ledger'
+import { buildTenantRequestDateItems } from '../lib/tenant-connect/requests'
+import type { TenantRequest } from '../lib/tenant-connect/types'
+import { TenantConnectStatusCard } from '../components/tenant-connect/TenantConnectStatusCard'
+import { TenantRequestsPanel } from '../components/tenant-connect/TenantRequestsPanel'
 
 // Investment Tools 2.0 (Part 2): splits a resolved NormalizedAddress into
 // this app's existing two-field address/city shape (properties.address,
@@ -502,6 +505,10 @@ export default function Home() {
   const [taxCustomItems, setTaxCustomItems] = useState<CustomTaxItemRow[]>([])
   const [contacts, setContacts] = useState<PropertyContact[]>([])
   const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([])
+  // Tenant Connect V1: portfolio-wide, RLS-scoped to this owner's own
+  // properties — loaded here for the SAME reason maintenanceRequests is
+  // (PropWatch needs every property's rows, not just the selected one).
+  const [tenantRequests, setTenantRequests] = useState<TenantRequest[]>([])
   // Property Profile 2.0
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   // QA: the greeting briefly showed the email-prefix fallback (e.g.
@@ -661,6 +668,14 @@ export default function Home() {
       ...buildMaintenanceDateItems(maintenanceRecords, propertyLabelById),
       ...(entitlements.canUsePropWatch ? buildRentDateItems(leases, properties, rentPayments, currentPeriod, propertyLabelById) : []),
       ...(entitlements.canUsePropWatch ? buildSystemWarrantyDateItems(propertySystems, propertyLabelById) : []),
+      // Tenant Connect V1: ungated by canUsePropWatch (like Lease/
+      // Insurance/Mortgage/Maintenance above) — a tenant_requests row
+      // can only exist at all once an owner has both Tenant Connect
+      // access (a plan-gated capability already enforced at the
+      // database layer, M10) AND an accepted tenant, so this never
+      // shows a Free/Organize owner anything they couldn't otherwise
+      // reach; it just avoids a redundant second gate here.
+      ...buildTenantRequestDateItems(tenantRequests, propertyLabelById),
     ]
     const { needsAttention, upcoming } = splitAttentionAndUpcoming(dateItems)
     const vacancy = entitlements.canUsePropWatch ? buildVacancyItems(properties, leases, propertyLabelById) : []
@@ -702,7 +717,7 @@ export default function Home() {
       attentionCountByProperty: attentionCounts,
       rentStatusByProperty: rentByProperty,
     }
-  }, [leases, insurancePolicies, mortgages, maintenanceRecords, documents, transactions, propertyNotes, properties, contacts, propertyLabelById, rentPayments, propertySystems, entitlements])
+  }, [leases, insurancePolicies, mortgages, maintenanceRecords, documents, transactions, propertyNotes, properties, contacts, propertyLabelById, rentPayments, propertySystems, entitlements, tenantRequests])
 
   const openMaintenanceCount = useMemo(() => maintenanceRecords.filter((m) => m.status !== 'Completed').length, [maintenanceRecords])
 
@@ -752,6 +767,7 @@ export default function Home() {
       { data: requestRows, error: requestError }, { data: systemRows, error: systemError }, { data: noteRows, error: noteError },
       { data: ownershipRows, error: ownershipError }, { data: profileRow }, { data: rentPaymentRows, error: rentPaymentError },
       { data: taxRecordRows, error: taxRecordError }, { data: taxCustomItemRows, error: taxCustomItemError },
+      { data: tenantRequestRows },
     ] = await Promise.all([
       client.from('properties').select('*').order('created_at', { ascending: true }),
       client.from('property_documents').select('*').order('created_at', { ascending: false }),
@@ -770,6 +786,7 @@ export default function Home() {
       client.from('rent_payments').select('*').order('date_received', { ascending: false }),
       client.from('property_tax_records').select('*'),
       client.from('property_tax_custom_items').select('*'),
+      client.from('tenant_requests').select('*').order('created_at', { ascending: false }),
     ])
     const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError || contactError || requestError || systemError || noteError || ownershipError || rentPaymentError || taxRecordError || taxCustomItemError
     if (firstError) {
@@ -802,6 +819,14 @@ export default function Home() {
     setUserProfile((profileRow || null) as UserProfile | null)
     setProfileReady(true)
     setMaintenanceRequests((requestRows || []) as MaintenanceRequest[])
+    // Tenant Connect V1: deliberately NOT included in firstError above —
+    // this migration is not yet applied to production (see the
+    // completion report), so this query legitimately 404s/errors on
+    // every account until it is. Every other property-workspace feature
+    // must keep working regardless; tenant_requests just stays empty
+    // (PropWatch shows nothing new, the Rent > Tenant Requests panel
+    // shows its own empty state) until the migration lands.
+    setTenantRequests((tenantRequestRows || []) as TenantRequest[])
     setRentPayments((rentPaymentRows || []) as RentPaymentRecord[])
     setBusy(false)
   }
@@ -1748,7 +1773,17 @@ export default function Home() {
 
           {rentSubTab === 'Tenant' && (selected.property_type === 'Rental Property' ? <>
             <div className="sectionHead workspaceHeading"><div><p className="eyebrow">TENANT REQUESTS</p><h2>Maintenance requests</h2><p>Owner-side tracking for tenant maintenance requests.</p></div><button className="primary" onClick={() => setShowRequestForm(true)}>+ Log request</button></div><div className="financialStats landlordStats"><div className="financialStat"><span>Open requests</span><strong>{openRequests.length}</strong></div><div className="financialStat"><span>Completed requests</span><strong>{completedRequests.length}</strong></div></div>{selectedRequests.length ? <div className="maintenanceList">{selectedRequests.map((req) => <article className="maintenanceRow requestRow" key={req.id}><div className="maintenanceDate"><strong>{new Date(req.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(req.created_at).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div><span className={`statusPill priority${req.priority}`}>{req.priority}</span><h3>{req.title}</h3><p>{req.tenant_name}{req.tenant_email ? ` · ${req.tenant_email}` : ''}</p></div></div>{req.description && <p className="requestDescription">{req.description}</p>}<div className="maintenanceActions"><select aria-label={`Status for ${req.title}`} value={req.status} onChange={(e) => void updateRequestStatus(req.id, e.target.value)}>{requestStatuses.map((s) => <option key={s}>{s}</option>)}</select><button className="dangerLink" onClick={() => void removeRequest(req.id)}>Remove</button></div></div></article>)}</div> : <EmptyModule title="No maintenance requests yet" text="Log tenant requests as they come in by phone, email or in person." action="Log request" onClick={() => setShowRequestForm(true)} />}
-            <TenantConnectPanel propertyId={selected.id} ownerId={user.id} tenantConnectEnabled={entitlementsFor(plan).tenantConnect} />
+            {/* Tenant Connect V1: replaces the old TenantConnectPanel
+                call site here (that component's own general multi-
+                conversation UI is broader than this milestone's "one
+                lease, one tenant relationship, requests-centered"
+                scope — its code/table/RLS are untouched, just no longer
+                mounted at this call site; see the completion report).
+                Two purpose-built pieces: a compact status card scoped
+                to THIS property's current lease, and the tenant-
+                submitted Requests list/conversation view. */}
+            {supabase && <TenantConnectStatusCard supabase={supabase} propertyId={selected.id} ownerId={user.id} currentLease={currentLease} tenantConnectEnabled={entitlements.tenantConnect} onChanged={() => void loadPortfolio()} />}
+            {supabase && <TenantRequestsPanel supabase={supabase} propertyId={selected.id} ownerId={user.id} tenantConnectEnabled={entitlements.tenantConnect} />}
           </> : <div className="emptyState"><strong>Tenant requests apply to Rental Property only.</strong><span>Change this property's type from Edit property facts if that's not correct.</span></div>)}
         </section>}
 

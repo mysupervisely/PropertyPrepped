@@ -50,7 +50,11 @@ export type PropertyLabelLookup = Map<string, string>
 // the exact same classifyDate()/daysUntil() thresholds as every type
 // already here, so they fold into the SAME Needs Attention/Upcoming
 // lists rather than a second, competing list.
-export type DashboardDateItemType = 'Lease' | 'Insurance' | 'Mortgage' | 'Maintenance' | 'Rent' | 'System'
+// Tenant Connect V1 adds 'TenantRequest' — built by
+// lib/tenant-connect/requests.ts (buildTenantRequestDateItems), same
+// reasoning as Milestone 18's own additions below: it folds into this
+// SAME Needs Attention list rather than a second, competing one.
+export type DashboardDateItemType = 'Lease' | 'Insurance' | 'Mortgage' | 'Maintenance' | 'Rent' | 'System' | 'TenantRequest'
 export type AttentionUrgency = 'Expired' | 'Urgent'
 
 export type DashboardDateItem = {
