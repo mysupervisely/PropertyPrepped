@@ -1,4 +1,4 @@
-// PropRoster Milestone 10: Tenant Connect — pure display/logic helpers.
+// PropRoster Milestone 10 / 24: Tenant Connect — pure display/logic helpers.
 //
 // Deliberately free of any Supabase/React import so these can be unit
 // tested without a live database (same reasoning as
@@ -42,4 +42,41 @@ export function tenantDisplayName(tenantEmail: string, status: 'Invited' | 'Acti
   if (status === 'Invited') return `${tenantEmail} (invite pending)`
   if (status === 'Revoked') return `${tenantEmail} (access revoked)`
   return tenantEmail
+}
+
+// ===========================================================================
+// Tenant Connect V1 (Milestone 24) — the compact Rent > Tenant status card.
+// ===========================================================================
+
+export type TenantConnectStatusLabel = 'Not invited' | 'Invitation pending' | 'Connected' | 'Access ended'
+
+/** The 4-state summary Section 2 asks for — a pure mapping from a tenant_property_access row's own status onto the landlord-facing label. `null` means no access row exists at all for this lease's tenant yet. */
+export function tenantConnectStatusLabel(status: 'Invited' | 'Active' | 'Revoked' | null): TenantConnectStatusLabel {
+  if (status === null) return 'Not invited'
+  if (status === 'Invited') return 'Invitation pending'
+  if (status === 'Active') return 'Connected'
+  return 'Access ended'
+}
+
+type AccessRowForLeaseMatch = { lease_id: string | null; status: 'Invited' | 'Active' | 'Revoked'; created_at: string }
+
+/**
+ * The Tenant Connect access row (if any) tied to a specific lease — the
+ * compact status card is scoped to THE CURRENT LEASE, never "any tenant
+ * on this property" (Section 3: "Invitation must be tied to... lease").
+ * When more than one row somehow references the same lease_id (e.g. an
+ * invite was revoked and the tenant re-invited for the same lease), an
+ * Active row always wins, then an Invited row, then the most recently
+ * created Revoked row — never an older row over a newer, more relevant
+ * one.
+ */
+export function findAccessForLease<T extends AccessRowForLeaseMatch>(rows: T[], leaseId: string | null | undefined): T | null {
+  if (!leaseId) return null
+  const forLease = rows.filter((r) => r.lease_id === leaseId)
+  if (!forLease.length) return null
+  return (
+    forLease.find((r) => r.status === 'Active')
+    || forLease.find((r) => r.status === 'Invited')
+    || [...forLease].sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
+  )
 }

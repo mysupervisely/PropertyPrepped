@@ -1739,3 +1739,77 @@ h2, h3, p { margin-top: 0; }
   .taxPanelGroupTotal { font-size: 11.5px; }
   .taxPanelGroupToggleTitle h4 { font-size: 13.5px; }
 }
+
+/* ==========================================================================
+   Tenant Connect V1 (Milestone 24) — the compact Property > Rent > Tenant
+   status card, the landlord-side Requests panel (reuses .maintenanceList/
+   .maintenanceRow/.tenantConnectThread* below — no new list styling), and
+   the standalone Tenant Portal page.
+   ========================================================================== */
+
+/* Status card — Section 2: "Do not make this area visually large... a
+   natural part of the property's Rent workspace." One compact bordered
+   card, not a full section with its own hero. */
+.tenantConnectCard { background: white; border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; margin-top: 20px; display: grid; gap: 10px; }
+.tenantConnectCardLocked { color: var(--muted); }
+.tenantConnectCardHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tenantConnectCardHead h3 { margin: 0; font-size: 15px; }
+.tenantConnectCardBody { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; font-weight: 650; }
+.tenantConnectCardActions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tenantConnectRevokeConfirm { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* Requests panel (landlord side) — reuses .maintenanceList/.maintenanceRow
+   wholesale (same list styling as the manual-log section above it); only
+   the row itself needs to become a real <button> (a11y + click target). */
+.tenantRequestsPanel { margin-top: 26px; }
+.tenantRequestRow { width: 100%; text-align: left; border: 1px solid var(--line); background: white; cursor: pointer; padding: 0; }
+.tenantRequestRow:hover { border-color: var(--brand); }
+
+@media (max-width: 480px) {
+  .tenantConnectCardHead { flex-wrap: wrap; }
+  .tenantConnectCardActions { width: 100%; }
+  .tenantConnectCardActions button { flex: 1 1 auto; }
+}
+
+/* ==========================================================================
+   Tenant Portal (app/tenant/page.tsx) — Section 14: "should feel almost
+   mobile-app-like." Its own small shell, deliberately NOT reusing
+   .shell/.topbar/.authHeader (those carry the landlord's navigation) —
+   a narrower max-width, big tap targets, no horizontal scrolling.
+   ========================================================================== */
+.tenantPortalShell { max-width: 620px; margin: 0 auto; padding: 0 20px 60px; min-height: 100vh; background: var(--bg); }
+.tenantPortalHeader { display: flex; align-items: center; gap: 12px; min-height: 72px; border-bottom: 1px solid var(--line); }
+.tenantPortalHeaderLabel { color: var(--muted); font-size: 13px; font-weight: 650; padding-left: 10px; border-left: 1px solid var(--line); flex: 1; }
+.tenantPortalLogout { flex-shrink: 0; }
+
+.tenantPortalInviteSection { margin-top: 20px; display: grid; gap: 12px; }
+.tenantPortalInviteCard { background: var(--brand-soft); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.tenantPortalInviteCard p { margin: 0; font-weight: 600; }
+
+.tenantPortalEmpty { margin-top: 40px; text-align: center; color: var(--muted); }
+
+.tenantPortalPropertySwitch { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 20px; }
+.tenantPortalPropertySwitch button { border: 1px solid var(--line); background: white; border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 650; color: var(--muted); }
+.tenantPortalPropertySwitch button.active { background: var(--brand); color: white; border-color: var(--brand); }
+
+.tenantPortalPropertyHead { padding: 22px 0 6px; }
+.tenantPortalPropertyHead h1 { font-size: clamp(24px, 6vw, 32px); }
+
+.tenantPortalTabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin: 10px 0 4px; }
+.tenantPortalTabs button { flex: 1; border: 0; background: transparent; padding: 14px 8px; font-weight: 650; color: var(--muted); border-bottom: 2px solid transparent; font-size: 15px; }
+.tenantPortalTabs button.active { color: var(--brand); border-bottom-color: var(--brand); }
+
+.tenantPortalSection { padding: 20px 0 40px; }
+.tenantPortalSectionHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.tenantPortalSectionHead h2 { font-size: 18px; margin: 0; }
+
+.tenantPortalRequestList { display: grid; gap: 10px; }
+.tenantPortalRequestRow { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: center; text-align: left; border: 1px solid var(--line); background: white; border-radius: 12px; padding: 16px; min-height: 44px; cursor: pointer; }
+.tenantPortalRequestRow:hover { border-color: var(--brand); }
+.tenantPortalRequestRowTitle { font-weight: 650; grid-column: 2; }
+.tenantPortalRequestRow .muted { grid-column: 2; font-size: 13px; }
+
+@media (max-width: 430px) {
+  .tenantPortalShell { padding: 0 14px 50px; }
+  .tenantPortalSectionHead button { width: 100%; }
+}
