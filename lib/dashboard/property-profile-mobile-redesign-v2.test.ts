@@ -123,9 +123,13 @@ describe('Financial Details card (Overview)', () => {
     expect(cardSlice).toContain('{money(monthlyCashFlow)}/mo')
   })
 
-  it('links out to the existing Investment Analysis workflow (property-evaluator), not a new page', () => {
-    expect(cardSlice).toContain('View full Investment Analysis')
-    expect(cardSlice).toContain('/investment-tools/property-evaluator?propertyId=')
+  // Superseded by the Property Profile / PropCrew UX Improvement
+  // milestone: the card's own "View full Investment Analysis" link was
+  // removed as redundant with the hero's Investment Analysis button. See
+  // lib/dashboard/financial-details-cta-removal.test.ts for the current,
+  // authoritative assertions.
+  it('no longer links out to Investment Analysis from within the card — that button lives only in the hero now', () => {
+    expect(cardSlice).not.toContain('View full Investment Analysis')
   })
 })
 

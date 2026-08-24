@@ -128,9 +128,15 @@ describe('Section 3: Financial Details no longer blindly duplicates the hero met
     expect(pageSource).not.toMatch(/capRate|cap_rate|CapRate/)
   })
 
-  it('the Investment Analysis link is preserved', () => {
-    expect(cardSlice).toContain('View full Investment Analysis')
-    expect(cardSlice).toContain('/investment-tools/property-evaluator?propertyId=')
+  // Superseded by the Property Profile / PropCrew UX Improvement
+  // milestone: the card's own bottom "View full Investment Analysis ->"
+  // CTA was removed as redundant with the Investment Analysis button
+  // already in the property hero (present on every tab, not just
+  // Overview). See lib/dashboard/financial-details-cta-removal.test.ts
+  // for the current, authoritative assertions.
+  it('no longer has its own bottom "View full Investment Analysis" CTA — the hero button is the only Investment Analysis entry point now', () => {
+    expect(cardSlice).not.toContain('View full Investment Analysis')
+    expect(cardSlice).not.toContain('financialDetailsLink')
   })
 })
 

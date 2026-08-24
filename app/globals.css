@@ -172,11 +172,13 @@ h2, h3, p { margin-top: 0; }
 .detailRows .highlightRow { margin-top: 4px; padding: 14px 12px; border: 0; border-radius: 10px; background: var(--brand-soft); color: var(--brand); }
 .detailRows .highlightRow span { color: var(--brand); }
 
-/* Property Profile Mobile Redesign V2, Section 5: the Financial Details
-   card's own link out to the existing Investment Analysis workflow —
-   just a full-width secondary action under the card's rows. */
+/* Property Profile / PropCrew UX Improvement: the Financial Details
+   card's own bottom "View full Investment Analysis" CTA (Property
+   Profile Mobile Redesign V2, Section 5) was removed as redundant with
+   the property hero's own Investment Analysis button — .financialDetailsLink
+   is gone with it. .financialDetailsCard itself stays: the card's rows
+   still benefit from a column flex layout. */
 .financialDetailsCard { display: flex; flex-direction: column; }
-.financialDetailsLink { margin-top: 16px; text-align: center; }
 
 /* Property Profile Mobile Redesign V2, Sections 7-9: the Tax tab's own
    header (mirrors .sectionHead/.workspaceHeading elsewhere) and its
