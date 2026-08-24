@@ -18,29 +18,39 @@
 // providers (the per-property People tab); omit it for the full
 // portfolio-wide directory (app/propcrew/page.tsx).
 //
-// QA audit (phone contact picker, deliberately NOT implemented): the
-// W3C Contact Picker API (navigator.contacts.select()) is what a
-// "Choose from Contacts" button would need — it's only implemented in
-// Chromium on Android; Safari (desktop and iOS) has never shipped it, and
-// this app's primary mobile web target is iOS Safari. There is no
-// reliable, secure way to do single-contact selection from the mobile
-// web on that target today, and the privacy requirement here (import
-// ONLY the one contact the user explicitly picks — never request broad
-// address-book access) rules out any broader-permission workaround. Per
-// that finding: manual entry (the Add form below) stays the only path on
-// web. The real fix is native contact picking in a future PropRoster
-// iOS/Android app, which can use each platform's real contact-selection
-// UI; this component is already the natural extension point for that —
-// a future native wrapper can prefill `prefill` (below) from a picked
-// contact exactly the way Document Intelligence's "Add this business to
-// PropCrew" apply action already does, still landing on this same
-// review-before-save form, still never auto-setting
-// would_use_again/experience_note/category without the user confirming
-// them.
+// Property Profile / PropCrew UX Improvement: "Add from Contacts" is now
+// implemented, superseding the prior QA finding below (kept for the
+// full history — the underlying platform-support facts it found are
+// still exactly true, and still exactly why this stays feature-detected
+// rather than always shown).
+//
+// Prior QA audit (phone contact picker, at that time deliberately NOT
+// implemented): the W3C Contact Picker API (navigator.contacts.select())
+// is what a "Choose from Contacts" button would need — it's only
+// implemented in Chromium on Android; Safari (desktop and iOS) has never
+// shipped it, and this app's primary mobile web target is iOS Safari.
+// There is no reliable, secure way to do single-contact selection from
+// the mobile web on that target today, and the privacy requirement here
+// (import ONLY the one contact the user explicitly picks — never request
+// broad address-book access) rules out any broader-permission
+// workaround. What changed: rather than leaving the option out
+// entirely, it's now real feature-detected (isContactPickerSupported,
+// lib/propcrew/contact-picker.ts) — "Add from Contacts" only ever
+// appears on the Chromium-Android browsers that actually support it;
+// every other browser (iOS Safari included) sees the exact same
+// manual-entry-only workflow this component always had. This is NOT a
+// workaround for iOS — there isn't one on the web platform today — it's
+// the feature working correctly where the platform allows it, and
+// staying invisible everywhere else, per this milestone's own explicit
+// "do not show a broken control" requirement. The real fix for iOS
+// remains native contact picking in a future PropRoster iOS app; this
+// component was already the natural extension point for that (see
+// `prefill`/`onPrefillConsumed` below), and still is.
 
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { PROPCREW_PRIVACY_DISCLOSURE, PROPCREW_PRIVATE_NOTE_LABEL, REUSE_PREFERENCE_LABELS, REUSE_PREFERENCE_OPTIONS, reusePreferenceTone, type ReusePreference } from '../lib/propcrew/reuse-preference'
+import { isContactPickerSupported, normalizeContactPickerResult, type ContactPickerResult, type PropCrewImportCandidate } from '../lib/propcrew/contact-picker'
 
 export const PROPCREW_CATEGORIES = [
   'HVAC', 'Plumbing', 'Electrical', 'Roofing', 'Handyman', 'Landscaping', 'Pest Control',
@@ -109,6 +119,30 @@ export function PropCrewPanel({
   const [busy, setBusy] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
+  // Property Profile / PropCrew UX Improvement: "Add from Contacts."
+  // pickerSupported is computed once on mount (client-only — navigator/
+  // window don't exist during SSR) via the real spec/MDN feature-detection
+  // check, never a browser/OS guess. showAddChooser is the small
+  // "Add from Contacts / Enter Manually" first step; it's skipped
+  // entirely (openAddChooser jumps straight to the existing manual form)
+  // on any browser where the picker isn't supported — never a chooser
+  // with a dead option.
+  const [pickerSupported, setPickerSupported] = useState(false)
+  const [showAddChooser, setShowAddChooser] = useState(false)
+  const [pickerBusy, setPickerBusy] = useState(false)
+  const [pickerError, setPickerError] = useState('')
+  // Set only when the picked contact has more than one phone AND/OR more
+  // than one email — the small "which one?" step (Section "If a selected
+  // contact has multiple phone numbers or email addresses..."). Never
+  // silently guesses; null the rest of the time (single or zero values
+  // go straight into the form).
+  const [multiValueCandidate, setMultiValueCandidate] = useState<PropCrewImportCandidate | null>(null)
+  const [multiValueChoice, setMultiValueChoice] = useState<{ phone: string; email: string }>({ phone: '', email: '' })
+
+  useEffect(() => {
+    setPickerSupported(isContactPickerSupported(typeof navigator === 'undefined' ? undefined : navigator, typeof window === 'undefined' ? undefined : window))
+  }, [])
+
   useEffect(() => {
     if (!prefill) return
     setDraft({ ...emptyDraft, name: prefill.name, businessName: prefill.businessName || '', phone: prefill.phone || '', email: prefill.email || '', website: prefill.website || '', propertyIds: scopePropertyId ? [scopePropertyId] : [] })
@@ -164,6 +198,66 @@ export function PropCrewPanel({
     setEditingId(null)
     setShowForm(true)
     setError('')
+  }
+
+  // The "+ Add to PropCrew" entry point. On a browser without the
+  // Contact Picker API, this behaves EXACTLY as before — straight to the
+  // manual form, no chooser step, no dead option ever shown.
+  function openAddChooser() {
+    setError('')
+    setPickerError('')
+    if (pickerSupported) setShowAddChooser(true)
+    else openAdd()
+  }
+
+  // Populates the SAME draft/showForm the manual "+ Add to PropCrew" flow
+  // already uses — the review-before-save form is identical either way,
+  // every field stays editable, and Save is still the one explicit
+  // action that writes anything (Section "Do not automatically save
+  // anything merely because a contact was selected").
+  function applyImportCandidate(candidate: PropCrewImportCandidate, phone: string, email: string) {
+    setDraft({ ...emptyDraft, name: candidate.name, phone, email, propertyIds: scopePropertyId ? [scopePropertyId] : [] })
+    setEditingId(null)
+    setShowForm(true)
+    setShowAddChooser(false)
+    setMultiValueCandidate(null)
+    setPickerError('')
+  }
+
+  // The one real Contact Picker API call in this component — everything
+  // else (support detection, result normalization) is the pure,
+  // unit-tested lib/propcrew/contact-picker.ts. Only ever requests name/
+  // tel/email (Section "request only fields that are useful..."), never
+  // `multiple: true` (Section "the user should explicitly select the
+  // contact they want to import" — one at a time, never a batch).
+  async function pickFromContacts() {
+    setPickerBusy(true)
+    setPickerError('')
+    try {
+      const nav = navigator as Navigator & { contacts: { select: (props: string[], opts?: { multiple?: boolean }) => Promise<ContactPickerResult[]> } }
+      const results = await nav.contacts.select(['name', 'tel', 'email'], { multiple: false })
+      setPickerBusy(false)
+      if (!results || !results.length) return // user cancelled the native picker — stay on the chooser
+      const candidate = normalizeContactPickerResult(results[0])
+      if (candidate.phones.length > 1 || candidate.emails.length > 1) {
+        // More than one number/email on file — let the user pick which
+        // one, never silently choosing the first (Section "provide a
+        // sensible way for the user to select which one should be used
+        // rather than silently choosing potentially incorrect
+        // information").
+        setMultiValueCandidate(candidate)
+        setMultiValueChoice({ phone: candidate.phones[0] || '', email: candidate.emails[0] || '' })
+        return
+      }
+      applyImportCandidate(candidate, candidate.phones[0] || '', candidate.emails[0] || '')
+    } catch (err) {
+      setPickerBusy(false)
+      // AbortError is the user backing out of the native picker (or
+      // denying the one-time permission prompt) — not a real failure,
+      // never surfaced as an error; manual entry is still one tap away.
+      if ((err as { name?: string })?.name === 'AbortError') return
+      setPickerError('Could not import that contact. You can still add it manually.')
+    }
   }
 
   function openEdit(contact: PropCrewContact) {
@@ -243,7 +337,7 @@ export function PropCrewPanel({
             <p>Every contractor, agent, lender and professional you&apos;ve worked with — {PROPCREW_PRIVACY_DISCLOSURE.toLowerCase()}</p>
           </div>
         ) : <div />}
-        <button className="primary" onClick={openAdd}>+ Add to PropCrew</button>
+        <button className="primary" onClick={openAddChooser}>+ Add to PropCrew</button>
       </div>
 
       {error && <div className="statusMessage errorMessage">{error}</div>}
@@ -297,7 +391,68 @@ export function PropCrewPanel({
           })}
         </div>
       ) : (
-        <div className="emptyModule"><strong>No PropCrew providers yet</strong><span>Add contractors, agents, lenders and other professionals as you work with them.</span><button className="primary" onClick={openAdd}>+ Add to PropCrew</button></div>
+        <div className="emptyModule"><strong>No PropCrew providers yet</strong><span>Add contractors, agents, lenders and other professionals as you work with them.</span><button className="primary" onClick={openAddChooser}>+ Add to PropCrew</button></div>
+      )}
+
+      {/* Property Profile / PropCrew UX Improvement: the first step when
+          the picker IS supported — "Add from Contacts" vs "Enter
+          Manually." Never rendered at all when pickerSupported is false
+          (openAddChooser skips straight to the manual form in that
+          case), so there's never a chooser with a dead/disabled option. */}
+      {showAddChooser && (
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowAddChooser(false)}>
+          <div className="modal addDocumentModal">
+            <div className="modalTop"><div><p className="eyebrow">PROPCREW</p><h2>Add a PropCrew member</h2></div><button className="iconButton" onClick={() => setShowAddChooser(false)}>×</button></div>
+            {pickerError && <p className="errorMessage">{pickerError}</p>}
+            <div className="addDocumentChooser">
+              <div className="addDocumentOption addDocumentOptionSmart">
+                <h3>Add from Contacts</h3>
+                <p>Choose one contact from your device — only that contact&apos;s name, phone and email are imported, nothing else from your address book.</p>
+                <button className="primary" disabled={pickerBusy} onClick={() => void pickFromContacts()}>{pickerBusy ? 'Opening contacts…' : 'Choose a contact'}</button>
+              </div>
+              <div className="addDocumentOption">
+                <h3>Enter Manually</h3>
+                <p>Type in their name, category, contact details and notes yourself.</p>
+                <button className="secondary" onClick={openAdd}>Enter manually</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* The "which number/email?" step — only rendered when the picked
+          contact actually has more than one of either (Section "If a
+          selected contact has multiple phone numbers or email
+          addresses, provide a sensible way for the user to select which
+          one should be used rather than silently choosing potentially
+          incorrect information"). A single value on either field skips
+          this entirely and goes straight into the form. */}
+      {multiValueCandidate && (
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setMultiValueCandidate(null)}>
+          <div className="modal">
+            <div className="modalTop"><h2>Which details for {multiValueCandidate.name || 'this contact'}?</h2><button className="iconButton" onClick={() => setMultiValueCandidate(null)}>×</button></div>
+            {multiValueCandidate.phones.length > 1 && (
+              <div className="fullField reusePreferenceField">
+                <span>Phone number</span>
+                <div className="modeToggle">
+                  {multiValueCandidate.phones.map((phone) => <button type="button" key={phone} className={multiValueChoice.phone === phone ? 'active' : ''} onClick={() => setMultiValueChoice((c) => ({ ...c, phone }))}>{phone}</button>)}
+                </div>
+              </div>
+            )}
+            {multiValueCandidate.emails.length > 1 && (
+              <div className="fullField reusePreferenceField">
+                <span>Email address</span>
+                <div className="modeToggle">
+                  {multiValueCandidate.emails.map((email) => <button type="button" key={email} className={multiValueChoice.email === email ? 'active' : ''} onClick={() => setMultiValueChoice((c) => ({ ...c, email }))}>{email}</button>)}
+                </div>
+              </div>
+            )}
+            <div className="modalActions">
+              <button className="secondary" onClick={() => setMultiValueCandidate(null)}>Cancel</button>
+              <button className="primary" onClick={() => applyImportCandidate(multiValueCandidate, multiValueChoice.phone, multiValueChoice.email)}>Continue</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showForm && (

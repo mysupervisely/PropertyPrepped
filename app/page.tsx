@@ -1596,14 +1596,19 @@ export default function Home() {
               forbids inventing one here. Every row below already existed
               in the pre-V3 card (nothing new was added, only the
               Value/Mortgage/Equity/Rent(Monthly)/Tax(Annual) rows that
-              purely duplicated the hero were removed). */}
+              purely duplicated the hero were removed). Property Profile /
+              PropCrew UX Improvement: this card's own bottom "View full
+              Investment Analysis ->" link was removed too — it duplicated
+              the Investment Analysis button already in the property hero
+              above (on every tab, not just Overview); that hero button is
+              untouched and is now the only Investment Analysis entry
+              point on this page. */}
           <div className="overviewGrid">
             <div className="overviewPanel financialDetailsCard"><h3>Financial details</h3><div className="detailRows">
               <div><span>Monthly property expenses</span><strong>{money(selected.monthly_expenses)}</strong></div>
               <div className="highlightRow"><span>Estimated cash flow</span><strong>{money(monthlyCashFlow)}/mo</strong></div>
               <div><span>Purchase price</span><strong>{money(selected.purchase_price)}</strong></div>{appreciation && <div className={appreciation.amount >= 0 ? 'metricTone-good' : 'metricTone-bad'}><span>Appreciation</span><strong>{signedMoney(appreciation.amount)} <small>({signedPercent(appreciation.percent)})</small></strong></div>}<div><span>Annual property tax</span><strong>{selected.property_tax_annual != null ? money(selected.property_tax_annual) : 'Not entered'}</strong></div>{selected.hoa_monthly != null && <div><span>HOA / month</span><strong>{money(selected.hoa_monthly)}</strong></div>}
             </div>
-              <Link className="secondary financialDetailsLink" href={`/investment-tools/property-evaluator?propertyId=${selected.id}`}>View full Investment Analysis →</Link>
             </div>
             <div className="overviewPanel"><h3>Property facts</h3><div className="detailRows">
               {selected.beds != null && <div><span>Beds</span><strong>{selected.beds}</strong></div>}
