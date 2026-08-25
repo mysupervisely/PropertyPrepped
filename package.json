@@ -6,21 +6,23 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "vitest run"
+    "test": "vitest run",
+    "render:reel": "node --experimental-strip-types scripts/render-reel.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "latest",
     "@supabase/supabase-js": "latest",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
     "stripe": "^22.5.0",
-    "@anthropic-ai/sdk": "latest",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "playwright-core": "^1.62.1",
     "typescript": "latest",
     "vitest": "^3.2.4"
   }
