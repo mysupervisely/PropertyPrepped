@@ -47,7 +47,7 @@ const CHROMIUM_EXECUTABLE = process.env.PROPROSTER_CHROMIUM_PATH
   || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
 
 const OUTPUT_DIR = join(ROOT, 'reel-output')
-const OUTPUT_FILE = join(OUTPUT_DIR, 'propRoster-reel-v1.mp4')
+const OUTPUT_FILE = join(OUTPUT_DIR, 'propRoster-reel-v1-1.mp4')
 
 async function which(bin) {
   return new Promise((resolve) => {

@@ -5,12 +5,15 @@ import {
   REEL_WIDTH, REEL_HEIGHT, REEL_FPS, REEL_SCENES, REEL_TOTAL_MS, FEATURE_TABS, FORBIDDEN_TERMS, sceneStartMs,
 } from './reel-content'
 
-// Animated Marketing Reel Prototype V1 — content-model tests. These lock
-// in the composition's technical requirements (dimensions/fps/duration)
-// and, most importantly, that every feature named in the Reel is real,
-// verifiable production functionality — never the contractor
-// marketplace, bidding, "name your price," Rental Turnover marketplace,
-// or any provider-network concept, none of which is live.
+// Animated Marketing Reel Prototype — content-model tests. Covers both
+// the original V1 requirements and the V1.1 visual-refinement pass
+// (rebalanced scene durations, per-tab content "tags", new end-card
+// tagline). These lock in the composition's technical requirements
+// (dimensions/fps/duration) and, most importantly, that every feature
+// named in the Reel is real, verifiable production functionality —
+// never the contractor marketplace, bidding, "name your price," Rental
+// Turnover marketplace, any provider-network concept, or an unverified
+// CTA ("download now" / "start free" / etc.), none of which is live.
 
 describe('Composition dimensions and timing are intentional, per the brief', () => {
   it('is 1080x1920 (9:16 vertical) at 30fps', () => {
@@ -25,6 +28,16 @@ describe('Composition dimensions and timing are intentional, per the brief', () 
     expect(REEL_TOTAL_MS).toBe(sum)
     expect(REEL_TOTAL_MS).toBeGreaterThanOrEqual(15000)
     expect(REEL_TOTAL_MS).toBeLessThanOrEqual(20000)
+  })
+
+  it('V1.1: durations were rebalanced (not left untouched) — propertyView (the product hero) and end (brand/domain) each got more time than V1', () => {
+    const propertyView = REEL_SCENES.find((s) => s.id === 'propertyView')
+    const end = REEL_SCENES.find((s) => s.id === 'end')
+    expect(propertyView?.durationMs).toBe(5000)
+    expect(end?.durationMs).toBe(3600)
+    // V1's durations were 4600 and 3000 respectively — both grew.
+    expect(propertyView!.durationMs).toBeGreaterThan(4600)
+    expect(end!.durationMs).toBeGreaterThan(3000)
   })
 
   it('has exactly the six scenes from the brief, in order: hook, change, meet, propertyView, value, end', () => {
@@ -69,6 +82,29 @@ describe('Every advertised feature tab matches production terminology exactly', 
     const propCrew = FEATURE_TABS.find((t) => t.label === 'PropCrew')
     expect(propCrew?.caption).toBe('Contractors, agents & lenders')
   })
+
+  it('V1.1: every tab\'s content "tags" (shown as pills in the propertyView hero card) are real, verified production terms — every tag is checked against source, not just spot-checked', () => {
+    const rentTags = FEATURE_TABS.find((t) => t.label === 'Rent')!.tags
+    expect(pageSource).toContain("type RentSubTab = 'Lease' | 'Ledger' | 'Tenant'")
+    expect(rentTags).toEqual(['Lease', 'Ledger', 'Tenant'])
+
+    const detailsTags = FEATURE_TABS.find((t) => t.label === 'Details')!.tags
+    for (const tag of detailsTags) {
+      expect(pageSource).toContain(`'${tag}'`) // each is one of the real PropertySubTab literals
+    }
+
+    const docsTags = FEATURE_TABS.find((t) => t.label === 'Documents')!.tags
+    expect(pageSource).toContain("type DocumentsSubTab = 'Documents' | 'Photos'")
+    expect(docsTags).toEqual(['Documents', 'Photos'])
+
+    const overviewTags = FEATURE_TABS.find((t) => t.label === 'Overview')!.tags
+    // The hero metric strip (Property Profile Mobile Redesign/Polish
+    // milestones) includes Value/Mortgage/Equity/Rent/Tax — every
+    // Overview tag here must be one of those five real metric labels.
+    for (const tag of overviewTags) {
+      expect(['Value', 'Mortgage', 'Equity', 'Rent', 'Tax']).toContain(tag)
+    }
+  })
 })
 
 describe('No non-live functionality is advertised anywhere in the Reel content', () => {
@@ -80,12 +116,12 @@ describe('No non-live functionality is advertised anywhere in the Reel content',
       if ('lines' in s) strings.push(...s.lines)
       if ('tagline' in s) strings.push(s.tagline)
       if ('url' in s) strings.push(s.url)
-      if ('tabs' in s) for (const t of s.tabs) { strings.push(t.label); strings.push(t.caption) }
+      if ('tabs' in s) for (const t of s.tabs) { strings.push(t.label); strings.push(t.caption); strings.push(...t.tags) }
     }
     return strings
   }
 
-  it('no scene string contains any forbidden marketplace/bidding/turnover term', () => {
+  it('no scene string contains any forbidden marketplace/bidding/turnover/unverified-CTA term', () => {
     const haystack = allReelStrings().join(' \n ').toLowerCase()
     for (const term of FORBIDDEN_TERMS) {
       expect(haystack).not.toContain(term.toLowerCase())
@@ -99,9 +135,16 @@ describe('No non-live functionality is advertised anywhere in the Reel content',
     expect(haystack.toLowerCase()).not.toContain('testimonial')
   })
 
-  it('the end card uses the real production domain (proproster.com) and the exact required tagline', () => {
+  it('the end card uses the real production domain (proproster.com) and the exact V1.1 required tagline', () => {
     const end = REEL_SCENES.find((s) => s.kind === 'end')
     expect(end && 'url' in end ? end.url : null).toBe('proproster.com')
-    expect(end && 'tagline' in end ? end.tagline : null).toBe('Property management built for independent landlords.')
+    expect(end && 'tagline' in end ? end.tagline : null).toBe('Every property. Everything in its place.')
+  })
+
+  it('no unsupported CTA ("Download now", "Start free", etc.) appears anywhere', () => {
+    const haystack = allReelStrings().join(' \n ').toLowerCase()
+    expect(haystack).not.toContain('download')
+    expect(haystack).not.toContain('start free')
+    expect(haystack).not.toContain('sign up')
   })
 })
