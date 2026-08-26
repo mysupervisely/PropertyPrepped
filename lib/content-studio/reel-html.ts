@@ -1,30 +1,38 @@
 // PropRoster Content Studio — Animated Marketing Reel Prototype
-// V1.1 — Visual Refinement Pass
+// V1.2 — Visual Expansion + Faster Pacing
 //
-// Pure function that turns reel-content.ts's data into one self-contained
-// HTML document (inline CSS + inline vanilla JS, no external requests,
-// no fonts/images fetched over the network). The animation clock is
-// driven by an explicit `setTime(ms)` function exposed on
-// `window.__REEL__` rather than real CSS @keyframes timing, so a
-// headless-browser renderer can call setTime() for each output frame and
-// get an exact, reproducible frame every time — real wall-clock CSS
-// animation timing is not reliable enough to screenshot frame-by-frame.
+// Pure function that turns reel-content.ts's data (plus the real,
+// embedded screenshots in reel-assets.ts) into one self-contained HTML
+// document (inline CSS + inline vanilla JS + base64 image data URIs —
+// still zero external network requests). The animation clock is driven
+// by an explicit `setTime(ms)` function exposed on `window.__REEL__`
+// rather than real CSS @keyframes timing, so a headless-browser renderer
+// can call setTime() for each output frame and get an exact,
+// reproducible frame every time — real wall-clock CSS animation timing
+// is not reliable enough to screenshot frame-by-frame.
 //
 // This file is intentionally framework-free (no React) — it is used
 // both by the prototype preview page (via an <iframe srcDoc={...}>) and
 // by scripts/render-reel.mjs (loaded directly in headless Chromium). No
-// animation library was installed for this, in V1 or this V1.1 pass:
-// everything here is plain CSS transforms/opacity driven by small
-// interpolation helpers.
+// animation library or video framework was installed for this, in V1,
+// V1.1, or this V1.2 pass: everything here is plain CSS transforms/
+// opacity driven by small interpolation helpers.
 //
-// V1.1 additions over V1 (see the completion report for the full list):
-//   - word-by-word text reveals (splitWords) instead of whole-line fades
-//   - a bigger, content-rich "hero" phone card in the propertyView scene
-//   - a 3x2 "meet" tab grid (matching production's real mobile tab
-//     layout) instead of 2x3
-//   - a subtle, deterministic ambient background spotlight drift
-//   - a subtle per-scene settle-in scale on the centered content column
-//   - a 2x2, gently rotated "chaos" grid instead of a vertical list
+// V1.2 changes from V1.1 (see the completion report for the full list):
+//   - the abstract "phone card with tag pills" hero scene is retired —
+//     replaced by five real, embedded product screenshots (montage
+//     scenes) in a browser-chrome-style frame, per this pass's brief to
+//     prefer actual recognizable UI over invented UI
+//   - a full-bleed property-photo background (with a dark scrim, the
+//     same visual idea as components/LandingPage.tsx's existing
+//     .landingHeroBg/.landingHeroScrim treatment) for the "transition"
+//     and "end" scenes
+//   - the hook scene's four "chaos" items now flash one at a time
+//     (rapid-fire) instead of appearing together in a grid
+//   - ten shorter scenes instead of six longer ones, for a new visual
+//     beat roughly every 1.4-2.2s
+//   - a muted secondary "sage" brand tone; every green here stays
+//     deliberately desaturated (no neon/lime)
 
 // The explicit .ts extension below is required so this file can be
 // loaded two ways: (a) normally, by Next.js/webpack, via tsconfig's
@@ -33,18 +41,13 @@
 // TypeScript support (`node --experimental-strip-types`) in
 // scripts/render-reel.mjs, which — unlike a bundler — needs a real,
 // resolvable file extension in every relative import.
-import { BRAND, REEL_FPS, REEL_HEIGHT, REEL_SCENES, REEL_TOTAL_MS, REEL_WIDTH, sceneStartMs, type FeatureTab, type Scene } from './reel-content.ts'
+import { BRAND, REEL_FPS, REEL_HEIGHT, REEL_SCENES, REEL_TOTAL_MS, REEL_WIDTH, sceneStartMs, type AssetKey, type Scene } from './reel-content.ts'
+import * as ASSETS from './reel-assets.ts'
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-// Splits a line into per-word <span class="word"> wrappers so the JS
-// clock can stagger each word's reveal individually — the "premium SaaS
-// launch video" text-animation pattern, rather than one block fading in
-// at once. Each word is escaped individually (no HTML-sensitive
-// characters appear in any Reel copy, but this keeps the function safe
-// regardless).
 function splitWords(text: string): string {
   return text
     .split(' ')
@@ -52,46 +55,53 @@ function splitWords(text: string): string {
     .join(' ')
 }
 
-function tabChip(tab: FeatureTab, index: number): string {
-  return `<div class="tabChip" data-i="${index}"><span class="tabChipLabel">${esc(tab.label)}</span><span class="tabChipCaption">${esc(tab.caption)}</span></div>`
+function asset(key: AssetKey) {
+  return (ASSETS as Record<string, { dataUri: string; width: number; height: number }>)[key]
 }
 
-function tagPill(tag: string): string {
-  return `<span class="tagPill">${esc(tag)}</span>`
+// Full-bleed background image + dark scrim, used by the "transition" and
+// "end" scenes — the same visual idea already used on the real marketing
+// site (components/LandingPage.tsx's .landingHeroBg/.landingHeroScrim).
+function bleedMarkup(key: AssetKey): string {
+  const a = asset(key)
+  return `<div class="bleedBg"><img class="bleedImg" data-el="bleedImg" src="${a.dataUri}" alt="" /><div class="bleedScrim"></div></div>`
+}
+
+function shotFrameMarkup(key: AssetKey): string {
+  const a = asset(key)
+  return `
+    <div class="shotFrame" data-el="shotFrame">
+      <div class="shotFrameBar"><span class="shotDot"></span><span class="shotDot"></span><span class="shotDot"></span></div>
+      <div class="shotImgWrap"><img class="shotImg" data-el="shotImg" src="${a.dataUri}" width="${a.width}" height="${a.height}" alt="" /><div class="shotShine" data-el="shotShine"></div></div>
+    </div>`
 }
 
 function sceneMarkup(scene: Scene, index: number): string {
   const start = sceneStartMs(scene.id)
   const end = start + scene.durationMs
-  const wrap = (inner: string) => `<section class="scene" data-scene="${scene.id}" data-start="${start}" data-end="${end}" style="z-index:${index};"><div class="centerCol" data-el="centerCol">${inner}</div></section>`
+  const wrap = (inner: string, bleedAsset?: AssetKey) =>
+    `<section class="scene" data-scene="${scene.id}" data-kind="${scene.kind}" data-start="${start}" data-end="${end}" style="z-index:${index};">${bleedAsset ? bleedMarkup(bleedAsset) : ''}<div class="safePad"><div class="centerCol" data-el="centerCol">${inner}</div></div></section>`
 
   switch (scene.kind) {
     case 'hook':
       return wrap(`
           <p class="hookLine" data-el="hookLine">${splitWords(scene.line)}</p>
-          <div class="chaosGrid">
-            ${scene.chaos.map((c, i) => `<div class="chaosItem" data-el="chaos${i}" data-rot="${[-3, 2, -2, 3][i % 4]}">${esc(c)}</div>`).join('')}
+          <div class="chaosFlash">
+            ${scene.chaos.map((c, i) => `<div class="chaosItem" data-el="chaos${i}">${esc(c)}</div>`).join('')}
           </div>`)
-    case 'change':
-      return wrap(`
-          <p class="changeLine" data-el="changeLine">${splitWords(scene.line)}</p>`)
+    case 'transition':
+      return wrap(`<p class="transitionLine" data-el="transitionLine">${splitWords(scene.line)}</p>`, scene.asset)
     case 'meet':
       return wrap(`
           <p class="meetLine" data-el="meetLine">${splitWords(scene.line)}</p>
           <div class="tabGrid">
-            ${scene.tabs.map((t, i) => tabChip(t, i)).join('')}
+            ${scene.tabs.map((t, i) => `<div class="tabChip" data-i="${i}">${esc(t)}</div>`).join('')}
           </div>`)
-    case 'propertyView':
+    case 'montage':
       return wrap(`
-          <div class="heroLabel" data-el="heroLabel">PROPROSTER</div>
-          <div class="phoneCard">
-            <div class="phoneCardNav">
-              ${scene.tabs.map((t, i) => `<span class="phoneNavItem" data-i="${i}">${esc(t.label)}</span>`).join('')}
-              <div class="phoneNavHighlight" data-el="phoneNavHighlight"></div>
-            </div>
-            <p class="phoneCardCaption" data-el="phoneCardCaption"></p>
-            <div class="phoneCardTags" data-el="phoneCardTags"></div>
-          </div>`)
+          <p class="montageEyebrow" data-el="montageEyebrow">${splitWords(scene.eyebrow)}</p>
+          <p class="montageLine" data-el="montageLine">${splitWords(scene.line)}</p>
+          ${shotFrameMarkup(scene.asset)}`)
     case 'value':
       return wrap(`
           ${scene.lines.map((l, i) => `<p class="valueLine" data-el="value${i}">${splitWords(l)}</p>`).join('')}`)
@@ -99,7 +109,7 @@ function sceneMarkup(scene: Scene, index: number): string {
       return wrap(`
           <p class="endWordmark reveal" data-el="endWordmark"><span class="wProp">Prop</span><span class="wRoster">Roster</span></p>
           <p class="endTagline" data-el="endTagline">${splitWords(scene.tagline)}</p>
-          <p class="endUrl reveal" data-el="endUrl">${esc(scene.url)}</p>`)
+          <p class="endUrl reveal" data-el="endUrl">${esc(scene.url)}</p>`, scene.asset)
   }
 }
 
@@ -121,82 +131,72 @@ export function buildReelDocument(): string {
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
       color: ${BRAND.ink};
     }
-    .scene {
-      position: absolute; inset: 0;
-      display: flex; align-items: center; justify-content: center;
-      opacity: 0; pointer-events: none;
-      /* Safe area: keep all copy within a centered column clear of the
-         top status/caption zone and the bottom Reel-controls/caption zone
-         social apps draw over vertical video (Step 9, V1 + reconfirmed
-         in V1.1). */
+    .scene { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+    .bleedBg { position: absolute; inset: 0; overflow: hidden; }
+    .bleedImg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scale(1); }
+    .bleedScrim { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,15,12,0.5) 0%, rgba(10,15,12,0.72) 55%, rgba(10,15,12,0.94) 100%); }
+    .safePad {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      /* Safe area: keep all copy clear of the top status/caption zone and
+         the bottom Reel-controls/caption zone social apps draw over
+         vertical video. */
       padding: 300px 92px 360px;
     }
-    .centerCol { width: 100%; max-width: 880px; text-align: center; transform: scale(1); }
+    .centerCol { width: 100%; max-width: 880px; text-align: center; transform: scale(1); position: relative; z-index: 1; }
     .reveal { opacity: 0; transform: translateY(28px); will-change: transform, opacity; }
     .word { display: inline-block; opacity: 0; transform: translateY(20px); will-change: transform, opacity; }
 
-    .hookLine { font-size: 60px; font-weight: 750; line-height: 1.22; margin: 0 0 72px; letter-spacing: -0.5px; }
-    .chaosGrid {
-      display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px;
-      max-width: 600px; margin: 0 auto;
-    }
+    .hookLine { font-size: 58px; font-weight: 750; line-height: 1.22; margin: 0 0 64px; letter-spacing: -0.5px; }
+    .chaosFlash { position: relative; height: 110px; }
     .chaosItem {
-      font-size: 30px; font-weight: 650; color: ${BRAND.muted};
-      border: 1px solid rgba(143,161,152,0.32); border-radius: 14px;
-      padding: 20px 18px; background: rgba(255,255,255,0.025);
-      opacity: 0;
+      position: absolute; top: 50%; left: 50%; font-size: 40px; font-weight: 700; color: ${BRAND.ink};
+      border: 1px solid rgba(135,160,145,0.4); border-radius: 16px;
+      padding: 20px 34px; background: rgba(255,255,255,0.035);
+      opacity: 0; transform: translate(-50%, -50%) scale(0.94); white-space: nowrap;
     }
 
-    .changeLine { font-size: 64px; font-weight: 750; line-height: 1.24; letter-spacing: -0.5px; }
+    .transitionLine { font-size: 62px; font-weight: 750; line-height: 1.26; letter-spacing: -0.5px; }
 
-    .meetLine { font-size: 66px; font-weight: 800; margin: 0 0 56px; letter-spacing: -0.5px; }
-    .tabGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .meetLine { font-size: 60px; font-weight: 800; margin: 0 0 40px; letter-spacing: -0.5px; }
+    .tabGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
     .tabChip {
-      display: flex; flex-direction: column; gap: 8px; text-align: left;
-      border: 1px solid rgba(47,122,92,0.45); border-radius: 16px;
-      background: rgba(47,122,92,0.08); padding: 18px 16px;
-      opacity: 0; transform: translateY(20px) scale(0.97);
+      font-size: 20px; font-weight: 750; color: ${BRAND.ink}; text-align: center;
+      border: 1px solid rgba(43,107,79,0.5); border-radius: 14px;
+      background: rgba(43,107,79,0.1); padding: 20px 10px;
+      opacity: 0; transform: translateY(16px) scale(0.96);
     }
-    .tabChipLabel { font-size: 22px; font-weight: 750; color: ${BRAND.ink}; }
-    .tabChipCaption { font-size: 14px; line-height: 1.35; color: ${BRAND.muted}; }
 
-    .heroLabel {
-      font-size: 15px; font-weight: 800; letter-spacing: 4px; color: ${BRAND.green};
-      margin: 0 0 22px; opacity: 0;
-    }
-    .phoneCard {
-      width: 680px; margin: 0 auto; border-radius: 30px;
+    .montageEyebrow { font-size: 17px; font-weight: 800; letter-spacing: 3px; color: ${BRAND.sage}; margin: 0 0 14px; }
+    .montageLine { font-size: 40px; font-weight: 750; line-height: 1.25; margin: 0 0 30px; letter-spacing: -0.3px; }
+    .shotFrame {
+      width: 620px; margin: 0 auto; border-radius: 22px; overflow: hidden;
       border: 1px solid rgba(255,255,255,0.14);
-      background: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.015));
-      padding: 30px 26px 42px; position: relative; overflow: hidden;
-      box-shadow: 0 40px 100px -40px rgba(47,122,92,0.35);
+      background: rgba(255,255,255,0.02);
+      box-shadow: 0 40px 90px -40px rgba(43,107,79,0.45);
+      opacity: 0; transform: translateY(26px) scale(0.96);
     }
-    .phoneCardNav { position: relative; display: flex; justify-content: space-between; padding-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.12); }
-    .phoneNavItem { font-size: 17px; font-weight: 700; color: ${BRAND.muted}; z-index: 1; position: relative; transition: none; }
-    .phoneNavHighlight {
-      position: absolute; bottom: -1px; height: 3px; width: 16.66%;
-      background: ${BRAND.green}; left: 0; border-radius: 3px;
-    }
-    .phoneCardCaption { font-size: 30px; font-weight: 700; margin: 36px 0 0; min-height: 42px; text-align: left; opacity: 0; }
-    .phoneCardTags { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; min-height: 40px; }
-    .tagPill {
-      font-size: 16px; font-weight: 650; color: ${BRAND.ink};
-      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14);
-      border-radius: 999px; padding: 8px 16px; opacity: 0; transform: translateY(10px);
+    .shotFrameBar { display: flex; gap: 6px; padding: 12px 14px; background: rgba(255,255,255,0.03); border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .shotDot { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.18); }
+    .shotImgWrap { position: relative; overflow: hidden; max-height: 760px; }
+    .shotImg { display: block; width: 100%; height: auto; transform-origin: center top; }
+    .shotShine {
+      position: absolute; top: 0; bottom: 0; width: 32%;
+      background: linear-gradient(100deg, transparent, rgba(255,255,255,0.16), transparent);
+      transform: translateX(-160%); pointer-events: none;
     }
 
-    .valueLine { font-size: 54px; font-weight: 750; line-height: 1.32; margin: 0 0 20px; letter-spacing: -0.5px; }
+    .valueLine { font-size: 52px; font-weight: 750; line-height: 1.32; margin: 0 0 18px; letter-spacing: -0.5px; }
 
-    .endWordmark { font-size: 78px; font-weight: 800; margin: 0 0 30px; letter-spacing: -1px; }
+    .endWordmark { font-size: 76px; font-weight: 800; margin: 0 0 28px; letter-spacing: -1px; }
     .wProp { color: ${BRAND.ink}; }
     .wRoster { color: ${BRAND.green}; }
-    .endTagline { font-size: 30px; font-weight: 600; color: ${BRAND.muted}; margin: 0 0 44px; max-width: 680px; margin-left: auto; margin-right: auto; line-height: 1.35; }
-    .endUrl { font-size: 36px; font-weight: 750; color: ${BRAND.green}; letter-spacing: 0.5px; }
+    .endTagline { font-size: 29px; font-weight: 600; color: ${BRAND.ink}; opacity: 0.86; margin: 0 0 42px; max-width: 660px; margin-left: auto; margin-right: auto; line-height: 1.35; }
+    .endUrl { font-size: 35px; font-weight: 750; color: ${BRAND.green}; letter-spacing: 0.5px; }
 
     .waveform {
-      position: absolute; left: 0; right: 0; bottom: 240px;
+      position: absolute; left: 0; right: 0; bottom: 240px; z-index: 2;
       height: 84px; display: flex; align-items: flex-end; justify-content: center; gap: 6px;
-      opacity: 0.3; pointer-events: none;
+      opacity: 0.28; pointer-events: none;
     }
     .wfBar { width: 8px; border-radius: 4px; background: ${BRAND.green}; height: 10px; }
   `
@@ -223,8 +223,7 @@ export function buildReelDocument(): string {
 
       // Word-by-word reveal: each .word span inside "container" gets its
       // own staggered delay (stepMs apart), so a headline builds in
-      // left-to-right rather than appearing as one block — the
-      // "premium SaaS launch video" text-animation pattern.
+      // left-to-right rather than appearing as one block.
       function revealWords(container, localMs, delayMs, stepMs, durMs) {
         if (!container) return;
         var words = container.querySelectorAll('.word');
@@ -236,43 +235,46 @@ export function buildReelDocument(): string {
         }
       }
 
-      function cardStyle(el, localMs, delayMs, durMs, rotateDeg) {
+      function cardStyle(el, localMs, delayMs, durMs) {
         if (!el) return;
         var p = clamp01((localMs - delayMs) / durMs);
         var e = easeOutCubic(p);
         el.style.opacity = String(e);
-        var rot = rotateDeg ? (rotateDeg * e) : 0;
-        el.style.transform = 'translateY(' + (18 * (1 - e)) + 'px) scale(' + (0.97 + 0.03 * e) + ') rotate(' + rot + 'deg)';
+        el.style.transform = 'translateY(' + (18 * (1 - e)) + 'px) scale(' + (0.96 + 0.04 * e) + ')';
       }
 
-      function pillStyle(el, localMs, delayMs, durMs) {
+      function chipStyle(el, localMs, delayMs, durMs) {
         if (!el) return;
         var p = clamp01((localMs - delayMs) / durMs);
         var e = easeOutCubic(p);
         el.style.opacity = String(e);
-        el.style.transform = 'translateY(' + (10 * (1 - e)) + 'px)';
+        el.style.transform = 'translateY(' + (16 * (1 - e)) + 'px) scale(' + (0.96 + 0.04 * e) + ')';
       }
 
-      // Subtle settle-in scale on the whole centered content column —
-      // starts a touch large, eases down to 1 over the scene's first
-      // 900ms. Independent of the word-level reveals; a small amount of
-      // "Ken Burns"-style motion reads as intentional, not busy.
+      // Subtle settle-in scale on the whole centered content column.
       function settleScale(container, localMs) {
         if (!container) return;
-        var p = clamp01(localMs / 900);
+        var p = clamp01(localMs / 700);
         var e = easeOutCubic(p);
-        var scale = 1.035 - 0.035 * e;
+        var scale = 1.03 - 0.03 * e;
         container.style.transform = 'scale(' + scale.toFixed(4) + ')';
       }
 
-      var propertyViewTabs = ${JSON.stringify((REEL_SCENES.find((s) => s.kind === 'propertyView') as Extract<Scene, { kind: 'propertyView' }>).tabs)};
+      // Slow, deterministic "Ken Burns" zoom on a full-bleed or montage
+      // image — a function of elapsed time within the scene only, so it
+      // is exactly reproducible frame-by-frame.
+      function kenBurns(img, localMs, durationMs, fromScale, toScale) {
+        if (!img) return;
+        var p = clamp01(localMs / durationMs);
+        var scale = fromScale + (toScale - fromScale) * p;
+        img.style.transform = 'scale(' + scale.toFixed(4) + ')';
+      }
 
       function setTime(ms) {
         ms = Math.max(0, Math.min(TOTAL_MS - 1, ms));
 
         // Ambient background spotlight: a slow, fully deterministic drift
-        // (function of ms only) so the dark background never feels
-        // static, without ever being loud or distracting.
+        // so the dark background never feels static.
         var spotX = 50 + 6 * Math.sin(ms / 5200);
         var spotY = 8 + 5 * Math.cos(ms / 6100);
         stageEl.style.setProperty('--spot-x', spotX.toFixed(2) + '%');
@@ -282,7 +284,7 @@ export function buildReelDocument(): string {
           var s = scenes[i];
           var start = Number(s.getAttribute('data-start'));
           var end = Number(s.getAttribute('data-end'));
-          var FADE = 260;
+          var FADE = 220;
           var active = ms >= start - FADE && ms < end;
           if (!active) { s.style.opacity = '0'; continue; }
           var local = ms - start;
@@ -293,60 +295,57 @@ export function buildReelDocument(): string {
 
           settleScale(s.querySelector('[data-el="centerCol"]'), local);
 
-          var scene = s.getAttribute('data-scene');
-          if (scene === 'hook') {
-            revealWords(s.querySelector('[data-el="hookLine"]'), local, 0, 55, 460)
+          // Dispatch on the scene's KIND (data-kind), not its id
+          // (data-scene) — several montage scenes (rentLedger, propCrew,
+          // search, investmentTools, attention) all share kind
+          // "montage" but each has a distinct id, so matching on id
+          // here would silently skip every one of them.
+          var kind = s.getAttribute('data-kind');
+          if (kind === 'hook') {
+            revealWords(s.querySelector('[data-el="hookLine"]'), local, 0, 45, 380)
+            var flashStart = 450, slot = 375, inD = 110, outD = 110;
+            var fi = Math.floor((local - flashStart) / slot);
             for (var c = 0; c < 4; c++) {
               var chaosEl = s.querySelector('[data-el="chaos' + c + '"]');
-              if (chaosEl) cardStyle(chaosEl, local, 520 + c * 190, 460, Number(chaosEl.getAttribute('data-rot')))
+              if (!chaosEl) continue;
+              if (local < flashStart || c !== fi) { chaosEl.style.opacity = '0'; continue; }
+              var within = local - (flashStart + fi * slot);
+              var holdEnd = slot - outD;
+              var op;
+              if (within < inD) op = clamp01(within / inD);
+              else if (within < holdEnd) op = 1;
+              else op = clamp01((slot - within) / outD);
+              chaosEl.style.opacity = String(op);
+              chaosEl.style.transform = 'translate(-50%, -50%) scale(' + (0.94 + 0.06 * op).toFixed(3) + ')';
             }
-          } else if (scene === 'change') {
-            revealWords(s.querySelector('[data-el="changeLine"]'), local, 100, 55, 520)
-          } else if (scene === 'meet') {
-            revealWords(s.querySelector('[data-el="meetLine"]'), local, 0, 55, 460)
+          } else if (kind === 'transition') {
+            revealWords(s.querySelector('[data-el="transitionLine"]'), local, 120, 50, 480)
+            kenBurns(s.querySelector('[data-el="bleedImg"]'), local, end - start, 1.0, 1.06)
+          } else if (kind === 'meet') {
+            revealWords(s.querySelector('[data-el="meetLine"]'), local, 0, 45, 360)
             var chips = s.querySelectorAll('.tabChip');
-            for (var k = 0; k < chips.length; k++) cardStyle(chips[k], local, 460 + k * 130, 400, 0)
-          } else if (scene === 'value') {
+            for (var k = 0; k < chips.length; k++) chipStyle(chips[k], local, 380 + k * 90, 320)
+          } else if (kind === 'montage') {
+            revealWords(s.querySelector('[data-el="montageEyebrow"]'), local, 0, 20, 260)
+            revealWords(s.querySelector('[data-el="montageLine"]'), local, 120, 40, 400)
+            var frameEl = s.querySelector('[data-el="shotFrame"]');
+            cardStyle(frameEl, local, 380, 420)
+            var sceneDur = end - start;
+            kenBurns(s.querySelector('[data-el="shotImg"]'), local, sceneDur, 1.0, 1.05)
+            var shine = s.querySelector('[data-el="shotShine"]');
+            if (shine) {
+              var shineStart = sceneDur * 0.38, shineDur = 700;
+              var sp = clamp01((local - shineStart) / shineDur);
+              shine.style.transform = 'translateX(' + (-160 + 320 * sp) + '%)';
+            }
+          } else if (kind === 'value') {
             var valueLines = s.querySelectorAll('.valueLine');
-            for (var v = 0; v < valueLines.length; v++) revealWords(valueLines[v], local, v * 480, 45, 440)
-          } else if (scene === 'end') {
+            for (var v = 0; v < valueLines.length; v++) revealWords(valueLines[v], local, v * 460, 42, 420)
+          } else if (kind === 'end') {
             revealStyle(s.querySelector('[data-el="endWordmark"]'), local, 0, 520)
             revealWords(s.querySelector('[data-el="endTagline"]'), local, 400, 45, 440)
             revealStyle(s.querySelector('[data-el="endUrl"]'), local, 900, 520)
-          }
-        }
-
-        // Property View scene — the product's hero moment: sweep the tab
-        // highlight, swap the caption, and reveal that tab's real content
-        // pills, all in lockstep, deterministically, based on elapsed
-        // time within the scene.
-        var pv = document.querySelector('.scene[data-scene="propertyView"]');
-        if (pv) {
-          var pvStart = Number(pv.getAttribute('data-start'));
-          var pvEnd = Number(pv.getAttribute('data-end'));
-          var pvLocal = ms - pvStart;
-          revealStyle(pv.querySelector('[data-el="heroLabel"]'), pvLocal, 0, 400)
-          var n = propertyViewTabs.length;
-          var stepDur = (pvEnd - pvStart) / n;
-          var idx = Math.max(0, Math.min(n - 1, Math.floor(pvLocal / stepDur)));
-          var withinStep = pvLocal - idx * stepDur;
-          var highlight = pv.querySelector('[data-el="phoneNavHighlight"]');
-          if (highlight) highlight.style.transform = 'translateX(' + (idx * 100) + '%)';
-          var caption = pv.querySelector('[data-el="phoneCardCaption"]');
-          if (caption) {
-            caption.textContent = propertyViewTabs[idx].label;
-            revealStyle(caption, withinStep, 80, 260)
-          }
-          var tagsEl = pv.querySelector('[data-el="phoneCardTags"]');
-          if (tagsEl) {
-            var tags = propertyViewTabs[idx].tags;
-            var wantHtml = tags.map(function (t) { return '<span class="tagPill">' + t + '</span>'; }).join('');
-            if (tagsEl.getAttribute('data-tab-idx') !== String(idx)) {
-              tagsEl.innerHTML = wantHtml;
-              tagsEl.setAttribute('data-tab-idx', String(idx));
-            }
-            var pills = tagsEl.querySelectorAll('.tagPill');
-            for (var pIdx = 0; pIdx < pills.length; pIdx++) pillStyle(pills[pIdx], withinStep, 160 + pIdx * 90, 320)
+            kenBurns(s.querySelector('[data-el="bleedImg"]'), local, end - start, 1.0, 1.05)
           }
         }
 

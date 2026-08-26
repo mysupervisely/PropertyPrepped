@@ -1,5 +1,5 @@
 // PropRoster Content Studio — Animated Marketing Reel Prototype
-// V1.1 — Visual Refinement Pass
+// V1.2 — Visual Expansion + Faster Pacing
 //
 // This module is the ONLY place that holds the actual words/claims that
 // appear in the Reel. It is deliberately data-only (no JSX, no rendering
@@ -11,106 +11,136 @@
 // PropCrew's copy, components/PropCrewPanel.tsx) on production main —
 // see the milestone completion reports for the exact verification
 // tables. Nothing here may reference the contractor marketplace,
-// bidding, "name your price," the Rental Turnover marketplace, or any
-// provider-network concept — none of that is live.
+// professional bidding, the Rental Turnover marketplace, "Find a
+// PropRoster Pro," a provider network, name-your-price jobs, or payments
+// collected by PropRoster — none of that is live. PropCrew is a private
+// directory; Rent Ledger records that rent was received, it does not
+// collect payments — both facts are asserted by the tests in this
+// folder, not just documented here.
+//
+// V1.2's headline change from V1.1: instead of an abstract phone-card
+// mockup, the "product montage" scenes now embed real, cropped
+// screenshots of the live product (lib/content-studio/reel-assets.ts,
+// generated from lib/content-studio/assets/*.jpg by
+// scripts/encode-reel-assets.mjs) — showing recognizable PropRoster UI
+// rather than invented UI, per this pass's brief.
 
 export const REEL_WIDTH = 1080
 export const REEL_HEIGHT = 1920
 export const REEL_FPS = 30
 
+// PropRoster's real visual language (app/globals.css's :root — brand
+// #204b3b), extended with a muted secondary sage and a pale glow tone
+// per this pass's direction: deep forest green primary, muted sage
+// secondary, pale desaturated green glow, off-white, charcoal/near-black
+// contrast. Deliberately NOT bright lime/neon/fluorescent — every green
+// here is desaturated enough to read as "premium SaaS," not "gaming UI."
 export const BRAND = {
-  // Same tokens as app/globals.css's :root — no new green introduced.
-  green: '#2f7a5c',
-  greenDeep: '#204b3b',
-  // The Reel's own near-black background. The live product's chrome is a
-  // light theme (--bg: #f5f7f9), so this is a deliberately new, Reel-only
-  // background — not a reuse of an app token — chosen for the "premium,
-  // dark, technology-forward" marketing look the brief calls for.
-  bg: '#0b100d',
-  bgAlt: '#111813',
-  ink: '#f5f7f5',
+  green: '#2b6b4f', // primary — deep forest, close to app's --brand #204b3b
+  greenDeep: '#173d2c', // deeper shade for large brand text / gradients
+  sage: '#87a091', // muted secondary accent (inactive nav items, small labels)
+  bg: '#0a0f0c', // near-black, faintly green-tinted charcoal background
+  bgAlt: '#0f1712',
+  ink: '#f6f8f5',
   muted: '#8fa198',
 } as const
 
-export type FeatureTab = {
-  label: string // exact production tab label, verbatim
-  caption: string // short, verified-accurate description of what's inside
-  // Short "content pills" shown inside the V1.1 propertyView hero card —
-  // each one is an exact, verified production term (a real sub-tab
-  // label, hero metric label, or a phrase lifted from real product
-  // copy) — never an invented feature.
-  tags: string[]
-}
-
 // Exact top-level tab labels from app/page.tsx's `tabs` array — verbatim,
-// same order as production. Nothing renamed, nothing invented.
-export const FEATURE_TABS: FeatureTab[] = [
-  { label: 'Overview', caption: 'Value, equity & cash flow', tags: ['Value', 'Equity', 'Rent'] },
-  { label: 'Rent', caption: 'Lease, ledger & tenant', tags: ['Lease', 'Ledger', 'Tenant'] },
-  { label: 'Details', caption: 'Mortgage, insurance & maintenance', tags: ['Mortgage', 'Insurance', 'Maintenance'] },
-  { label: 'PropCrew', caption: 'Contractors, agents & lenders', tags: ['Contractors', 'Agents', 'Lenders'] },
-  { label: 'Documents', caption: 'Every document, organized', tags: ['Documents', 'Photos'] },
-  { label: 'Tax', caption: 'Property tax at a glance', tags: ['Property tax', 'Documents'] },
-]
+// same order as production. Nothing renamed, nothing invented. Shown as
+// a quick establishing grid in the "meet" scene (labels only, matching
+// how the real product's own tab bar shows just names, no captions).
+export const FEATURE_TAB_LABELS = ['Overview', 'Rent', 'Details', 'PropCrew', 'Documents', 'Tax']
+
+export type AssetKey = 'rentLedger' | 'rentLedgerAttention' | 'search' | 'investmentTools' | 'propcrew' | 'propertyHome'
 
 export type Scene =
   | { id: 'hook'; kind: 'hook'; durationMs: number; line: string; chaos: string[] }
-  | { id: 'change'; kind: 'change'; durationMs: number; line: string }
-  | { id: 'meet'; kind: 'meet'; durationMs: number; line: string; tabs: FeatureTab[] }
-  | { id: 'propertyView'; kind: 'propertyView'; durationMs: number; tabs: FeatureTab[] }
+  | { id: 'transition'; kind: 'transition'; durationMs: number; line: string; asset: AssetKey }
+  | { id: 'meet'; kind: 'meet'; durationMs: number; line: string; tabs: string[] }
+  | { id: string; kind: 'montage'; durationMs: number; eyebrow: string; line: string; asset: AssetKey; shine?: boolean }
   | { id: 'value'; kind: 'value'; durationMs: number; lines: string[] }
-  | { id: 'end'; kind: 'end'; durationMs: number; tagline: string; url: string }
+  | { id: 'end'; kind: 'end'; durationMs: number; tagline: string; url: string; asset: AssetKey }
 
 // Scene-by-scene content. Durations are intentional (not incidental) —
-// see reel-content.test.ts for the exact total. Ordering is the
-// suggested 6-scene sequence from the brief, unchanged.
-//
-// V1.1 rebalance: the "meet" grid-reveal and "propertyView" cycle both
-// showed the same six tabs in V1, which read as repetitive at a fixed
-// pace. "meet" is now a quick, punchy establishing beat (all six areas
-// at a glance) and "propertyView" — the product's hero moment — gets
-// more time so each of the six tabs' real content pills are actually
-// readable without pausing. "end" gets more time so the brand/domain
-// register before the loop point.
+// see reel-content.test.ts for the exact total. V1.2 trades V1.1's six
+// longer scenes for ten shorter ones (a new visual beat roughly every
+// 1.4-2.2s) while keeping the same 18-20s target window.
 export const REEL_SCENES: Scene[] = [
   {
     id: 'hook',
     kind: 'hook',
-    durationMs: 3000,
+    durationMs: 2400,
     line: 'Still managing your rentals across…',
     chaos: ['Spreadsheets', 'Text threads', 'Random folders', 'A dozen apps'],
   },
   {
-    id: 'change',
-    kind: 'change',
-    durationMs: 2200,
+    id: 'transition',
+    kind: 'transition',
+    durationMs: 1600,
     line: 'What if your property had one home?',
+    asset: 'propertyHome',
   },
   {
     id: 'meet',
     kind: 'meet',
-    durationMs: 2800,
+    durationMs: 1400,
     line: 'Meet PropRoster.',
-    tabs: FEATURE_TABS,
+    tabs: FEATURE_TAB_LABELS,
   },
   {
-    id: 'propertyView',
-    kind: 'propertyView',
-    durationMs: 5000,
-    tabs: FEATURE_TABS,
+    id: 'rentLedger',
+    kind: 'montage',
+    durationMs: 2000,
+    eyebrow: 'RENT LEDGER',
+    line: 'Track rent. Month by month.',
+    asset: 'rentLedger',
+  },
+  {
+    id: 'propCrew',
+    kind: 'montage',
+    durationMs: 2000,
+    eyebrow: 'PROPCREW',
+    line: 'Your private crew. Your trusted pros.',
+    asset: 'propcrew',
+  },
+  {
+    id: 'search',
+    kind: 'montage',
+    durationMs: 1600,
+    eyebrow: 'SEARCH',
+    line: 'Find anything. Fast.',
+    asset: 'search',
+  },
+  {
+    id: 'investmentTools',
+    kind: 'montage',
+    durationMs: 2200,
+    eyebrow: 'INVESTMENT TOOLS',
+    line: 'Run the numbers before you commit.',
+    asset: 'investmentTools',
+    shine: true,
+  },
+  {
+    id: 'attention',
+    kind: 'montage',
+    durationMs: 1600,
+    eyebrow: 'RENT LEDGER',
+    line: 'Stay ahead of what needs attention.',
+    asset: 'rentLedgerAttention',
   },
   {
     id: 'value',
     kind: 'value',
-    durationMs: 2400,
+    durationMs: 1800,
     lines: ['One property. One place.', 'Less chasing. More control.'],
   },
   {
     id: 'end',
     kind: 'end',
-    durationMs: 3600,
+    durationMs: 3000,
     tagline: 'Every property. Everything in its place.',
     url: 'proproster.com',
+    asset: 'propertyHome',
   },
 ]
 
@@ -131,11 +161,18 @@ export const FORBIDDEN_TERMS = [
   'marketplace',
   'bidding',
   'name your price',
+  'name-your-price',
   'rental turnover',
   'provider network',
   'bid on',
+  'find a proproster pro',
   'download now',
   'start free',
   'sign up free',
   'free trial',
+  'collects rent',
+  'collect rent',
+  'collects payments',
+  'collect payments',
+  'payments collected by proproster',
 ]

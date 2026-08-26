@@ -3,30 +3,39 @@ import { buildReelDocument } from './reel-html'
 import { BRAND, FORBIDDEN_TERMS, REEL_HEIGHT, REEL_WIDTH } from './reel-content'
 
 // Animated Marketing Reel Prototype — generated-document tests. Covers
-// both the original V1 requirements and the V1.1 visual-refinement pass
-// (word-by-word text reveals, the 3x2 "meet" grid, the content-rich
-// propertyView hero card, the ambient background drift). This repo has
-// no jsdom/React Testing Library, so (matching every other component
-// test in this repo) these assert against the raw generated
+// V1, V1.1, and the V1.2 "visual expansion + faster pacing" pass. This
+// repo has no jsdom/React Testing Library, so (matching every other
+// component test in this repo) these assert against the raw generated
 // HTML/CSS/JS string rather than mounting it.
 
 const doc = buildReelDocument()
 
-describe('The generated document is a self-contained, offline HTML page', () => {
-  it('has no external network requests — no <link>/<script src> to a remote host, no @import', () => {
+describe('The generated document is a self-contained, offline page (screenshots included)', () => {
+  it('has no external network requests — no remote <link>/<script src>, no @import, and every <img> is a base64 data: URI, never a remote or relative file path', () => {
     expect(doc).not.toMatch(/<link[^>]+href=["']https?:\/\//)
     expect(doc).not.toMatch(/<script[^>]+src=/)
     expect(doc).not.toMatch(/@import/)
     expect(doc).not.toContain('fonts.googleapis.com')
+    const imgSrcs = [...doc.matchAll(/<img[^>]+src="([^"]+)"/g)].map((m) => m[1])
+    expect(imgSrcs.length).toBeGreaterThan(0)
+    for (const src of imgSrcs) expect(src.startsWith('data:image/jpeg;base64,')).toBe(true)
   })
 
   it('the stage is exactly the Reel dimensions', () => {
     expect(doc).toContain(`width: ${REEL_WIDTH}px; height: ${REEL_HEIGHT}px;`)
   })
 
-  it('uses the dark, near-black Reel background and the brand green — not the live app\'s light theme', () => {
+  it('uses the dark, near-black Reel background and the muted (non-neon) brand greens', () => {
     expect(doc).toContain(BRAND.bg)
     expect(doc).toContain(BRAND.green)
+    expect(doc).toContain(BRAND.sage)
+    // Guard against ever swapping in a bright/neon green by mistake. Scoped
+    // to the <style> block only — the full document also contains base64
+    // image data, which (being effectively random text) will eventually
+    // contain any given short substring, including "lime" or "neon", by
+    // coincidence.
+    const styleBlock = (doc.match(/<style>([\s\S]*?)<\/style>/) as RegExpMatchArray)[1].toLowerCase()
+    expect(styleBlock).not.toMatch(/#00ff00|#39ff14|lime|neon/)
   })
 })
 
@@ -41,88 +50,128 @@ describe('A deterministic, externally-drivable animation clock is exposed', () =
     expect(doc).toContain('requestAnimationFrame(tick)')
   })
 
-  it('the waveform bars and the ambient background spotlight are both a deterministic function of ms (Math.sin/Math.cos), never Math.random() — so re-rendering the same frame twice is reproducible', () => {
+  it('the waveform, ambient spotlight, and Ken Burns image zooms are all deterministic functions of ms/local time, never Math.random()', () => {
     expect(doc).not.toContain('Math.random(')
     expect(doc).toContain('Math.sin(ms /')
     expect(doc).toContain("stageEl.style.setProperty('--spot-x'")
+    expect(doc).toContain('function kenBurns(img, localMs, durationMs, fromScale, toScale)')
   })
 })
 
-describe('All six scenes are present in the markup with the required brand elements', () => {
-  for (const scene of ['hook', 'change', 'meet', 'propertyView', 'value', 'end']) {
+describe('All ten scenes are present in the markup', () => {
+  for (const scene of ['hook', 'transition', 'meet', 'rentLedger', 'propCrew', 'search', 'investmentTools', 'attention', 'value', 'end']) {
     it(`renders a section for the "${scene}" scene`, () => {
       expect(doc).toContain(`data-scene="${scene}"`)
     })
   }
 
-  it('the end card renders the two-tone PropRoster wordmark, the V1.1 tagline, and the URL', () => {
+  it('the end card renders the two-tone PropRoster wordmark, the tagline, and the URL', () => {
     expect(doc).toContain('<span class="wProp">Prop</span><span class="wRoster">Roster</span>')
     expect(doc).toContain('Every property. Everything in its place.'.split(' ').map((w) => `<span class="word">${w}</span>`).join(' '))
     expect(doc).toContain('proproster.com')
   })
+})
 
-  it('the propertyView scene renders a phone-card mock, not a real (tiny/unreadable) screenshot — no <img> tag anywhere in the document', () => {
-    expect(doc).toContain('class="phoneCard"')
-    expect(doc).not.toContain('<img')
+describe('V1.2: full-bleed property-photo scenes reuse the real site\'s hero-image + scrim pattern', () => {
+  it('"transition" and "end" both render a bleedBg with an <img> and a dark scrim, matching components/LandingPage.tsx\'s existing .landingHeroBg/.landingHeroScrim idea', () => {
+    expect(doc).toContain('.bleedBg { position: absolute; inset: 0; overflow: hidden; }')
+    expect(doc).toContain('.bleedScrim')
+    const transitionIdx = doc.indexOf('data-scene="transition"')
+    const endIdx = doc.indexOf('data-scene="end"')
+    expect(doc.slice(transitionIdx, transitionIdx + 400)).toContain('class="bleedBg"')
+    expect(doc.slice(endIdx, endIdx + 400)).toContain('class="bleedBg"')
+  })
+
+  it('other scenes (hook/meet/montage/value) do not render a bleedBg — only transition/end are full-bleed', () => {
+    for (const scene of ['hook', 'meet', 'rentLedger', 'value']) {
+      const idx = doc.indexOf(`data-scene="${scene}"`)
+      const nextSectionIdx = doc.indexOf('<section', idx + 1)
+      const slice = doc.slice(idx, nextSectionIdx > -1 ? nextSectionIdx : idx + 600)
+      expect(slice).not.toContain('class="bleedBg"')
+    }
   })
 })
 
-describe('V1.1: text reveals are word-by-word, not one whole-line block fade', () => {
-  it('multi-word headlines (hook/change/meet/value/end tagline) are split into individually-animatable .word spans', () => {
-    expect(doc).toContain('<p class="hookLine" data-el="hookLine"><span class="word">Still</span>')
-    expect(doc).toContain('<p class="changeLine" data-el="changeLine"><span class="word">What</span>')
-    expect(doc).toContain('<p class="meetLine" data-el="meetLine"><span class="word">Meet</span>')
+describe('V1.2: the product montage shows real screenshots in a browser-chrome-style frame', () => {
+  it('every montage scene renders a .shotFrame with a chrome bar and an <img>', () => {
+    for (const scene of ['rentLedger', 'propCrew', 'search', 'investmentTools', 'attention']) {
+      const idx = doc.indexOf(`data-scene="${scene}"`)
+      const slice = doc.slice(idx, idx + 1200)
+      expect(slice).toContain('class="shotFrame"')
+      expect(slice).toContain('class="shotFrameBar"')
+      expect(slice).toMatch(/<img class="shotImg"[^>]+src="data:image\/jpeg;base64,/)
+    }
   })
 
-  it('the JS staggers each .word\'s reveal with revealWords(), not a single revealStyle() call on the whole line', () => {
-    expect(doc).toContain('function revealWords(container, localMs, delayMs, stepMs, durMs)')
-    expect(doc).toContain('revealWords(s.querySelector(\'[data-el="hookLine"]\'), local, 0, 55, 460)')
-  })
-})
-
-describe('V1.1: the meet scene uses a 3x2 grid, matching production\'s real mobile tab layout', () => {
-  it('.tabGrid is 3 columns (repeat(3, 1fr)), not the V1 2-column layout', () => {
-    expect(doc).toMatch(/\.tabGrid\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*1fr\)/)
-  })
-})
-
-describe('V1.1: propertyView is the product\'s visual hero, with real content pills per tab', () => {
-  it('renders a PROPROSTER hero label and a phoneCardTags pill container', () => {
-    expect(doc).toContain('<div class="heroLabel" data-el="heroLabel">PROPROSTER</div>')
-    expect(doc).toContain('data-el="phoneCardTags"')
+  it('only the investmentTools scene\'s JS branch drives the shotShine highlight sweep', () => {
+    expect(doc).toContain('var shine = s.querySelector(\'[data-el="shotShine"]\')')
+    expect(doc).toContain('shineStart = sceneDur * 0.38')
   })
 
-  it('the JS drives per-tab caption + tag pills off the same verified FEATURE_TABS data (labels appear in the embedded JSON)', () => {
-    expect(doc).toContain('var propertyViewTabs = ')
-    expect(doc).toContain('"label":"Overview"')
-    expect(doc).toContain('"tags":["Value","Equity","Rent"]')
-  })
-
-  it('the phone card is visually larger/richer than a plain caption — a box-shadow and a tags row are present', () => {
-    expect(doc).toMatch(/\.phoneCard\s*\{[^}]*box-shadow:/)
-    expect(doc).toContain('.phoneCardTags')
+  it('no <img> is a tiny/unreadable thumbnail — every embedded screenshot has real pixel width/height attributes', () => {
+    const imgs = [...doc.matchAll(/<img class="shotImg"[^>]+width="(\d+)"[^>]+height="(\d+)"/g)]
+    expect(imgs.length).toBe(5)
+    for (const m of imgs) {
+      expect(Number(m[1])).toBeGreaterThan(300)
+      expect(Number(m[2])).toBeGreaterThan(100)
+    }
   })
 })
 
-describe('V1.1: the hook scene\'s chaos items form a compact, gently-rotated 2x2 grid, not a plain vertical list', () => {
-  it('.chaosGrid is a 2-column grid (not a flex column list)', () => {
-    expect(doc).toMatch(/\.chaosGrid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*1fr\)/)
+describe('V1.2: the hook scene\'s chaos items flash one at a time (rapid-fire), not all together in a static grid', () => {
+  it('the JS computes a single active "flash index" per frame and hides every other chaos item', () => {
+    expect(doc).toContain('var flashStart = 450, slot = 375')
+    expect(doc).toContain("if (local < flashStart || c !== fi) { chaosEl.style.opacity = '0'; continue; }")
+  })
+})
+
+describe('Regression guard: the per-frame dispatch branches on scene KIND, not scene id', () => {
+  // Caught during V1.2 QA: five montage scenes (rentLedger, propCrew,
+  // search, investmentTools, attention) all share kind "montage" but
+  // have distinct ids. An earlier draft dispatched on `data-scene`
+  // (the id) and checked `=== 'montage'`, which is never true for any
+  // of them — every montage scene rendered fully blank (eyebrow/line/
+  // shotFrame stuck at their CSS-default opacity 0, never touched by
+  // JS) despite the scene container itself fading in correctly. Fixed
+  // by adding a `data-kind` attribute and dispatching on that instead.
+  it('every scene section carries a data-kind attribute distinct from its data-scene id for montage scenes', () => {
+    for (const id of ['rentLedger', 'propCrew', 'search', 'investmentTools', 'attention']) {
+      expect(doc).toContain(`data-scene="${id}" data-kind="montage"`)
+    }
   })
 
-  it('each chaos item carries a small deterministic rotation via a data attribute, applied by cardStyle()', () => {
-    expect(doc).toMatch(/data-el="chaos0" data-rot="-3"/)
-    expect(doc).toContain('function cardStyle(el, localMs, delayMs, durMs, rotateDeg)')
+  it('the JS reads data-kind (not data-scene) to choose the per-frame branch', () => {
+    expect(doc).toContain("var kind = s.getAttribute('data-kind');")
+    expect(doc).toContain("if (kind === 'hook')")
+    expect(doc).toContain("} else if (kind === 'montage') {")
+    // The old, broken form must never come back.
+    expect(doc).not.toMatch(/var scene = s\.getAttribute\('data-scene'\)/)
+  })
+
+  it('every element a revealWords() call targets is built with splitWords() (has .word children) — a plain esc()-only element would have no .word spans for revealWords to ever find, permanently stuck at its CSS default opacity', () => {
+    expect(doc).toContain('<p class="montageEyebrow" data-el="montageEyebrow"><span class="word">')
+    // .montageEyebrow itself must NOT carry a baked-in opacity:0 — only
+    // its .word children may start hidden, or the reveal could never
+    // raise the (already-invisible) parent's effective opacity.
+    const eyebrowRuleMatch = doc.match(/\.montageEyebrow\s*\{([^}]*)\}/)
+    expect(eyebrowRuleMatch).not.toBeNull()
+    expect((eyebrowRuleMatch as RegExpMatchArray)[1]).not.toMatch(/opacity:\s*0[^.]/)
   })
 })
 
 describe('Mobile/social safe areas: important copy stays clear of the edges', () => {
-  it('every scene has generous top/bottom padding clear of where Instagram/TikTok draw their caption, controls, and username overlays', () => {
-    expect(doc).toMatch(/\.scene\s*\{[^}]*padding:\s*300px 92px 360px;/)
+  it('every scene\'s text layer has generous top/bottom padding clear of where Instagram/TikTok draw their caption, controls, and username overlays', () => {
+    expect(doc).toMatch(/\.safePad\s*\{[^}]*padding:\s*300px 92px 360px;/)
+  })
+
+  it('full-bleed background images are NOT constrained by the safe-area padding (they must reach the true edges), while the text/content layer is', () => {
+    expect(doc).toMatch(/\.bleedBg\s*\{\s*position:\s*absolute;\s*inset:\s*0;/)
+    expect(doc).toMatch(/\.safePad\s*\{[\s\S]*?padding:/)
   })
 })
 
 describe('No non-live functionality or unsupported CTA reaches the rendered document', () => {
-  it('no forbidden marketplace/bidding/turnover/unverified-CTA term appears anywhere in the generated HTML', () => {
+  it('no forbidden marketplace/bidding/turnover/unverified-CTA/payments-collected term appears anywhere in the generated HTML', () => {
     const lower = doc.toLowerCase()
     for (const term of FORBIDDEN_TERMS) {
       expect(lower).not.toContain(term.toLowerCase())
