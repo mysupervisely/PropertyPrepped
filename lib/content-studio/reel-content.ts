@@ -62,9 +62,14 @@ export type Scene =
   | { id: 'end'; kind: 'end'; durationMs: number; tagline: string; url: string; asset: AssetKey }
 
 // Scene-by-scene content. Durations are intentional (not incidental) —
-// see reel-content.test.ts for the exact total. V1.2 trades V1.1's six
-// longer scenes for ten shorter ones (a new visual beat roughly every
-// 1.4-2.2s) while keeping the same 18-20s target window.
+// see reel-content.test.ts for the exact total. V1.3 pacing pass: V1.2's
+// ten scenes moved too fast through the actual product demonstrations
+// (a viewer on a phone couldn't read them). Durations here are
+// deliberately uneven — the hook stays quick (it's a hook), while every
+// real-screenshot montage scene and the end card get more room, per a
+// requested ~22-23s total (up from V1.2's 19.6s, but well short of
+// V1.1's slower ~19-20s six-scene pacing — a middle ground, not a
+// reversion).
 export const REEL_SCENES: Scene[] = [
   {
     id: 'hook',
@@ -76,21 +81,21 @@ export const REEL_SCENES: Scene[] = [
   {
     id: 'transition',
     kind: 'transition',
-    durationMs: 1600,
+    durationMs: 1900,
     line: 'What if your property had one home?',
     asset: 'propertyHome',
   },
   {
     id: 'meet',
     kind: 'meet',
-    durationMs: 1400,
+    durationMs: 1800,
     line: 'Meet PropRoster.',
     tabs: FEATURE_TAB_LABELS,
   },
   {
     id: 'rentLedger',
     kind: 'montage',
-    durationMs: 2000,
+    durationMs: 2400,
     eyebrow: 'RENT LEDGER',
     line: 'Track rent. Month by month.',
     asset: 'rentLedger',
@@ -98,7 +103,7 @@ export const REEL_SCENES: Scene[] = [
   {
     id: 'propCrew',
     kind: 'montage',
-    durationMs: 2000,
+    durationMs: 2400,
     eyebrow: 'PROPCREW',
     line: 'Your private crew. Your trusted pros.',
     asset: 'propcrew',
@@ -106,7 +111,7 @@ export const REEL_SCENES: Scene[] = [
   {
     id: 'search',
     kind: 'montage',
-    durationMs: 1600,
+    durationMs: 2100,
     eyebrow: 'SEARCH',
     line: 'Find anything. Fast.',
     asset: 'search',
@@ -114,7 +119,7 @@ export const REEL_SCENES: Scene[] = [
   {
     id: 'investmentTools',
     kind: 'montage',
-    durationMs: 2200,
+    durationMs: 2600,
     eyebrow: 'INVESTMENT TOOLS',
     line: 'Run the numbers before you commit.',
     asset: 'investmentTools',
@@ -123,7 +128,7 @@ export const REEL_SCENES: Scene[] = [
   {
     id: 'attention',
     kind: 'montage',
-    durationMs: 1600,
+    durationMs: 2100,
     eyebrow: 'RENT LEDGER',
     line: 'Stay ahead of what needs attention.',
     asset: 'rentLedgerAttention',
@@ -131,13 +136,13 @@ export const REEL_SCENES: Scene[] = [
   {
     id: 'value',
     kind: 'value',
-    durationMs: 1800,
+    durationMs: 2000,
     lines: ['One property. One place.', 'Less chasing. More control.'],
   },
   {
     id: 'end',
     kind: 'end',
-    durationMs: 3000,
+    durationMs: 3300,
     tagline: 'Every property. Everything in its place.',
     url: 'proproster.com',
     asset: 'propertyHome',

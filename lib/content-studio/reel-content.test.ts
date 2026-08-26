@@ -7,15 +7,18 @@ import {
 import * as ASSETS from './reel-assets'
 
 // Animated Marketing Reel Prototype — content-model tests. Covers V1,
-// V1.1, and the V1.2 "visual expansion + faster pacing" pass (ten
-// shorter scenes, real embedded screenshots instead of an abstract hero
-// card). These lock in the composition's technical requirements
-// (dimensions/fps/duration) and, most importantly, that every feature
-// named or shown in the Reel is real, verifiable production
-// functionality — never the contractor marketplace, professional
-// bidding, the Rental Turnover marketplace, "Find a PropRoster Pro," a
-// provider network, name-your-price jobs, or payments collected by
-// PropRoster, none of which is live.
+// V1.1, V1.2 ("visual expansion + faster pacing" — ten shorter scenes,
+// real embedded screenshots instead of an abstract hero card), and V1.3
+// ("pacing + house motion polish" — a slower middle-ground pace so the
+// product screens are actually readable at mobile size, plus a fix for
+// a one-frame crossfade-opacity bug; see reel-html.test.ts for the
+// motion-specific regression guards). These lock in the composition's
+// technical requirements (dimensions/fps/duration) and, most
+// importantly, that every feature named or shown in the Reel is real,
+// verifiable production functionality — never the contractor
+// marketplace, professional bidding, the Rental Turnover marketplace,
+// "Find a PropRoster Pro," a provider network, name-your-price jobs, or
+// payments collected by PropRoster, none of which is live.
 
 describe('Composition dimensions and timing are intentional, per the brief', () => {
   it('is 1080x1920 (9:16 vertical) at 30fps', () => {
@@ -25,22 +28,29 @@ describe('Composition dimensions and timing are intentional, per the brief', () 
     expect(REEL_FPS).toBe(30)
   })
 
-  it('total duration is ~18-20 seconds, and is exactly the sum of the ten scene durations (not incidental)', () => {
+  it('total duration is ~22-23 seconds (V1.3 pacing pass), and is exactly the sum of the ten scene durations (not incidental)', () => {
     const sum = REEL_SCENES.reduce((s, sc) => s + sc.durationMs, 0)
     expect(REEL_TOTAL_MS).toBe(sum)
-    expect(REEL_TOTAL_MS).toBeGreaterThanOrEqual(18000)
-    expect(REEL_TOTAL_MS).toBeLessThanOrEqual(20000)
+    expect(REEL_TOTAL_MS).toBeGreaterThanOrEqual(22000)
+    expect(REEL_TOTAL_MS).toBeLessThanOrEqual(23000)
   })
 
-  it('V1.2: has ten scenes (up from V1.1\'s six) — a new visual beat roughly every 1.4-2.2s, with the end card deliberately held longer so the brand/domain register', () => {
-    expect(REEL_SCENES).toHaveLength(10)
+  it('V1.3: every real-screenshot montage scene and the end card got MORE time than V1.2, a deliberate middle ground (slower than V1.2, still faster than V1.1)', () => {
+    const v12Durations: Record<string, number> = {
+      hook: 2400, transition: 1600, meet: 1400, rentLedger: 2000, propCrew: 2000,
+      search: 1600, investmentTools: 2200, attention: 1600, value: 1800, end: 3000,
+    }
     for (const s of REEL_SCENES) {
-      if (s.id === 'end') {
-        expect(s.durationMs).toBeGreaterThan(2400)
-        continue
+      const prior = v12Durations[s.id]
+      if (s.id === 'hook') {
+        expect(s.durationMs).toBe(prior) // the hook stays quick — it's the hook
+      } else {
+        expect(s.durationMs).toBeGreaterThan(prior)
       }
-      expect(s.durationMs).toBeGreaterThanOrEqual(1200)
-      expect(s.durationMs).toBeLessThanOrEqual(2400)
+      // Still every scene is comfortably readable on a phone without
+      // ballooning into V1.1's much slower six-scene pace.
+      expect(s.durationMs).toBeGreaterThanOrEqual(1800)
+      expect(s.durationMs).toBeLessThanOrEqual(3500)
     }
   })
 

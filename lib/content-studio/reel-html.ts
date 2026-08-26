@@ -260,14 +260,22 @@ export function buildReelDocument(): string {
         container.style.transform = 'scale(' + scale.toFixed(4) + ')';
       }
 
-      // Slow, deterministic "Ken Burns" zoom on a full-bleed or montage
-      // image — a function of elapsed time within the scene only, so it
-      // is exactly reproducible frame-by-frame.
-      function kenBurns(img, localMs, durationMs, fromScale, toScale) {
+      // Slow, deterministic "Ken Burns" zoom (+ an optional very subtle
+      // continuous pan) on a full-bleed or montage image — a pure
+      // function of elapsed time within the scene only (clamped to
+      // [0,1] progress), so it is exactly reproducible frame-by-frame,
+      // never resets mid-scene, and has no discontinuity at either end:
+      // at p=0 it is exactly (fromScale, fromXPct, fromYPct); at p=1,
+      // exactly (toScale, toXPct, toYPct). Pan defaults to 0 (no
+      // translate) for callers that only want a zoom.
+      function kenBurns(img, localMs, durationMs, fromScale, toScale, fromXPct, toXPct, fromYPct, toYPct) {
         if (!img) return;
+        fromXPct = fromXPct || 0; toXPct = toXPct || 0; fromYPct = fromYPct || 0; toYPct = toYPct || 0;
         var p = clamp01(localMs / durationMs);
         var scale = fromScale + (toScale - fromScale) * p;
-        img.style.transform = 'scale(' + scale.toFixed(4) + ')';
+        var x = fromXPct + (toXPct - fromXPct) * p;
+        var y = fromYPct + (toYPct - fromYPct) * p;
+        img.style.transform = 'translate(' + x.toFixed(3) + '%, ' + y.toFixed(3) + '%) scale(' + scale.toFixed(4) + ')';
       }
 
       function setTime(ms) {
@@ -284,14 +292,38 @@ export function buildReelDocument(): string {
           var s = scenes[i];
           var start = Number(s.getAttribute('data-start'));
           var end = Number(s.getAttribute('data-end'));
+          // Single continuous crossfade curve across the whole active
+          // window [start-FADE, end]: fadeIn ramps 0->1 over
+          // [start-FADE, start], holds at 1 across the scene body, then
+          // fadeOut ramps 1->0 over [end-FADE, end], reaching exactly 0
+          // AT ms===end (scene durations are exact multiples of the
+          // frame step, so that boundary always lands on a sampled
+          // frame). Using an inclusive "ms <= end" here — together with
+          // this being one unbranched min(fadeIn, fadeOut) rather than
+          // two competing formulas — means the natural ramp already
+          // reaches 0 by the time a scene goes inactive, so there is no
+          // separate "snap to 0" discontinuity left for that handoff.
+          //
+          // V1.3 fix: an earlier version computed fadeIn as
+          // clamp01(local / FADE) (exactly 0 at local===0, i.e. AT a
+          // scene's own start) and only corrected the pre-roll via a
+          // second, competing assignment guarded by "ms < start"
+          // (strictly before start). Exactly AT ms===start neither
+          // branch produced the correct ~1 value, so every scene's
+          // opacity silently dropped to 0 for exactly one frame right
+          // as it began — invisible against the near-black background
+          // on text-only scenes, but a visible one-frame flash-to-black
+          // "stutter" on the property-photo scenes (transition/end).
+          // Confirmed empirically (frame-by-frame pixel diff) before
+          // this fix and re-confirmed clean after it — see the
+          // completion report.
           var FADE = 220;
-          var active = ms >= start - FADE && ms < end;
+          var active = ms >= start - FADE && ms <= end;
           if (!active) { s.style.opacity = '0'; continue; }
           var local = ms - start;
-          var fadeIn = clamp01(local / FADE);
+          var fadeIn = clamp01((ms - (start - FADE)) / FADE);
           var fadeOut = clamp01((end - ms) / FADE);
-          s.style.opacity = String(Math.min(fadeIn, fadeOut === 0 ? 1 : fadeOut, 1));
-          if (ms < start) s.style.opacity = String(clamp01((ms - (start - FADE)) / FADE));
+          s.style.opacity = String(Math.min(fadeIn, fadeOut));
 
           settleScale(s.querySelector('[data-el="centerCol"]'), local);
 
@@ -320,7 +352,7 @@ export function buildReelDocument(): string {
             }
           } else if (kind === 'transition') {
             revealWords(s.querySelector('[data-el="transitionLine"]'), local, 120, 50, 480)
-            kenBurns(s.querySelector('[data-el="bleedImg"]'), local, end - start, 1.0, 1.06)
+            kenBurns(s.querySelector('[data-el="bleedImg"]'), local, end - start, 1.02, 1.07, 0, -1.2, 0, -0.8)
           } else if (kind === 'meet') {
             revealWords(s.querySelector('[data-el="meetLine"]'), local, 0, 45, 360)
             var chips = s.querySelectorAll('.tabChip');
@@ -345,7 +377,7 @@ export function buildReelDocument(): string {
             revealStyle(s.querySelector('[data-el="endWordmark"]'), local, 0, 520)
             revealWords(s.querySelector('[data-el="endTagline"]'), local, 400, 45, 440)
             revealStyle(s.querySelector('[data-el="endUrl"]'), local, 900, 520)
-            kenBurns(s.querySelector('[data-el="bleedImg"]'), local, end - start, 1.0, 1.05)
+            kenBurns(s.querySelector('[data-el="bleedImg"]'), local, end - start, 1.02, 1.06, 0, 1.0, 0, -0.6)
           }
         }
 

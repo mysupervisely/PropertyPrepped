@@ -54,7 +54,7 @@ describe('A deterministic, externally-drivable animation clock is exposed', () =
     expect(doc).not.toContain('Math.random(')
     expect(doc).toContain('Math.sin(ms /')
     expect(doc).toContain("stageEl.style.setProperty('--spot-x'")
-    expect(doc).toContain('function kenBurns(img, localMs, durationMs, fromScale, toScale)')
+    expect(doc).toContain('function kenBurns(img, localMs, durationMs, fromScale, toScale, fromXPct, toXPct, fromYPct, toYPct)')
   })
 })
 
@@ -156,6 +156,60 @@ describe('Regression guard: the per-frame dispatch branches on scene KIND, not s
     const eyebrowRuleMatch = doc.match(/\.montageEyebrow\s*\{([^}]*)\}/)
     expect(eyebrowRuleMatch).not.toBeNull()
     expect((eyebrowRuleMatch as RegExpMatchArray)[1]).not.toMatch(/opacity:\s*0[^.]/)
+  })
+})
+
+describe('V1.3 regression guard: the crossfade opacity curve is one continuous formula, no one-frame flash-to-black at scene boundaries', () => {
+  // Found via frame-by-frame pixel diffing of the V1.2 render: at the
+  // exact instant a scene began (ms === its own start), opacity was
+  // computed by TWO competing formulas — fadeIn = clamp01(local / FADE)
+  // (exactly 0 at local === 0) and a second, only-for-strictly-earlier-
+  // frames correction (`if (ms < start) ...`) that never fired AT
+  // ms === start itself. The result: every scene's opacity silently
+  // dropped to 0 for exactly one frame right as it began. Invisible
+  // against the near-black background on text-only scenes; a glaring
+  // one-frame flash-to-black on the property-photo scenes (transition,
+  // end), which is exactly the "stutter" reported. Fixed by replacing
+  // both formulas with a single min(fadeIn, fadeOut) curve and an
+  // inclusive `ms <= end` active window.
+  it('there is exactly one opacity formula (Math.min(fadeIn, fadeOut)) and no leftover competing "ms < start" correction', () => {
+    expect(doc).toContain('s.style.opacity = String(Math.min(fadeIn, fadeOut));')
+    expect(doc).not.toMatch(/if \(ms < start\) s\.style\.opacity/)
+    expect(doc).not.toContain("fadeOut === 0 ? 1 : fadeOut")
+  })
+
+  it('fadeIn is computed the same way for every ms in the active window (a single continuous ramp), not conditionally overridden', () => {
+    expect(doc).toContain("var fadeIn = clamp01((ms - (start - FADE)) / FADE);")
+    // The old, buggy form (exactly 0 at local === 0) must not come back.
+    expect(doc).not.toContain('var fadeIn = clamp01(local / FADE);')
+  })
+
+  it('the active window is inclusive of ms === end, so the natural fadeOut ramp (which reaches exactly 0 there) is what turns the scene invisible — not an abrupt "snap to 0"', () => {
+    expect(doc).toContain('var active = ms >= start - FADE && ms <= end;')
+  })
+})
+
+describe('V1.3: the house-photo Ken Burns motion is one continuous zoom + subtle pan, never reset mid-scene', () => {
+  it('kenBurns() computes scale/x/y as pure linear interpolations of a single clamped progress value (no reset, no branch that could jump)', () => {
+    const fnMatch = doc.match(/function kenBurns\(img,[^)]*\)\s*\{([\s\S]*?)\n\s{6}\}/)
+    expect(fnMatch).not.toBeNull()
+    const body = (fnMatch as RegExpMatchArray)[1]
+    expect(body).toContain('var p = clamp01(localMs / durationMs);')
+    expect(body).toContain('fromScale + (toScale - fromScale) * p')
+    expect(body).toContain('fromXPct + (toXPct - fromXPct) * p')
+    expect(body).toContain('fromYPct + (toYPct - fromYPct) * p')
+  })
+
+  it('the transition and end scenes both pass an explicit pan (non-zero X or Y), and both start above scale 1 and end higher still (continuous with the requested ~1.02-1.07 cinematic range)', () => {
+    const pattern = /kenBurns\(s\.querySelector\('\[data-el="bleedImg"\]'\), local, end - start, ([\d.]+), ([\d.]+), (-?[\d.]+), (-?[\d.]+), (-?[\d.]+), (-?[\d.]+)\)/g
+    const calls = [...doc.matchAll(pattern)]
+    expect(calls.length).toBe(2) // transition + end
+    for (const m of calls) {
+      const [fromScale, toScale, fromX, toX, fromY, toY] = m.slice(1).map(Number)
+      expect(fromScale).toBeGreaterThan(1.0)
+      expect(toScale).toBeGreaterThan(fromScale)
+      expect(fromX !== toX || fromY !== toY).toBe(true)
+    }
   })
 })
 
