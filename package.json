@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
-    "render:reel": "node --experimental-strip-types scripts/render-reel.mjs"
+    "render:reel": "node --experimental-strip-types scripts/render-reel.mjs",
+    "render:reel2": "node --experimental-strip-types scripts/render-reel.mjs --module=../lib/content-studio/property-overview/html.ts --fn=buildReel2Document --output=reel-output/propertyOverview-reel-v1.mp4"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "latest",
