@@ -998,6 +998,30 @@ h2, h3, p { margin-top: 0; }
 .landingWhatIsCard h3 { font-size: 15px; margin: 14px 0 8px; }
 .landingWhatIsCard p { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin: 0; }
 
+/* Public Homepage Pricing + First Property Free: small, muted supporting
+   line under the hero CTAs — deliberately secondary to the h1/CTA
+   buttons, never competing with them for attention. */
+.landingHeroFreeNote { color: var(--muted); font-size: 13.5px; margin: 12px 0 0; }
+
+/* Public Homepage Pricing + First Property Free: compact pricing section.
+   Reuses .pricingGrid/.pricingCard/.pricingBadge/.pricingTagline/
+   .pricingPrice/.pricingFeatureList/.statusPill/.pricingEarlyAccess as-is
+   (defined above, shared with app/pricing/page.tsx) so the card look is
+   identical everywhere pricing is shown — only this section's own
+   wrapper/intro/CTA classes are new. */
+.landingPricing { max-width: 1100px; margin: 10px auto 60px; padding: 0 28px; text-align: center; }
+.landingPricingIntro { max-width: 560px; margin: 0 auto 30px; }
+.landingPricingIntro h2 { font-size: clamp(22px, 2.6vw, 30px); letter-spacing: -.5px; margin: 0 0 10px; }
+.landingPricingSub { color: var(--muted); font-size: 15px; line-height: 1.5; margin: 0; }
+.landingPricingGrid { text-align: left; margin: 0 0 32px; }
+.landingPricingLimit { font-weight: 700; font-size: 14px; margin: 0; }
+.landingPricingCta { max-width: 420px; margin: 0 auto; }
+.landingPricingCtaLead { font-weight: 700; font-size: 16px; margin: 0 0 14px; }
+.landingPricingCta .landingCtaPrimary { width: 100%; }
+.landingPricingCtaNote { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+.landingPricingFullLink { display: inline-block; margin-top: 16px; color: var(--brand); font-weight: 650; font-size: 14px; text-decoration: none; }
+.landingPricingFullLink:hover { text-decoration: underline; }
+
 /* Section 7: privacy/trust note. */
 .landingPrivacyNote { max-width: 1320px; margin: 30px auto 60px; padding: 0 28px; display: flex; align-items: flex-start; gap: 14px; }
 .landingPrivacyNote h3 { font-size: 15px; margin: 0 0 4px; }
@@ -1016,6 +1040,7 @@ h2, h3, p { margin-top: 0; }
   .landingHeroHeadline { align-self: auto; }
   .landingSignInCard { padding: 28px 22px; }
   .landingWhatIsGrid { grid-template-columns: 1fr 1fr; }
+  .landingPricing { padding: 0 22px; }
 }
 
 @media (max-width: 560px) {
@@ -1029,6 +1054,7 @@ h2, h3, p { margin-top: 0; }
   .landingWhatIsGrid { grid-template-columns: 1fr; }
   .landingPrivacyNote { padding: 0 18px; }
   .landingNav { gap: 14px; }
+  .landingPricing { padding: 0 16px; margin: 6px auto 44px; }
 }
 
 /* Bugfix (found while diagnosing the mobile Document Intelligence modal
