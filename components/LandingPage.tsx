@@ -23,6 +23,7 @@ import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../lib/supabase'
 import { Wordmark } from './Wordmark'
+import { PLANS, PUBLIC_PLAN_ORDER, PLAN_FEATURE_HIGHLIGHTS, EARLY_ACCESS_PRICING } from '../lib/billing/plans'
 
 function HouseIcon() {
   return (
@@ -227,9 +228,19 @@ export default function LandingPage() {
             <p className="landingHeroTagline">Organize it. Analyze it. Stay ahead of it.</p>
             <p className="landingHeroSub">PropRoster helps property owners and real estate investors organize properties, track finances, analyze opportunities, manage documents, monitor important dates, and stay ahead of what needs attention.</p>
             <div className="landingHeroCtas">
-              <button type="button" className="primary landingCtaPrimary" onClick={startSignup}>Create Free Account</button>
+              <button type="button" className="primary landingCtaPrimary" onClick={startSignup}>Start Free</button>
               <Link href="/investment-tools/rental-analyzer" className="secondary landingCtaSecondary">Try Rental Property Analyzer</Link>
             </div>
+            {/* Public Homepage Pricing + First Property Free: verified against
+                lib/billing/plans.ts (PLANS.free: priceMonthly 0, maxProperties 1)
+                and the real signup flow (components/LandingPage.tsx's own
+                submitAuth() below calls supabase.auth.signUp() only — no
+                Stripe/card collection anywhere in that path; Stripe Checkout is
+                a separate, later, authenticated-only action in
+                app/api/billing/checkout/route.ts). Kept visually secondary
+                (small, muted) — the CTA buttons above remain the primary
+                visual weight of the hero. */}
+            <p className="landingHeroFreeNote">Start with your first property free. No credit card required.</p>
           </div>
 
           <div className="landingValueProps">
@@ -323,6 +334,61 @@ export default function LandingPage() {
               <p>{item.text}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Public Homepage Pricing + First Property Free: a compact, public
+          pricing section so a visitor can understand cost before creating
+          an account, without duplicating the pricing data. Every price,
+          property limit, tagline, and feature bullet below is read
+          directly from lib/billing/plans.ts — the same canonical source
+          app/pricing/page.tsx renders from — so this section and the full
+          /pricing page can never drift into contradictory numbers. This
+          intentionally does NOT re-implement /pricing's own JSX (its
+          auth-aware "Current Plan"/"Upgrade to X" CTA logic is exercised
+          by existing tests keyed to that file's exact source) — only the
+          shared data is reused, and this section's own CTA is the single,
+          always-the-same "start signing up" action appropriate for a
+          signed-out marketing page. Deliberately omits the Coming Soon
+          (Automate) and 16+/Contact cards for a "compact" section — the
+          "View full pricing" link below covers those. */}
+      <section className="landingPricing" id="pricing">
+        <div className="landingPricingIntro">
+          <p className="eyebrow">PRICING</p>
+          <h2>Simple pricing that grows with your portfolio</h2>
+          <p className="landingPricingSub">Start with your first property free. Upgrade when your portfolio grows.</p>
+        </div>
+
+        <div className="pricingGrid landingPricingGrid">
+          {PUBLIC_PLAN_ORDER.map((planId) => {
+            const def = PLANS[planId]
+            const isPaid = planId !== 'free'
+            return (
+              <article className={`pricingCard${def.mostPopular ? ' pricingCardPopular' : ''}`} key={planId}>
+                {def.mostPopular && <span className="pricingBadge">Most Popular</span>}
+                <h3>{def.name}</h3>
+                <p className="pricingTagline">{def.tagline}</p>
+                <div className="pricingPrice">
+                  <strong>${def.priceMonthly.toFixed(2)}</strong>
+                  <span>/month</span>
+                </div>
+                <p className="landingPricingLimit">{def.maxProperties === 1 ? '1 property' : `Up to ${def.maxProperties} properties`}</p>
+                {isPaid && EARLY_ACCESS_PRICING && <span className="statusPill pricingEarlyAccess">Early Access Pricing</span>}
+                {PLAN_FEATURE_HIGHLIGHTS[planId] && (
+                  <ul className="pricingFeatureList">
+                    {PLAN_FEATURE_HIGHLIGHTS[planId]!.map((feature) => <li key={feature}>{feature}</li>)}
+                  </ul>
+                )}
+              </article>
+            )
+          })}
+        </div>
+
+        <div className="landingPricingCta">
+          <p className="landingPricingCtaLead">Start with your first property free.</p>
+          <button type="button" className="primary landingCtaPrimary" onClick={startSignup}>Get Started Free</button>
+          <p className="landingPricingCtaNote">No credit card required.</p>
+          <Link href="/pricing" className="landingPricingFullLink">View full pricing details →</Link>
         </div>
       </section>
 
