@@ -29,7 +29,7 @@ export default function ContentStudioReelPropCrewPrototype() {
         <strong>Internal prototype — not part of the PropRoster product.</strong> Not linked from
         any production navigation. Feature Reel #3 — PropCrew only. A short landlord story leading
         into the PropCrew reveal, using the one real, supplied PropCrew screenshot (5645 North
-        Eagle Highway) with contact phone/email visually masked in this presentation layer only.
+        Eagle Highway — placeholder/test contact data, not a real person or business).
       </div>
 
       <h1 style={{ fontSize: 22, marginBottom: 4 }}>PropRoster Content Studio</h1>

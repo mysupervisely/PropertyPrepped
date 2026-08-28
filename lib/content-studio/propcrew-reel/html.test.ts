@@ -114,33 +114,15 @@ describe('All seven scenes are present, in order', () => {
   })
 })
 
-describe('PRIVACY: phone/email are masked in the rendered document, names are not', () => {
-  it('the two real phone numbers and the one real email address never appear anywhere in the generated document', () => {
-    expect(doc).not.toContain('727-898-5484')
-    expect(doc).not.toContain('813-948-5967')
-    expect(doc).not.toContain('info@breezeair.com')
-  })
-
-  // Note: the names/business names ("Independent Handyman", "Jose
-  // Rodriguez", "Breeze Air", "Joseph Bartow") are pixels INSIDE the
-  // embedded screenshot image, not separate overlay text — so they
-  // cannot be asserted via a plain string search against the generated
-  // HTML (the image is opaque base64 pixel data). That they remain
-  // visible (i.e. are never covered by a mask) is instead verified
-  // geometrically in content.test.ts ("each mask sits below its card's
-  // own name row, never covering it") and was additionally confirmed by
-  // direct visual inspection of rendered frames — see the completion
-  // report.
-
-  it('renders at least 3 static .maskBar redaction bars on the base "reveal"/"trust" screenshots, plus 3 more nested inside the two card-pop cutouts (6 total)', () => {
-    expect(doc.match(/class="maskBar"/g)?.length).toBe(9) // reveal(3) + trust base(3) + trust pops(1+2)
-  })
-
-  it('the "private" scene screenshot never includes any mask (because its crop never reaches the cards at all — see content.test.ts\'s dedicated bounds check)', () => {
-    const privateSceneStart = doc.indexOf('data-scene="private"')
-    const privateSceneEnd = doc.indexOf('</section>', privateSceneStart)
-    const privateBranch = doc.slice(privateSceneStart, privateSceneEnd)
-    expect(privateBranch).not.toContain('maskBar')
+// The screenshot's contact details (names, phone numbers, email) are
+// placeholder/test data on the demo property used throughout this
+// project — confirmed by the requester, not a real person or business —
+// so this Reel does NOT mask any of it. There is deliberately no
+// redaction markup anywhere in the generated document (the card-pop
+// cutouts are a plain clipped window onto the unmodified screenshot).
+describe('No redaction markup exists anywhere in the document — the screenshot is shown as supplied', () => {
+  it('there is no .maskBar (or any other redaction-bar) element in the generated document', () => {
+    expect(doc).not.toContain('maskBar')
   })
 })
 

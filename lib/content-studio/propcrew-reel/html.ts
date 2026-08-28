@@ -13,7 +13,6 @@ import {
   BRAND, REEL3_FPS, REEL3_HEIGHT, REEL3_SCENES, REEL3_TOTAL_MS, REEL3_WIDTH, reel3SceneStartMs,
   DISPLAY_WIDTH, VIEWPORT_HEIGHT, PRIVATE_VIEWPORT_HEIGHT, SCREENSHOT_WIDTH, SCREENSHOT_HEIGHT, SCALE_FACTOR,
   REVEAL_CAMERA, PRIVATE_CAMERA, CARD_HANDYMAN, CARD_BREEZE_AIR,
-  MASK_HANDYMAN_PHONE, MASK_BREEZE_AIR_PHONE, MASK_BREEZE_AIR_EMAIL, ALL_MASKS,
   rectFor, type Reel3Scene, type Rect,
 } from './content.ts'
 import { propcrewShot } from './assets.ts'
@@ -30,26 +29,16 @@ function splitWords(text: string): string {
     .join(' ')
 }
 
-// A static (build-time, non-animated) "redaction bar" over one raw-pixel
-// rect, given the camera that positions the base screenshot it sits on
-// top of. Purely presentational — the source PNG itself is never
-// touched (see assets.ts / scripts/encode-propcrew-reel-asset.mjs).
-function maskDivHtml(raw: Rect, camera: { s: number; tx: number; ty: number }): string {
-  const r = rectFor(raw, camera)
-  return `<div class="maskBar" style="left:${r.x.toFixed(2)}px;top:${r.y.toFixed(2)}px;width:${r.w.toFixed(2)}px;height:${r.h.toFixed(2)}px;"></div>`
-}
-
 // A static "device card" screenshot viewport at a fixed camera (used by
 // the "reveal" and "private" scenes — both static crops, no camera
-// motion) — background masks are baked in here too since they never
-// move for these two scenes. `viewportHeight` is passed explicitly
-// (rather than always using the shared VIEWPORT_HEIGHT) because the
-// "private" scene deliberately uses its OWN, shorter viewport — see
-// content.ts's PRIVATE_VIEWPORT_HEIGHT comment for why: at the shared
-// 240px height, frameFor()'s width-bound scale leaves enough vertical
-// margin that the crop reaches into the (unmasked, at this scene's
-// crop) contact cards below.
-function staticShotHtml(camera: { s: number; tx: number; ty: number }, masks: Rect[], viewportHeight: number): string {
+// motion). `viewportHeight` is passed explicitly (rather than always
+// using the shared VIEWPORT_HEIGHT) because the "private" scene
+// deliberately uses its OWN, shorter viewport — see content.ts's
+// PRIVATE_VIEWPORT_HEIGHT comment for why: at the shared 240px height,
+// frameFor()'s width-bound scale leaves enough vertical margin that the
+// crop reaches into the contact cards below, which this scene isn't
+// meant to show.
+function staticShotHtml(camera: { s: number; tx: number; ty: number }, viewportHeight: number): string {
   const imgW = SCREENSHOT_WIDTH * SCALE_FACTOR * camera.s
   const imgH = SCREENSHOT_HEIGHT * SCALE_FACTOR * camera.s
   return `
@@ -57,7 +46,6 @@ function staticShotHtml(camera: { s: number; tx: number; ty: number }, masks: Re
       <div class="shotFrameBar"><span class="shotDot"></span><span class="shotDot"></span><span class="shotDot"></span></div>
       <div class="shotViewport" style="height:${viewportHeight}px;">
         <img class="pcImg" src="${propcrewShot.dataUri}" style="width:${imgW.toFixed(2)}px;height:${imgH.toFixed(2)}px;transform:translate(${camera.tx.toFixed(2)}px, ${camera.ty.toFixed(2)}px);" alt="" />
-        ${masks.map((m) => maskDivHtml(m, camera)).join('')}
       </div>
     </div>`
 }
@@ -66,27 +54,14 @@ function staticShotHtml(camera: { s: number; tx: number; ty: number }, masks: Re
 // (same REVEAL_CAMERA), positioned/sized to exactly one card's rect, so
 // it reads as that card being lifted forward — background-image (not an
 // <img>) so this stays a small, purely-CSS overlay rather than another
-// full <img> element. Its own local mask(s) are nested inside, in
-// cutout-local coordinates, so they track the pop's scale-up correctly
-// (a CSS transform on the cutout div scales its children uniformly).
-function cardPopHtml(dataEl: string, card: Rect, cardMasks: Rect[]): string {
+// full <img> element.
+function cardPopHtml(dataEl: string, card: Rect): string {
   const cardRect = rectFor(card, REVEAL_CAMERA)
   const imgW = SCREENSHOT_WIDTH * SCALE_FACTOR * REVEAL_CAMERA.s
   const imgH = SCREENSHOT_HEIGHT * SCALE_FACTOR * REVEAL_CAMERA.s
   const bgPosX = REVEAL_CAMERA.tx - cardRect.x
   const bgPosY = REVEAL_CAMERA.ty - cardRect.y
-  const localMasks = cardMasks
-    .map((m) => {
-      const r = rectFor(m, REVEAL_CAMERA)
-      const lx = r.x - cardRect.x
-      const ly = r.y - cardRect.y
-      return `<div class="maskBar" style="left:${lx.toFixed(2)}px;top:${ly.toFixed(2)}px;width:${r.w.toFixed(2)}px;height:${r.h.toFixed(2)}px;"></div>`
-    })
-    .join('')
-  return `
-    <div class="cardPop" data-el="${dataEl}" style="left:${cardRect.x.toFixed(2)}px;top:${cardRect.y.toFixed(2)}px;width:${cardRect.w.toFixed(2)}px;height:${cardRect.h.toFixed(2)}px;background-image:url('${propcrewShot.dataUri}');background-size:${imgW.toFixed(2)}px ${imgH.toFixed(2)}px;background-position:${bgPosX.toFixed(2)}px ${bgPosY.toFixed(2)}px;">
-      ${localMasks}
-    </div>`
+  return `<div class="cardPop" data-el="${dataEl}" style="left:${cardRect.x.toFixed(2)}px;top:${cardRect.y.toFixed(2)}px;width:${cardRect.w.toFixed(2)}px;height:${cardRect.h.toFixed(2)}px;background-image:url('${propcrewShot.dataUri}');background-size:${imgW.toFixed(2)}px ${imgH.toFixed(2)}px;background-position:${bgPosX.toFixed(2)}px ${bgPosY.toFixed(2)}px;"></div>`
 }
 
 function sceneMarkup(scene: Reel3Scene, index: number): string {
@@ -107,7 +82,7 @@ function sceneMarkup(scene: Reel3Scene, index: number): string {
     case 'reveal':
       return wrap(`
           <p class="revealLabel" data-el="revealLabel">${splitWords(scene.label)}</p>
-          ${staticShotHtml(REVEAL_CAMERA, ALL_MASKS, VIEWPORT_HEIGHT)}`)
+          ${staticShotHtml(REVEAL_CAMERA, VIEWPORT_HEIGHT)}`)
     case 'trust': {
       const imgW = SCREENSHOT_WIDTH * SCALE_FACTOR * REVEAL_CAMERA.s
       const imgH = SCREENSHOT_HEIGHT * SCALE_FACTOR * REVEAL_CAMERA.s
@@ -118,23 +93,22 @@ function sceneMarkup(scene: Reel3Scene, index: number): string {
             <div class="shotFrameBar"><span class="shotDot"></span><span class="shotDot"></span><span class="shotDot"></span></div>
             <div class="shotViewport" style="height:${VIEWPORT_HEIGHT}px;">
               <img class="pcImg" src="${propcrewShot.dataUri}" style="width:${imgW.toFixed(2)}px;height:${imgH.toFixed(2)}px;transform:translate(${REVEAL_CAMERA.tx.toFixed(2)}px, ${REVEAL_CAMERA.ty.toFixed(2)}px);" alt="" />
-              ${ALL_MASKS.map((m) => maskDivHtml(m, REVEAL_CAMERA)).join('')}
               <div class="scrim" data-el="trustScrim"></div>
-              ${cardPopHtml('card1Pop', CARD_HANDYMAN, [MASK_HANDYMAN_PHONE])}
-              ${cardPopHtml('card2Pop', CARD_BREEZE_AIR, [MASK_BREEZE_AIR_PHONE, MASK_BREEZE_AIR_EMAIL])}
+              ${cardPopHtml('card1Pop', CARD_HANDYMAN)}
+              ${cardPopHtml('card2Pop', CARD_BREEZE_AIR)}
             </div>
           </div>`)
     }
     case 'private':
-      // Empty masks array is safe here (not a gap in coverage): this
-      // scene's viewport is capped by PRIVATE_VIEWPORT_HEIGHT (see
+      // This scene's viewport is capped by PRIVATE_VIEWPORT_HEIGHT (see
       // content.ts) to never show any raw-pixel row at or below the
-      // cards' own top edge — see content.test.ts's dedicated bounds
-      // check for the guard against this regressing.
+      // cards' own top edge, keeping the crop scoped to the heading as
+      // the storyboard calls for — see content.test.ts's dedicated
+      // bounds check for the guard against this regressing.
       return wrap(`
           <p class="privateLine reveal" data-el="privateLineA">${esc(scene.lineA)}</p>
           <p class="privateLine privateLineB reveal" data-el="privateLineB">${esc(scene.lineB)}</p>
-          ${staticShotHtml(PRIVATE_CAMERA, [], PRIVATE_VIEWPORT_HEIGHT)}`)
+          ${staticShotHtml(PRIVATE_CAMERA, PRIVATE_VIEWPORT_HEIGHT)}`)
     case 'close':
       return wrap(`
           <p class="endWordmark reveal" data-el="endWordmark"><span class="wProp">Prop</span><span class="wRoster">Roster</span></p>
@@ -185,8 +159,6 @@ export function buildReel3Document(): string {
        VIEWPORT_HEIGHT; see content.ts's PRIVATE_VIEWPORT_HEIGHT comment. */
     .shotViewport { position: relative; width: ${DISPLAY_WIDTH}px; overflow: hidden; background: #f5f7f5; }
     .pcImg { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
-
-    .maskBar { position: absolute; background: #dfe4df; border: 1px solid rgba(20,30,24,0.06); border-radius: 5px; }
 
     .scrim { position: absolute; inset: 0; background: rgba(6,10,8,0.6); opacity: 0; }
     .cardPop {

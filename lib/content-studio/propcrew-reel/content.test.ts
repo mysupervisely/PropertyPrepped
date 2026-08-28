@@ -5,7 +5,7 @@ import {
   REEL3_WIDTH, REEL3_HEIGHT, REEL3_FPS, REEL3_SCENES, REEL3_TOTAL_MS, reel3SceneStartMs,
   SCREENSHOT_WIDTH, SCREENSHOT_HEIGHT, DISPLAY_WIDTH, VIEWPORT_HEIGHT, PRIVATE_VIEWPORT_HEIGHT, SCALE_FACTOR,
   REVEAL_TARGET_BOX, REVEAL_CAMERA, PRIVATE_TARGET_BOX, PRIVATE_CAMERA, PRIVATE_CROP_BOTTOM_RAW_Y,
-  CARD_HANDYMAN, CARD_BREEZE_AIR, MASK_HANDYMAN_PHONE, MASK_BREEZE_AIR_PHONE, MASK_BREEZE_AIR_EMAIL, ALL_MASKS,
+  CARD_HANDYMAN, CARD_BREEZE_AIR,
   frameFor, rectFor, FORBIDDEN_TERMS,
 } from './content'
 
@@ -13,9 +13,16 @@ import {
 // tests. Covers: exact approved copy, duration/resolution, scene
 // ordering, no forbidden marketplace/booking/bidding/privacy-overclaim
 // terms, only the one approved screenshot asset in use, deterministic
-// crop/mask math (including the privacy-critical "private" scene bounds
-// check), and — critically — that Reel #1 and Reel #2's own files are
-// completely untouched by this third Reel's existence.
+// crop math (including the "private" scene's bounds, which stays
+// scoped to the heading per the storyboard), and — critically — that
+// Reel #1 and Reel #2's own files are completely untouched by this
+// third Reel's existence.
+//
+// Note: the contact details shown in the screenshot (names, phone
+// numbers, email) are placeholder/test data on the demo property used
+// throughout this project — confirmed by the requester, not a real
+// person or business — so nothing in the cards is masked, and there is
+// no masking-specific test coverage here.
 
 describe('Composition dimensions and duration are intentional', () => {
   it('is 1080x1920 (9:16 vertical) at 30fps', () => {
@@ -121,8 +128,8 @@ describe('Only the approved PropCrew screenshot is used, verbatim, with the exac
     expect(CARD_HANDYMAN.x + CARD_HANDYMAN.w).toBeLessThanOrEqual(CARD_BREEZE_AIR.x)
   })
 
-  it('every card/mask/target box is a real, positive-size box within the screenshot\'s own bounds — never an invented off-image coordinate', () => {
-    const boxes = [CARD_HANDYMAN, CARD_BREEZE_AIR, MASK_HANDYMAN_PHONE, MASK_BREEZE_AIR_PHONE, MASK_BREEZE_AIR_EMAIL]
+  it('every card/target box is a real, positive-size box within the screenshot\'s own bounds — never an invented off-image coordinate', () => {
+    const boxes = [CARD_HANDYMAN, CARD_BREEZE_AIR]
     for (const b of boxes) {
       expect(b.w).toBeGreaterThan(0)
       expect(b.h).toBeGreaterThan(0)
@@ -131,35 +138,6 @@ describe('Only the approved PropCrew screenshot is used, verbatim, with the exac
       expect(b.x + b.w).toBeLessThanOrEqual(SCREENSHOT_WIDTH)
       expect(b.y + b.h).toBeLessThanOrEqual(SCREENSHOT_HEIGHT)
     }
-  })
-
-  it('each mask sits fully within its own card\'s bounds (never floating off the card it is meant to redact)', () => {
-    expect(MASK_HANDYMAN_PHONE.x).toBeGreaterThanOrEqual(CARD_HANDYMAN.x)
-    expect(MASK_HANDYMAN_PHONE.x + MASK_HANDYMAN_PHONE.w).toBeLessThanOrEqual(CARD_HANDYMAN.x + CARD_HANDYMAN.w)
-    expect(MASK_HANDYMAN_PHONE.y).toBeGreaterThanOrEqual(CARD_HANDYMAN.y)
-    expect(MASK_HANDYMAN_PHONE.y + MASK_HANDYMAN_PHONE.h).toBeLessThanOrEqual(CARD_HANDYMAN.y + CARD_HANDYMAN.h)
-
-    for (const m of [MASK_BREEZE_AIR_PHONE, MASK_BREEZE_AIR_EMAIL]) {
-      expect(m.x).toBeGreaterThanOrEqual(CARD_BREEZE_AIR.x)
-      expect(m.x + m.w).toBeLessThanOrEqual(CARD_BREEZE_AIR.x + CARD_BREEZE_AIR.w)
-      expect(m.y).toBeGreaterThanOrEqual(CARD_BREEZE_AIR.y)
-      expect(m.y + m.h).toBeLessThanOrEqual(CARD_BREEZE_AIR.y + CARD_BREEZE_AIR.h)
-    }
-  })
-
-  it('each mask sits below its card\'s own name row (y >= card.y + 60px, clear of the "Independent Handyman"/"Breeze Air" name and "Jose Rodriguez"/"Joseph Bartow" subtitle lines near the top of the card) — masks can never cover the approved, still-visible names', () => {
-    const NAME_ROW_HEIGHT = 60
-    for (const m of [MASK_HANDYMAN_PHONE]) {
-      expect(m.y).toBeGreaterThanOrEqual(CARD_HANDYMAN.y + NAME_ROW_HEIGHT)
-    }
-    for (const m of [MASK_BREEZE_AIR_PHONE, MASK_BREEZE_AIR_EMAIL]) {
-      expect(m.y).toBeGreaterThanOrEqual(CARD_BREEZE_AIR.y + NAME_ROW_HEIGHT)
-    }
-  })
-
-  it('ALL_MASKS is exactly the three masks: one phone line for Handyman, one phone + one email line for Breeze Air', () => {
-    expect(ALL_MASKS).toEqual([MASK_HANDYMAN_PHONE, MASK_BREEZE_AIR_PHONE, MASK_BREEZE_AIR_EMAIL])
-    expect(ALL_MASKS.length).toBe(3)
   })
 })
 
@@ -173,16 +151,6 @@ describe('Deterministic crop/camera math (testable without a browser)', () => {
   it('REVEAL_CAMERA keeps both cards fully within the 900x240 viewport', () => {
     for (const card of [CARD_HANDYMAN, CARD_BREEZE_AIR]) {
       const r = rectFor(card, REVEAL_CAMERA)
-      expect(r.x).toBeGreaterThanOrEqual(-1)
-      expect(r.x + r.w).toBeLessThanOrEqual(DISPLAY_WIDTH + 1)
-      expect(r.y).toBeGreaterThanOrEqual(-1)
-      expect(r.y + r.h).toBeLessThanOrEqual(VIEWPORT_HEIGHT + 1)
-    }
-  })
-
-  it('REVEAL_CAMERA keeps every mask fully within the 900x240 viewport (masks must always be on-screen, never clipped off)', () => {
-    for (const m of ALL_MASKS) {
-      const r = rectFor(m, REVEAL_CAMERA)
       expect(r.x).toBeGreaterThanOrEqual(-1)
       expect(r.x + r.w).toBeLessThanOrEqual(DISPLAY_WIDTH + 1)
       expect(r.y).toBeGreaterThanOrEqual(-1)
@@ -210,7 +178,7 @@ describe('Deterministic crop/camera math (testable without a browser)', () => {
   })
 })
 
-describe('PRIVACY: the "private" scene\'s crop can never reach the contact cards — regression guard for a real bug caught during this Reel\'s own QA pass', () => {
+describe('The "private" scene\'s crop stays scoped to the heading, never reaching the cards below — matches the storyboard\'s "return attention to the heading" framing (regression guard for a real bug caught during this Reel\'s own QA pass)', () => {
   it('PRIVATE_CROP_BOTTOM_RAW_Y (the lowest raw-pixel row the private-scene viewport can ever show) is above both cards\' own top edge', () => {
     expect(PRIVATE_CROP_BOTTOM_RAW_Y).toBeLessThan(CARD_HANDYMAN.y)
     expect(PRIVATE_CROP_BOTTOM_RAW_Y).toBeLessThan(CARD_BREEZE_AIR.y)

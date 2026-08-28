@@ -34,7 +34,7 @@ export const REEL3_FPS = 30
 export { BRAND }
 
 // ---------------------------------------------------------------------
-// The real screenshot's geometry. Every crop/card/mask box below is
+// The real screenshot's geometry. Every crop/card box below is
 // expressed in these RAW pixel coordinates (the screenshot's own
 // 996x750 pixel grid), measured directly against the source image using
 // a graduated grid overlay (same calibration method as Reel #2) — never
@@ -75,8 +75,8 @@ export function frameFor(x0: number, x1: number, y0: number, y1: number): Camera
 
 // Pure viewport-space rect for a raw-pixel box at a given camera state —
 // the exact math the renderer's JS uses each frame, exposed here so
-// tests can verify (without a browser) that every card/mask stays
-// within the 900x240 viewport.
+// tests can verify (without a browser) that every card stays within the
+// 900x240 viewport.
 export function rectFor(raw: Rect, camera: Camera): Rect {
   return {
     x: raw.x * SCALE_FACTOR * camera.s + camera.tx,
@@ -103,21 +103,19 @@ export const REVEAL_CAMERA: Camera = frameFor(
 // so "return attention to the heading" is a real zoom-in moment, not a
 // repeat of the same framing.
 //
-// IMPORTANT — privacy: this crop uses its OWN, SHORTER viewport height
-// (PRIVATE_VIEWPORT_HEIGHT, not the shared VIEWPORT_HEIGHT), deliberately
-// NOT frameFor()'s "fit both axes" scale. frameFor() always picks
-// min(sx, sy) so the WIDTH fits, which leaves the height under-filled —
-// at the shared 240px viewport height, that leftover vertical margin
-// would show ~170px further down the page than the target's own y1,
-// reaching well INTO the contact cards' un-masked phone-number rows
-// (verified empirically by rendering a frame at the shared height and
-// finding "727-898-5484"/"813-948-5967" peeking in unmasked — a real
-// privacy bug, caught and fixed before this Reel was finalized). Capping
-// the viewport at 80px keeps the visible raw-pixel range to
-// [434, ~485] — the heading block only, ~16px of margin before the
-// cards (raw y=501) ever enter frame — see content.test.ts's
-// "private crop never reaches the cards" test for the guard against
-// this regressing.
+// This crop uses its OWN, SHORTER viewport height (PRIVATE_VIEWPORT_HEIGHT,
+// not the shared VIEWPORT_HEIGHT), deliberately NOT frameFor()'s "fit
+// both axes" scale. frameFor() always picks min(sx, sy) so the WIDTH
+// fits, which leaves the height under-filled — at the shared 240px
+// viewport height, that leftover vertical margin would show ~170px
+// further down the page than the target's own y1, reaching into the
+// contact cards below (verified empirically by rendering a frame at the
+// shared height). That's not what this scene is meant to show — the
+// storyboard calls for "return attention to the heading" specifically —
+// so the viewport is capped at 80px, keeping the visible raw-pixel
+// range to [434, ~485] — the heading block only, with margin before the
+// cards (raw y=501) ever enter frame — see content.test.ts's guard
+// against this regressing.
 export const PRIVATE_TARGET_BOX = { x0: 20, x1: 655, y0: 434, y1: 490 }
 export const PRIVATE_VIEWPORT_HEIGHT = 80
 export const PRIVATE_CAMERA: Camera = (() => {
@@ -130,30 +128,18 @@ export const PRIVATE_CAMERA: Camera = (() => {
 // The lowest raw-pixel Y the "private" scene's viewport can ever show —
 // exposed so a test can assert (without a browser) that it stays above
 // both cards' own top edge, i.e. this crop can never reveal any card
-// content, masked or not.
+// content, keeping the scene's framing scoped to the heading as intended.
 export const PRIVATE_CROP_BOTTOM_RAW_Y = PRIVATE_TARGET_BOX.y0 + PRIVATE_VIEWPORT_HEIGHT / PRIVATE_CAMERA.s
 
 // --- The two real contact cards, raw pixel boxes (verified against the
-// source image with a 10px-grid crop — see the completion report).
+// source image with a 10px-grid crop — see the completion report). The
+// contact details shown in these cards (names, phone numbers, email)
+// are placeholder/test data on the demo property used throughout this
+// project's Content Studio work, not a real person or business's
+// information — confirmed by the requester, so nothing in these cards
+// is masked in the rendered Reel.
 export const CARD_HANDYMAN: Rect = { x: 22, y: 501, w: 466, h: 166 }
 export const CARD_BREEZE_AIR: Rect = { x: 500, y: 501, w: 466, h: 166 }
-
-// --- Privacy masking (presentation-layer only — the source PNG itself
-// is never edited). Per the brief: names/business names may stay
-// visible ("Independent Handyman" / "Jose Rodriguez" / "Breeze Air" /
-// "Joseph Bartow" — the exact names the brief itself names as approved
-// to use), but phone numbers and email addresses are masked. Each rect
-// is sized generously (verified with a rendered simulation — see the
-// completion report) so the underlying digits/characters never peek out
-// past an edge.
-export const MASK_HANDYMAN_PHONE: Rect = { x: 45, y: 590, w: 160, h: 24 } // "727-898-5484"
-export const MASK_BREEZE_AIR_PHONE: Rect = { x: 516, y: 589, w: 170, h: 26 } // "813-948-5967"
-export const MASK_BREEZE_AIR_EMAIL: Rect = { x: 516, y: 605, w: 222, h: 26 } // "info@breezeair.com"
-// "breezeair.com" (the business's own public website domain — distinct
-// from a personal phone/email) is intentionally left unmasked; see the
-// completion report for the reasoning.
-
-export const ALL_MASKS: Rect[] = [MASK_HANDYMAN_PHONE, MASK_BREEZE_AIR_PHONE, MASK_BREEZE_AIR_EMAIL]
 
 // ---------------------------------------------------------------------
 // Scenes
