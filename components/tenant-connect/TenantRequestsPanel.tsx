@@ -9,13 +9,18 @@
 // tenant_requests (this milestone's one new table) is thin metadata
 // (category/title/description/status) sitting beside a conversation,
 // never a parallel messaging system. See supabase/milestone-24-tenant-
-// connect-v1.sql's own header comment for the full reasoning.
+// connect-v1.sql's own header comment for the full reasoning — actually
+// created in production by
+// supabase/milestone-25-maintenance-coordination-foundation.sql (M1
+// foundation repair; milestone-24's own migration was never applied to
+// production — see docs/tenant-connect-maintenance-m1-foundation.md).
 
 import { useEffect, useState } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { notifyTenantConnect } from '../../lib/tenant-connect/notify-client'
 import { TENANT_REQUEST_STATUSES, type TenantRequest, type TenantRequestStatus } from '../../lib/tenant-connect/types'
 import type { PropertyMessage } from '../../lib/tenant-connect/types'
+import { maintenanceCategoryLabel } from '../../lib/maintenance/categories'
 
 type AccessRef = { id: string; tenant_email: string }
 
@@ -120,7 +125,7 @@ export function TenantRequestsPanel({
                   <div>
                     <span className={`statusPill ${r.status === 'New' ? 'pillWarn' : r.status === 'Resolved' ? 'pillGood' : ''}`}>{r.status}</span>
                     <h3>{r.title}</h3>
-                    <p>{r.category} · {accessById.get(r.tenant_access_id)?.tenant_email || 'Tenant'}</p>
+                    <p>{maintenanceCategoryLabel(r.category)} · {accessById.get(r.tenant_access_id)?.tenant_email || 'Tenant'}</p>
                   </div>
                 </div>
               </div>
@@ -135,7 +140,7 @@ export function TenantRequestsPanel({
         <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setOpenId(null)}>
           <div className="modal tenantConnectThreadModal">
             <div className="modalTop">
-              <div><p className="eyebrow">{open.category.toUpperCase()}</p><h2>{open.title}</h2></div>
+              <div><p className="eyebrow">{maintenanceCategoryLabel(open.category).toUpperCase()}</p><h2>{open.title}</h2></div>
               <button className="iconButton" onClick={() => setOpenId(null)}>×</button>
             </div>
             <div className="tenantConnectThreadMeta">

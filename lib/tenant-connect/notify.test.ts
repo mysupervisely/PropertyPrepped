@@ -13,10 +13,11 @@ describe('buildInviteEmail', () => {
 })
 
 describe('buildNewRequestEmail', () => {
-  it('includes the category, title, and property in the landlord notification', () => {
-    const email = buildNewRequestEmail('5531 Turtle Crossing Loop', 'Plumbing', 'Kitchen sink leaking')
+  it('includes the category\'s human-readable label (not its raw machine id), title, and property in the landlord notification', () => {
+    const email = buildNewRequestEmail('5531 Turtle Crossing Loop', 'plumbing', 'Kitchen sink leaking')
     expect(email.subject).toContain('5531 Turtle Crossing Loop')
     expect(email.body).toContain('Plumbing')
+    expect(email.body).not.toContain('plumbing request') // the raw id must never leak into recipient-facing copy
     expect(email.body).toContain('Kitchen sink leaking')
   })
 })
