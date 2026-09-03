@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validatePropertyPhotoFile, resolvePhotoContentType, toUploadableFile } from './validate'
+import { validatePropertyPhotoFile, resolvePhotoContentType, toUploadableFile, classifyPhotoSelection, isFirstCoverPhoto } from './validate'
 
 describe('resolvePhotoContentType', () => {
   it('uses the browser-reported type when present', () => {
@@ -109,5 +109,88 @@ describe('toUploadableFile — the confirmed root-cause fix', () => {
     fixedForm.append('', fixed)
     const fixedBody = await new Request('http://example.com', { method: 'POST', body: fixedForm }).text()
     expect(fixedBody).toContain('Content-Type: image/heic')
+  })
+})
+
+// V2 (post-selection-failure investigation): the real gallery flow
+// hands addPhotoFiles() a multi-file selection, not one file at a time
+// — these exercise classifyPhotoSelection() with real File[] batches,
+// covering the exact iOS-shaped file variations from the brief (blank
+// MIME, image/heic, image/heif, JPEG, PNG, zero-byte) together in one
+// selection, which single-file tests above can't reach.
+describe('classifyPhotoSelection — real multi-file batches, as addPhotoFiles() actually receives them', () => {
+  it('a single valid JPEG is accepted with no rejection message (item: valid File reaches upload)', () => {
+    const file = new File([new Uint8Array([1, 2, 3])], 'house.jpg', { type: 'image/jpeg' })
+    const result = classifyPhotoSelection([file])
+    expect(result.accepted).toHaveLength(1)
+    expect(result.accepted[0].file).toBe(file)
+    expect(result.rejectionMessage).toBe('')
+  })
+
+  it('accepts a batch mixing every real iOS/browser MIME-type shape in one selection: blank type, image/heic, image/heif, JPEG, PNG', () => {
+    const blank = new File([new Uint8Array([1])], 'IMG_0001.HEIC', { type: '' })
+    const heic = new File([new Uint8Array([1])], 'IMG_0002.HEIC', { type: 'image/heic' })
+    const heif = new File([new Uint8Array([1])], 'IMG_0003.HEIF', { type: 'image/heif' })
+    const jpeg = new File([new Uint8Array([1])], 'house.jpg', { type: 'image/jpeg' })
+    const png = new File([new Uint8Array([1])], 'screenshot.png', { type: 'image/png' })
+    const result = classifyPhotoSelection([blank, heic, heif, jpeg, png])
+    expect(result.accepted).toHaveLength(5)
+    expect(result.rejectionMessage).toBe('')
+    // The blank-type file was corrected — this is the exact object that
+    // must reach .upload(), byte-identical, with a real Content-Type.
+    expect(result.accepted[0].file.type).toBe('image/heic')
+    expect(result.accepted[0].file).not.toBe(blank) // rewrapped, since its type changed
+    expect(result.accepted[0].contentType).toBe('image/heic')
+    // A file whose type was already correct is NOT needlessly rewrapped.
+    expect(result.accepted[3].file).toBe(jpeg)
+  })
+
+  it('a zero-byte file (nonzero File remains nonzero after normalization, zero-byte rejected) is rejected with a clear reason, and does not block other valid files in the same batch', () => {
+    const zeroByte = new File([], 'IMG_0004.HEIC', { type: '' })
+    const valid = new File([new Uint8Array([1, 2, 3])], 'house.jpg', { type: 'image/jpeg' })
+    const result = classifyPhotoSelection([zeroByte, valid])
+    expect(result.accepted).toHaveLength(1)
+    expect(result.accepted[0].file).toBe(valid)
+    expect(result.accepted[0].file.size).toBeGreaterThan(0)
+    expect(result.rejectionMessage).toMatch(/empty \(0 bytes\)/)
+  })
+
+  it('a selection with only rejected files leaves the gallery in its empty state (accepted is empty, rejection message present)', () => {
+    const zeroByte = new File([], 'broken.jpg', { type: 'image/jpeg' })
+    const result = classifyPhotoSelection([zeroByte])
+    expect(result.accepted).toHaveLength(0)
+    expect(result.rejectionMessage.length).toBeGreaterThan(0)
+  })
+
+  it('selecting the same File object twice in one batch (same file selected twice) processes both independently — no dedup, no shared mutable state', () => {
+    const file = new File([new Uint8Array([1, 2, 3])], 'house.jpg', { type: 'image/jpeg' })
+    const result = classifyPhotoSelection([file, file])
+    expect(result.accepted).toHaveLength(2)
+    expect(result.accepted[0].file).toBe(result.accepted[1].file)
+  })
+
+  it('results carries one validation outcome per input file, in order — what addPhotoFiles() logs PHOTO_VALIDATION_RESULT from', () => {
+    const good = new File([new Uint8Array([1])], 'house.jpg', { type: 'image/jpeg' })
+    const bad = new File([], 'broken.jpg', { type: 'image/jpeg' })
+    const result = classifyPhotoSelection([good, bad])
+    expect(result.results).toHaveLength(2)
+    expect(result.results[0].validation.ok).toBe(true)
+    expect(result.results[1].validation.ok).toBe(false)
+  })
+})
+
+describe('isFirstCoverPhoto', () => {
+  it('the first photo in a batch becomes the cover when the property has no existing cover', () => {
+    expect(isFirstCoverPhoto(false, 0)).toBe(true)
+  })
+
+  it('later photos in the same batch never become the cover, even without an existing one', () => {
+    expect(isFirstCoverPhoto(false, 1)).toBe(false)
+    expect(isFirstCoverPhoto(false, 2)).toBe(false)
+  })
+
+  it('no photo in the batch becomes the cover when the property already has one (existing cover plus new gallery photo)', () => {
+    expect(isFirstCoverPhoto(true, 0)).toBe(false)
+    expect(isFirstCoverPhoto(true, 1)).toBe(false)
   })
 })

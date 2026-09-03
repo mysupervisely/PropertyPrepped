@@ -1,5 +1,87 @@
 # Property Photo Upload Bug — Trace, Root Cause, and Fix
 
+## UPDATE V2 (post-selection-failure investigation, after PR #53 shipped)
+
+The iOS production-bug fix below (`toUploadableFile()`) shipped and was
+merged as PR #53, but a real-iPhone retest **still failed** — with a
+much more specific symptom this time: the photo picker opens, the user
+picks a photo, the picker closes, and then **nothing happens at all**.
+No photo in the gallery, the empty state ("No photos uploaded yet")
+stays up, and no error is shown anywhere. This narrows the bug to
+**after** file selection, in the gallery-add path specifically
+(Documents -> Photos -> "Add property photos"), not the Add Property
+modal's cover photo (a different call site, `handleImage`/`addProperty`
+— not reported as broken).
+
+**What a full re-audit of that exact path found:** every individual
+stage was already correct and already checked (Storage upload error,
+`property_photos` insert error, `cover_photo_path` update error — all
+three check their own error post-PR-#53; the FileList is already copied
+to a plain array synchronously before the input is reset, so no file is
+lost; `selectedPhotos` is recomputed fresh every render, no stale
+memoization; `loadPortfolio()` always regenerates fresh signed URLs).
+**No single deterministic logic bug reproduces the exact reported
+symptom in the current code.** Two real, concrete, non-speculative gaps
+were found instead, and both are exactly the kind of gap that produces
+*this* specific symptom set (total silence, no error, no photo):
+
+1. **No exception safety.** Both real upload entry points
+   (`addPhotoFiles()` and `addProperty()`) are invoked fire-and-forget
+   — `void addPhotoFiles(files)` / `void addProperty()`, no `.catch()`
+   anywhere. Every Supabase call already checked in this app converts
+   network-level failures into a returned `{error}` object by design
+   (verified by reading both `@supabase/storage-js`'s `handleOperation()`
+   and `@supabase/postgrest-js`'s `PostgrestBuilder`'s fetch-retry/catch
+   logic directly — both wrap raw `fetch()` rejections into their own
+   typed error and resolve, they do not throw, for the common
+   network-failure case). But that is not a guarantee against *every*
+   possible exception — a bug in a helper, an unexpected null-deref if
+   auth state changes mid-await, or a future SDK behavior change — and
+   there was **zero** handling for anything outside the already-checked
+   `{error}` returns. Any such exception becomes a silent unhandled
+   promise rejection: no `setError`, no `console.error`, no
+   `loadPortfolio()`, and `busy` left stuck. That is a byte-for-byte
+   match for the reported symptom, regardless of what specifically
+   triggers it.
+2. **An error, even when it IS set, can render off-screen.** `.globalError`
+   (`app/globals.css`) is a normal in-flow element right after the page
+   header — not `position: sticky`/`fixed`. The property workspace page
+   is long (hero, tabs, sub-tabs); a user scrolled down into Documents
+   -> Photos who triggers *any* error would see nothing unless they
+   scroll back to the very top. "No visible error is shown" does not
+   require that no error was set — only that it wasn't seen.
+
+Also found and fixed in the same pass: `loadPortfolio()`'s
+`createSignedUrl()` call discarded its own error entirely (a photo
+whose signed URL failed to generate would silently show "Photo
+unavailable" with zero trace); `property_photos` INSERT/UPDATE RLS
+policies don't verify `property_id` belongs to the authenticated owner
+the way `property_documents`' policies explicitly do (a real,
+pre-existing gap, confirmed by reading `supabase/schema.sql` — but not
+implicated in this bug, since the reported failure is on the user's own
+existing property; **not changed** in this pass, flagged for a future,
+separately-scoped hardening pass rather than folded in here).
+
+**The fix, matching "smallest robust fix, no speculative root-cause
+chasing":** wrap both upload entry points in `try/catch/finally` so an
+unexpected exception is always caught, logged, surfaced to the user,
+and never leaves `busy` stuck; add `surfaceError()` (scrolls to top on
+any new error) so a shown error is actually seen; check
+`createSignedUrl()`'s own error; and add the full `PHOTO_*` diagnostic
+taxonomy end-to-end (picker -> validation -> upload -> DB insert -> DB
+update -> reload -> render) so if this is *still* wrong on the next
+real-device retest, the product owner's own browser console will show
+exactly which stage stopped, without another deploy-and-guess cycle
+(open Safari's Web Inspector, or `console.log` output relayed by the
+product owner, and look for the last `[property-photo:PHOTO_*]` line
+before the failure — that names the exact stage that didn't complete).
+The diagnostic taxonomy, the exact code changes, and the corresponding
+test coverage are described in the session's own completion report for
+this pass — this document's job is the durable trace/root-cause record,
+not a running changelog of every file touched.
+
+---
+
 **UPDATE (iOS production-bug investigation, post-merge/deploy):** the
 M2.1 fix below shipped to production, but a real-iPhone retest still
 failed — the M2.1 diagnosis was **incomplete**, not wrong about the two
