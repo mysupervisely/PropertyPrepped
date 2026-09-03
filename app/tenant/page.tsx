@@ -36,7 +36,7 @@
 // service-role key, and a bug here can only ever surface what these
 // views/policies already allow, never bypass them.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
@@ -215,6 +215,7 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
   const [showNew, setShowNew] = useState(false)
 
   const [openId, setOpenId] = useState<string | null>(null)
+  const openIdRef = useRef<string | null>(null)
   const [threadMessages, setThreadMessages] = useState<PropertyMessage[]>([])
   const [attachmentsByMessage, setAttachmentsByMessage] = useState<Map<string, string[]>>(new Map())
   const [replyText, setReplyText] = useState('')
@@ -237,8 +238,11 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
     await load()
   }
 
-  async function loadAttachments(messages: PropertyMessage[]) {
-    if (!messages.length) { setAttachmentsByMessage(new Map()); return }
+  // M2.1 review pass (Part 6): forRequestId guards against a rapid
+  // "open A, then open B before A's fetch resolves" race — see the
+  // identical note in TenantRequestsPanel.tsx's own loadAttachments().
+  async function loadAttachments(messages: PropertyMessage[], forRequestId: string) {
+    if (!messages.length) { if (openIdRef.current === forRequestId) setAttachmentsByMessage(new Map()); return }
     const { data } = await supabase.from('property_message_attachments').select('message_id, storage_path').in('message_id', messages.map((m) => m.id))
     const rows = (data as { message_id: string; storage_path: string }[]) || []
     const byMessage = new Map<string, string[]>()
@@ -246,21 +250,28 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
       const { data: signed } = await supabase.storage.from('tenant-connect-attachments').createSignedUrl(row.storage_path, 3600)
       if (signed?.signedUrl) byMessage.set(row.message_id, [...(byMessage.get(row.message_id) || []), signed.signedUrl])
     }
-    setAttachmentsByMessage(byMessage)
+    if (openIdRef.current === forRequestId) setAttachmentsByMessage(byMessage)
   }
 
   async function openRequest(request: TenantRequest) {
     setOpenId(request.id)
+    openIdRef.current = request.id
     setReplyText('')
     setAttachFile(null)
     const { data, error: err } = await supabase.from('property_messages').select('*').eq('conversation_id', request.conversation_id).order('created_at', { ascending: true })
     if (err) { setError(err.message); return }
     const messages = (data as PropertyMessage[]) || []
+    if (openIdRef.current !== request.id) return
     setThreadMessages(messages)
-    void loadAttachments(messages)
+    void loadAttachments(messages, request.id)
   }
 
   const open = requests.find((r) => r.id === openId) || null
+
+  function closeThread() {
+    setOpenId(null)
+    openIdRef.current = null
+  }
 
   async function sendReply() {
     if (!open || !replyText.trim()) return
@@ -320,11 +331,11 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
       )}
 
       {open && (
-        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setOpenId(null)}>
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && closeThread()}>
           <div className="modal tenantConnectThreadModal">
             <div className="modalTop">
               <div><p className="eyebrow">{maintenanceCategoryLabel(open.category).toUpperCase()}</p><h2>{open.title}</h2></div>
-              <button className="iconButton" onClick={() => setOpenId(null)}>×</button>
+              <button className="iconButton" onClick={closeThread}>×</button>
             </div>
             <div className="tenantConnectThreadMeta">
               <span className={`statusPill ${open.status === 'New' ? 'pillWarn' : open.status === 'Resolved' ? 'pillGood' : ''}`}>{open.status}</span>

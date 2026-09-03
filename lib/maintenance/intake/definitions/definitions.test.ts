@@ -186,7 +186,12 @@ describe('Urgent safety triggers route to the urgent path deterministically', ()
     { category: 'toilet', stepId: 'overflow_active', answerKey: 'overflow_active', answerValue: 'yes' },
     { category: 'appliance', stepId: 'leak', answerKey: 'leak', answerValue: 'yes_major' },
     { category: 'appliance', stepId: 'unusual_smell_sound', answerKey: 'unusual_smell_sound', answerValue: 'gas' },
-    { category: 'other', stepId: 'safety_gate', answerKey: 'safety_gate', answerValue: 'yes' },
+    { category: 'other', stepId: 'safety_gate', answerKey: 'safety_gate', answerValue: 'fire' },
+    { category: 'other', stepId: 'safety_gate', answerKey: 'safety_gate', answerValue: 'smoke' },
+    { category: 'other', stepId: 'safety_gate', answerKey: 'safety_gate', answerValue: 'gas' },
+    { category: 'other', stepId: 'safety_gate', answerKey: 'safety_gate', answerValue: 'sparking' },
+    { category: 'other', stepId: 'safety_gate', answerKey: 'safety_gate', answerValue: 'burning_smell' },
+    { category: 'other', stepId: 'safety_gate', answerKey: 'safety_gate', answerValue: 'flooding' },
   ]
 
   for (const c of cases) {
@@ -199,5 +204,23 @@ describe('Urgent safety triggers route to the urgent path deterministically', ()
   it('a non-urgent answer on the same questions does NOT escalate', () => {
     const tree = intakeTreeFor('electrical')
     expect(getNextStepId(tree, 'symptom', { symptom: 'no_power' })).not.toBe(URGENT_STEP_ID)
+  })
+
+  it('"Other"\'s safety gate maps each specific hazard to its own correctly-tailored urgentReason, not one generic bucket', () => {
+    const tree = intakeTreeFor('other')
+    const step = tree.steps.safety_gate
+    const byValue = Object.fromEntries((step.question.options ?? []).map((o) => [o.value, o.urgentReason]))
+    expect(byValue.fire).toBe('fire_smoke')
+    expect(byValue.smoke).toBe('fire_smoke')
+    expect(byValue.gas).toBe('gas_smell')
+    expect(byValue.sparking).toBe('electrical_hazard')
+    expect(byValue.burning_smell).toBe('electrical_hazard')
+    expect(byValue.flooding).toBe('major_flooding')
+    expect(byValue.none).toBeUndefined()
+  })
+
+  it('"Other" answered "none of these" does NOT escalate', () => {
+    const tree = intakeTreeFor('other')
+    expect(getNextStepId(tree, 'safety_gate', { safety_gate: 'none' })).not.toBe(URGENT_STEP_ID)
   })
 })

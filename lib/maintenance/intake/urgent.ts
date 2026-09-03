@@ -7,11 +7,24 @@
 // picked whenever an IntakeOption with a matching `urgentReason` is
 // selected anywhere in any tree (see engine.ts's getNextStepId()).
 //
-// Deliberately conservative: never instructs the tenant to touch,
-// shut off, open, or repair anything. PropRoster is never claimed to be
-// an emergency service — every entry tells the tenant to call 911 (or
-// their utility) for a genuine emergency, and PropRoster's own role is
-// limited to "you can still submit this report so your landlord knows."
+// M2.1 review pass (Part 2): kept every entry short, conservative, and
+// action-oriented per the review's own instruction. Never instructs the
+// tenant to touch, shut off, open, or repair anything — never mentions
+// electrical panels, pumps, or shutoff valves at all, even to warn
+// about them, since naming the equipment invites exactly the
+// interaction this copy exists to prevent. Never makes a medical,
+// legal, or professional-safety guarantee, and never implies PropRoster
+// itself responds to emergencies — that disclaimer is rendered once,
+// persistently, on every urgent screen by GuidedIntake.tsx (not
+// repeated in each entry below, so this stays short rather than
+// padded). 911 is named only for the genuine life-safety cases this
+// file covers — never as boilerplate for ordinary maintenance.
+//
+// FLAGGED FOR HUMAN/LEGAL/SAFETY REVIEW: this wording is an engineering
+// best effort, not a reviewed safety or legal document. It must be
+// reviewed by someone with actual safety/legal expertise before this
+// reaches real tenants at any meaningful scale — see this milestone's
+// own docs for the full note.
 
 import type { UrgentReason } from './types'
 
@@ -24,42 +37,38 @@ export const URGENT_GUIDANCE: Record<UrgentReason, UrgentGuidance> = {
   fire_smoke: {
     heading: 'This may be a fire emergency',
     body: [
-      'If you see fire or active smoke, leave the area right away and call 911.',
-      'PropRoster is not an emergency service — do not wait for a reply here before getting to safety.',
-      'Once everyone is safe, you can still submit this report so your landlord knows right away.',
+      'Leave the area now and call 911.',
+      'Once everyone is safe, you can still submit this report so your landlord knows.',
     ],
   },
   gas_smell: {
     heading: 'Possible gas leak',
     body: [
-      'If you smell gas, leave the area immediately.',
-      'Do not use light switches, appliances, or open flames.',
-      'Call your gas utility’s emergency line or 911 from a safe location.',
+      'Leave the area now — do not use light switches, appliances, or open flames on your way out.',
+      'From a safe location, call your gas utility’s emergency line or 911.',
       'You can still submit this report once you are safe.',
     ],
   },
   electrical_hazard: {
     heading: 'Possible electrical hazard',
     body: [
-      'Stay away from the affected outlet, switch, or equipment — do not touch it.',
-      'If you see sparking, smoke, or smell burning, leave the area and call 911.',
-      'Do not attempt to open any panel or fix this yourself.',
+      'Stay away from it — do not touch it and do not try to fix it yourself.',
+      'If you saw sparking or smell burning, leave the area and call 911.',
       'You can still submit this report so your landlord knows right away.',
     ],
   },
   major_flooding: {
     heading: 'Active major water leak',
     body: [
-      'If it is safe and easy to do so, you may move valuables away from the water.',
-      'Do not attempt to shut off, fix, or repair anything yourself.',
-      'Stay away from any area where water is near electrical outlets or appliances.',
+      'Stay away from the water, especially near any outlets or plugged-in appliances.',
+      'Do not try to fix or stop it yourself.',
       'You can still submit this report so your landlord knows right away.',
     ],
   },
   general_hazard: {
     heading: 'This sounds urgent',
     body: [
-      'If anyone is in danger, call 911.',
+      'If anyone is in immediate danger, call 911.',
       'You can still submit this report so your landlord knows right away.',
     ],
   },

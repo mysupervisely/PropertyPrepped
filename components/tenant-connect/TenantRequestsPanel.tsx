@@ -15,7 +15,7 @@
 // foundation repair; milestone-24's own migration was never applied to
 // production — see docs/tenant-connect-maintenance-m1-foundation.md).
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { notifyTenantConnect } from '../../lib/tenant-connect/notify-client'
 import { TENANT_REQUEST_STATUSES, type TenantRequest, type TenantRequestStatus } from '../../lib/tenant-connect/types'
@@ -38,6 +38,7 @@ export function TenantRequestsPanel({
   const [error, setError] = useState('')
 
   const [openId, setOpenId] = useState<string | null>(null)
+  const openIdRef = useRef<string | null>(null)
   const [threadMessages, setThreadMessages] = useState<PropertyMessage[]>([])
   const [attachmentsByMessage, setAttachmentsByMessage] = useState<Map<string, string[]>>(new Map())
   const [replyText, setReplyText] = useState('')
@@ -63,8 +64,14 @@ export function TenantRequestsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, tenantConnectEnabled])
 
-  async function loadAttachments(messages: PropertyMessage[]) {
-    if (!messages.length) { setAttachmentsByMessage(new Map()); return }
+  // M2.1 review pass (Part 6): `forRequestId` guards against a rapid
+  // "open A, then open B before A's fetch resolves" race — not a
+  // security issue (RLS still scopes every row/signed-URL correctly
+  // either way), but without this, A's slower-resolving attachment map
+  // could overwrite B's already-applied one, transiently hiding B's
+  // real photos until the panel is reopened.
+  async function loadAttachments(messages: PropertyMessage[], forRequestId: string) {
+    if (!messages.length) { if (openIdRef.current === forRequestId) setAttachmentsByMessage(new Map()); return }
     const { data } = await supabase.from('property_message_attachments').select('message_id, storage_path').in('message_id', messages.map((m) => m.id))
     const rows = (data as { message_id: string; storage_path: string }[]) || []
     const byMessage = new Map<string, string[]>()
@@ -72,22 +79,29 @@ export function TenantRequestsPanel({
       const { data: signed } = await supabase.storage.from('tenant-connect-attachments').createSignedUrl(row.storage_path, 3600)
       if (signed?.signedUrl) byMessage.set(row.message_id, [...(byMessage.get(row.message_id) || []), signed.signedUrl])
     }
-    setAttachmentsByMessage(byMessage)
+    if (openIdRef.current === forRequestId) setAttachmentsByMessage(byMessage)
   }
 
   async function openRequest(request: TenantRequest) {
     setOpenId(request.id)
+    openIdRef.current = request.id
     setReplyText('')
     setAttachFile(null)
     const { data, error: err } = await supabase.from('property_messages').select('*').eq('conversation_id', request.conversation_id).order('created_at', { ascending: true })
     if (err) { setError(err.message); return }
     const messages = (data as PropertyMessage[]) || []
+    if (openIdRef.current !== request.id) return
     setThreadMessages(messages)
-    void loadAttachments(messages)
+    void loadAttachments(messages, request.id)
     await supabase.from('property_conversation_reads').upsert({ conversation_id: request.conversation_id, user_id: ownerId, last_read_at: new Date().toISOString() }, { onConflict: 'conversation_id,user_id' })
   }
 
   const open = requests.find((r) => r.id === openId) || null
+
+  function closeModal() {
+    setOpenId(null)
+    openIdRef.current = null
+  }
 
   async function changeStatus(status: TenantRequestStatus) {
     if (!open) return
@@ -152,11 +166,11 @@ export function TenantRequestsPanel({
       )}
 
       {open && (
-        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setOpenId(null)}>
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && closeModal()}>
           <div className="modal tenantConnectThreadModal">
             <div className="modalTop">
               <div><p className="eyebrow">{maintenanceCategoryLabel(open.category).toUpperCase()}</p><h2>{open.title}</h2></div>
-              <button className="iconButton" onClick={() => setOpenId(null)}>×</button>
+              <button className="iconButton" onClick={closeModal}>×</button>
             </div>
             <div className="tenantConnectThreadMeta">
               <span>{accessById.get(open.tenant_access_id)?.tenant_email || 'Tenant'}</span>

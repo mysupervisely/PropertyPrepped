@@ -114,8 +114,17 @@ export function GuidedIntake({ supabase, propertyId, ownerId, tenantAccessId, on
   }
 
   function goBack() {
+    // M2.1 review pass (Part 3): must always return to the 'question'
+    // phase explicitly — without this, calling goBack() from 'review'
+    // or 'urgent' silently shrank stepHistory while the screen stayed
+    // on review/urgent (neither of those screens re-reads stepHistory,
+    // only `answers`, which goBack() never touches), so the Back button
+    // visibly did nothing. Also lets a tenant back out of an accidental
+    // urgent-triggering answer instead of being stuck with only
+    // "Close" or "submit as urgent."
     if (stepHistory.length <= 1) { setCategory(null); setPhase('category'); return }
     setStepHistory((h) => h.slice(0, -1))
+    setPhase('question')
   }
 
   function continueFromUrgentToReview() {
@@ -208,9 +217,19 @@ export function GuidedIntake({ supabase, propertyId, ownerId, tenantAccessId, on
 
             {currentStep.question.type === 'photo' && (
               <div className="guidedIntakePhotoStep">
+                {photos.length > 0 && (
+                  <ul className="guidedIntakePhotoList">
+                    {photos.map((file, i) => (
+                      <li key={`${file.name}-${i}`}>
+                        <span>{file.name}</span>
+                        <button type="button" className="iconButton" aria-label={`Remove ${file.name}`} onClick={() => setPhotos((prev) => prev.filter((_, idx) => idx !== i))}>×</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <label className="secondary guidedIntakePhotoLabel">
-                  {photos.length ? `${photos.length} photo${photos.length > 1 ? 's' : ''} added` : 'Add a photo'}
-                  <input type="file" accept="image/*" multiple hidden onChange={(e) => setPhotos((prev) => [...prev, ...Array.from(e.target.files || [])].slice(0, 5))} />
+                  {photos.length ? 'Add another photo' : 'Add a photo'}
+                  <input type="file" accept="image/*" multiple hidden disabled={photos.length >= 5} onChange={(e) => { setPhotos((prev) => [...prev, ...Array.from(e.target.files || [])].slice(0, 5)); e.target.value = '' }} />
                 </label>
                 <button className="primary" onClick={() => answer(photos.length ? 'attached' : 'skipped')}>{photos.length ? 'Continue' : 'Skip'}</button>
               </div>
@@ -238,6 +257,7 @@ export function GuidedIntake({ supabase, propertyId, ownerId, tenantAccessId, on
               )}
               <p className="muted">PropRoster is not an emergency service. If anyone is in danger, call 911 first.</p>
               <div className="guidedIntakeNav">
+                <button className="secondary" onClick={goBack}>Back</button>
                 <button className="secondary" onClick={onClose}>Close</button>
                 <button className="primary" onClick={continueFromUrgentToReview}>I'm safe — submit this report to my landlord</button>
               </div>
@@ -286,13 +306,21 @@ export function GuidedIntake({ supabase, propertyId, ownerId, tenantAccessId, on
 
 function GuidedIntakeTextInput({ unitSuffix, onSubmit }: { unitSuffix?: string; onSubmit: (value: string) => void }) {
   const [value, setValue] = useState('')
+  // M2.1 review pass (Part 3): a plain <input> outside a <form> never
+  // reacts to the mobile keyboard's Enter/Go/Next action key on its
+  // own — without this, a tenant typing a temperature and tapping their
+  // keyboard's Go key would see nothing happen and have to reach back
+  // down to tap Continue manually.
+  function submitIfReady() {
+    if (value.trim()) onSubmit(value.trim())
+  }
   return (
     <div className="guidedIntakeTextInput">
       <div className="guidedIntakeTextInputRow">
-        <input value={value} onChange={(e) => setValue(e.target.value)} placeholder={unitSuffix ? `e.g. 72` : undefined} autoFocus />
+        <input value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submitIfReady()} placeholder={unitSuffix ? `e.g. 72` : undefined} autoFocus />
         {unitSuffix && <span className="muted">{unitSuffix}</span>}
       </div>
-      <button className="primary" disabled={!value.trim()} onClick={() => onSubmit(value.trim())}>Continue</button>
+      <button className="primary" disabled={!value.trim()} onClick={submitIfReady}>Continue</button>
     </div>
   )
 }
