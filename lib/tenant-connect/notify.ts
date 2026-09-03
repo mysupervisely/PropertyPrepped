@@ -20,6 +20,7 @@
 // production. See the completion report for exactly what to set.
 
 import type { TenantRequestCategory } from './types'
+import { maintenanceCategoryLabel } from '../maintenance/categories'
 
 export type TenantConnectEmail = { subject: string; body: string }
 
@@ -37,12 +38,19 @@ export function buildInviteEmail(propertyAddress: string): TenantConnectEmail {
   }
 }
 
-/** To the property owner's email — Section 11, "New tenant request → landlord." */
+/**
+ * To the property owner's email — Section 11, "New tenant request →
+ * landlord." `category` is the stable machine-readable id
+ * (lib/maintenance/categories.ts) stored on the request row — this
+ * function is the one place that gets converted to the human-readable
+ * label before it reaches an actual recipient, so no caller has to
+ * remember to do that conversion itself.
+ */
 export function buildNewRequestEmail(propertyAddress: string, category: TenantRequestCategory, title: string): TenantConnectEmail {
   return {
     subject: `New request — ${propertyAddress}`,
     body: [
-      `A tenant submitted a new ${category} request for ${propertyAddress}.`,
+      `A tenant submitted a new ${maintenanceCategoryLabel(category)} request for ${propertyAddress}.`,
       '',
       title,
       '',

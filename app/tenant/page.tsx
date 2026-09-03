@@ -9,10 +9,14 @@
 // landlord's Dashboard/Documents/Tax Center/PropCrew/Investment Tools/
 // Profile/Pricing — none of which belong here) — just a minimal
 // "PropRoster · Tenant Portal" header and Log out. Least-privilege by
-// construction: every read here goes through tenant-scoped surfaces
-// defined in supabase/milestone-24-tenant-connect-v1.sql — this page
-// NEVER queries public.properties or public.leases (the owner-facing
-// base tables) directly. Property/lease reads go through
+// construction: every read here goes through tenant-scoped surfaces —
+// originally designed in supabase/milestone-24-tenant-connect-v1.sql,
+// actually created in production by
+// supabase/milestone-25-maintenance-coordination-foundation.sql (M1
+// foundation repair — see docs/tenant-connect-maintenance-m1-foundation.md;
+// milestone-24's own migration was never applied to production) — this
+// page NEVER queries public.properties or public.leases (the
+// owner-facing base tables) directly. Property/lease reads go through
 // public.tenant_property_view / public.tenant_lease_view instead — two
 // narrow, column-limited views that expose only address/city and
 // tenant_name/monthly_rent/start_date/end_date/rent_due_day
@@ -38,9 +42,10 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { Wordmark } from '../../components/Wordmark'
-import { TENANT_REQUEST_CATEGORIES, TENANT_REQUEST_STATUSES, type TenantRequest, type TenantRequestCategory } from '../../lib/tenant-connect/types'
+import { TENANT_REQUEST_STATUSES, type TenantRequest, type TenantRequestCategory } from '../../lib/tenant-connect/types'
 import type { TenantPropertyAccess, PropertyMessage } from '../../lib/tenant-connect/types'
 import { notifyTenantConnect } from '../../lib/tenant-connect/notify-client'
+import { MAINTENANCE_CATEGORIES, maintenanceCategoryLabel } from '../../lib/maintenance/categories'
 
 type PropertyRef = { id: string; address: string; city: string }
 type LeaseRef = { id: string; tenant_name: string; monthly_rent: number; start_date: string; end_date: string; rent_due_day: number | null }
@@ -207,7 +212,7 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showNew, setShowNew] = useState(false)
-  const [draft, setDraft] = useState<{ category: TenantRequestCategory; title: string; description: string }>({ category: 'General Maintenance', title: '', description: '' })
+  const [draft, setDraft] = useState<{ category: TenantRequestCategory; title: string; description: string }>({ category: 'other', title: '', description: '' })
   const [saving, setSaving] = useState(false)
 
   const [openId, setOpenId] = useState<string | null>(null)
@@ -248,7 +253,7 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
     if (reqErr || !request) { setError(reqErr?.message || 'Could not submit request.'); return }
     void notifyTenantConnect(supabase, 'new_request', { requestId: request.id })
     setShowNew(false)
-    setDraft({ category: 'General Maintenance', title: '', description: '' })
+    setDraft({ category: 'other', title: '', description: '' })
     await load()
   }
 
@@ -301,7 +306,7 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
             <button key={r.id} className="tenantPortalRequestRow" onClick={() => void openRequest(r)}>
               <span className={`statusPill ${r.status === 'New' ? 'pillWarn' : r.status === 'Resolved' ? 'pillGood' : ''}`}>{r.status}</span>
               <span className="tenantPortalRequestRowTitle">{r.title}</span>
-              <span className="muted">{r.category}</span>
+              <span className="muted">{maintenanceCategoryLabel(r.category)}</span>
             </button>
           ))}
         </div>
@@ -313,7 +318,7 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
         <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowNew(false)}>
           <div className="modal">
             <div className="modalTop"><h2>New Request</h2><button className="iconButton" onClick={() => setShowNew(false)}>×</button></div>
-            <label>Category<select value={draft.category} onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value as TenantRequestCategory }))}>{TENANT_REQUEST_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></label>
+            <label>Category<select value={draft.category} onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value as TenantRequestCategory }))}>{MAINTENANCE_CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
             <label>Title<input value={draft.title} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} placeholder="Kitchen sink leaking" /></label>
             <label>Description<textarea rows={4} value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Describe what's happening…" /></label>
             <div className="modalActions"><button className="secondary" onClick={() => setShowNew(false)}>Cancel</button><button className="primary" disabled={saving || !draft.title.trim() || !draft.description.trim()} onClick={() => void submitRequest()}>{saving ? 'Submitting…' : 'Submit Request'}</button></div>
@@ -325,7 +330,7 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
         <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setOpenId(null)}>
           <div className="modal tenantConnectThreadModal">
             <div className="modalTop">
-              <div><p className="eyebrow">{open.category.toUpperCase()}</p><h2>{open.title}</h2></div>
+              <div><p className="eyebrow">{maintenanceCategoryLabel(open.category).toUpperCase()}</p><h2>{open.title}</h2></div>
               <button className="iconButton" onClick={() => setOpenId(null)}>×</button>
             </div>
             <div className="tenantConnectThreadMeta">

@@ -6,6 +6,8 @@
 // panel) shares, so the status/type lists only exist once, matching the
 // pattern already established in lib/document-intelligence/types.ts.
 
+import type { MaintenanceCategoryId } from '../maintenance/categories'
+
 export const TENANT_ACCESS_STATUSES = ['Invited', 'Active', 'Revoked'] as const
 export type TenantAccessStatus = (typeof TENANT_ACCESS_STATUSES)[number]
 
@@ -63,11 +65,15 @@ export type PropertyMessageAttachment = {
   created_at: string
 }
 
-// Tenant Connect V1 (Milestone 24) — mirrors
-// supabase/milestone-24-tenant-connect-v1.sql's CHECK constraints
-// exactly, same convention as everything above.
-export const TENANT_REQUEST_CATEGORIES = ['Plumbing', 'Electrical', 'HVAC', 'Appliance', 'General Maintenance', 'Other'] as const
-export type TenantRequestCategory = (typeof TENANT_REQUEST_CATEGORIES)[number]
+// Tenant Connect V1 (Milestone 24) / Maintenance Coordination M1 —
+// mirrors supabase/milestone-25-maintenance-coordination-foundation.sql's
+// tenant_requests.category CHECK constraint exactly, same convention as
+// everything above. The category vocabulary itself (stable
+// machine-readable ids, separate from display labels) lives in
+// lib/maintenance/categories.ts, re-exported here so every existing
+// Tenant Connect import site keeps working unchanged.
+export { MAINTENANCE_CATEGORY_IDS as TENANT_REQUEST_CATEGORIES } from '../maintenance/categories'
+export type { MaintenanceCategoryId as TenantRequestCategory } from '../maintenance/categories'
 
 export const TENANT_REQUEST_STATUSES = ['New', 'In Progress', 'Resolved'] as const
 export type TenantRequestStatus = (typeof TENANT_REQUEST_STATUSES)[number]
@@ -78,10 +84,19 @@ export type TenantRequest = {
   owner_id: string
   tenant_access_id: string
   conversation_id: string
-  category: TenantRequestCategory
+  category: MaintenanceCategoryId
   title: string
   description: string
   status: TenantRequestStatus
   created_at: string
   updated_at: string
+  // Maintenance Coordination M1.1 (Milestone 26) — the canonical
+  // maintenance_requests case this submission created. Always set by
+  // the tenant_requests_create_maintenance_case() trigger before the
+  // row is ever visible to a client (never null in practice, never
+  // client-supplied); nullable in the type only because the underlying
+  // DB column is nullable for deployment-sequencing safety — see that
+  // migration's own header for why. See lib/maintenance/source.ts for
+  // the origin/source vocabulary stored on the linked case itself.
+  maintenance_request_id: string | null
 }
