@@ -45,7 +45,8 @@ import {
 import { buildTenantRequestDateItems } from '../lib/tenant-connect/requests'
 import type { TenantRequest } from '../lib/tenant-connect/types'
 import { maintenanceCategoryLabel } from '../lib/maintenance/categories'
-import { validatePropertyPhotoFile } from '../lib/property-photos/validate'
+import { validatePropertyPhotoFile, toUploadableFile } from '../lib/property-photos/validate'
+import { logPhotoUploadDiagnostic, safeFileSummary } from '../lib/property-photos/diagnostics'
 import { TenantConnectStatusCard } from '../components/tenant-connect/TenantConnectStatusCard'
 import { TenantRequestsPanel } from '../components/tenant-connect/TenantRequestsPanel'
 
@@ -849,12 +850,21 @@ export default function Home() {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
+    logPhotoUploadDiagnostic('file_selected', { site: 'add-property-cover', ...safeFileSummary(file) })
     const validation = validatePropertyPhotoFile(file)
+    logPhotoUploadDiagnostic('validation_result', { site: 'add-property-cover', ok: validation.ok, ...(validation.ok ? { contentType: validation.contentType } : { reason: validation.reason }) })
     if (!validation.ok) { setError(validation.reason); return }
-    setCoverFile(file)
+    // iOS production-bug investigation: rewrap NOW, at selection time,
+    // not just right before upload — coverFile is what actually gets
+    // uploaded later in addProperty(), so this is the object that must
+    // carry the corrected type (see toUploadableFile's own doc comment
+    // for why the type must live ON the object, not in an upload
+    // option, for @supabase/storage-js to send it correctly).
+    const uploadable = toUploadableFile(file, validation.contentType)
+    setCoverFile(uploadable)
     const reader = new FileReader()
     reader.onload = () => setImagePreview(String(reader.result || ''))
-    reader.readAsDataURL(file)
+    reader.readAsDataURL(uploadable)
   }
 
   // Section 8: check the plan boundary BEFORE opening the add-property
@@ -930,22 +940,50 @@ export default function Home() {
     if (coverFile) {
       // M2.1 review pass (Part 5) — this upload's error used to be
       // silently discarded: the property still saved, but a failed
-      // cover-photo upload produced zero visible feedback ("cannot
-      // reliably upload a new property picture" from the product
-      // owner's own report). Re-validated here too (not just at
-      // selection time in handleImage) since coverFile can sit in
-      // state for a while before this async function actually runs.
+      // cover-photo upload produced zero visible feedback. Re-validated
+      // here too (not just at selection time in handleImage) since
+      // coverFile can sit in state for a while before this async
+      // function actually runs.
+      //
+      // iOS production-bug follow-up: `toUploadableFile()` is the
+      // confirmed real fix — @supabase/storage-js reads the type
+      // directly off the File object for every upload in this app, so
+      // it must be corrected ON the object, not passed as an option
+      // (see lib/property-photos/validate.ts's own header for the full
+      // trace). handleImage() already does this at selection time;
+      // re-applying it here is cheap, harmless insurance against
+      // coverFile ever being set through a different path later.
       const validation = validatePropertyPhotoFile(coverFile)
+      logPhotoUploadDiagnostic('validation_result', { site: 'add-property-cover:pre-upload', ok: validation.ok, ...(validation.ok ? { contentType: validation.contentType } : { reason: validation.reason }) })
       if (!validation.ok) {
-        setError(`Property saved, but the cover photo could not be uploaded: ${validation.reason}`)
+        setError('Property saved, but the cover photo could not be uploaded. Please try a JPEG or PNG, or choose another photo.')
       } else {
+        const uploadable = toUploadableFile(coverFile, validation.contentType)
         const path = `${user.id}/${inserted.id}/photos/${crypto.randomUUID()}-${safeName(coverFile.name)}`
-        const { error: uploadError } = await supabase.storage.from('property-photos').upload(path, coverFile, { contentType: validation.contentType, upsert: false })
+        logPhotoUploadDiagnostic('upload_start', { site: 'add-property-cover', bucket: 'property-photos', path, ...safeFileSummary(uploadable) })
+        const { error: uploadError } = await supabase.storage.from('property-photos').upload(path, uploadable, { contentType: validation.contentType, upsert: false })
+        logPhotoUploadDiagnostic('upload_result', { site: 'add-property-cover', ok: !uploadError, error: uploadError?.message })
         if (uploadError) {
-          setError(`Property saved, but the cover photo could not be uploaded: ${uploadError.message}`)
+          console.error('property-photo cover upload failed', uploadError)
+          setError('Property saved, but the cover photo could not be uploaded. Please try a JPEG or PNG, or choose another photo.')
         } else {
-          await supabase.from('property_photos').insert({ owner_id: user.id, property_id: inserted.id, name: coverFile.name, storage_path: path, is_cover: true })
-          await supabase.from('properties').update({ cover_photo_path: path }).eq('id', inserted.id)
+          const { error: rowError } = await supabase.from('property_photos').insert({ owner_id: user.id, property_id: inserted.id, name: coverFile.name, storage_path: path, is_cover: true })
+          if (rowError) {
+            // Storage upload succeeded but the DB write failed — don't
+            // leave an orphaned, unreferenced object in the bucket, and
+            // don't leave cover_photo_path pointing at nothing.
+            await supabase.storage.from('property-photos').remove([path])
+            console.error('property-photo cover DB insert failed after a successful upload', rowError)
+            logPhotoUploadDiagnostic('db_update_result', { site: 'add-property-cover:insert', ok: false, error: rowError.message })
+            setError('Property saved, but the cover photo could not be attached. Please try uploading it again.')
+          } else {
+            const { error: updateError } = await supabase.from('properties').update({ cover_photo_path: path }).eq('id', inserted.id)
+            logPhotoUploadDiagnostic('db_update_result', { site: 'add-property-cover:cover_photo_path', ok: !updateError, error: updateError?.message })
+            if (updateError) {
+              console.error('property-photo cover_photo_path update failed after a successful upload', updateError)
+              setError('Property saved, and the photo was uploaded, but it could not be set as the cover. Try again from the property\'s photo gallery.')
+            }
+          }
         }
       }
     }
@@ -1137,8 +1175,10 @@ export default function Home() {
     const rejections: string[] = []
     const incoming: { file: File; contentType: string | undefined }[] = []
     for (const file of incomingRaw) {
+      logPhotoUploadDiagnostic('file_selected', { site: 'gallery-add', ...safeFileSummary(file) })
       const validation = validatePropertyPhotoFile(file)
-      if (validation.ok) incoming.push({ file, contentType: validation.contentType })
+      logPhotoUploadDiagnostic('validation_result', { site: 'gallery-add', ok: validation.ok, ...(validation.ok ? { contentType: validation.contentType } : { reason: validation.reason }) })
+      if (validation.ok) incoming.push({ file: toUploadableFile(file, validation.contentType), contentType: validation.contentType })
       else rejections.push(validation.reason)
     }
     if (!incoming.length) {
@@ -1149,22 +1189,39 @@ export default function Home() {
     setError(rejections.join(' '))
     const hasCover = selectedPhotos.some((photo) => photo.is_cover)
     for (let index = 0; index < incoming.length; index++) {
+      // iOS production-bug follow-up: `file` here is already the
+      // toUploadableFile()-corrected object (real fix — see
+      // lib/property-photos/validate.ts's header for the full trace of
+      // why @supabase/storage-js needs the type set ON the object).
       const { file, contentType } = incoming[index]
       const path = `${user.id}/${selectedId}/photos/${crypto.randomUUID()}-${safeName(file.name)}`
+      logPhotoUploadDiagnostic('upload_start', { site: 'gallery-add', bucket: 'property-photos', path, ...safeFileSummary(file) })
       const { error: uploadError } = await supabase.storage.from('property-photos').upload(path, file, { contentType, upsert: false })
+      logPhotoUploadDiagnostic('upload_result', { site: 'gallery-add', ok: !uploadError, error: uploadError?.message })
       if (uploadError) {
-        setError(uploadError.message)
+        console.error('property-photo gallery upload failed', uploadError)
+        setError('Photo upload failed. Please try a JPEG or PNG, or choose another photo.')
         continue
       }
       const isCover = !hasCover && index === 0
       const { error: rowError } = await supabase.from('property_photos').insert({ owner_id: user.id, property_id: selectedId, name: file.name, storage_path: path, is_cover: isCover })
+      logPhotoUploadDiagnostic('db_update_result', { site: 'gallery-add:insert', ok: !rowError, error: rowError?.message })
       if (rowError) {
+        // Storage upload succeeded but the DB row failed — clean up the
+        // now-orphaned object rather than leaving it unreferenced.
         await supabase.storage.from('property-photos').remove([path])
-        setError(rowError.message)
+        console.error('property-photo gallery DB insert failed after a successful upload', rowError)
+        setError('Photo upload failed. Please try a JPEG or PNG, or choose another photo.')
       } else if (isCover) {
-        await supabase.from('properties').update({ cover_photo_path: path }).eq('id', selectedId)
+        const { error: updateError } = await supabase.from('properties').update({ cover_photo_path: path }).eq('id', selectedId)
+        logPhotoUploadDiagnostic('db_update_result', { site: 'gallery-add:cover_photo_path', ok: !updateError, error: updateError?.message })
+        if (updateError) {
+          console.error('property-photo cover_photo_path update failed after a successful upload', updateError)
+          setError('The photo uploaded, but could not be set as the cover. Try again from the photo gallery.')
+        }
       }
     }
+    logPhotoUploadDiagnostic('ui_state', { site: 'gallery-add', reloading: true })
     await loadPortfolio()
     setBusy(false)
   }

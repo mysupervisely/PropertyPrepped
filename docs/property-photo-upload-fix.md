@@ -1,8 +1,204 @@
 # Property Photo Upload Bug — Trace, Root Cause, and Fix
 
-M2.1 review pass (Part 5), secondary to the M2 Guided Intake review.
-Application-only fix — **no Supabase Storage bucket/policy change and no
-migration were needed.**
+**UPDATE (iOS production-bug investigation, post-merge/deploy):** the
+M2.1 fix below shipped to production, but a real-iPhone retest still
+failed — the M2.1 diagnosis was **incomplete**, not wrong about the two
+bugs it found (both were real and are still fixed), but it missed the
+actual mechanism that matters for a real upload. See "UPDATE: the
+confirmed real root cause" below, added after this document's original
+M2.1 content (preserved as-is beneath it for the historical record).
+
+## UPDATE: the confirmed real root cause (this is the one that matters)
+
+M2.1 computed a corrected content type (`resolvePhotoContentType()`)
+for a file whose browser-reported `type` was empty, and passed it as
+`{ contentType: ... }` to `.upload()`. This was **verified, on
+re-inspection, to have zero effect on any real upload in this app.**
+
+Re-reading `@supabase/storage-js`'s installed source
+(`uploadOrUpdate()` in `node_modules/@supabase/storage-js/dist/
+index.cjs`) line by line: for a `File`/`Blob` body — which every real
+upload in this app is, always — the SDK does:
+
+```js
+if (typeof Blob !== "undefined" && fileBody instanceof Blob) {
+  body = new FormData()
+  body.append("cacheControl", options.cacheControl)
+  body.append("", fileBody)   // <-- options.contentType is NEVER read here
+}
+```
+
+`options.contentType` is only read in a different branch (raw streams/
+ArrayBuffers — not what this app ever passes). The actual Content-Type
+of the uploaded file, as far as the wire request and the server are
+concerned, comes from the browser's own `FormData` serialization of
+`fileBody`, which uses **`fileBody.type` directly** (a File/Blob's own,
+immutable property) — not any option we pass.
+
+**This was proven empirically, not just by reading source** — a test
+(`validate.test.ts`, "DEFINITIVE PROOF") constructs a real `File` with
+an empty `type`, appends it to a real `FormData`, and serializes it via
+`new Request(..., { body: formData }).text()` — the same construction
+path a browser and the SDK actually use. The result:
+
+```
+Content-Disposition: form-data; name=""; filename="IMG_0001.HEIC"
+Content-Type: application/octet-stream
+```
+
+**`application/octet-stream`** — not empty, not omitted, but a
+concrete, wrong MIME type, and NOT one of the `property-photos`
+bucket's configured `allowed_mime_types` (`image/jpeg`, `image/png`,
+`image/webp`, `image/heic`, `image/heif` — `supabase/schema.sql`). A
+bucket-level MIME allowlist is a server-side enforcement feature —
+that's its entire purpose — so an upload whose actual multipart part
+declares `application/octet-stream` is exactly the shape of request a
+server-side allowlist check would reject. This is the confirmed root
+cause: **the real uploaded bytes never carried a usable content type
+for a subset of iOS selections, and M2.1's fix never reached them.**
+
+### Why M2.1 did not fix it
+
+M2.1 fixed two real, separate bugs (both still fixed, see below) but
+never addressed the ACTUAL upload payload's content type — it only ever
+changed a `contentType` SDK option that, for this app's exact call
+pattern (always a real File object), the SDK silently discards. The
+unit/wiring tests written at the time all passed because they tested
+`validatePropertyPhotoFile()`'s return value and (via source-string
+matching) that `contentType` was passed as an option — they never
+serialized a real request and inspected what actually got sent, which
+is the only way this specific gap would have been visible.
+
+### The actual fix: `toUploadableFile()`
+
+`lib/property-photos/validate.ts` — `new File([file], file.name, {
+type: contentType })` constructs a NEW File wrapping the exact same
+underlying bytes (verified byte-identical in `validate.test.ts`) but
+with the corrected `type` set directly on the object. Since the SDK
+reads `fileBody.type` from whatever object we hand it, this is the only
+place the correction can actually take effect. When the browser already
+reported a correct type, this returns the original File unchanged (no
+copy, no behavior change) — the fix only ever does something when there
+was actually something wrong to fix.
+
+Applied at both real upload call sites (`handleImage`'s cover-photo
+selection and `addPhotoFiles()`'s gallery uploader) in `app/page.tsx`,
+immediately after validation and before the file is stored in state or
+handed to `.upload()`.
+
+### Other findings from this pass
+
+- **Two more silent-failure gaps found and fixed**, matching the
+  brief's own "database update failure after successful storage
+  upload" test scenario: neither the `property_photos` row insert nor
+  the `properties.cover_photo_path` update checked their own error in
+  `addProperty()`'s cover-photo block, and the `cover_photo_path`
+  update was entirely unchecked in `addPhotoFiles()` too. A storage
+  upload could now succeed while the DB never actually reflected it —
+  the photo would be gone from the user's view (or the cover wouldn't
+  change) with no explanation. Fixed: every DB write following a
+  successful upload now checks its own error, cleans up the orphaned
+  storage object on an insert failure, and shows a clear message.
+- **User-facing error text no longer echoes raw storage/DB internals.**
+  Previously `setError(`...${uploadError.message}`)` could put a raw
+  string like "No content provided" directly in front of the user. Now:
+  a concise, actionable message ("Please try a JPEG or PNG, or choose
+  another photo."), with the real technical error preserved via
+  `console.error` for safe debugging.
+- **Development-only diagnostics added** (`lib/property-photos/
+  diagnostics.ts`) — gated on `NODE_ENV !== 'production'`, logs
+  platform, file extension (never the full filename), MIME type, byte
+  size, File-vs-Blob, validation result, upload start/result, and DB
+  update result at every real stage of both upload paths. Never logs
+  bytes, URLs, tokens, or secrets.
+- **Cache/replacement re-verified, not just assumed:** every upload
+  gets a fresh `crypto.randomUUID()` path — paths are never reused, so
+  there is no stale-URL/cache risk at the storage-object level. Every
+  photo mutation (`addProperty`, `addPhotoFiles`, `setCover`,
+  `removePhoto`) calls `loadPortfolio()`, which re-fetches every photo
+  and generates a brand-new signed URL every time — the displayed image
+  can never be a cached response for a since-replaced object. No
+  existing code path deletes the previous cover image before a new
+  upload+DB update both succeed — "replacing" a cover is a separate,
+  explicit two-step user action (upload, then Set Cover), never an
+  atomic delete-then-upload.
+- **Bucket/policy audit (read-only, no changes):** `property-photos`
+  bucket — `public: false`, `file_size_limit: 20971520` (20MB),
+  `allowed_mime_types: ['image/jpeg','image/png','image/webp',
+  'image/heic','image/heif']` (the exact mechanism this whole
+  investigation traces back to). RLS policies
+  (`property_photos_select_own`/`_insert_own`/etc., `supabase/
+  schema.sql`) are the standard, unchanged
+  `(storage.foldername(name))[1] = auth.uid()` folder-scoping pattern —
+  not implicated, not changed. **No migration was needed** — this bug
+  was never a policy/bucket misconfiguration, it was the client sending
+  the wrong Content-Type for the actual bytes.
+- **Upload failure vs. preview/render failure — explicitly checked,
+  kept separate:** the brief asked us to distinguish these, so two
+  distinct rendering paths were traced independently of the upload fix
+  above.
+  - *Selection-time preview* (`handleImage`'s `<img src={imagePreview}>`
+    in the Add Property modal): this is a `FileReader.readAsDataURL()`
+    data URL, decoded and painted entirely by the browser the user is
+    uploading *from*. For the real-world failure this bug report is
+    about — a photo picked in iOS Safari — that's WebKit, and WebKit's
+    `<img>`/ImageIO stack has decoded and displayed HEIC natively since
+    Safari 11. So on the one browser this bug is actually about, this
+    preview path was not a suspect and testing confirmed nothing here
+    needed to change.
+  - *Gallery/cover thumbnails after upload* (`<img src={photo.
+    signedUrl}>`, line ~1783): these come straight from the Storage
+    signed URL, rendered by whatever browser is later viewing the
+    dashboard — which will not always be Safari (e.g. a desktop Chrome/
+    Firefox session). Chromium- and Gecko-based browsers still do not
+    decode HEIC/HEIF for `<img>`. This is a **real, pre-existing, and
+    separate** limitation: even after this fix, a HEIC file that now
+    uploads and stores correctly can still render as a broken image
+    icon in a non-Safari viewer. It is not the bug reported (nothing
+    reported "the photo looks broken" — the report was "upload does not
+    work") and it predates this investigation.
+  - **No fix was made for this.** Per the brief's own instruction not to
+    add a heavy HEIC→JPEG conversion dependency without a demonstrated
+    need, and since no failure of this kind was reproduced or reported,
+    this is documented here as a known follow-up candidate rather than
+    acted on speculatively. If cross-browser gallery rendering of HEIC
+    photos becomes a real complaint, the fix would be server-side
+    normalization to JPEG at upload time (a background conversion step,
+    not a client-side one) — a new, separate, deliberately-scoped piece
+    of work, not a change to bundle into this bug fix.
+
+### What could not be verified from this sandbox
+
+This environment has no live network path to the production Supabase
+project (confirmed in an earlier, unrelated investigation — outbound
+requests to the project's own host are blocked by this sandbox's
+network policy) and no real iOS device. Everything above was verified
+by: reading the exact installed SDK source, and reproducing its exact
+`FormData`/multipart construction in a real Node 22 environment (which
+has spec-compliant global `File`/`Blob`/`FormData`/`Request`) to observe
+the actual bytes that would be sent. This is strong, mechanistic
+evidence, not a live end-to-end confirmation against the real bucket.
+**Recommended production checks for the product owner** (read-only,
+no risk):
+
+1. In the Supabase dashboard → Storage → `property-photos` → confirm
+   the bucket's `allowed_mime_types` still matches what's in
+   `supabase/schema.sql` (a manual dashboard edit could have drifted
+   from the migration file).
+2. After this fix deploys, retry the exact same failing upload from the
+   same iPhone, and if it still fails, capture the Network tab's
+   request/response for the `POST .../storage/v1/object/property-photos/...`
+   call — the response body and status code will confirm or rule this
+   out immediately (a 400 with a MIME-type-related message would
+   confirm this; anything else points elsewhere).
+3. If still failing, check Supabase's own Storage logs (dashboard →
+   Logs → Storage) for the exact rejected request around the failure
+   timestamp.
+
+---
+
+*Everything below this line is the original M2.1 document, preserved
+as-is.*
 
 ## The full path, traced
 
