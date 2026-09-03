@@ -39,6 +39,7 @@ export function TenantRequestsPanel({
 
   const [openId, setOpenId] = useState<string | null>(null)
   const [threadMessages, setThreadMessages] = useState<PropertyMessage[]>([])
+  const [attachmentsByMessage, setAttachmentsByMessage] = useState<Map<string, string[]>>(new Map())
   const [replyText, setReplyText] = useState('')
   const [attachFile, setAttachFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
@@ -62,13 +63,27 @@ export function TenantRequestsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, tenantConnectEnabled])
 
+  async function loadAttachments(messages: PropertyMessage[]) {
+    if (!messages.length) { setAttachmentsByMessage(new Map()); return }
+    const { data } = await supabase.from('property_message_attachments').select('message_id, storage_path').in('message_id', messages.map((m) => m.id))
+    const rows = (data as { message_id: string; storage_path: string }[]) || []
+    const byMessage = new Map<string, string[]>()
+    for (const row of rows) {
+      const { data: signed } = await supabase.storage.from('tenant-connect-attachments').createSignedUrl(row.storage_path, 3600)
+      if (signed?.signedUrl) byMessage.set(row.message_id, [...(byMessage.get(row.message_id) || []), signed.signedUrl])
+    }
+    setAttachmentsByMessage(byMessage)
+  }
+
   async function openRequest(request: TenantRequest) {
     setOpenId(request.id)
     setReplyText('')
     setAttachFile(null)
     const { data, error: err } = await supabase.from('property_messages').select('*').eq('conversation_id', request.conversation_id).order('created_at', { ascending: true })
     if (err) { setError(err.message); return }
-    setThreadMessages((data as PropertyMessage[]) || [])
+    const messages = (data as PropertyMessage[]) || []
+    setThreadMessages(messages)
+    void loadAttachments(messages)
     await supabase.from('property_conversation_reads').upsert({ conversation_id: request.conversation_id, user_id: ownerId, last_read_at: new Date().toISOString() }, { onConflict: 'conversation_id,user_id' })
   }
 
@@ -155,6 +170,13 @@ export function TenantRequestsPanel({
                 <div key={m.id} className={`tenantConnectBubble tenantConnectBubble${m.sender_role}`}>
                   <div className="tenantConnectBubbleMeta"><strong>{m.sender_role}</strong><span>{new Date(m.created_at).toLocaleString()}</span></div>
                   <p>{m.message}</p>
+                  {(attachmentsByMessage.get(m.id) || []).length > 0 && (
+                    <div className="tenantConnectBubbleAttachments">
+                      {(attachmentsByMessage.get(m.id) || []).map((url) => (
+                        <a key={url} href={url} target="_blank" rel="noreferrer"><img src={url} alt="Attached photo" /></a>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
               {!threadMessages.length && <p className="muted">No replies yet.</p>}
