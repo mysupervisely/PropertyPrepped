@@ -1,6 +1,5 @@
 // PropRoster — Property photo upload validation (M2.1 review pass,
-// Part 5: "the product owner cannot reliably upload a new property
-// picture / replace an existing property picture").
+// Part 5, and the follow-up iOS production-bug investigation).
 //
 // Pure functions only, no Supabase/React/DOM — testable without a
 // browser. `FileLike` intentionally mirrors only the three File
@@ -8,20 +7,39 @@
 // satisfies it structurally with no adapter, and tests can pass a
 // plain object.
 //
-// TRACED ROOT CAUSE (see docs/property-photo-upload-fix.md for the
-// full writeup): app/page.tsx's addPhotoFiles() filtered incoming
-// files with `file.type.startsWith('image/')`, which SILENTLY dropped
-// any file with an empty `type` string — a real, documented behavior
-// for some iOS photo-picker selections (particularly HEIC), where the
-// browser reports no MIME type at all. A single such file being the
-// only one selected made the whole upload silently no-op (the function
-// returned before ever calling Storage). Separately, the "add a cover
-// photo while creating a new property" path (addProperty()) never
-// surfaced its own upload error to the user at all — a genuine failure
-// (which could read exactly like "No content provided" from Supabase
-// Storage) produced zero visible feedback. Neither of these was a
-// Storage bucket/policy defect — both were application-layer gaps, so
-// no migration was needed.
+// M2.1 (first pass) found and fixed two real bugs: addPhotoFiles()
+// silently dropped any file with an empty browser-reported `type`
+// (real iOS behavior for some selections), and addProperty()'s
+// cover-photo upload discarded its own error entirely. Both fixes
+// shipped, but a real-iPhone retest still failed — the diagnosis was
+// incomplete. See docs/property-photo-upload-fix.md for the full,
+// updated writeup of what M2.1 actually missed.
+//
+// THE MISS: M2.1 computed a corrected `resolvePhotoContentType()` and
+// passed it as the SDK's `options.contentType` — but re-reading
+// @supabase/storage-js's installed source (uploadOrUpdate() in
+// node_modules/@supabase/storage-js/dist/index.cjs) line by line shows
+// that for a File/Blob body (every real upload in this app), the SDK
+// builds `body = new FormData(); body.append("", fileBody)` and NEVER
+// reads `options.contentType` in that branch at all — the browser's
+// own FormData serialization sets that multipart part's Content-Type
+// from `fileBody.type` directly (a File/Blob's own, immutable
+// property), completely ignoring the option. So M2.1's contentType fix
+// was computed correctly but delivered through a parameter the SDK
+// silently ignores for every real upload — it never reached the wire.
+// Since the property-photos bucket has a configured
+// `allowed_mime_types` allowlist (supabase/schema.sql), an upload whose
+// actual multipart part carries an empty Content-Type (iOS Safari, some
+// HEIC/camera-originated selections) is exactly the kind of input a
+// server-side allowlist check is likely to reject or mishandle — this
+// is the confirmed, corrected root cause. toUploadableFile() below is
+// the actual fix: it constructs a NEW File wrapping the SAME bytes
+// (verified byte-identical — see toUploadableFile's own doc comment and
+// its test) but with the corrected `type` set directly ON THE OBJECT,
+// so the SDK's own `fileBody.type` read now sees the right value.
+//
+// Neither pass required a Storage bucket/policy/schema change — both
+// were application-layer gaps.
 
 export type FileLike = { name: string; type: string; size: number }
 
@@ -80,4 +98,30 @@ export function validatePropertyPhotoFile(file: FileLike): PhotoValidation {
     return { ok: false, reason: `"${file.name}" doesn't look like an image file.` }
   }
   return { ok: true, contentType }
+}
+
+/**
+ * THE actual fix for the confirmed iOS root cause (see this file's own
+ * header). @supabase/storage-js reads `fileBody.type` directly off the
+ * object passed to `.upload()` — never the `contentType` option — for
+ * every File/Blob body. When the browser reported no type at all
+ * (`file.type === ''`), the ONLY way to make the real uploaded bytes
+ * carry the correct type is to hand the SDK a File that itself already
+ * has that type set.
+ *
+ * `new File([file], file.name, { type })` wraps the SAME underlying
+ * bytes (Blob construction slices/references source data, it does not
+ * re-encode or transform it — verified byte-identical by this file's
+ * own test) with a corrected `type` property. When `file.type` is
+ * already correct, this returns the ORIGINAL File object unchanged —
+ * no unnecessary copy, and "keep the original browser File/Blob intact
+ * until upload" holds exactly whenever there's nothing to correct.
+ *
+ * Never called with an invalid file — always call this only after
+ * validatePropertyPhotoFile() returned `ok: true`, using that same
+ * result's `contentType`.
+ */
+export function toUploadableFile(file: File, contentType: string | undefined): File {
+  if (!contentType || file.type === contentType) return file
+  return new File([file], file.name, { type: contentType })
 }
