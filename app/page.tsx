@@ -45,8 +45,8 @@ import {
 import { buildTenantRequestDateItems } from '../lib/tenant-connect/requests'
 import type { TenantRequest } from '../lib/tenant-connect/types'
 import { maintenanceCategoryLabel } from '../lib/maintenance/categories'
-import { validatePropertyPhotoFile, toUploadableFile } from '../lib/property-photos/validate'
-import { logPhotoUploadDiagnostic, safeFileSummary } from '../lib/property-photos/diagnostics'
+import { validatePropertyPhotoFile, toUploadableFile, classifyPhotoSelection, isFirstCoverPhoto } from '../lib/property-photos/validate'
+import { logPhotoUploadDiagnostic, safeFileSummary, safeFileListSummary, safeErrorSummary } from '../lib/property-photos/diagnostics'
 import { TenantConnectStatusCard } from '../components/tenant-connect/TenantConnectStatusCard'
 import { TenantRequestsPanel } from '../components/tenant-connect/TenantRequestsPanel'
 
@@ -630,6 +630,26 @@ export default function Home() {
     }
   }, [user?.id])
 
+  // Post-selection-failure investigation (V2) — PHOTO_RENDER_RESULT:
+  // confirms the render layer actually received whatever `photos` state
+  // holds for the currently-open property, independent of whether the
+  // upload/DB/reload stages logged success. If a photo's DB row and
+  // reload both succeeded but this never logs a higher gallery count,
+  // the bug is in this component's own state/render wiring, not the
+  // upload path — exactly the distinction section 6 of the brief asks
+  // for. Runs on every `photos`/`selectedId` change, not just uploads,
+  // so it also catches "photo vanished after some unrelated reload".
+  useEffect(() => {
+    if (!selectedId) return
+    const forThisProperty = photos.filter((p) => p.property_id === selectedId)
+    logPhotoUploadDiagnostic('PHOTO_RENDER_RESULT', {
+      propertyId: selectedId,
+      galleryCount: forThisProperty.length,
+      withSignedUrl: forThisProperty.filter((p) => p.signedUrl).length,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, photos])
+
   const totals = useMemo(() => {
     const value = properties.reduce((sum, p) => sum + Number(p.estimated_value), 0)
     const debt = properties.reduce((sum, p) => sum + Number(p.mortgage_balance), 0)
@@ -770,11 +790,29 @@ export default function Home() {
     systems: selectedSystems, contacts: selectedContacts,
   }) : []
 
+  // Post-selection-failure investigation (V2): `.globalError` (see
+  // globals.css) renders once, right after the header, in normal
+  // document flow — not sticky/fixed. On the long, tabbed property
+  // workspace page, a user scrolled down into Documents -> Photos can
+  // trigger an error that appears off-screen above them, reading as "no
+  // visible error" even though setError() did run. surfaceError()
+  // scrolls to the top so a newly-set error is guaranteed to be seen —
+  // used specifically on the property-photo upload paths this
+  // investigation covers, not swapped in for every setError() in the
+  // file (most other forms are inside modals, already in view).
+  function surfaceError(message: string) {
+    setError(message)
+    if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }
+
   async function loadPortfolio() {
     if (!supabase || !user) return
     const client = supabase
     setBusy(true)
     setError('')
+    logPhotoUploadDiagnostic('PHOTO_RELOAD_START', {})
     const [
       { data: propertyRows, error: propertyError }, { data: docRows, error: docError }, { data: photoRows, error: photoError },
       { data: transactionRows, error: transactionError }, { data: leaseRows, error: leaseError }, { data: mortgageRows, error: mortgageError },
@@ -805,6 +843,7 @@ export default function Home() {
     ])
     const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError || contactError || requestError || systemError || noteError || ownershipError || rentPaymentError || taxRecordError || taxCustomItemError
     if (firstError) {
+      logPhotoUploadDiagnostic('PHOTO_RELOAD_ERROR', { stage: 'query', error: safeErrorSummary(firstError) })
       setError(firstError.message)
       setBusy(false)
       return
@@ -812,14 +851,36 @@ export default function Home() {
 
     const rawProperties = (propertyRows || []) as Property[]
     const rawPhotos = (photoRows || []) as PropertyPhoto[]
+    // Post-selection-failure investigation (V2): createSignedUrl()'s own
+    // error was previously discarded entirely (`const { data } = await
+    // ...`) — a photo whose signed URL failed to generate (e.g. a
+    // transient Storage error) would silently render as "Photo
+    // unavailable" with zero trace of why. Kept the same graceful
+    // fallback (a missing signedUrl is not fatal to the reload — every
+    // OTHER photo must still show), but the error is now logged
+    // (dev-only) instead of vanishing.
     const signedPhotos = await Promise.all(rawPhotos.map(async (photo) => {
-      const { data } = await client.storage.from('property-photos').createSignedUrl(photo.storage_path, 3600)
+      const { data, error: signError } = await client.storage.from('property-photos').createSignedUrl(photo.storage_path, 3600)
+      if (signError) {
+        logPhotoUploadDiagnostic('PHOTO_RELOAD_ERROR', { stage: 'createSignedUrl', propertyId: photo.property_id, error: safeErrorSummary(signError) })
+      }
       return { ...photo, signedUrl: data?.signedUrl }
     }))
     const coverMap = new Map(signedPhotos.filter((p) => p.is_cover).map((p) => [p.property_id, p.signedUrl]))
     setProperties(rawProperties.map((p) => ({ ...p, coverUrl: coverMap.get(p.id) })))
     setDocuments((docRows || []) as PropertyDocument[])
     setPhotos(signedPhotos)
+    // PHOTO_RELOAD_SUCCESS is logged here (not in addPhotoFiles) because
+    // this is the one place with direct access to the freshly-fetched
+    // array — reading `photos`/`selectedPhotos` state back inside
+    // addPhotoFiles right after `await loadPortfolio()` would see the
+    // STALE closure from the render that started the upload, not the
+    // just-set state (React state updates don't retroactively change an
+    // already-running async function's captured consts).
+    logPhotoUploadDiagnostic('PHOTO_RELOAD_SUCCESS', {
+      totalPhotos: signedPhotos.length,
+      selectedPropertyPhotos: selectedId ? signedPhotos.filter((p) => p.property_id === selectedId).length : undefined,
+    })
     setTransactions((transactionRows || []) as FinancialTransaction[])
     setLeases((leaseRows || []) as LeaseRecord[])
     setMortgages((mortgageRows || []) as MortgageRecord[])
@@ -908,92 +969,103 @@ export default function Home() {
     if (!supabase || !user || !draft.address.trim() || !draft.city.trim()) return
     setBusy(true)
     setError('')
-    const { data: inserted, error: insertError } = await supabase.from('properties').insert({
-      owner_id: user.id,
-      address: draft.address.trim(),
-      city: draft.city.trim(),
-      property_type: draft.type,
-      estimated_value: Number(draft.value || 0),
-      mortgage_balance: Number(draft.mortgage || 0),
-      monthly_rent: Number(draft.rent || 0),
-      purchase_price: Number(draft.purchasePrice || 0),
-      monthly_expenses: Number(draft.monthlyExpenses || 0),
-      financing_status: draft.financingStatus,
-    }).select('*').single()
+    // Post-selection-failure investigation (V2): wrapped in try/finally
+    // for the same reason as addPhotoFiles() below — this is called
+    // fire-and-forget (`onClick={() => void addProperty()}`, no
+    // `.catch()`), so an unexpected exception anywhere in this function
+    // previously would have left `busy` stuck and shown nothing.
+    try {
+      const { data: inserted, error: insertError } = await supabase.from('properties').insert({
+        owner_id: user.id,
+        address: draft.address.trim(),
+        city: draft.city.trim(),
+        property_type: draft.type,
+        estimated_value: Number(draft.value || 0),
+        mortgage_balance: Number(draft.mortgage || 0),
+        monthly_rent: Number(draft.rent || 0),
+        purchase_price: Number(draft.purchasePrice || 0),
+        monthly_expenses: Number(draft.monthlyExpenses || 0),
+        financing_status: draft.financingStatus,
+      }).select('*').single()
 
-    if (insertError || !inserted) {
-      // PROPERTY_LIMIT_REACHED is the trigger's distinguishable message
-      // (Section 6/8) — show the upgrade prompt instead of a raw database
-      // error. This is the real security boundary; it can fire even when
-      // openAddProperty()'s check above passed, if another tab/request
-      // used up the last slot in between.
-      if (insertError?.message === 'PROPERTY_LIMIT_REACHED') {
-        setShowAdd(false)
-        setShowUpgrade('propertyLimit')
-      } else {
-        setError(insertError?.message || 'Unable to add property.')
-      }
-      setBusy(false)
-      return
-    }
-
-    if (coverFile) {
-      // M2.1 review pass (Part 5) — this upload's error used to be
-      // silently discarded: the property still saved, but a failed
-      // cover-photo upload produced zero visible feedback. Re-validated
-      // here too (not just at selection time in handleImage) since
-      // coverFile can sit in state for a while before this async
-      // function actually runs.
-      //
-      // iOS production-bug follow-up: `toUploadableFile()` is the
-      // confirmed real fix — @supabase/storage-js reads the type
-      // directly off the File object for every upload in this app, so
-      // it must be corrected ON the object, not passed as an option
-      // (see lib/property-photos/validate.ts's own header for the full
-      // trace). handleImage() already does this at selection time;
-      // re-applying it here is cheap, harmless insurance against
-      // coverFile ever being set through a different path later.
-      const validation = validatePropertyPhotoFile(coverFile)
-      logPhotoUploadDiagnostic('validation_result', { site: 'add-property-cover:pre-upload', ok: validation.ok, ...(validation.ok ? { contentType: validation.contentType } : { reason: validation.reason }) })
-      if (!validation.ok) {
-        setError('Property saved, but the cover photo could not be uploaded. Please try a JPEG or PNG, or choose another photo.')
-      } else {
-        const uploadable = toUploadableFile(coverFile, validation.contentType)
-        const path = `${user.id}/${inserted.id}/photos/${crypto.randomUUID()}-${safeName(coverFile.name)}`
-        logPhotoUploadDiagnostic('upload_start', { site: 'add-property-cover', bucket: 'property-photos', path, ...safeFileSummary(uploadable) })
-        const { error: uploadError } = await supabase.storage.from('property-photos').upload(path, uploadable, { contentType: validation.contentType, upsert: false })
-        logPhotoUploadDiagnostic('upload_result', { site: 'add-property-cover', ok: !uploadError, error: uploadError?.message })
-        if (uploadError) {
-          console.error('property-photo cover upload failed', uploadError)
-          setError('Property saved, but the cover photo could not be uploaded. Please try a JPEG or PNG, or choose another photo.')
+      if (insertError || !inserted) {
+        // PROPERTY_LIMIT_REACHED is the trigger's distinguishable message
+        // (Section 6/8) — show the upgrade prompt instead of a raw database
+        // error. This is the real security boundary; it can fire even when
+        // openAddProperty()'s check above passed, if another tab/request
+        // used up the last slot in between.
+        if (insertError?.message === 'PROPERTY_LIMIT_REACHED') {
+          setShowAdd(false)
+          setShowUpgrade('propertyLimit')
         } else {
-          const { error: rowError } = await supabase.from('property_photos').insert({ owner_id: user.id, property_id: inserted.id, name: coverFile.name, storage_path: path, is_cover: true })
-          if (rowError) {
-            // Storage upload succeeded but the DB write failed — don't
-            // leave an orphaned, unreferenced object in the bucket, and
-            // don't leave cover_photo_path pointing at nothing.
-            await supabase.storage.from('property-photos').remove([path])
-            console.error('property-photo cover DB insert failed after a successful upload', rowError)
-            logPhotoUploadDiagnostic('db_update_result', { site: 'add-property-cover:insert', ok: false, error: rowError.message })
-            setError('Property saved, but the cover photo could not be attached. Please try uploading it again.')
+          surfaceError(insertError?.message || 'Unable to add property.')
+        }
+        return
+      }
+
+      if (coverFile) {
+        // M2.1 review pass (Part 5) — this upload's error used to be
+        // silently discarded: the property still saved, but a failed
+        // cover-photo upload produced zero visible feedback. Re-validated
+        // here too (not just at selection time in handleImage) since
+        // coverFile can sit in state for a while before this async
+        // function actually runs.
+        //
+        // iOS production-bug follow-up: `toUploadableFile()` is the
+        // confirmed real fix — @supabase/storage-js reads the type
+        // directly off the File object for every upload in this app, so
+        // it must be corrected ON the object, not passed as an option
+        // (see lib/property-photos/validate.ts's own header for the full
+        // trace). handleImage() already does this at selection time;
+        // re-applying it here is cheap, harmless insurance against
+        // coverFile ever being set through a different path later.
+        const validation = validatePropertyPhotoFile(coverFile)
+        logPhotoUploadDiagnostic('validation_result', { site: 'add-property-cover:pre-upload', ok: validation.ok, ...(validation.ok ? { contentType: validation.contentType } : { reason: validation.reason }) })
+        if (!validation.ok) {
+          surfaceError('Property saved, but the cover photo could not be uploaded. Please try a JPEG or PNG, or choose another photo.')
+        } else {
+          const uploadable = toUploadableFile(coverFile, validation.contentType)
+          const path = `${user.id}/${inserted.id}/photos/${crypto.randomUUID()}-${safeName(coverFile.name)}`
+          logPhotoUploadDiagnostic('upload_start', { site: 'add-property-cover', bucket: 'property-photos', path, ...safeFileSummary(uploadable) })
+          const { error: uploadError } = await supabase.storage.from('property-photos').upload(path, uploadable, { contentType: validation.contentType, upsert: false })
+          logPhotoUploadDiagnostic('upload_result', { site: 'add-property-cover', ok: !uploadError, error: uploadError?.message })
+          if (uploadError) {
+            console.error('property-photo cover upload failed', uploadError)
+            surfaceError('Property saved, but the cover photo could not be uploaded. Please try a JPEG or PNG, or choose another photo.')
           } else {
-            const { error: updateError } = await supabase.from('properties').update({ cover_photo_path: path }).eq('id', inserted.id)
-            logPhotoUploadDiagnostic('db_update_result', { site: 'add-property-cover:cover_photo_path', ok: !updateError, error: updateError?.message })
-            if (updateError) {
-              console.error('property-photo cover_photo_path update failed after a successful upload', updateError)
-              setError('Property saved, and the photo was uploaded, but it could not be set as the cover. Try again from the property\'s photo gallery.')
+            const { error: rowError } = await supabase.from('property_photos').insert({ owner_id: user.id, property_id: inserted.id, name: coverFile.name, storage_path: path, is_cover: true })
+            if (rowError) {
+              // Storage upload succeeded but the DB write failed — don't
+              // leave an orphaned, unreferenced object in the bucket, and
+              // don't leave cover_photo_path pointing at nothing.
+              await supabase.storage.from('property-photos').remove([path])
+              console.error('property-photo cover DB insert failed after a successful upload', rowError)
+              logPhotoUploadDiagnostic('db_update_result', { site: 'add-property-cover:insert', ok: false, error: rowError.message })
+              surfaceError('Property saved, but the cover photo could not be attached. Please try uploading it again.')
+            } else {
+              const { error: updateError } = await supabase.from('properties').update({ cover_photo_path: path }).eq('id', inserted.id)
+              logPhotoUploadDiagnostic('db_update_result', { site: 'add-property-cover:cover_photo_path', ok: !updateError, error: updateError?.message })
+              if (updateError) {
+                console.error('property-photo cover_photo_path update failed after a successful upload', updateError)
+                surfaceError('Property saved, and the photo was uploaded, but it could not be set as the cover. Try again from the property\'s photo gallery.')
+              }
             }
           }
         }
       }
-    }
 
-    setDraft({ address: '', city: '', type: 'Rental Property', value: '', mortgage: '', rent: '', purchasePrice: '', monthlyExpenses: '', financingStatus: 'Unknown' })
-    setCoverFile(null)
-    setImagePreview('')
-    setShowAdd(false)
-    await loadPortfolio()
-    setBusy(false)
+      setDraft({ address: '', city: '', type: 'Rental Property', value: '', mortgage: '', rent: '', purchasePrice: '', monthlyExpenses: '', financingStatus: 'Unknown' })
+      setCoverFile(null)
+      setImagePreview('')
+      setShowAdd(false)
+      await loadPortfolio()
+    } catch (unexpected) {
+      logPhotoUploadDiagnostic('PHOTO_UNEXPECTED_EXCEPTION', { site: 'add-property-cover', error: safeErrorSummary(unexpected) })
+      console.error('addProperty threw unexpectedly', unexpected)
+      surfaceError('Something went wrong saving the property. Please try again.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   function openEditProperty(property: Property) {
@@ -1161,6 +1233,18 @@ export default function Home() {
 
   async function addPhotoFiles(files: FileList | File[]) {
     if (!supabase || !user || !selectedId) return
+    // Post-selection-failure investigation (V2) — the FileList must be
+    // copied to a plain array SYNCHRONOUSLY, before any `await`, or a
+    // reset/cleared input can leave later code looking at zero files.
+    // This is already the case here: `Array.from(files)` is the very
+    // first thing this async function body does, before any await runs
+    // (an async function's body executes synchronously up to its first
+    // await), and the caller (the input's onChange, below) already
+    // copies `e.target.files` into `files` BEFORE resetting
+    // `e.target.value`. Verified safe — see
+    // upload-wiring.test.ts's "FileList/event lifecycle" coverage.
+    const incomingRaw = Array.from(files)
+    logPhotoUploadDiagnostic('PHOTO_PICKER_SELECTED', { site: 'gallery-add', propertyId: selectedId, ...safeFileListSummary(incomingRaw) })
     // M2.1 review pass (Part 5) — this used to filter with
     // `file.type.startsWith('image/')`, which SILENTLY dropped any
     // file the browser reported no MIME type for at all (a real,
@@ -1171,59 +1255,84 @@ export default function Home() {
     // accept="image/*") but still rejects a genuinely wrong or
     // zero-byte file, WITH a reason shown to the user instead of a
     // silent drop.
-    const incomingRaw = Array.from(files)
-    const rejections: string[] = []
-    const incoming: { file: File; contentType: string | undefined }[] = []
-    for (const file of incomingRaw) {
-      logPhotoUploadDiagnostic('file_selected', { site: 'gallery-add', ...safeFileSummary(file) })
-      const validation = validatePropertyPhotoFile(file)
-      logPhotoUploadDiagnostic('validation_result', { site: 'gallery-add', ok: validation.ok, ...(validation.ok ? { contentType: validation.contentType } : { reason: validation.reason }) })
-      if (validation.ok) incoming.push({ file: toUploadableFile(file, validation.contentType), contentType: validation.contentType })
-      else rejections.push(validation.reason)
+    // V2: classifyPhotoSelection() is the same accept/reject decision
+    // that used to be an inline loop here, pulled into
+    // lib/property-photos/validate.ts so it's testable with real,
+    // multi-file File[] batches directly (see validate.test.ts) instead
+    // of only via this component's source text.
+    const { results, accepted: incoming, rejectionMessage } = classifyPhotoSelection(incomingRaw)
+    for (const { file, validation } of results) {
+      logPhotoUploadDiagnostic('PHOTO_VALIDATION_RESULT', { site: 'gallery-add', accepted: validation.ok, size: file.size, ...(validation.ok ? { contentType: validation.contentType } : { reason: validation.reason }) })
     }
     if (!incoming.length) {
-      if (rejections.length) setError(rejections.join(' '))
+      if (rejectionMessage) surfaceError(rejectionMessage)
       return
     }
     setBusy(true)
-    setError(rejections.join(' '))
-    const hasCover = selectedPhotos.some((photo) => photo.is_cover)
-    for (let index = 0; index < incoming.length; index++) {
-      // iOS production-bug follow-up: `file` here is already the
-      // toUploadableFile()-corrected object (real fix — see
-      // lib/property-photos/validate.ts's header for the full trace of
-      // why @supabase/storage-js needs the type set ON the object).
-      const { file, contentType } = incoming[index]
-      const path = `${user.id}/${selectedId}/photos/${crypto.randomUUID()}-${safeName(file.name)}`
-      logPhotoUploadDiagnostic('upload_start', { site: 'gallery-add', bucket: 'property-photos', path, ...safeFileSummary(file) })
-      const { error: uploadError } = await supabase.storage.from('property-photos').upload(path, file, { contentType, upsert: false })
-      logPhotoUploadDiagnostic('upload_result', { site: 'gallery-add', ok: !uploadError, error: uploadError?.message })
-      if (uploadError) {
-        console.error('property-photo gallery upload failed', uploadError)
-        setError('Photo upload failed. Please try a JPEG or PNG, or choose another photo.')
-        continue
-      }
-      const isCover = !hasCover && index === 0
-      const { error: rowError } = await supabase.from('property_photos').insert({ owner_id: user.id, property_id: selectedId, name: file.name, storage_path: path, is_cover: isCover })
-      logPhotoUploadDiagnostic('db_update_result', { site: 'gallery-add:insert', ok: !rowError, error: rowError?.message })
-      if (rowError) {
-        // Storage upload succeeded but the DB row failed — clean up the
-        // now-orphaned object rather than leaving it unreferenced.
-        await supabase.storage.from('property-photos').remove([path])
-        console.error('property-photo gallery DB insert failed after a successful upload', rowError)
-        setError('Photo upload failed. Please try a JPEG or PNG, or choose another photo.')
-      } else if (isCover) {
-        const { error: updateError } = await supabase.from('properties').update({ cover_photo_path: path }).eq('id', selectedId)
-        logPhotoUploadDiagnostic('db_update_result', { site: 'gallery-add:cover_photo_path', ok: !updateError, error: updateError?.message })
-        if (updateError) {
-          console.error('property-photo cover_photo_path update failed after a successful upload', updateError)
-          setError('The photo uploaded, but could not be set as the cover. Try again from the photo gallery.')
+    setError(rejectionMessage)
+    // Post-selection-failure investigation (V2): the entire upload loop
+    // below is now wrapped in try/finally. Previously NOTHING in this
+    // function caught an unexpected exception — the input's onChange
+    // calls this with `void addPhotoFiles(files)` (fire-and-forget, no
+    // `.catch()`), so any throw that wasn't a Supabase-returned `{error}`
+    // (already all checked below) would become a silent unhandled
+    // promise rejection: no setError, no console.error, no
+    // loadPortfolio(), and `busy` left stuck true. That exact failure
+    // mode — total silence, no photo, no error — matches the reported
+    // symptom, and this closes it regardless of what specifically
+    // throws (a future SDK change, a transient browser API failure,
+    // etc.), not just the causes already ruled out below.
+    try {
+      const hasCover = selectedPhotos.some((photo) => photo.is_cover)
+      for (let index = 0; index < incoming.length; index++) {
+        // iOS production-bug follow-up: `file` here is already the
+        // toUploadableFile()-corrected object (real fix — see
+        // lib/property-photos/validate.ts's header for the full trace of
+        // why @supabase/storage-js needs the type set ON the object).
+        const { file, contentType } = incoming[index]
+        const path = `${user.id}/${selectedId}/photos/${crypto.randomUUID()}-${safeName(file.name)}`
+        logPhotoUploadDiagnostic('PHOTO_UPLOAD_START', { site: 'gallery-add', propertyId: selectedId, bucket: 'property-photos', path, contentType, size: file.size })
+        const { error: uploadError } = await supabase.storage.from('property-photos').upload(path, file, { contentType, upsert: false })
+        if (uploadError) {
+          logPhotoUploadDiagnostic('PHOTO_UPLOAD_ERROR', { site: 'gallery-add', path, error: safeErrorSummary(uploadError) })
+          console.error('property-photo gallery upload failed', uploadError)
+          surfaceError('Photo upload failed. Please try a JPEG or PNG, or choose another photo.')
+          continue
+        }
+        logPhotoUploadDiagnostic('PHOTO_UPLOAD_SUCCESS', { site: 'gallery-add', path })
+        const isCover = isFirstCoverPhoto(hasCover, index)
+        logPhotoUploadDiagnostic('PHOTO_DB_INSERT_START', { site: 'gallery-add', propertyId: selectedId, isCover })
+        const { error: rowError } = await supabase.from('property_photos').insert({ owner_id: user.id, property_id: selectedId, name: file.name, storage_path: path, is_cover: isCover })
+        if (rowError) {
+          logPhotoUploadDiagnostic('PHOTO_DB_INSERT_ERROR', { site: 'gallery-add', error: safeErrorSummary(rowError) })
+          // Storage upload succeeded but the DB row failed — clean up the
+          // now-orphaned object rather than leaving it unreferenced.
+          await supabase.storage.from('property-photos').remove([path])
+          console.error('property-photo gallery DB insert failed after a successful upload', rowError)
+          surfaceError('Photo upload failed. Please try a JPEG or PNG, or choose another photo.')
+        } else {
+          logPhotoUploadDiagnostic('PHOTO_DB_INSERT_SUCCESS', { site: 'gallery-add' })
+          if (isCover) {
+            logPhotoUploadDiagnostic('PHOTO_DB_UPDATE_START', { site: 'gallery-add:cover_photo_path', propertyId: selectedId })
+            const { error: updateError } = await supabase.from('properties').update({ cover_photo_path: path }).eq('id', selectedId)
+            if (updateError) {
+              logPhotoUploadDiagnostic('PHOTO_DB_UPDATE_ERROR', { site: 'gallery-add:cover_photo_path', error: safeErrorSummary(updateError) })
+              console.error('property-photo cover_photo_path update failed after a successful upload', updateError)
+              surfaceError('The photo uploaded, but could not be set as the cover. Try again from the photo gallery.')
+            } else {
+              logPhotoUploadDiagnostic('PHOTO_DB_UPDATE_SUCCESS', { site: 'gallery-add:cover_photo_path' })
+            }
+          }
         }
       }
+      await loadPortfolio()
+    } catch (unexpected) {
+      logPhotoUploadDiagnostic('PHOTO_UNEXPECTED_EXCEPTION', { site: 'gallery-add', error: safeErrorSummary(unexpected) })
+      console.error('property-photo gallery upload threw unexpectedly', unexpected)
+      surfaceError('Something went wrong uploading that photo. Please try again.')
+    } finally {
+      setBusy(false)
     }
-    logPhotoUploadDiagnostic('ui_state', { site: 'gallery-add', reloading: true })
-    await loadPortfolio()
-    setBusy(false)
   }
 
   // QA: "Open" didn't reliably open the document, particularly on mobile

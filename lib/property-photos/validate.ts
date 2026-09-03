@@ -125,3 +125,48 @@ export function toUploadableFile(file: File, contentType: string | undefined): F
   if (!contentType || file.type === contentType) return file
   return new File([file], file.name, { type: contentType })
 }
+
+export type ClassifiedPhotoSelection = {
+  /** One validation result per input file, same order — for per-file diagnostic logging at the call site. */
+  results: { file: File; validation: PhotoValidation }[]
+  accepted: { file: File; contentType: string | undefined }[]
+  rejectionMessage: string
+}
+
+/**
+ * V2 (post-selection-failure investigation): the batch-validation logic
+ * that decides which of a multi-file gallery selection are actually
+ * uploadable — was previously inline in app/page.tsx's addPhotoFiles(),
+ * untestable except by reading source strings. Pulled out here so it
+ * can be exercised directly with real File objects (a real FileList
+ * always yields plain File instances; this takes File[] since jsdom is
+ * not used in this repo and a real FileList can't be constructed
+ * outside a browser, but a real array of real Files is byte-for-byte
+ * identical input as far as this function's own logic is concerned).
+ *
+ * Every accepted file is already run through toUploadableFile() here —
+ * callers must never re-validate or re-wrap; the returned File is
+ * upload-ready as-is.
+ */
+export function classifyPhotoSelection(files: File[]): ClassifiedPhotoSelection {
+  const results = files.map((file) => ({ file, validation: validatePropertyPhotoFile(file) }))
+  const accepted = results
+    .filter((r): r is { file: File; validation: { ok: true; contentType: string | undefined } } => r.validation.ok)
+    .map((r) => ({ file: toUploadableFile(r.file, r.validation.contentType), contentType: r.validation.contentType }))
+  const rejectionMessage = results
+    .filter((r): r is { file: File; validation: { ok: false; reason: string } } => !r.validation.ok)
+    .map((r) => r.validation.reason)
+    .join(' ')
+  return { results, accepted, rejectionMessage }
+}
+
+/**
+ * Whether the photo at this index in an accepted batch becomes the
+ * property's cover: only the very first photo in the batch, and only
+ * when the property doesn't already have a cover photo. Pulled out
+ * alongside classifyPhotoSelection() for the same reason — a one-line
+ * decision that was previously only verifiable by reading source.
+ */
+export function isFirstCoverPhoto(hasExistingCover: boolean, indexInBatch: number): boolean {
+  return !hasExistingCover && indexInBatch === 0
+}
