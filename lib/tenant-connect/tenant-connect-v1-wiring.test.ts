@@ -19,7 +19,7 @@ describe('Tenant Connect V1 lives inside Property > Rent > Tenant, not a new des
   it('renders the new status card and requests panel inside the Rent > Tenant sub-tab', () => {
     const tenantTabIndex = source.indexOf("rentSubTab === 'Tenant'")
     expect(tenantTabIndex).toBeGreaterThan(-1)
-    const nearby = source.slice(tenantTabIndex, tenantTabIndex + 3000)
+    const nearby = source.slice(tenantTabIndex, tenantTabIndex + 4000)
     expect(nearby).toContain('<TenantConnectStatusCard')
     expect(nearby).toContain('<TenantRequestsPanel')
   })
@@ -47,6 +47,19 @@ describe('Tenant Connect V1 lives inside Property > Rent > Tenant, not a new des
 
   it('does not add a new top-level Tab value for Tenant Connect', () => {
     expect(source).toContain("type Tab = 'Overview' | 'Rent' | 'Details' | 'PropCrew' | 'Documents' | 'Tax'")
+  })
+})
+
+describe('Maintenance Coordination M2.1 review pass (Part 4) — minimum landlord visibility on the existing maintenance_requests list', () => {
+  const source = readFile('app/page.tsx')
+
+  it('shows a Tenant source badge on a tenant-originated maintenance_requests row', () => {
+    expect(source).toContain("req.source === 'tenant' && <span className=\"statusPill tenantSourceBadge\">Tenant</span>")
+  })
+
+  it('shows the category for a tenant-originated row, derived from the already-fetched portfolio-wide tenant_requests (maintenance_requests itself has no category column)', () => {
+    expect(source).toContain('categoryByMaintenanceRequestId')
+    expect(source).toContain('maintenanceCategoryLabel(categoryByMaintenanceRequestId.get(req.id)!)')
   })
 })
 

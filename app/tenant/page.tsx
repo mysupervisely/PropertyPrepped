@@ -36,16 +36,17 @@
 // service-role key, and a bug here can only ever surface what these
 // views/policies already allow, never bypass them.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { Wordmark } from '../../components/Wordmark'
-import { TENANT_REQUEST_STATUSES, type TenantRequest, type TenantRequestCategory } from '../../lib/tenant-connect/types'
+import type { TenantRequest } from '../../lib/tenant-connect/types'
 import type { TenantPropertyAccess, PropertyMessage } from '../../lib/tenant-connect/types'
 import { notifyTenantConnect } from '../../lib/tenant-connect/notify-client'
-import { MAINTENANCE_CATEGORIES, maintenanceCategoryLabel } from '../../lib/maintenance/categories'
+import { maintenanceCategoryLabel } from '../../lib/maintenance/categories'
+import { GuidedIntake } from '../../components/tenant-connect/GuidedIntake'
 
 type PropertyRef = { id: string; address: string; city: string }
 type LeaseRef = { id: string; tenant_name: string; monthly_rent: number; start_date: string; end_date: string; rent_due_day: number | null }
@@ -212,11 +213,11 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showNew, setShowNew] = useState(false)
-  const [draft, setDraft] = useState<{ category: TenantRequestCategory; title: string; description: string }>({ category: 'other', title: '', description: '' })
-  const [saving, setSaving] = useState(false)
 
   const [openId, setOpenId] = useState<string | null>(null)
+  const openIdRef = useRef<string | null>(null)
   const [threadMessages, setThreadMessages] = useState<PropertyMessage[]>([])
+  const [attachmentsByMessage, setAttachmentsByMessage] = useState<Map<string, string[]>>(new Map())
   const [replyText, setReplyText] = useState('')
   const [attachFile, setAttachFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
@@ -231,42 +232,46 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
 
   useEffect(() => { void load() }, [tenantAccessId])
 
-  async function submitRequest() {
-    if (!draft.title.trim() || !draft.description.trim()) return
-    setSaving(true)
-    setError('')
-    const { data: userData } = await supabase.auth.getUser()
-    const { data: conv, error: convErr } = await supabase
-      .from('property_conversations')
-      .insert({ property_id: propertyId, owner_id: ownerId, tenant_access_id: tenantAccessId, subject: draft.title.trim(), conversation_type: 'Maintenance' })
-      .select('id')
-      .single()
-    if (convErr || !conv) { setSaving(false); setError(convErr?.message || 'Could not submit request.'); return }
-    const { error: msgErr } = await supabase.from('property_messages').insert({ conversation_id: conv.id, sender_user_id: userData.user?.id, sender_role: 'Tenant', message: draft.description.trim() })
-    if (msgErr) { setSaving(false); setError(msgErr.message); return }
-    const { data: request, error: reqErr } = await supabase
-      .from('tenant_requests')
-      .insert({ property_id: propertyId, owner_id: ownerId, tenant_access_id: tenantAccessId, conversation_id: conv.id, category: draft.category, title: draft.title.trim(), description: draft.description.trim() })
-      .select('id')
-      .single()
-    setSaving(false)
-    if (reqErr || !request) { setError(reqErr?.message || 'Could not submit request.'); return }
-    void notifyTenantConnect(supabase, 'new_request', { requestId: request.id })
+  async function handleGuidedIntakeSubmitted(tenantRequestId: string) {
+    void notifyTenantConnect(supabase, 'new_request', { requestId: tenantRequestId })
     setShowNew(false)
-    setDraft({ category: 'other', title: '', description: '' })
     await load()
+  }
+
+  // M2.1 review pass (Part 6): forRequestId guards against a rapid
+  // "open A, then open B before A's fetch resolves" race — see the
+  // identical note in TenantRequestsPanel.tsx's own loadAttachments().
+  async function loadAttachments(messages: PropertyMessage[], forRequestId: string) {
+    if (!messages.length) { if (openIdRef.current === forRequestId) setAttachmentsByMessage(new Map()); return }
+    const { data } = await supabase.from('property_message_attachments').select('message_id, storage_path').in('message_id', messages.map((m) => m.id))
+    const rows = (data as { message_id: string; storage_path: string }[]) || []
+    const byMessage = new Map<string, string[]>()
+    for (const row of rows) {
+      const { data: signed } = await supabase.storage.from('tenant-connect-attachments').createSignedUrl(row.storage_path, 3600)
+      if (signed?.signedUrl) byMessage.set(row.message_id, [...(byMessage.get(row.message_id) || []), signed.signedUrl])
+    }
+    if (openIdRef.current === forRequestId) setAttachmentsByMessage(byMessage)
   }
 
   async function openRequest(request: TenantRequest) {
     setOpenId(request.id)
+    openIdRef.current = request.id
     setReplyText('')
     setAttachFile(null)
     const { data, error: err } = await supabase.from('property_messages').select('*').eq('conversation_id', request.conversation_id).order('created_at', { ascending: true })
     if (err) { setError(err.message); return }
-    setThreadMessages((data as PropertyMessage[]) || [])
+    const messages = (data as PropertyMessage[]) || []
+    if (openIdRef.current !== request.id) return
+    setThreadMessages(messages)
+    void loadAttachments(messages, request.id)
   }
 
   const open = requests.find((r) => r.id === openId) || null
+
+  function closeThread() {
+    setOpenId(null)
+    openIdRef.current = null
+  }
 
   async function sendReply() {
     if (!open || !replyText.trim()) return
@@ -295,7 +300,7 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
     <section className="tenantPortalSection">
       <div className="tenantPortalSectionHead">
         <h2>Requests</h2>
-        <button className="primary" onClick={() => setShowNew(true)}>+ New Request</button>
+        <button className="primary" onClick={() => setShowNew(true)}>+ Report an issue</button>
       </div>
       {error && <div className="statusMessage errorMessage">{error}<button onClick={() => setError('')}>×</button></div>}
       {loading ? (
@@ -311,27 +316,26 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
           ))}
         </div>
       ) : (
-        <p className="muted">No requests yet. Use + New Request to report an issue.</p>
+        <p className="muted">No requests yet. Use + Report an issue to tell your landlord what's going on.</p>
       )}
 
       {showNew && (
-        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowNew(false)}>
-          <div className="modal">
-            <div className="modalTop"><h2>New Request</h2><button className="iconButton" onClick={() => setShowNew(false)}>×</button></div>
-            <label>Category<select value={draft.category} onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value as TenantRequestCategory }))}>{MAINTENANCE_CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
-            <label>Title<input value={draft.title} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} placeholder="Kitchen sink leaking" /></label>
-            <label>Description<textarea rows={4} value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Describe what's happening…" /></label>
-            <div className="modalActions"><button className="secondary" onClick={() => setShowNew(false)}>Cancel</button><button className="primary" disabled={saving || !draft.title.trim() || !draft.description.trim()} onClick={() => void submitRequest()}>{saving ? 'Submitting…' : 'Submit Request'}</button></div>
-          </div>
-        </div>
+        <GuidedIntake
+          supabase={supabase}
+          propertyId={propertyId}
+          ownerId={ownerId}
+          tenantAccessId={tenantAccessId}
+          onClose={() => setShowNew(false)}
+          onSubmitted={(tenantRequestId) => void handleGuidedIntakeSubmitted(tenantRequestId)}
+        />
       )}
 
       {open && (
-        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setOpenId(null)}>
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && closeThread()}>
           <div className="modal tenantConnectThreadModal">
             <div className="modalTop">
               <div><p className="eyebrow">{maintenanceCategoryLabel(open.category).toUpperCase()}</p><h2>{open.title}</h2></div>
-              <button className="iconButton" onClick={() => setOpenId(null)}>×</button>
+              <button className="iconButton" onClick={closeThread}>×</button>
             </div>
             <div className="tenantConnectThreadMeta">
               <span className={`statusPill ${open.status === 'New' ? 'pillWarn' : open.status === 'Resolved' ? 'pillGood' : ''}`}>{open.status}</span>
@@ -343,6 +347,13 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
                 <div key={m.id} className={`tenantConnectBubble tenantConnectBubble${m.sender_role}`}>
                   <div className="tenantConnectBubbleMeta"><strong>{m.sender_role}</strong><span>{new Date(m.created_at).toLocaleString()}</span></div>
                   <p>{m.message}</p>
+                  {(attachmentsByMessage.get(m.id) || []).length > 0 && (
+                    <div className="tenantConnectBubbleAttachments">
+                      {(attachmentsByMessage.get(m.id) || []).map((url) => (
+                        <a key={url} href={url} target="_blank" rel="noreferrer"><img src={url} alt="Attached photo" /></a>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
               {!threadMessages.length && <p className="muted">No replies yet.</p>}

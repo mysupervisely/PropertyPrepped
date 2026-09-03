@@ -44,6 +44,8 @@ import {
 } from '../lib/rent-ledger/ledger'
 import { buildTenantRequestDateItems } from '../lib/tenant-connect/requests'
 import type { TenantRequest } from '../lib/tenant-connect/types'
+import { maintenanceCategoryLabel } from '../lib/maintenance/categories'
+import { validatePropertyPhotoFile } from '../lib/property-photos/validate'
 import { TenantConnectStatusCard } from '../components/tenant-connect/TenantConnectStatusCard'
 import { TenantRequestsPanel } from '../components/tenant-connect/TenantRequestsPanel'
 
@@ -196,6 +198,13 @@ type PropertyContact = {
 type MaintenanceRequest = {
   id: string; property_id: string; owner_id: string; tenant_name: string; tenant_email: string | null; title: string; description: string; priority: string; status: string; created_at: string
   assigned_contact_id: string | null
+  // Maintenance Coordination M2 (Milestone 27) — 'source' already exists
+  // on the table since M1.1 (Milestone 26); reading it here for the
+  // first time only to show a "Tenant" badge (Section 11) — this row
+  // may be one the tenant submitted through Guided Intake, auto-created
+  // by the tenant_requests_create_maintenance_case() trigger, not
+  // logged manually via "+ Log request" below.
+  source: 'tenant' | 'landlord'
 }
 
 // Tax Center V2: one row per (property, tax_year) — see
@@ -739,6 +748,11 @@ export default function Home() {
   const selectedTaxCustomItems = taxCustomItems.filter((row) => row.property_id === selectedId)
   const selectedContacts = contacts.filter((row) => row.property_id === selectedId)
   const selectedRequests = maintenanceRequests.filter((row) => row.property_id === selectedId)
+  // Maintenance Coordination M2.1 review pass (Part 4) — maintenance_requests
+  // itself has no category column (only tenant_requests does); reuse the
+  // portfolio-wide tenantRequests already fetched for PropWatch above to
+  // show a tenant-originated case's category without a new query.
+  const categoryByMaintenanceRequestId = new Map(tenantRequests.filter((r) => r.maintenance_request_id).map((r) => [r.maintenance_request_id as string, r.category]))
   const openRequests = selectedRequests.filter((row) => row.status !== 'Completed')
   const completedRequests = selectedRequests.filter((row) => row.status === 'Completed')
   const selectedSystems = propertySystems.filter((row) => row.property_id === selectedId)
@@ -833,7 +847,10 @@ export default function Home() {
 
   const handleImage = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
+    const validation = validatePropertyPhotoFile(file)
+    if (!validation.ok) { setError(validation.reason); return }
     setCoverFile(file)
     const reader = new FileReader()
     reader.onload = () => setImagePreview(String(reader.result || ''))
@@ -911,11 +928,25 @@ export default function Home() {
     }
 
     if (coverFile) {
-      const path = `${user.id}/${inserted.id}/photos/${crypto.randomUUID()}-${safeName(coverFile.name)}`
-      const { error: uploadError } = await supabase.storage.from('property-photos').upload(path, coverFile, { contentType: coverFile.type, upsert: false })
-      if (!uploadError) {
-        await supabase.from('property_photos').insert({ owner_id: user.id, property_id: inserted.id, name: coverFile.name, storage_path: path, is_cover: true })
-        await supabase.from('properties').update({ cover_photo_path: path }).eq('id', inserted.id)
+      // M2.1 review pass (Part 5) — this upload's error used to be
+      // silently discarded: the property still saved, but a failed
+      // cover-photo upload produced zero visible feedback ("cannot
+      // reliably upload a new property picture" from the product
+      // owner's own report). Re-validated here too (not just at
+      // selection time in handleImage) since coverFile can sit in
+      // state for a while before this async function actually runs.
+      const validation = validatePropertyPhotoFile(coverFile)
+      if (!validation.ok) {
+        setError(`Property saved, but the cover photo could not be uploaded: ${validation.reason}`)
+      } else {
+        const path = `${user.id}/${inserted.id}/photos/${crypto.randomUUID()}-${safeName(coverFile.name)}`
+        const { error: uploadError } = await supabase.storage.from('property-photos').upload(path, coverFile, { contentType: validation.contentType, upsert: false })
+        if (uploadError) {
+          setError(`Property saved, but the cover photo could not be uploaded: ${uploadError.message}`)
+        } else {
+          await supabase.from('property_photos').insert({ owner_id: user.id, property_id: inserted.id, name: coverFile.name, storage_path: path, is_cover: true })
+          await supabase.from('properties').update({ cover_photo_path: path }).eq('id', inserted.id)
+        }
       }
     }
 
@@ -1092,15 +1123,35 @@ export default function Home() {
 
   async function addPhotoFiles(files: FileList | File[]) {
     if (!supabase || !user || !selectedId) return
-    const incoming = Array.from(files).filter((file) => file.type.startsWith('image/'))
-    if (!incoming.length) return
+    // M2.1 review pass (Part 5) — this used to filter with
+    // `file.type.startsWith('image/')`, which SILENTLY dropped any
+    // file the browser reported no MIME type for at all (a real,
+    // observed iOS Safari behavior for some HEIC selections) — if that
+    // was the only file picked, this function returned having done
+    // nothing, with zero feedback. validatePropertyPhotoFile() is
+    // permissive about a missing type (trusts this input's own
+    // accept="image/*") but still rejects a genuinely wrong or
+    // zero-byte file, WITH a reason shown to the user instead of a
+    // silent drop.
+    const incomingRaw = Array.from(files)
+    const rejections: string[] = []
+    const incoming: { file: File; contentType: string | undefined }[] = []
+    for (const file of incomingRaw) {
+      const validation = validatePropertyPhotoFile(file)
+      if (validation.ok) incoming.push({ file, contentType: validation.contentType })
+      else rejections.push(validation.reason)
+    }
+    if (!incoming.length) {
+      if (rejections.length) setError(rejections.join(' '))
+      return
+    }
     setBusy(true)
-    setError('')
+    setError(rejections.join(' '))
     const hasCover = selectedPhotos.some((photo) => photo.is_cover)
     for (let index = 0; index < incoming.length; index++) {
-      const file = incoming[index]
+      const { file, contentType } = incoming[index]
       const path = `${user.id}/${selectedId}/photos/${crypto.randomUUID()}-${safeName(file.name)}`
-      const { error: uploadError } = await supabase.storage.from('property-photos').upload(path, file, { contentType: file.type, upsert: false })
+      const { error: uploadError } = await supabase.storage.from('property-photos').upload(path, file, { contentType, upsert: false })
       if (uploadError) {
         setError(uploadError.message)
         continue
@@ -1671,7 +1722,7 @@ export default function Home() {
 
           {documentsSubTab === 'Photos' && <>
           <div className="sectionHead workspaceHeading"><div><p className="eyebrow">PROPERTY PHOTOS</p><h2>Visual record</h2><p>Keep listing photos, renovation progress, inspections and property-condition photos together.</p></div></div>
-          <label className="photoUploader"><span>+</span><strong>{busy ? 'Uploading…' : 'Add property photos'}</strong><small>Select multiple images at once. The first photo becomes the cover if there is no cover yet.</small><input type="file" accept="image/*" multiple disabled={busy} onChange={(e) => e.target.files && void addPhotoFiles(e.target.files)} /></label>
+          <label className="photoUploader"><span>+</span><strong>{busy ? 'Uploading…' : 'Add property photos'}</strong><small>Select multiple images at once. The first photo becomes the cover if there is no cover yet.</small><input type="file" accept="image/*" multiple disabled={busy} onChange={(e) => { const files = e.target.files; e.target.value = ''; if (files) void addPhotoFiles(files) }} /></label>
           <div className="photoGallery">{selectedPhotos.length ? selectedPhotos.map((photo) => <div className={`galleryItem ${photo.is_cover ? 'coverItem' : ''}`} key={photo.id}>{photo.signedUrl ? <img src={photo.signedUrl} alt={photo.name} /> : <div className="heroPlaceholder">Photo unavailable</div>}<div className="galleryMeta"><span>{photo.name}</span><div className="galleryButtons">{!photo.is_cover && <button onClick={() => void setCover(photo)}>Set cover</button>}<button className="removePhoto" onClick={() => void removePhoto(photo)}>×</button></div></div></div>) : <div className="emptyGallery"><strong>No photos uploaded yet</strong><span>Add photos to build this property's visual history.</span></div>}</div>
           </>}
         </section>}
@@ -1799,7 +1850,7 @@ export default function Home() {
           })()}
 
           {rentSubTab === 'Tenant' && (selected.property_type === 'Rental Property' ? <>
-            <div className="sectionHead workspaceHeading"><div><p className="eyebrow">TENANT REQUESTS</p><h2>Maintenance requests</h2><p>Owner-side tracking for tenant maintenance requests.</p></div><button className="primary" onClick={() => setShowRequestForm(true)}>+ Log request</button></div><div className="financialStats landlordStats"><div className="financialStat"><span>Open requests</span><strong>{openRequests.length}</strong></div><div className="financialStat"><span>Completed requests</span><strong>{completedRequests.length}</strong></div></div>{selectedRequests.length ? <div className="maintenanceList">{selectedRequests.map((req) => <article className="maintenanceRow requestRow" key={req.id}><div className="maintenanceDate"><strong>{new Date(req.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(req.created_at).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div><span className={`statusPill priority${req.priority}`}>{req.priority}</span><h3>{req.title}</h3><p>{req.tenant_name}{req.tenant_email ? ` · ${req.tenant_email}` : ''}</p></div></div>{req.description && <p className="requestDescription">{req.description}</p>}<div className="maintenanceActions"><select aria-label={`Status for ${req.title}`} value={req.status} onChange={(e) => void updateRequestStatus(req.id, e.target.value)}>{requestStatuses.map((s) => <option key={s}>{s}</option>)}</select><button className="dangerLink" onClick={() => void removeRequest(req.id)}>Remove</button></div></div></article>)}</div> : <EmptyModule title="No maintenance requests yet" text="Log tenant requests as they come in by phone, email or in person." action="Log request" onClick={() => setShowRequestForm(true)} />}
+            <div className="sectionHead workspaceHeading"><div><p className="eyebrow">TENANT REQUESTS</p><h2>Maintenance requests</h2><p>Owner-side tracking for tenant maintenance requests.</p></div><button className="primary" onClick={() => setShowRequestForm(true)}>+ Log request</button></div><div className="financialStats landlordStats"><div className="financialStat"><span>Open requests</span><strong>{openRequests.length}</strong></div><div className="financialStat"><span>Completed requests</span><strong>{completedRequests.length}</strong></div></div>{selectedRequests.length ? <div className="maintenanceList">{selectedRequests.map((req) => <article className="maintenanceRow requestRow" key={req.id}><div className="maintenanceDate"><strong>{new Date(req.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(req.created_at).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div><span className={`statusPill priority${req.priority}`}>{req.priority}</span>{req.source === 'tenant' && <span className="statusPill tenantSourceBadge">Tenant</span>}<h3>{req.title}</h3><p>{req.source === 'tenant' && categoryByMaintenanceRequestId.has(req.id) ? `${maintenanceCategoryLabel(categoryByMaintenanceRequestId.get(req.id)!)} · ` : ''}{req.tenant_name}{req.tenant_email ? ` · ${req.tenant_email}` : ''}</p></div></div>{req.description && <p className="requestDescription">{req.description}</p>}<div className="maintenanceActions"><select aria-label={`Status for ${req.title}`} value={req.status} onChange={(e) => void updateRequestStatus(req.id, e.target.value)}>{requestStatuses.map((s) => <option key={s}>{s}</option>)}</select><button className="dangerLink" onClick={() => void removeRequest(req.id)}>Remove</button></div></div></article>)}</div> : <EmptyModule title="No maintenance requests yet" text="Log tenant requests as they come in by phone, email or in person." action="Log request" onClick={() => setShowRequestForm(true)} />}
             {/* Tenant Connect V1: replaces the old TenantConnectPanel
                 call site here (that component's own general multi-
                 conversation UI is broader than this milestone's "one

@@ -840,6 +840,7 @@ h2, h3, p { margin-top: 0; }
 .statusPill.priorityNormal { background: var(--brand-soft); color: var(--brand); }
 .statusPill.priorityHigh { background: #fff5dc; color: #805f12; }
 .statusPill.priorityUrgent { background: #fdeceb; color: #8a3d35; }
+.statusPill.tenantSourceBadge { background: #eef2ef; color: var(--muted); margin-left: 6px; }
 @media (max-width: 800px) { .contactGrid { grid-template-columns: 1fr; } }
 @media (max-width: 560px) { .landlordStats { grid-template-columns: 1fr 1fr; } }
 
@@ -1214,6 +1215,8 @@ h2, h3, p { margin-top: 0; }
 .tenantConnectBubbleMeta { display: flex; gap: 8px; align-items: baseline; margin-bottom: 4px; font-size: 11px; color: var(--muted); }
 .tenantConnectBubbleMeta strong { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: var(--text); }
 .tenantConnectBubble p { margin: 0; font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+.tenantConnectBubbleAttachments { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.tenantConnectBubbleAttachments img { width: 84px; height: 84px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); display: block; }
 
 .tenantConnectCompose { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; }
 .tenantConnectCompose textarea { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-family: inherit; font-size: 14px; resize: vertical; }
@@ -1892,4 +1895,62 @@ h2, h3, p { margin-top: 0; }
 @media (max-width: 430px) {
   .tenantPortalShell { padding: 0 14px 50px; }
   .tenantPortalSectionHead button { width: 100%; }
+}
+
+/* Guided Maintenance Intake M2 V1 (Milestone 27) — mobile-first,
+   one-question-at-a-time wizard. Reuses .overlay/.modal/.primary/
+   .secondary/.statusMessage/.muted as-is; these are the only new rules
+   this feature needs. */
+.guidedIntakeModal { width: min(520px, calc(100% - 24px)); }
+
+.guidedIntakeResume { display: grid; gap: 12px; margin-top: 16px; }
+.guidedIntakeResumeActions { display: flex; gap: 10px; }
+
+.guidedIntakeCategoryGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+.guidedIntakeCategoryTile { border: 1px solid var(--line); background: white; border-radius: 14px; padding: 20px 14px; min-height: 64px; font-weight: 650; font-size: 15px; text-align: center; display: flex; align-items: center; justify-content: center; }
+.guidedIntakeCategoryTile:hover { border-color: var(--brand); }
+
+.guidedIntakeQuestion { margin-top: 12px; display: grid; gap: 12px; }
+.guidedIntakeProgress { font-size: 12px; font-weight: 650; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.guidedIntakeQuestionPrompt { font-size: 19px; font-weight: 700; margin: 0; line-height: 1.35; }
+.guidedIntakeHelpText { margin: 0; font-size: 13.5px; }
+
+.guidedIntakeOptions { display: grid; gap: 10px; margin-top: 4px; }
+.guidedIntakeOptionTile { border: 1px solid var(--line); background: white; border-radius: 12px; padding: 15px 16px; min-height: 48px; font-weight: 650; text-align: left; font-size: 15px; }
+.guidedIntakeOptionTile:hover { border-color: var(--brand); background: var(--brand-soft); }
+
+.guidedIntakeTextInput { display: grid; gap: 12px; margin-top: 4px; }
+.guidedIntakeTextInputRow { display: flex; align-items: center; gap: 10px; }
+.guidedIntakeTextInputRow input { flex: 1; border: 1px solid var(--line); border-radius: 10px; padding: 13px 14px; font-size: 16px; font-family: inherit; }
+
+.guidedIntakePhotoStep { display: grid; gap: 12px; margin-top: 4px; }
+.guidedIntakePhotoLabel { text-align: center; cursor: pointer; }
+.guidedIntakePhotoLabel:has(input:disabled) { opacity: .55; cursor: not-allowed; }
+.guidedIntakePhotoList { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.guidedIntakePhotoList li { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; }
+.guidedIntakePhotoList li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.guidedIntakeNav { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.guidedIntakeNav .primary { margin-left: auto; }
+@media (max-width: 380px) {
+  /* The urgent screen's three buttons (Back/Close/submit) and the
+     review screen's longer "Submit to my landlord" label need full
+     width on the narrowest phones to stay comfortably tappable. */
+  .guidedIntakeNav button { flex: 1 1 100%; }
+  .guidedIntakeNav .primary { margin-left: 0; }
+}
+
+.guidedIntakeUrgent { margin-top: 12px; display: grid; gap: 10px; }
+.guidedIntakeUrgent h3 { margin: 0; color: #8a3d35; }
+.guidedIntakeUrgent ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+
+.guidedIntakeReview { margin-top: 12px; display: grid; gap: 12px; }
+.guidedIntakeSummary { white-space: pre-wrap; background: #f7f8f7; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; font-family: inherit; font-size: 13.5px; line-height: 1.6; margin: 0; }
+.guidedIntakeReview label { display: block; font-size: 13px; font-weight: 650; }
+.guidedIntakeReview textarea { width: 100%; margin-top: 6px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-family: inherit; font-size: 14px; resize: vertical; }
+
+.guidedIntakeDone { margin-top: 16px; display: grid; gap: 14px; text-align: center; }
+
+@media (max-width: 460px) {
+  .guidedIntakeCategoryGrid { grid-template-columns: 1fr; }
 }
