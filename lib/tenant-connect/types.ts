@@ -90,4 +90,13 @@ export type TenantRequest = {
   status: TenantRequestStatus
   created_at: string
   updated_at: string
+  // Maintenance Coordination M1.1 (Milestone 26) — the canonical
+  // maintenance_requests case this submission created. Always set by
+  // the tenant_requests_create_maintenance_case() trigger before the
+  // row is ever visible to a client (never null in practice, never
+  // client-supplied); nullable in the type only because the underlying
+  // DB column is nullable for deployment-sequencing safety — see that
+  // migration's own header for why. See lib/maintenance/source.ts for
+  // the origin/source vocabulary stored on the linked case itself.
+  maintenance_request_id: string | null
 }

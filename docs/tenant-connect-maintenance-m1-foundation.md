@@ -523,3 +523,384 @@ before any real write path ships.
   `supabase/milestone-25-maintenance-coordination-foundation.sql` to
   production (separate from, and required before, any M2 work that
   depends on `tenant_requests` existing there).
+
+---
+
+# M1.1 ADDENDUM — Canonical Maintenance Case + Safe Production Integration
+
+Everything above this line is the original M1 record, preserved
+unchanged. This addendum documents M1.1, which resolved the one open
+item M1 explicitly deferred (§2, §20): whether `maintenance_requests`
+and `tenant_requests` should ever unify.
+
+Branch: `claude/tenant-connect-maintenance-m1-1-integration`, based
+directly on M1's own tip (`cc1e770`) — main had not advanced beyond
+`e5d198c` since M0/M1, so M1.1 branches from M1 itself rather than a
+fresh `origin/main` checkout, preserving M1's history exactly.
+
+## A1. The product-owner decision
+
+A broken AC is one maintenance case regardless of who reported it — the
+source of a request is metadata, not a reason to run two permanent
+maintenance coordination engines. `public.maintenance_requests` becomes
+the single canonical maintenance case; `public.tenant_requests` becomes
+the tenant's own intake/submission record, linked 1:1 to the case it
+creates. No third maintenance entity was introduced.
+
+## A2. Why `maintenance_requests`, not `tenant_requests`, is the case
+
+Repository-audit-driven, not naming preference:
+
+1. `maintenance_requests` already carries a real case lifecycle
+   (`priority`, a 4-state `status` machine: Submitted/Scheduled/In
+   Progress/Completed) that predates this milestone and is already
+   read/written by the landlord dashboard (`app/page.tsx`) today.
+2. `maintenance_requests.assigned_contact_id` (Milestone 11) is already
+   a live FK to `property_contacts` (PropCrew) — exactly the future
+   provider-assignment anchor this milestone needed, already built and
+   unused, waiting for this.
+3. `maintenance_requests` may already hold real production data (live
+   since Milestone 6); `tenant_requests` has zero rows anywhere.
+   Pointing the empty new table at the already-populated one is
+   strictly lower-risk than the reverse.
+4. The landlord's existing maintenance list (`app/page.tsx`) already
+   queries every `maintenance_requests` row it owns. A tenant-originated
+   case appears there automatically — zero new landlord UI required in
+   this milestone.
+
+## A3. Final role of `maintenance_requests`
+
+Canonical maintenance case for every origin (tenant and landlord alike).
+Gains one additive column (`source text not null default 'landlord'
+check (source in ('tenant', 'landlord'))`) and one narrowed INSERT
+policy (`and source = 'landlord'`, closing the "landlord hand-crafts a
+row claiming source=tenant" gap — cosmetic-only, since no shipped UI
+ever sent `source` and no code trusts it for privilege decisions).
+Every pre-existing column, row, and the DELETE/UPDATE policies are
+byte-for-byte unchanged. `assigned_contact_id` (future provider
+assignment) needed no change — it already exists.
+
+## A4. Final role of `tenant_requests`
+
+Tenant-safe intake/submission record — unchanged in every respect from
+M1 except one new column, `maintenance_request_id`, and one line added
+to the pre-existing `tenant_requests_lock_immutable_fields()` trigger to
+lock it. The tenant never gains any privilege on `maintenance_requests`
+itself, at any level — every effect on that table happens exclusively
+inside the new `SECURITY DEFINER` trigger.
+
+## A5. Relationship / linkage
+
+`tenant_requests.maintenance_request_id` (FK, `on delete restrict`,
+backed by a `UNIQUE` index) — set exclusively by a new `BEFORE INSERT`
+trigger, `tenant_requests_create_maintenance_case()`. The trigger:
+
+1. Derives `tenant_name`/`tenant_email` server-side from the caller's
+   own active `tenant_property_access` row (joined to `leases` for the
+   name when a lease is linked) — never client-supplied.
+2. Inserts exactly one new `maintenance_requests` row
+   (`source = 'tenant'`, `status = 'Submitted'`, `priority = 'Normal'`,
+   title/description copied from the submission) in the SAME statement
+   as the `tenant_requests` insert.
+3. Sets `NEW.maintenance_request_id` to the freshly created case's id
+   before the row is ever written or RLS-checked.
+
+This is fully transactional by construction — no RPC, no client-side
+multi-step sequencing, no window where a `tenant_requests` row exists
+without its case (or vice versa). Verified hands-on in
+`supabase/tests/milestone-26-rls.test.sql` §1.
+
+## A6. Duplicate-case prevention
+
+Structural, not conventional: the trigger fires exactly once per
+`tenant_requests` INSERT statement, and a UNIQUE index on
+`tenant_requests.maintenance_request_id` makes two submissions ever
+sharing one case physically impossible. Verified hands-on (§2 of the new
+test — confirms the index is real, and that two distinct submissions
+get two distinct cases). "Duplicate" at the human level (a tenant
+submitting the same real-world issue twice) is a UX/product concern
+(e.g. a debounced submit button), explicitly out of scope — M1.1 builds
+no intake UI.
+
+## A7. Tenant/landlord privilege boundary (unchanged from M1's model, extended)
+
+The tenant still never touches `maintenance_requests` directly, at any
+privilege level — verified explicitly (§3 of the new test: a tenant's
+direct `SELECT` against their own linked case returns zero rows). The
+landlord reads a tenant-originated case through the SAME, unmodified
+`maintenance_requests_select_own` policy that has existed since
+Milestone 6 (§4). Cross-property and cross-owner isolation re-verified
+for both tables together (§8). Anon and unrelated-signed-in-user denial
+re-verified (§9).
+
+## A8. Entitlement verification
+
+Traced `lib/billing/plans.ts`'s canonical `PlanId` union
+(`'free' | 'organize' | 'manage' | 'automate' | 'investor' | 'portfolio'
+| 'portfolio_pro' | 'owner'`) and `lib/billing/entitlements.ts`'s
+`TENANT_CONNECT_ENABLED` map and `ENTITLED_STATUSES` set
+(`'active', 'trialing', 'past_due'`) directly, byte-for-byte, against
+`owner_has_tenant_connect()`'s current body (fixed in M1). Confirmed —
+not assumed — that the plan list `('portfolio', 'portfolio_pro',
+'owner', 'manage', 'automate')` exactly matches every plan the TS map
+marks `true`, with every `false` plan correctly excluded. No further
+change was needed or made to `owner_has_tenant_connect()` in M1.1.
+
+Added a genuinely new, hands-on negative case beyond M1's own
+verification: a Free-plan owner with **no `user_subscriptions` row at
+all** — the exact "brand-new Free account that has never touched
+Stripe" scenario the function's own comment describes — correctly
+blocks their tenant from even starting a conversation, let alone
+submitting a request (§10 of the new test). This is a different failure
+mode than M1's fix (a legacy-vs-current plan NAME mismatch); this
+confirms the "no row" path independently.
+
+## A9. Where future concepts attach (documented, none built here)
+
+Anchored to the canonical case (`maintenance_requests.id` — lifecycle
+concerns independent of origin): future provider assignment
+(`assigned_contact_id`, already exists), future appointments, quotes,
+owner authorizations, and Service Thread provider-participation events
+— each its own future table with a `maintenance_request_id` FK, never
+columns bolted onto `maintenance_requests` itself, never one shared
+status enum.
+
+Anchored to the tenant's own intake record (`tenant_requests.id` —
+source-specific, tenant-only concepts a landlord-reported case will
+never have): guided-intake sessions/answers (already anchored here since
+M1, unchanged); future tenant-provided availability
+(`maintenance_access_windows`, still not created — no structural need
+yet) should key off `tenant_requests.id`/`tenant_access_id`, reachable
+from the case only transitively through `maintenance_request_id`.
+
+## A10. Maintenance-history strategy (confirmed, not re-decided)
+
+`public.maintenance_records` (Milestone 6) already exists as the
+property's durable, completed-service ledger — a separate, already-built
+concept from the active case. This confirms M1's own (B) recommendation
+by the existing table's mere presence: closure of a `maintenance_requests`
+case should eventually generate/reference a `maintenance_records` row,
+not treat the case row itself as the permanent historical artifact. Not
+implemented in M1.1 — no code writes that linkage yet, and
+`maintenance_records` gains no new column here — flagged for whichever
+milestone actually builds request-closure behavior.
+
+## A11. Status-machine independence (re-affirmed)
+
+`tenant_requests.status` (tenant-facing: New/In Progress/Resolved) and
+`maintenance_requests.status` (case lifecycle:
+Submitted/Scheduled/In Progress/Completed) remain two separate, narrow
+state machines — no giant unified enum was built, per M0's own
+principle, re-affirmed by the M1.1 brief. Whether/how they should ever
+sync (e.g. a case marked Completed flips the tenant's own request to
+Resolved) is an open product question for whichever milestone builds the
+landlord-review experience — not decided or implemented here.
+
+## A12. Schema changes (`supabase/milestone-26-canonical-maintenance-case.sql`)
+
+- `maintenance_requests`: `+ source text not null default 'landlord'
+  check (source in ('tenant', 'landlord'))`, an index on it, and a
+  narrowed `maintenance_requests_insert_own` WITH CHECK.
+- `tenant_requests`: `+ maintenance_request_id uuid references
+  maintenance_requests(id) on delete restrict` (nullable at the DB
+  level — see A14), a UNIQUE index, and a plain index.
+- New function + trigger: `tenant_requests_create_maintenance_case()`
+  (`SECURITY DEFINER`, `BEFORE INSERT` on `tenant_requests`).
+- `create or replace` of `tenant_requests_lock_immutable_fields()`
+  (Milestone 25's own function) adding one line to lock the new column.
+
+Folded verbatim into `supabase/schema.sql` under a "Milestone 26"
+banner — diffed against M1's own `schema.sql` to confirm zero bytes
+changed anywhere before that new section (pure append).
+
+## A13. Application changes
+
+- `lib/maintenance/source.ts` (new) — the `MaintenanceRequestSource`
+  vocabulary (`'tenant' | 'landlord'`), mirroring
+  `lib/maintenance/categories.ts`'s established pattern, with a test
+  that cross-checks its values against the SQL CHECK constraint's exact
+  text.
+- `lib/tenant-connect/types.ts` — `TenantRequest` gains
+  `maintenance_request_id: string | null`.
+- No UI changes. The landlord's existing maintenance list
+  (`app/page.tsx`) requires no code change to start showing
+  tenant-originated cases — it already selects every `maintenance_requests`
+  row it owns.
+
+## A14. Why `maintenance_request_id` is nullable at the DB level
+
+Despite being logically required for every row inserted through the
+normal path (the trigger always sets it), the column is deliberately
+**not** `NOT NULL`. This is a conservative deployment-safety choice: if
+this migration is ever applied some time after `milestone-25` rather
+than in the same operation, any `tenant_requests` row created in that
+gap would predate this trigger and would otherwise make a `NOT NULL`
+constraint fail the whole migration. The UNIQUE index still fully
+prevents two `tenant_requests` rows from ever sharing one case
+regardless (Postgres unique indexes permit multiple `NULL`s). See A16
+for why this gap is expected to be empty in practice.
+
+## A15. `ON DELETE RESTRICT` — a deliberate, tested behavior change
+
+A landlord can no longer delete a `maintenance_requests` case that has a
+linked `tenant_requests` row (verified: §7a of the new test — rejected
+with `foreign_key_violation`). A purely landlord-created case (no linked
+`tenant_requests` row) remains exactly as deletable as it always was
+(§7b). This is a deliberate protection — a landlord cannot silently
+erase a tenant's own submission history — consistent with the
+retire-via-status/append-only ethos already established elsewhere in
+this schema (`tenant_requests` itself has no DELETE policy at all).
+
+## A16. Migration safety review
+
+1. **Could this destroy existing production data?** No. Every
+   statement is additive (`add column if not exists`, `create or
+   replace function`, `drop policy if exists` + `create policy`,
+   idempotent constraint/index creation). `source`'s `NOT NULL DEFAULT
+   'landlord'` backfills every existing `maintenance_requests` row
+   automatically and correctly (all pre-M1.1 rows are landlord-logged,
+   since `tenant_requests` never existed before M1) — no `UPDATE`
+   statement touches any existing row.
+2. **Could this modify existing maintenance records unexpectedly?** No
+   — no existing column's value or meaning changes; the only new
+   behavioral change (`ON DELETE RESTRICT`, A15) only ever affects a
+   case that gains a `tenant_requests` link *after* this migration —
+   impossible for any pre-existing row today.
+3. **Could it expose tenant data?** No — verified explicitly (§8 of the
+   new test, cross-property and cross-owner).
+4. **Could it expose landlord-private data?** No — the tenant gains
+   zero privilege on `maintenance_requests` at any level (§3).
+5. **Could it break existing Tenant Connect?** No — `milestone-25`'s
+   full RLS suite re-run after this migration still passes 19/19 with
+   zero regressions (re-verified hands-on, not assumed).
+6. **Could it break existing PropCrew?** No — `property_contacts` /
+   `property_contact_links` / `assigned_contact_id` are untouched by
+   this file.
+7. **Could it break existing landlord maintenance records?** No — see
+   1/2 above; `maintenance_requests_select_own` /
+   `_update_own` / `_delete_own` are byte-for-byte unchanged, and
+   `_insert_own`'s narrowing cannot reject any request a real landlord
+   client has ever sent (none has ever set `source`).
+8. **Could deployment ordering create an application/schema mismatch?**
+   Only if this file and `milestone-25` are deployed apart — see A17.
+   Deployed together (as recommended), there is no intermediate window:
+   `tenant_requests` and its case-linkage exist simultaneously from the
+   application's perspective, with no application code change required
+   at all (the frontend already only ever inserts into `tenant_requests`
+   directly; the case row is entirely server-derived).
+9. **Is application rollback possible if deployment fails?** Yes — see
+   this file's own header's rollback section; every statement has a
+   documented reverse.
+10. **Does anything require destructive SQL?** No.
+11. **Does anything require manual production intervention?** No, as an
+    additive migration — but see A17/A18 for whether this session is
+    authorized/equipped to actually run it.
+
+**No material risk identified.**
+
+## A17. Deployment sequencing
+
+**Recommended: apply `milestone-25-maintenance-coordination-foundation.sql`
+and `milestone-26-canonical-maintenance-case.sql` together, in the same
+operation.** Both are additive/idempotent, so applying them as one
+combined script (or two scripts run back-to-back with no real traffic
+in between) removes any question of an intermediate window. Since
+`tenant_requests` itself has never existed in production, there is no
+existing tenant traffic that could hit the gap A14 describes — the
+gap is only a theoretical concern if the two files are deliberately
+deployed apart with real usage in between, which is not the plan.
+
+No application code deploy is required alongside either file: the
+currently-deployed frontend already expects `tenant_requests` to exist
+in exactly this shape (it was simply missing); this milestone's own
+`lib/tenant-connect/types.ts` change is a type-level addition only,
+compiled into whatever frontend build is deployed whenever that
+normally happens — not a hard dependency of the migration itself.
+
+## A18. Production migration status — NOT APPLIED
+
+**This session has no established, authorized tooling to apply a
+migration to the production database.** Verified before considering
+any production action: no `netlify.toml`, no Supabase CLI
+configuration directory, no CI/CD workflow files
+(`.github/workflows/`) in this repository, and no
+`SUPABASE_*`/`DATABASE_URL`-shaped environment variables present in
+this session's environment. There is no safe, authorized path in this
+session to execute SQL against the production database at all — not a
+risk judgment call, a plain absence of access/tooling.
+
+Per the milestone's own explicit instruction ("If production migration
+cannot be safely applied using established authorized project tooling:
+STOP. Do not pretend it was deployed. Report the exact manual step
+required."), **no production SQL was run, and no deploy occurred.**
+
+**Exact manual step required**, if/when a human with production
+Supabase access authorizes this: apply
+`supabase/milestone-25-maintenance-coordination-foundation.sql` followed
+immediately by `supabase/milestone-26-canonical-maintenance-case.sql`
+(or the two concatenated into one script) via the project's normal
+Supabase migration path (Supabase Studio's SQL editor, or `supabase db
+push`/the CLI against the linked project — whichever this project
+normally uses; this session found no repository evidence of which one
+that is, since no Supabase CLI config or CI workflow exists in the
+repo). No separate application deploy is required (A17).
+
+## A19. Production smoke test — not performed
+
+Not applicable — no deployment occurred (A18), so there is nothing new
+to smoke-test in production. The full local-Postgres verification (A16
+items 5-7, and the complete `milestone-26-rls.test.sql` run, A20 below)
+is the closest verification this session could safely and honestly
+perform without production access.
+
+## A20. Tests added / results
+
+- `lib/maintenance/source.ts` + `lib/maintenance/source.test.ts` (3
+  tests: exact vocabulary, guard function, cross-check against the SQL
+  CHECK constraint text).
+- `supabase/tests/milestone-26-rls.test.sql` (new) — 15 PASS assertions
+  across 10 sections, run against a real local Postgres 16 instance
+  loaded from the complete `schema.sql` (M1 through M1.1, 3771 lines,
+  zero load errors), inside a rolled-back transaction (verified 0 rows
+  left behind in either `maintenance_requests` or `tenant_requests`
+  afterward). Zero REGRESSION lines, zero unexpected ERROR lines.
+- `supabase/tests/milestone-25-rls.test.sql` re-run, unmodified, against
+  the same M1.1-updated schema — still 19/19 PASS, zero regressions,
+  confirming M1.1 did not disturb M1's own behavior.
+- `supabase/tests/milestone-24-rls.test.sql` re-run — still exactly
+  10/10 of its category-vocabulary-independent assertions pass (the
+  same expected, documented incompatibility from M1 remains and is
+  unchanged by M1.1).
+- Full JS/TS suite: 73 files / 1070 tests (1067 carried over + 3 new),
+  all passing.
+- `npx tsc --noEmit`: clean.
+- `npm run build`: succeeds, all 31 routes.
+- No lint script exists in this repository (`package.json` defines
+  `dev`/`build`/`start`/`test` only) — confirmed accurately, not
+  assumed.
+
+## A21. Deferred items confirmed untouched in M1.1
+
+Per this milestone's explicit scope list: no guided maintenance UI, no
+intake trees, no AI troubleshooting/cost guidance, no external pricing
+research, no SMS (inbound or outbound), no provider secure links,
+accounts, or discovery, no quotes, no scheduling, no owner-authorization
+UI, no Service Thread provider participation, no native apps, no Tenant
+Turnover, no Lease Builder, no payments/rent collection, no marketplace,
+no smart locks, no masked calling. Also confirmed untouched, per the
+interrupting product-direction discussion's own explicit carve-out:
+Property Intelligence, dynamic cap-rate functionality, financial trend
+functionality, Rent Follow-Up, scheduled rent reminders — none of these
+has any code, schema, or documentation change in this branch.
+
+## A22. Open items for M2 (and beyond)
+
+- Whether/how `tenant_requests.status` and `maintenance_requests.status`
+  should ever sync (A11) — left for the milestone that builds the
+  landlord-review experience.
+- Request-closure → `maintenance_records` linkage (A10) — left for
+  whichever milestone builds closure behavior.
+- Production migration authorization and execution (A18) — a human with
+  Supabase production access must run the two migration files via this
+  project's actual Supabase deployment path (not discoverable from this
+  repository).
