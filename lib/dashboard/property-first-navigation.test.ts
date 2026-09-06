@@ -21,8 +21,11 @@ function readFile(relativePath: string): string {
 describe('Property-First UX Cleanup — app/page.tsx tab structure', () => {
   const source = readFile('app/page.tsx')
 
-  it('the property workspace tabs are Overview / Rent / Details / PropCrew / Documents / Tax', () => {
-    expect(source).toContain("const tabs: Tab[] = ['Overview', 'Rent', 'Details', 'PropCrew', 'Documents', 'Tax']")
+  // M3 (Milestone 28) added 'Maintenance' as its own top-level tab — see
+  // docs/tenant-connect-maintenance-m3-command-center.md for why (the
+  // Landlord Maintenance Command Center used to be inline in Rent).
+  it('the property workspace tabs are Overview / Rent / Maintenance / Details / PropCrew / Documents / Tax', () => {
+    expect(source).toContain("const tabs: Tab[] = ['Overview', 'Rent', 'Maintenance', 'Details', 'PropCrew', 'Documents', 'Tax']")
   })
 
   it('Financials and People no longer exist as top-level tabs', () => {

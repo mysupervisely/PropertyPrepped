@@ -13,14 +13,28 @@ function readFile(relativePath: string): string {
   return readFileSync(join(ROOT, relativePath), 'utf8')
 }
 
-describe('Tenant Connect V1 lives inside Property > Rent > Tenant, not a new destination', () => {
+describe('Tenant Connect V1 lives inside the property workspace, not a new global destination', () => {
   const source = readFile('app/page.tsx')
 
-  it('renders the new status card and requests panel inside the Rent > Tenant sub-tab', () => {
+  // M3 (Milestone 28) relocated TenantRequestsPanel and the maintenance-
+  // case list out of Rent > Tenant into their own top-level Maintenance
+  // tab (see docs/tenant-connect-maintenance-m3-command-center.md for
+  // the full reasoning) — TenantConnectStatusCard is what's left in
+  // Rent > Tenant, since it's a lease/tenant-status card, not a
+  // maintenance concept. Both stayed inside the property workspace
+  // (still no new global nav destination), just at different tabs now.
+  it('TenantConnectStatusCard renders inside the Rent > Tenant sub-tab', () => {
     const tenantTabIndex = source.indexOf("rentSubTab === 'Tenant'")
     expect(tenantTabIndex).toBeGreaterThan(-1)
-    const nearby = source.slice(tenantTabIndex, tenantTabIndex + 4000)
+    const nearby = source.slice(tenantTabIndex, tenantTabIndex + 2000)
     expect(nearby).toContain('<TenantConnectStatusCard')
+  })
+
+  it('TenantRequestsPanel now renders inside the top-level Maintenance tab, alongside the Command Center', () => {
+    const maintenanceTabIndex = source.indexOf("activeTab === 'Maintenance'")
+    expect(maintenanceTabIndex).toBeGreaterThan(-1)
+    const nearby = source.slice(maintenanceTabIndex, maintenanceTabIndex + 2000)
+    expect(nearby).toContain('<MaintenanceCommandCenter')
     expect(nearby).toContain('<TenantRequestsPanel')
   })
 
@@ -45,21 +59,25 @@ describe('Tenant Connect V1 lives inside Property > Rent > Tenant, not a new des
     expect(source).toContain('buildTenantRequestDateItems(tenantRequests, propertyLabelById)')
   })
 
-  it('does not add a new top-level Tab value for Tenant Connect', () => {
-    expect(source).toContain("type Tab = 'Overview' | 'Rent' | 'Details' | 'PropCrew' | 'Documents' | 'Tax'")
+  it('does not add a separate top-level "Tenant Connect" Tab value — Maintenance (M3) is the only addition to the tab set', () => {
+    expect(source).toContain("type Tab = 'Overview' | 'Rent' | 'Maintenance' | 'Details' | 'PropCrew' | 'Documents' | 'Tax'")
   })
 })
 
-describe('Maintenance Coordination M2.1 review pass (Part 4) — minimum landlord visibility on the existing maintenance_requests list', () => {
-  const source = readFile('app/page.tsx')
+describe('Maintenance Coordination M2.1 review pass (Part 4) — minimum landlord visibility, now inside MaintenanceCommandCenter (M3)', () => {
+  // M3 moved the flat maintenance_requests list (and this visibility
+  // logic) out of app/page.tsx into MaintenanceCommandCenter.tsx — same
+  // requirement, same table, new home. See
+  // components/tenant-connect/MaintenanceCommandCenter.tsx.
+  const source = readFile('components/tenant-connect/MaintenanceCommandCenter.tsx')
 
   it('shows a Tenant source badge on a tenant-originated maintenance_requests row', () => {
-    expect(source).toContain("req.source === 'tenant' && <span className=\"statusPill tenantSourceBadge\">Tenant</span>")
+    expect(source).toContain("item.source === 'tenant' && <span className=\"statusPill tenantSourceBadge\">Tenant</span>")
   })
 
-  it('shows the category for a tenant-originated row, derived from the already-fetched portfolio-wide tenant_requests (maintenance_requests itself has no category column)', () => {
-    expect(source).toContain('categoryByMaintenanceRequestId')
-    expect(source).toContain('maintenanceCategoryLabel(categoryByMaintenanceRequestId.get(req.id)!)')
+  it('shows the category for a tenant-originated row, derived from the already-fetched tenant_requests prop (maintenance_requests itself has no category column)', () => {
+    expect(source).toContain('tenantRequestByCaseId')
+    expect(source).toContain('maintenanceCategoryLabel(linked.category)')
   })
 })
 

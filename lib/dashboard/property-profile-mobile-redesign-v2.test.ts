@@ -19,10 +19,16 @@ function readFile(relativePath: string): string {
 const pageSource = readFile('app/page.tsx')
 const cssSource = readFile('app/globals.css')
 
-describe('All six property sections exist and are always rendered in the tab nav', () => {
-  it('the Tab type and tabs array are exactly the six existing sections, unchanged', () => {
-    expect(pageSource).toContain("type Tab = 'Overview' | 'Rent' | 'Details' | 'PropCrew' | 'Documents' | 'Tax'")
-    expect(pageSource).toContain("const tabs: Tab[] = ['Overview', 'Rent', 'Details', 'PropCrew', 'Documents', 'Tax']")
+describe('All property sections exist and are always rendered in the tab nav', () => {
+  // M3 (Milestone 28) added a 7th top-level tab, 'Maintenance' — the
+  // Landlord Maintenance Command Center, previously squeezed inline
+  // into the Rent tab. The redesign's own actual requirement (below)
+  // was never "exactly six, forever" — it was "no horizontal scroll, a
+  // fixed-column grid, every tab always rendered" — which this still
+  // is, just at 7 columns instead of 6. See
+  // docs/tenant-connect-maintenance-m3-command-center.md.
+  it('the Tab type and tabs array include the current seven sections', () => {
+    expect(pageSource).toContain("const tabs: Tab[] = ['Overview', 'Rent', 'Maintenance', 'Details', 'PropCrew', 'Documents', 'Tax']")
   })
 
   it('the nav renders every entry in `tabs` unconditionally — no filtering, no "more" menu, no truncation', () => {

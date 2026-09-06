@@ -81,9 +81,9 @@ describe('Section 2: the five-metric mobile layout intentionally balances 3 + 2,
   })
 })
 
-describe('Section 5: the six-tab navigation is unchanged by this milestone', () => {
-  it('the tabs array and non-scrolling grid nav are untouched', () => {
-    expect(pageSource).toContain("const tabs: Tab[] = ['Overview', 'Rent', 'Details', 'PropCrew', 'Documents', 'Tax']")
+describe('Section 5: the tab navigation is still a non-scrolling grid (M3 added a 7th tab, Maintenance — see docs/tenant-connect-maintenance-m3-command-center.md)', () => {
+  it('the tabs array and non-scrolling grid nav are still a fixed grid, now at 7 columns', () => {
+    expect(pageSource).toContain("const tabs: Tab[] = ['Overview', 'Rent', 'Maintenance', 'Details', 'PropCrew', 'Documents', 'Tax']")
     const tabsRule = cssSource.match(/\.tabs\s*\{[^}]*\}/)?.[0] || ''
     expect(tabsRule).toContain('display: grid')
     expect(tabsRule).not.toContain('overflow-x')
