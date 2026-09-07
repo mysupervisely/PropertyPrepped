@@ -58,15 +58,17 @@ export async function uploadDocumentForReview(
   file: File,
   batchId: string,
   source: UploadSource,
+  // V1.1 (real-device diagnostics): shared by Smart Upload, Smart
+  // Import, and the header's "Take Photo" capture input
+  // (SmartUploadModal.tsx's camera-input onChange feeds the exact same
+  // handleFiles -> processFile -> this function pipeline — there is no
+  // separate "Take Photo" upload path to fix). `flow` defaults to
+  // 'smart-upload' so every pre-existing caller (Smart Import, and any
+  // call site that predates this parameter) is unaffected; only
+  // SmartUploadModal's camera input passes 'smart-upload-camera', so a
+  // real-device console log can tell the two apart.
+  flow: UploadFlow = 'smart-upload',
 ): Promise<UploadResult> {
-  // Upload Reliability Audit: shared by Smart Upload, Smart Import, and
-  // the header's "Take Photo" capture input (SmartUploadModal.tsx's
-  // camera-input onChange feeds the exact same handleFiles ->
-  // processFile -> this function pipeline — there is no separate
-  // "Take Photo" upload path to fix) — logged under one 'smart-upload'
-  // flow label since that's what's actually true of the code, not
-  // three independent implementations.
-  const flow: UploadFlow = 'smart-upload'
   logUploadDiagnostic(flow, 'UPLOAD_FILE_RECEIVED', { extension: file.name, reportedMime: file.type, size: file.size, source })
 
   // property-documents has NO allowed_mime_types allowlist (unlike
@@ -114,7 +116,10 @@ export async function uploadDocumentForReview(
     .insert({ owner_id: ownerId, document_id: docRow.id, batch_id: batchId, source })
     .select('id')
     .single()
-  if (itemError || !itemRow) return { ok: false, error: itemError?.message || 'Could not start this upload.' }
+  if (itemError || !itemRow) {
+    logUploadDiagnostic(flow, 'UPLOAD_DB_ERROR', { error: safeErrorSummary(itemError), stage: 'smart_upload_items' })
+    return { ok: false, error: itemError?.message || 'Could not start this upload.' }
+  }
 
   return { ok: true, documentId: docRow.id, itemId: itemRow.id }
 }
@@ -131,10 +136,26 @@ export type AnalyzeResult =
  * neither SmartUploadModal nor Smart Import's queue do; a Failed item
  * only re-runs this through an explicit user-triggered Retry.
  */
-export async function analyzeDocument(supabase: SupabaseClient, documentId: string): Promise<AnalyzeResult> {
+export async function analyzeDocument(supabase: SupabaseClient, documentId: string, flow: UploadFlow = 'smart-upload'): Promise<AnalyzeResult> {
+  // V1.1 (real-device diagnostics): Section 8's "trace Needs attention"
+  // ask. Every code path below that can turn into a raw-Failed item is
+  // now a distinct, logged reason — see
+  // docs/upload-reliability-real-device-diagnostics.md for the full
+  // enumeration this was built from (lib/document-intelligence/
+  // analyze-request.ts's own status codes: AI not configured, monthly
+  // AI_LIMIT_REACHED, unsupported resolved MIME (415), file too
+  // large/empty, signed-URL/download failure, and the provider call
+  // itself failing — each already returns its OWN specific `error`
+  // string from the server; this only makes sure that string is logged
+  // as UPLOAD_ANALYSIS_ERROR, not silently swallowed into a bare
+  // "Failed" with nothing recorded).
+  logUploadDiagnostic(flow, 'UPLOAD_ANALYSIS_START', {})
   const { data: sessionData } = await supabase.auth.getSession()
   const token = sessionData.session?.access_token
-  if (!token) return { ok: false, error: 'Your session expired — please sign in again.' }
+  if (!token) {
+    logUploadDiagnostic(flow, 'UPLOAD_ANALYSIS_ERROR', { error: { message: 'session expired' } })
+    return { ok: false, error: 'Your session expired — please sign in again.' }
+  }
   try {
     const resp = await fetch('/api/document-intelligence/analyze', {
       method: 'POST',
@@ -142,8 +163,12 @@ export async function analyzeDocument(supabase: SupabaseClient, documentId: stri
       body: JSON.stringify({ documentId, documentType: 'Other' as DocumentType }),
     })
     const body = await resp.json().catch(() => ({}))
-    if (!resp.ok) return { ok: false, error: body?.error || 'Analysis failed.' }
-  } catch {
+    if (!resp.ok) {
+      logUploadDiagnostic(flow, 'UPLOAD_ANALYSIS_ERROR', { error: { message: body?.error || 'Analysis failed.', status: resp.status } })
+      return { ok: false, error: body?.error || 'Analysis failed.' }
+    }
+  } catch (err) {
+    logUploadDiagnostic(flow, 'UPLOAD_ANALYSIS_ERROR', { error: safeErrorSummary(err), stage: 'fetch' })
     return { ok: false, error: 'Analysis failed. Please try again.' }
   }
   const [{ data: docRow }, { data: analysisRows }] = await Promise.all([
@@ -151,7 +176,11 @@ export async function analyzeDocument(supabase: SupabaseClient, documentId: stri
     supabase.from('document_analyses').select('structured_data').eq('document_id', documentId).order('analysis_version', { ascending: false }).limit(1),
   ])
   const latest = analysisRows?.[0]?.structured_data as DocumentAnalysisOutput | undefined
-  if (!latest) return { ok: false, error: 'Analysis completed but the result could not be loaded.' }
+  if (!latest) {
+    logUploadDiagnostic(flow, 'UPLOAD_ANALYSIS_ERROR', { error: { message: 'result row missing after a successful analyze call' }, stage: 'read-back' })
+    return { ok: false, error: 'Analysis completed but the result could not be loaded.' }
+  }
+  logUploadDiagnostic(flow, 'UPLOAD_ANALYSIS_SUCCESS', {})
   return { ok: true, documentType: (docRow?.document_type as DocumentType) || 'Other', analysis: latest }
 }
 

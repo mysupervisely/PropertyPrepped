@@ -60,8 +60,10 @@ describe('Smart Upload / Take Photo shared engine — the confirmed root cause i
   it('Take Photo is confirmed to share this exact engine — no separate capture-input upload path exists', () => {
     expect(smartUploadModalSource).toContain('capture="environment"')
     // The capture input's onChange feeds handleFiles() -> processFile() -> uploadDocumentForReview(), the SAME function this file fixes.
-    expect(smartUploadModalSource).toContain('onFiles(e.target.files)')
-    expect(smartUploadModalSource).toContain('Array.from(fileList).forEach((file) => { void processFile(file, batchId) })')
+    // V1.1: it now also tags this call 'smart-upload-camera' (see the
+    // dedicated describe block below) — same pipeline, distinguishable flow.
+    expect(smartUploadModalSource).toContain("onFiles(e.target.files, 'smart-upload-camera')")
+    expect(smartUploadModalSource).toContain('Array.from(fileList).forEach((file) => { void processFile(file, batchId, flow) })')
   })
 
   it('normalizes an image file with resolveImageContentType()/toUploadableImageFile() before it reaches .upload(), leaving PDFs untouched', () => {
@@ -88,7 +90,7 @@ describe('Smart Upload / Take Photo shared engine — the confirmed root cause i
     // awaited sequentially in a way that would let one file's rejection
     // stop the loop from reaching the next file.
     const handleFilesBody = smartUploadModalSource.slice(smartUploadModalSource.indexOf('function handleFiles('), smartUploadModalSource.indexOf('function handleFiles(') + 400)
-    expect(handleFilesBody).toMatch(/forEach\(\(file\) => \{ void processFile\(file, batchId\) \}\)/)
+    expect(handleFilesBody).toMatch(/forEach\(\(file\) => \{ void processFile\(file, batchId, flow\) \}\)/)
   })
 
   it('logs diagnostics at every real stage', () => {

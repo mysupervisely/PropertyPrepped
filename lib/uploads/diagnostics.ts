@@ -12,7 +12,15 @@
 // reported MIME, normalized MIME, size, stage, and a safe error
 // code/message.
 
-export type UploadFlow = 'smart-upload' | 'take-photo' | 'upload-multiple' | 'profile-photo' | 'property-photo'
+// V1.1 (real-device diagnostics): 'smart-upload-camera' is a DISTINCT
+// flow tag from 'smart-upload' — same underlying pipeline
+// (uploadDocumentForReview() in lib/smart-upload/engine.ts is never
+// duplicated for the camera input), but tagged separately so a real-
+// device console log (or a future analytics rollup) can tell a camera
+// capture apart from a Photo Library / Choose File / Upload Multiple
+// selection, per this milestone's explicit ask. Nothing about the
+// UPLOAD/DB/analysis logic differs between the two — only this label.
+export type UploadFlow = 'smart-upload' | 'smart-upload-camera' | 'upload-multiple' | 'profile-photo' | 'property-photo'
 
 export type UploadStage =
   | 'UPLOAD_FILE_RECEIVED'
@@ -26,6 +34,15 @@ export type UploadStage =
   | 'UPLOAD_DB_START'
   | 'UPLOAD_DB_SUCCESS'
   | 'UPLOAD_DB_ERROR'
+  // V1.1: Smart Upload's ONE extra real stage beyond every other flow —
+  // the Document Intelligence analysis call. Added here (not a new,
+  // separate diagnostics module) so it shows up in the exact same
+  // console-log format/taxonomy as every other stage, and so
+  // "UPLOAD_STORAGE_SUCCESS but UPLOAD_ANALYSIS_ERROR" is visible as
+  // two distinct, ordered facts rather than one opaque "Failed".
+  | 'UPLOAD_ANALYSIS_START'
+  | 'UPLOAD_ANALYSIS_SUCCESS'
+  | 'UPLOAD_ANALYSIS_ERROR'
   | 'UPLOAD_URL_START'
   | 'UPLOAD_URL_SUCCESS'
   | 'UPLOAD_URL_ERROR'
@@ -98,5 +115,33 @@ export function initialUploadDebugState(file: { name: string; type: string }): U
     storageUpload: 'pending',
     databaseRecord: 'pending',
     renderUrl: 'pending',
+  }
+}
+
+/**
+ * Smart Upload's own debug shape — Section 2/8's explicit ask to
+ * distinguish "upload failed" from "analysis/classification failed
+ * AFTER a successful upload" instead of collapsing both into one
+ * "Needs attention" pill. `renderUrl` from the base UploadDebugState
+ * doesn't apply here (Smart Upload never renders a signed-URL image —
+ * its "final state" is the Ready-to-review screen) — replaced with
+ * `analysis`, which is Smart Upload's actual last real stage.
+ */
+export type SmartUploadDebugState = Omit<UploadDebugState, 'renderUrl' | 'renderError'> & {
+  flow: Extract<UploadFlow, 'smart-upload' | 'smart-upload-camera'>
+  analysis: 'pending' | 'success' | 'failed' | 'skipped'
+  analysisError?: string
+}
+
+export function initialSmartUploadDebugState(file: { name: string; type: string }, flow: Extract<UploadFlow, 'smart-upload' | 'smart-upload-camera'>): SmartUploadDebugState {
+  return {
+    fileReceived: true,
+    extension: fileExtension(file.name),
+    reportedMime: file.type || '(empty)',
+    validation: 'pending',
+    storageUpload: 'pending',
+    databaseRecord: 'pending',
+    flow,
+    analysis: 'pending',
   }
 }

@@ -47,7 +47,8 @@ import type { TenantRequest } from '../lib/tenant-connect/types'
 import { maintenanceCategoryLabel } from '../lib/maintenance/categories'
 import { validatePropertyPhotoFile, toUploadableFile, classifyPhotoSelection, isFirstCoverPhoto } from '../lib/property-photos/validate'
 import { resolveImageContentType, toUploadableImageFile } from '../lib/uploads/image-file'
-import { logUploadDiagnostic } from '../lib/uploads/diagnostics'
+import { logUploadDiagnostic, initialUploadDebugState, type UploadDebugState } from '../lib/uploads/diagnostics'
+import { UploadDebugPanel } from '../components/uploads/UploadDebugPanel'
 import { logPhotoUploadDiagnostic, safeFileSummary, safeFileListSummary, safeErrorSummary } from '../lib/property-photos/diagnostics'
 import { TenantConnectStatusCard } from '../components/tenant-connect/TenantConnectStatusCard'
 import { TenantRequestsPanel } from '../components/tenant-connect/TenantRequestsPanel'
@@ -585,6 +586,12 @@ export default function Home() {
   const [docCategory, setDocCategory] = useState('All')
   const [uploadCategory, setUploadCategory] = useState('Other')
   const [isDragging, setIsDragging] = useState(false)
+  // Upload Reliability V1.1 — temporary per-file debug state for
+  // "Upload Multiple" (Documents tab multi-file upload), so one failing
+  // file's real stage/reason is visible without hiding what happened to
+  // the rest of the batch. Remove alongside UploadDebugPanel once
+  // confirmed fixed on a real device.
+  const [documentUploadDebug, setDocumentUploadDebug] = useState<UploadDebugState[]>([])
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState('')
   const [draft, setDraft] = useState({
@@ -1220,22 +1227,35 @@ export default function Home() {
     // ignored-contentType-option bug lib/uploads/image-file.ts's header
     // documents — fixed here the same way as profile photos and Smart
     // Upload. PDFs/non-images pass through untouched.
-    for (const file of incoming) {
+    //
+    // V1.1: documentUploadDebug carries one UploadDebugState PER FILE,
+    // updated by index as each file's own upload progresses — a failing
+    // file's own panel shows its own stage/reason without touching (or
+    // hiding) any other file's already-rendered success.
+    setDocumentUploadDebug(incoming.map(initialUploadDebugState))
+    function patchFileDebug(index: number, patch: Partial<UploadDebugState>) {
+      setDocumentUploadDebug((prev) => prev.map((s, i) => (i === index ? { ...s, ...patch } : s)))
+    }
+    for (let index = 0; index < incoming.length; index++) {
+      const file = incoming[index]
       logUploadDiagnostic('upload-multiple', 'UPLOAD_FILE_RECEIVED', { extension: file.name, reportedMime: file.type, size: file.size })
       const looksLikeImage = file.type.startsWith('image/') || (!file.type && /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name))
       const resolvedContentType = looksLikeImage ? resolveImageContentType(file) : file.type || undefined
       const uploadable = looksLikeImage ? toUploadableImageFile(file, resolvedContentType) : file
       logUploadDiagnostic('upload-multiple', 'UPLOAD_NORMALIZATION_COMPLETE', { normalizedMime: uploadable.type || '(unchanged)' })
+      patchFileDebug(index, { validation: 'accepted' })
 
       const path = `${user.id}/${selectedId}/documents/${crypto.randomUUID()}-${safeName(file.name)}`
       logUploadDiagnostic('upload-multiple', 'UPLOAD_STORAGE_START', { path })
       const { error: uploadError } = await supabase.storage.from('property-documents').upload(path, uploadable, { contentType: resolvedContentType, upsert: false })
       if (uploadError) {
         logUploadDiagnostic('upload-multiple', 'UPLOAD_STORAGE_ERROR', { error: safeErrorSummary(uploadError) })
+        patchFileDebug(index, { storageUpload: 'failed', storageError: uploadError.message, databaseRecord: 'skipped', renderUrl: 'skipped' })
         setError(uploadError.message)
         continue
       }
       logUploadDiagnostic('upload-multiple', 'UPLOAD_STORAGE_SUCCESS', { path })
+      patchFileDebug(index, { storageUpload: 'success' })
       const { error: rowError } = await supabase.from('property_documents').insert({
         owner_id: user.id, property_id: selectedId, name: file.name, category: uploadCategory,
         storage_path: path, size_bytes: uploadable.size, mime_type: uploadable.type || null,
@@ -1243,9 +1263,11 @@ export default function Home() {
       if (rowError) {
         logUploadDiagnostic('upload-multiple', 'UPLOAD_DB_ERROR', { error: safeErrorSummary(rowError) })
         await supabase.storage.from('property-documents').remove([path])
+        patchFileDebug(index, { databaseRecord: 'failed', databaseError: rowError.message, renderUrl: 'skipped' })
         setError(rowError.message)
       } else {
         logUploadDiagnostic('upload-multiple', 'UPLOAD_DB_SUCCESS', {})
+        patchFileDebug(index, { databaseRecord: 'success', renderUrl: 'success' })
       }
     }
     await loadPortfolio()
@@ -1924,6 +1946,7 @@ export default function Home() {
                   <p>Choose a category, then drop in a file — no AI involved.</p>
                   <label>File category<select value={uploadCategory} onChange={(e) => setUploadCategory(e.target.value)}>{DOCUMENT_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></label>
                   <label className={`dropZone ${isDragging ? 'dragging' : ''}`} onDragEnter={(e) => { e.preventDefault(); setIsDragging(true) }} onDragOver={(e) => e.preventDefault()} onDragLeave={() => setIsDragging(false)} onDrop={(e: DragEvent<HTMLLabelElement>) => { e.preventDefault(); setIsDragging(false); void addDocumentFiles(e.dataTransfer.files) }}><span className="uploadIcon">↑</span><strong>{busy ? 'Uploading…' : 'Drop a file here or choose one'}</strong><small>PDF, spreadsheets, receipts, contracts and more · up to 50 MB each</small><input type="file" multiple disabled={busy} onChange={(e) => e.target.files && void addDocumentFiles(e.target.files)} /></label>
+                  {documentUploadDebug.length > 0 && <div className="uploadDebugPanelGroup">{documentUploadDebug.map((state, i) => <UploadDebugPanel key={i} state={state} />)}</div>}
                 </div>
                 <div className="addDocumentOption addDocumentOptionSmart">
                   <h3>Smart Upload</h3>
