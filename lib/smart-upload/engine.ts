@@ -28,6 +28,8 @@ import type { ApplyFields, DocumentAnalysisOutput } from '../document-intelligen
 import { shouldCreateFinancialTransaction, shouldCreateMaintenanceRecord } from './idempotency'
 import { findMatchingContact } from './match-contact'
 import type { SmartUploadContact } from './types'
+import { resolveImageContentType, toUploadableImageFile } from '../uploads/image-file'
+import { logUploadDiagnostic, safeErrorSummary, type UploadFlow } from '../uploads/diagnostics'
 
 export const safeName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_')
 
@@ -57,19 +59,55 @@ export async function uploadDocumentForReview(
   batchId: string,
   source: UploadSource,
 ): Promise<UploadResult> {
-  const path = `${ownerId}/smart-upload/${batchId}/${crypto.randomUUID()}-${safeName(file.name)}`
-  const { error: uploadError } = await supabase.storage.from('property-documents').upload(path, file, { contentType: file.type || undefined, upsert: false })
-  if (uploadError) return { ok: false, error: uploadError.message }
+  // Upload Reliability Audit: shared by Smart Upload, Smart Import, and
+  // the header's "Take Photo" capture input (SmartUploadModal.tsx's
+  // camera-input onChange feeds the exact same handleFiles ->
+  // processFile -> this function pipeline — there is no separate
+  // "Take Photo" upload path to fix) — logged under one 'smart-upload'
+  // flow label since that's what's actually true of the code, not
+  // three independent implementations.
+  const flow: UploadFlow = 'smart-upload'
+  logUploadDiagnostic(flow, 'UPLOAD_FILE_RECEIVED', { extension: file.name, reportedMime: file.type, size: file.size, source })
 
+  // property-documents has NO allowed_mime_types allowlist (unlike
+  // property-photos/profile-photos), so the confirmed "@supabase/
+  // storage-js ignores the contentType option" bug (see
+  // lib/uploads/image-file.ts's header) can't cause Storage to reject
+  // an image upload here the way it could on those two buckets — but
+  // the SAME normalization is still applied, for two real reasons: (1)
+  // consistency — this is the one other place besides property/profile
+  // photos that regularly receives camera-originated images, and (2) it
+  // gives resolveMimeType() (lib/document-intelligence/analyze-
+  // request.ts) a corrected mime_type to store, rather than relying
+  // solely on its own extension-fallback for a blank-type iOS file.
+  // PDFs (and anything else non-image) pass through untouched — this
+  // never touches the file for a document type it doesn't apply to.
+  const looksLikeImage = file.type.startsWith('image/') || (!file.type && /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name))
+  const resolvedContentType = looksLikeImage ? resolveImageContentType(file) : file.type || undefined
+  const uploadable = looksLikeImage ? toUploadableImageFile(file, resolvedContentType) : file
+  logUploadDiagnostic(flow, 'UPLOAD_NORMALIZATION_COMPLETE', { normalizedMime: uploadable.type || '(unchanged)' })
+
+  const path = `${ownerId}/smart-upload/${batchId}/${crypto.randomUUID()}-${safeName(file.name)}`
+  logUploadDiagnostic(flow, 'UPLOAD_STORAGE_START', { path })
+  const { error: uploadError } = await supabase.storage.from('property-documents').upload(path, uploadable, { contentType: resolvedContentType, upsert: false })
+  if (uploadError) {
+    logUploadDiagnostic(flow, 'UPLOAD_STORAGE_ERROR', { error: safeErrorSummary(uploadError) })
+    return { ok: false, error: uploadError.message }
+  }
+  logUploadDiagnostic(flow, 'UPLOAD_STORAGE_SUCCESS', { path })
+
+  logUploadDiagnostic(flow, 'UPLOAD_DB_START', {})
   const { data: docRow, error: docError } = await supabase
     .from('property_documents')
-    .insert({ owner_id: ownerId, property_id: null, name: file.name, category: 'Other', storage_path: path, size_bytes: file.size, mime_type: file.type || null })
+    .insert({ owner_id: ownerId, property_id: null, name: file.name, category: 'Other', storage_path: path, size_bytes: uploadable.size, mime_type: uploadable.type || null })
     .select('id')
     .single()
   if (docError || !docRow) {
+    logUploadDiagnostic(flow, 'UPLOAD_DB_ERROR', { error: safeErrorSummary(docError) })
     await supabase.storage.from('property-documents').remove([path])
     return { ok: false, error: docError?.message || 'Could not save this file.' }
   }
+  logUploadDiagnostic(flow, 'UPLOAD_DB_SUCCESS', {})
 
   const { data: itemRow, error: itemError } = await supabase
     .from('smart_upload_items')

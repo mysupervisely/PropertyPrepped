@@ -1954,3 +1954,14 @@ h2, h3, p { margin-top: 0; }
 @media (max-width: 460px) {
   .guidedIntakeCategoryGrid { grid-template-columns: 1fr; }
 }
+
+/* Upload Reliability Audit — temporary on-screen debug panel (Section
+   11). Deliberately plain/boxed so it reads as a temporary debug
+   affordance, not a permanent design element — remove alongside
+   UploadDebugPanel.tsx once root causes are confirmed fixed on a real
+   device. */
+.uploadDebugPanel { margin-top: 12px; border: 1px dashed var(--muted); border-radius: 10px; padding: 10px 12px; background: #fafbfa; font-size: 12px; }
+.uploadDebugTitle { margin: 0 0 6px; font-weight: 750; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-size: 10px; }
+.uploadDebugPanel dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; }
+.uploadDebugPanel dt { color: var(--muted); }
+.uploadDebugPanel dd { margin: 0; word-break: break-word; }

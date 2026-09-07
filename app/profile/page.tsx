@@ -17,6 +17,9 @@ import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { AuthHeader } from '../../components/AuthHeader'
 import { COMMON_TIMEZONES, type UserProfile } from '../../lib/user-profile/types'
+import { validateImageFile, toUploadableImageFile } from '../../lib/uploads/image-file'
+import { logUploadDiagnostic, safeErrorSummary, initialUploadDebugState, type UploadDebugState } from '../../lib/uploads/diagnostics'
+import { UploadDebugPanel } from '../../components/uploads/UploadDebugPanel'
 
 // Launch Polish: same path-sanitizing helper app/page.tsx already uses
 // for property photo/document uploads — not exported from there (a
@@ -56,6 +59,10 @@ export default function ProfilePage() {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [photoBusy, setPhotoBusy] = useState(false)
   const [photoError, setPhotoError] = useState('')
+  // Upload Reliability Audit — temporary debug state (Section 11);
+  // remove alongside UploadDebugPanel.tsx once confirmed fixed on a
+  // real device.
+  const [photoDebug, setPhotoDebug] = useState<UploadDebugState | null>(null)
 
   useEffect(() => {
     if (!supabase || !user) return
@@ -74,33 +81,83 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!supabase || !profile?.photo_path) { setPhotoUrl(null); return }
     let cancelled = false
-    supabase.storage.from('profile-photos').createSignedUrl(profile.photo_path, 3600).then(({ data }) => {
-      if (!cancelled) setPhotoUrl(data?.signedUrl || null)
+    logUploadDiagnostic('profile-photo', 'UPLOAD_URL_START', {})
+    supabase.storage.from('profile-photos').createSignedUrl(profile.photo_path, 3600).then(({ data, error: urlError }) => {
+      if (cancelled) return
+      setPhotoUrl(data?.signedUrl || null)
+      if (urlError || !data?.signedUrl) {
+        logUploadDiagnostic('profile-photo', 'UPLOAD_URL_ERROR', { error: safeErrorSummary(urlError) })
+        setPhotoDebug((d) => d && { ...d, renderUrl: 'failed', renderError: urlError?.message || 'no signed URL returned' })
+      } else {
+        logUploadDiagnostic('profile-photo', 'UPLOAD_URL_SUCCESS', {})
+        logUploadDiagnostic('profile-photo', 'UPLOAD_RENDER_SUCCESS', {})
+        setPhotoDebug((d) => d && d.renderUrl === 'pending' ? { ...d, renderUrl: 'success' } : d)
+      }
     })
     return () => { cancelled = true }
   }, [profile?.photo_path])
 
   async function uploadPhoto(file: File) {
     if (!supabase || !user) return
-    if (!file.type.startsWith('image/')) { setPhotoError('Choose an image file.'); return }
+    setPhotoDebug(initialUploadDebugState(file))
+    logUploadDiagnostic('profile-photo', 'UPLOAD_FILE_RECEIVED', { extension: file.name, reportedMime: file.type, size: file.size })
+
+    // Upload Reliability Audit: this used to be `!file.type.startsWith
+    // ('image/')`, which rejected ANY file with a blank reported
+    // type outright — a real, common iOS Safari behavior for some
+    // photo-library selections, not a sign of an actually-wrong file.
+    // validateImageFile() is the same permissive-on-missing-type check
+    // property photos already use.
+    logUploadDiagnostic('profile-photo', 'UPLOAD_VALIDATION_START', {})
+    const validation = validateImageFile(file)
+    if (!validation.ok) {
+      logUploadDiagnostic('profile-photo', 'UPLOAD_VALIDATION_REJECTED', { reason: validation.reason })
+      setPhotoDebug((d) => d && { ...d, validation: 'rejected', validationReason: validation.reason })
+      setPhotoError(validation.reason)
+      return
+    }
+    logUploadDiagnostic('profile-photo', 'UPLOAD_VALIDATION_ACCEPTED', { normalizedMime: validation.contentType })
+    setPhotoDebug((d) => d && { ...d, validation: 'accepted' })
+
+    // THE confirmed fix (see lib/uploads/image-file.ts's own header):
+    // @supabase/storage-js reads the File object's own `.type`
+    // directly, never the `contentType` upload option, so an
+    // empty-type iOS file must be re-wrapped with the corrected type
+    // set ON the object before it ever reaches `.upload()`.
+    const uploadable = toUploadableImageFile(file, validation.contentType)
+    logUploadDiagnostic('profile-photo', 'UPLOAD_NORMALIZATION_COMPLETE', { normalizedMime: uploadable.type })
+
     setPhotoBusy(true)
     setPhotoError('')
     const path = `${user.id}/avatar/${crypto.randomUUID()}-${safeName(file.name)}`
-    const { error: uploadError } = await supabase.storage.from('profile-photos').upload(path, file, { contentType: file.type, upsert: false })
+    logUploadDiagnostic('profile-photo', 'UPLOAD_STORAGE_START', { path })
+    const { error: uploadError } = await supabase.storage.from('profile-photos').upload(path, uploadable, { contentType: validation.contentType, upsert: false })
     if (uploadError) {
-      setPhotoError(uploadError.message)
+      logUploadDiagnostic('profile-photo', 'UPLOAD_STORAGE_ERROR', { error: safeErrorSummary(uploadError) })
+      setPhotoDebug((d) => d && { ...d, storageUpload: 'failed', storageError: uploadError.message, databaseRecord: 'skipped', renderUrl: 'skipped' })
+      setPhotoError('Photo upload failed. Please try a JPEG or PNG, or choose another photo.')
+      console.error('profile-photo upload failed', uploadError)
       setPhotoBusy(false)
       return
     }
+    logUploadDiagnostic('profile-photo', 'UPLOAD_STORAGE_SUCCESS', {})
+    setPhotoDebug((d) => d && { ...d, storageUpload: 'success' })
+
+    logUploadDiagnostic('profile-photo', 'UPLOAD_DB_START', {})
     const { data, error: saveError } = await supabase.from('user_profiles').upsert({ id: user.id, photo_path: path, updated_at: new Date().toISOString() }).select('*').single()
     if (saveError) {
       // The row write failed — remove the orphaned upload rather than
       // leaving a photo in storage nothing points to.
+      logUploadDiagnostic('profile-photo', 'UPLOAD_DB_ERROR', { error: safeErrorSummary(saveError) })
+      setPhotoDebug((d) => d && { ...d, databaseRecord: 'failed', databaseError: saveError.message, renderUrl: 'skipped' })
       await supabase.storage.from('profile-photos').remove([path])
-      setPhotoError(saveError.message)
+      setPhotoError('Photo uploaded, but could not be saved to your profile. Please try again.')
+      console.error('profile-photo DB upsert failed after a successful upload', saveError)
       setPhotoBusy(false)
       return
     }
+    logUploadDiagnostic('profile-photo', 'UPLOAD_DB_SUCCESS', {})
+    setPhotoDebug((d) => d && { ...d, databaseRecord: 'success' })
     const oldPath = profile?.photo_path
     setProfile(data as UserProfile)
     if (oldPath && oldPath !== path) await supabase.storage.from('profile-photos').remove([oldPath])
@@ -225,6 +282,7 @@ export default function ProfilePage() {
           </div>
         </div>
         {photoError && <p className="errorMessage">{photoError}</p>}
+        {photoDebug && <UploadDebugPanel state={photoDebug} />}
       </section>
 
       <div className="editPropertyFooter compactActions">

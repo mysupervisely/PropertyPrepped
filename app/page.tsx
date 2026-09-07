@@ -46,6 +46,8 @@ import { buildTenantRequestDateItems } from '../lib/tenant-connect/requests'
 import type { TenantRequest } from '../lib/tenant-connect/types'
 import { maintenanceCategoryLabel } from '../lib/maintenance/categories'
 import { validatePropertyPhotoFile, toUploadableFile, classifyPhotoSelection, isFirstCoverPhoto } from '../lib/property-photos/validate'
+import { resolveImageContentType, toUploadableImageFile } from '../lib/uploads/image-file'
+import { logUploadDiagnostic } from '../lib/uploads/diagnostics'
 import { logPhotoUploadDiagnostic, safeFileSummary, safeFileListSummary, safeErrorSummary } from '../lib/property-photos/diagnostics'
 import { TenantConnectStatusCard } from '../components/tenant-connect/TenantConnectStatusCard'
 import { TenantRequestsPanel } from '../components/tenant-connect/TenantRequestsPanel'
@@ -1211,20 +1213,39 @@ export default function Home() {
     if (!incoming.length) return
     setBusy(true)
     setError('')
+    // Upload Reliability Audit ("Upload Multiple") — each file already
+    // gets its own iteration/own try (a bad file `continue`s rather than
+    // aborting the rest), which was already correct; what wasn't
+    // correct is the same confirmed @supabase/storage-js
+    // ignored-contentType-option bug lib/uploads/image-file.ts's header
+    // documents — fixed here the same way as profile photos and Smart
+    // Upload. PDFs/non-images pass through untouched.
     for (const file of incoming) {
+      logUploadDiagnostic('upload-multiple', 'UPLOAD_FILE_RECEIVED', { extension: file.name, reportedMime: file.type, size: file.size })
+      const looksLikeImage = file.type.startsWith('image/') || (!file.type && /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name))
+      const resolvedContentType = looksLikeImage ? resolveImageContentType(file) : file.type || undefined
+      const uploadable = looksLikeImage ? toUploadableImageFile(file, resolvedContentType) : file
+      logUploadDiagnostic('upload-multiple', 'UPLOAD_NORMALIZATION_COMPLETE', { normalizedMime: uploadable.type || '(unchanged)' })
+
       const path = `${user.id}/${selectedId}/documents/${crypto.randomUUID()}-${safeName(file.name)}`
-      const { error: uploadError } = await supabase.storage.from('property-documents').upload(path, file, { contentType: file.type || undefined, upsert: false })
+      logUploadDiagnostic('upload-multiple', 'UPLOAD_STORAGE_START', { path })
+      const { error: uploadError } = await supabase.storage.from('property-documents').upload(path, uploadable, { contentType: resolvedContentType, upsert: false })
       if (uploadError) {
+        logUploadDiagnostic('upload-multiple', 'UPLOAD_STORAGE_ERROR', { error: safeErrorSummary(uploadError) })
         setError(uploadError.message)
         continue
       }
+      logUploadDiagnostic('upload-multiple', 'UPLOAD_STORAGE_SUCCESS', { path })
       const { error: rowError } = await supabase.from('property_documents').insert({
         owner_id: user.id, property_id: selectedId, name: file.name, category: uploadCategory,
-        storage_path: path, size_bytes: file.size, mime_type: file.type || null,
+        storage_path: path, size_bytes: uploadable.size, mime_type: uploadable.type || null,
       })
       if (rowError) {
+        logUploadDiagnostic('upload-multiple', 'UPLOAD_DB_ERROR', { error: safeErrorSummary(rowError) })
         await supabase.storage.from('property-documents').remove([path])
         setError(rowError.message)
+      } else {
+        logUploadDiagnostic('upload-multiple', 'UPLOAD_DB_SUCCESS', {})
       }
     }
     await loadPortfolio()
