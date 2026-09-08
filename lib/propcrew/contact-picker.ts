@@ -43,14 +43,28 @@ export function isContactPickerSupported(nav: unknown, win: unknown): boolean {
   return hasSelect && hasManager
 }
 
-/** The normalized, de-duplicated candidate values from one picked contact — never a single guessed phone/email when the contact has more than one. */
+/**
+ * The normalized, de-duplicated candidate values from one picked
+ * contact — never a single guessed phone/email when the contact has
+ * more than one. `businessName` is deliberately OPTIONAL and omitted
+ * entirely (never present as an empty/null placeholder) unless the
+ * source actually provided a real organization value — the Contact
+ * Picker API has no `organization` property at all (its supported
+ * properties are name/email/tel/address/icon only), so that path never
+ * sets it; PropCrew Mobile Contact Import V1's vCard fallback (see
+ * lib/propcrew/vcard.ts) is the one path that can, from a vCard ORG
+ * field. Never invented from name or email — see this milestone's own
+ * explicit "do not invent a company" instruction.
+ */
 export type PropCrewImportCandidate = {
   name: string
   phones: string[]
   emails: string[]
+  businessName?: string
 }
 
-function dedupeTrimmed(values: string[] | undefined): string[] {
+/** Exported for reuse by lib/propcrew/vcard.ts — the same "trim, drop blanks, de-dupe exact repeats" rule applies to a vCard's TEL/EMAIL lines as to a Contact Picker result, so this stays the one implementation. */
+export function dedupeTrimmed(values: string[] | undefined): string[] {
   const seen = new Set<string>()
   const out: string[] = []
   for (const raw of values || []) {

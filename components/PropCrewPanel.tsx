@@ -46,11 +46,35 @@
 // remains native contact picking in a future PropRoster iOS app; this
 // component was already the natural extension point for that (see
 // `prefill`/`onPrefillConsumed` below), and still is.
+//
+// PropCrew Mobile Contact Import V1 — re-confirmed the above by direct
+// audit (isContactPickerSupported's own two-part spec check; nothing in
+// this codebase or an installed-as-PWA context changes it — WebKit is
+// WebKit whether the site is opened in Safari or added to the Home
+// Screen) and adds two things real-device iPhone testing showed were
+// still missing:
+//   1. An iOS/other-unsupported-browser fallback that's a genuine
+//      upgrade over typing everything by hand — importing a
+//      user-exported vCard (.vcf) file (lib/propcrew/vcard.ts) — shown
+//      with a brief, honest explanation instead of silently skipping
+//      straight past any chooser (Section 3's own "do not leave a
+//      button that appears broken, but also do not pretend the native
+//      picker exists" instruction). Investigated and rejected: any
+//      approach that would need broader address-book access, an
+//      undocumented API, or scraping — none exist safely on the web
+//      platform for iOS today.
+//   2. Deterministic (never fuzzy/AI) duplicate avoidance
+//      (lib/propcrew/dedupe.ts) plus an explicit "Link Existing
+//      Contact" entry point, so the same HVAC company/handyman doesn't
+//      need to be re-entered for every property one property_contacts
+//      row can already legally serve via property_contact_links.
 
-import { useEffect, useMemo, useState } from 'react'
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { PROPCREW_PRIVACY_DISCLOSURE, PROPCREW_PRIVATE_NOTE_LABEL, REUSE_PREFERENCE_LABELS, REUSE_PREFERENCE_OPTIONS, reusePreferenceTone, type ReusePreference } from '../lib/propcrew/reuse-preference'
 import { isContactPickerSupported, normalizeContactPickerResult, type ContactPickerResult, type PropCrewImportCandidate } from '../lib/propcrew/contact-picker'
+import { parseVCardFile } from '../lib/propcrew/vcard'
+import { findExactContactMatch } from '../lib/propcrew/dedupe'
 
 export const PROPCREW_CATEGORIES = [
   'HVAC', 'Plumbing', 'Electrical', 'Roofing', 'Handyman', 'Landscaping', 'Pest Control',
@@ -139,6 +163,30 @@ export function PropCrewPanel({
   const [multiValueCandidate, setMultiValueCandidate] = useState<PropCrewImportCandidate | null>(null)
   const [multiValueChoice, setMultiValueChoice] = useState<{ phone: string; email: string }>({ phone: '', email: '' })
 
+  // PropCrew Mobile Contact Import V1 — the iOS/unsupported-browser
+  // fallback: a user-selected .vcf file, read and parsed entirely
+  // client-side (lib/propcrew/vcard.ts). vcardInputRef is a hidden
+  // <input type=file>, clicked programmatically from a real button so
+  // the file picker still opens from a genuine user gesture.
+  const vcardInputRef = useRef<HTMLInputElement | null>(null)
+  const [vcardBusy, setVcardBusy] = useState(false)
+  const [vcardError, setVcardError] = useState('')
+
+  // "Link Existing Contact" (Section 9) — a SEPARATE entry point from
+  // "+ Add to PropCrew," not a third option crowding that chooser
+  // (which stays exactly the two options the milestone specifies).
+  // Only ever rendered when scopePropertyId is set (there is no "this
+  // property" to link to from the unscoped, portfolio-wide directory)
+  // and at least one existing contact isn't already associated with it.
+  const [showLinkExisting, setShowLinkExisting] = useState(false)
+  const [linkFilter, setLinkFilter] = useState('')
+
+  // Deterministic duplicate-avoidance (Section 5) — set when save()
+  // finds an existing contact whose normalized phone/email exactly
+  // matches the draft being created (never on an edit — see save()).
+  // Never merges automatically; only offers the choice.
+  const [dedupeMatch, setDedupeMatch] = useState<PropCrewContact | null>(null)
+
   useEffect(() => {
     setPickerSupported(isContactPickerSupported(typeof navigator === 'undefined' ? undefined : navigator, typeof window === 'undefined' ? undefined : window))
   }, [])
@@ -185,6 +233,23 @@ export function PropCrewPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contacts, links, scopePropertyId])
 
+  // Section 9 — every existing contact NOT already associated with
+  // THIS property (i.e. every one "Link Existing Contact" could
+  // actually add here). Always [] when scopePropertyId isn't set —
+  // there is no single "this property" to link to from the unscoped,
+  // portfolio-wide directory.
+  const linkableContacts = useMemo(() => {
+    if (!scopePropertyId) return []
+    return contacts.filter((c) => !propertyIdsFor(c).includes(scopePropertyId))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contacts, links, scopePropertyId])
+
+  const filteredLinkableContacts = useMemo(() => {
+    const q = linkFilter.trim().toLowerCase()
+    if (!q) return linkableContacts
+    return linkableContacts.filter((c) => `${c.name} ${c.business_name || ''} ${c.role}`.toLowerCase().includes(q))
+  }, [linkableContacts, linkFilter])
+
   function serviceHistoryFor(contactId: string) {
     const records = maintenance.filter((m) => m.propcrew_contact_id === contactId)
     const linkedSystems = systems.filter((s) => s.propcrew_contact_id === contactId)
@@ -200,28 +265,76 @@ export function PropCrewPanel({
     setError('')
   }
 
-  // The "+ Add to PropCrew" entry point. On a browser without the
-  // Contact Picker API, this behaves EXACTLY as before — straight to the
-  // manual form, no chooser step, no dead option ever shown.
+  // The "+ Add to PropCrew" entry point. PropCrew Mobile Contact Import
+  // V1: the chooser is now ALWAYS shown (previously skipped entirely
+  // when the Contact Picker API was unsupported) — every browser now
+  // has at least one real, working import path (native picker on
+  // Chromium/Android, vCard import everywhere else) plus manual entry,
+  // so there is never a chooser with a dead option, and iOS no longer
+  // silently loses the chooser step it never had a use for before.
   function openAddChooser() {
     setError('')
     setPickerError('')
-    if (pickerSupported) setShowAddChooser(true)
-    else openAdd()
+    setVcardError('')
+    setShowAddChooser(true)
+  }
+
+  function closeAddChooser() {
+    setShowAddChooser(false)
+    setPickerError('')
+    setVcardError('')
   }
 
   // Populates the SAME draft/showForm the manual "+ Add to PropCrew" flow
   // already uses — the review-before-save form is identical either way,
   // every field stays editable, and Save is still the one explicit
   // action that writes anything (Section "Do not automatically save
-  // anything merely because a contact was selected").
+  // anything merely because a contact was selected"). businessName is
+  // only ever set when the source actually provided one (vCard ORG) —
+  // never invented (Contact Picker never provides it at all, so that
+  // path's candidate has no businessName key and this falls back to '').
   function applyImportCandidate(candidate: PropCrewImportCandidate, phone: string, email: string) {
-    setDraft({ ...emptyDraft, name: candidate.name, phone, email, propertyIds: scopePropertyId ? [scopePropertyId] : [] })
+    setDraft({ ...emptyDraft, name: candidate.name, businessName: candidate.businessName || '', phone, email, propertyIds: scopePropertyId ? [scopePropertyId] : [] })
     setEditingId(null)
     setShowForm(true)
     setShowAddChooser(false)
     setMultiValueCandidate(null)
     setPickerError('')
+    setVcardError('')
+  }
+
+  // The iOS/unsupported-browser fallback: read the ONE file the user
+  // explicitly selected (nothing else is ever touched), parse it
+  // entirely client-side, and route through the exact same
+  // applyImportCandidate()/multi-value-picker path as the native
+  // Contact Picker result — one prefill pipeline, not two.
+  async function handleVCardFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-selecting the same file later (onChange only fires on a value change otherwise)
+    if (!file) return
+    setVcardError('')
+    setVcardBusy(true)
+    try {
+      const text = await file.text()
+      const result = parseVCardFile(text)
+      setVcardBusy(false)
+      if (!result.ok) {
+        if (result.reason === 'multiple_cards') setVcardError('That file has more than one contact. Export and select just one contact’s card, then try again.')
+        else if (result.reason === 'empty_card') setVcardError('That contact card has no name, phone, or email to import.')
+        else setVcardError('That doesn’t look like a contact card (.vcf) file.')
+        return
+      }
+      const { candidate } = result
+      if (candidate.phones.length > 1 || candidate.emails.length > 1) {
+        setMultiValueCandidate(candidate)
+        setMultiValueChoice({ phone: candidate.phones[0] || '', email: candidate.emails[0] || '' })
+        return
+      }
+      applyImportCandidate(candidate, candidate.phones[0] || '', candidate.emails[0] || '')
+    } catch {
+      setVcardBusy(false)
+      setVcardError('Could not read that file. You can still add this contact manually.')
+    }
   }
 
   // The one real Contact Picker API call in this component — everything
@@ -271,8 +384,19 @@ export function PropCrewPanel({
     setError('')
   }
 
-  async function save() {
+  // Section 5 — deterministic duplicate-avoidance, new contacts only.
+  // Never runs on an edit (editingId set): editing an existing row's
+  // own phone/email can never be "a duplicate of itself," and this
+  // must never block a legitimate edit. `force` is set only by the
+  // dedupe-confirmation modal's own "Create new anyway" action — the
+  // landlord's explicit override for the rare case of two real people
+  // who happen to share a phone/email (e.g. a shared office line).
+  async function save(force = false) {
     if (!supabase || !draft.name.trim() || !draft.propertyIds.length) return
+    if (!editingId && !force) {
+      const match = findExactContactMatch(contacts, draft.phone, draft.email)
+      if (match) { setDedupeMatch(match); return }
+    }
     setBusy(true)
     setError('')
     const [primaryPropertyId, ...otherPropertyIds] = draft.propertyIds
@@ -311,6 +435,50 @@ export function PropCrewPanel({
     setBusy(false)
   }
 
+  // The landlord's explicit "Use existing contact" choice from the
+  // dedupe-confirmation modal — links the ALREADY-existing contact to
+  // whatever properties in the draft it isn't already linked to,
+  // rather than creating a second property_contacts row for the same
+  // person/company. Never touches the existing row's own fields (name,
+  // role, notes, would_use_again, etc.) — the draft's own edits to
+  // those are discarded, exactly like "Enter Manually" was abandoned in
+  // favor of the existing record, not merged into it (Section 5: "Do
+  // not merge records automatically").
+  async function useDedupeMatch() {
+    if (!supabase || !dedupeMatch) return
+    setBusy(true)
+    setError('')
+    const alreadyLinkedIds = propertyIdsFor(dedupeMatch)
+    const newPropertyIds = draft.propertyIds.filter((id) => !alreadyLinkedIds.includes(id))
+    if (newPropertyIds.length) {
+      const { error: linkError } = await supabase.from('property_contact_links').insert(newPropertyIds.map((propertyId) => ({ contact_id: dedupeMatch.id, property_id: propertyId, owner_id: ownerId })))
+      if (linkError) { setError(linkError.message); setBusy(false); return }
+    }
+    setDedupeMatch(null)
+    setShowForm(false)
+    await load()
+    onChanged?.()
+    setBusy(false)
+  }
+
+  // Section 9 — links an ALREADY-existing PropCrew contact to
+  // scopePropertyId with a single explicit tap, no re-typing of any of
+  // that contact's details and no new property_contacts row. Only ever
+  // reachable when scopePropertyId is set (see linkableContacts/the
+  // "Link Existing Contact" button, both scopePropertyId-gated).
+  async function linkExistingContact(contactId: string) {
+    if (!supabase || !scopePropertyId) return
+    setBusy(true)
+    setError('')
+    const { error: linkError } = await supabase.from('property_contact_links').insert({ contact_id: contactId, property_id: scopePropertyId, owner_id: ownerId })
+    if (linkError) { setError(linkError.message); setBusy(false); return }
+    setShowLinkExisting(false)
+    setLinkFilter('')
+    await load()
+    onChanged?.()
+    setBusy(false)
+  }
+
   // Selecting "NO" must never delete/hide the historical record (Part 11)
   // — there is no delete-on-NO path anywhere in this component; removal
   // is always a separate, explicit action.
@@ -337,7 +505,10 @@ export function PropCrewPanel({
             <p>Every contractor, agent, lender and professional you&apos;ve worked with — {PROPCREW_PRIVACY_DISCLOSURE.toLowerCase()}</p>
           </div>
         ) : <div />}
-        <button className="primary" onClick={openAddChooser}>+ Add to PropCrew</button>
+        <div className="propCrewHeaderActions">
+          {linkableContacts.length > 0 && <button className="secondary" onClick={() => setShowLinkExisting(true)}>Link Existing Contact</button>}
+          <button className="primary" onClick={openAddChooser}>+ Add to PropCrew</button>
+        </div>
       </div>
 
       {error && <div className="statusMessage errorMessage">{error}</div>}
@@ -391,30 +562,86 @@ export function PropCrewPanel({
           })}
         </div>
       ) : (
-        <div className="emptyModule"><strong>No PropCrew providers yet</strong><span>Add contractors, agents, lenders and other professionals as you work with them.</span><button className="primary" onClick={openAddChooser}>+ Add to PropCrew</button></div>
+        <div className="emptyModule"><strong>No PropCrew providers yet</strong><span>Add contractors, agents, lenders and other professionals as you work with them.</span><div className="propCrewHeaderActions">{linkableContacts.length > 0 && <button className="secondary" onClick={() => setShowLinkExisting(true)}>Link Existing Contact</button>}<button className="primary" onClick={openAddChooser}>+ Add to PropCrew</button></div></div>
       )}
 
-      {/* Property Profile / PropCrew UX Improvement: the first step when
-          the picker IS supported — "Add from Contacts" vs "Enter
-          Manually." Never rendered at all when pickerSupported is false
-          (openAddChooser skips straight to the manual form in that
-          case), so there's never a chooser with a dead/disabled option. */}
+      {/* PropCrew Mobile Contact Import V1 (UX polish pass): the first
+          step, ALWAYS shown — "Choose from Contacts" (native picker) OR
+          "Import from iPhone Contacts" (vCard fallback), whichever this
+          browser actually supports, plus "Enter Manually." Never both
+          import options at once, and never a native-picker button on a
+          browser that doesn't support it (Section 3: "never claim
+          contact access is available when it is not") — pickerSupported
+          alone decides which import option renders. Copy is
+          deliberately plain-language: no "WebKit," "Contact Picker
+          API," "vCard," or "browser compatibility" anywhere in this
+          user-facing block — see docs/propcrew-mobile-contact-import-v1.md
+          for that explanation instead. */}
       {showAddChooser && (
-        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowAddChooser(false)}>
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && closeAddChooser()}>
           <div className="modal addDocumentModal">
-            <div className="modalTop"><div><p className="eyebrow">PROPCREW</p><h2>Add a PropCrew member</h2></div><button className="iconButton" onClick={() => setShowAddChooser(false)}>×</button></div>
+            <div className="modalTop"><div><p className="eyebrow">PROPCREW</p><h2>Add to PropCrew</h2></div><button className="iconButton" onClick={closeAddChooser}>×</button></div>
             {pickerError && <p className="errorMessage">{pickerError}</p>}
+            {vcardError && <p className="errorMessage">{vcardError}</p>}
             <div className="addDocumentChooser">
-              <div className="addDocumentOption addDocumentOptionSmart">
-                <h3>Add from Contacts</h3>
-                <p>Choose one contact from your device — only that contact&apos;s name, phone and email are imported, nothing else from your address book.</p>
-                <button className="primary" disabled={pickerBusy} onClick={() => void pickFromContacts()}>{pickerBusy ? 'Opening contacts…' : 'Choose a contact'}</button>
-              </div>
+              {pickerSupported ? (
+                <div className="addDocumentOption addDocumentOptionSmart">
+                  <h3>Choose from Contacts</h3>
+                  <p>Select a contact from your phone and we&apos;ll prefill the details for you to review.</p>
+                  <button className="primary" disabled={pickerBusy} onClick={() => void pickFromContacts()}>{pickerBusy ? 'Opening contacts…' : 'Choose from Contacts'}</button>
+                </div>
+              ) : (
+                <div className="addDocumentOption addDocumentOptionSmart">
+                  <h3>Import from iPhone Contacts</h3>
+                  <div className="propCrewImportSteps">
+                    <p className="propCrewImportStepsTitle">Import an existing contact</p>
+                    <ol>
+                      <li>Open Contacts and select the person.</li>
+                      <li>Tap Share Contact.</li>
+                      <li>Choose Save to Files.</li>
+                      <li>Return to PropRoster and tap Import Contact Card.</li>
+                    </ol>
+                  </div>
+                  <input ref={vcardInputRef} type="file" accept=".vcf,text/vcard,text/x-vcard" hidden onChange={(e) => void handleVCardFile(e)} />
+                  <button className="primary" disabled={vcardBusy} onClick={() => vcardInputRef.current?.click()}>{vcardBusy ? 'Reading file…' : 'Import Contact Card'}</button>
+                  <p className="muted propCrewImportHelper">Choose the contact file you saved from Contacts.</p>
+                </div>
+              )}
               <div className="addDocumentOption">
                 <h3>Enter Manually</h3>
                 <p>Type in their name, category, contact details and notes yourself.</p>
-                <button className="secondary" onClick={openAdd}>Enter manually</button>
+                <button className="secondary" onClick={openAdd}>Enter Manually</button>
               </div>
+            </div>
+            {!pickerSupported && (
+              <p className="muted propCrewImportFutureNote">Direct contact selection for iPhone is planned for a future PropRoster app.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Section 9 — a SEPARATE, lightweight entry point from the "+ Add
+          to PropCrew" chooser above: link an already-existing PropCrew
+          contact to this property with one tap, no re-typing any of
+          their details and no new property_contacts row. Only ever
+          reachable when scopePropertyId is set (see linkableContacts). */}
+      {showLinkExisting && (
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowLinkExisting(false)}>
+          <div className="modal">
+            <div className="modalTop"><div><p className="eyebrow">PROPCREW</p><h2>Link an existing contact</h2></div><button className="iconButton" onClick={() => setShowLinkExisting(false)}>×</button></div>
+            <p className="muted">Already in PropCrew for another property? Link them here instead of adding them again.</p>
+            {error && <p className="errorMessage">{error}</p>}
+            <input className="propCrewLinkSearch" type="text" placeholder="Search by name, business or category…" value={linkFilter} onChange={(e) => setLinkFilter(e.target.value)} aria-label="Search existing PropCrew contacts" />
+            <div className="propCrewLinkExistingList">
+              {filteredLinkableContacts.length ? filteredLinkableContacts.map((c) => (
+                <div className="propCrewLinkRow" key={c.id}>
+                  <div>
+                    <strong>{c.business_name || c.name}</strong>
+                    <span className="muted">{c.business_name ? `${c.name} · ` : ''}{c.role}</span>
+                  </div>
+                  <button className="secondary" disabled={busy} onClick={() => void linkExistingContact(c.id)}>Link</button>
+                </div>
+              )) : <p className="muted">No matching contacts.</p>}
             </div>
           </div>
         </div>
@@ -483,6 +710,27 @@ export function PropCrewPanel({
               <label className="fullField">{PROPCREW_PRIVATE_NOTE_LABEL}<small>{PROPCREW_PRIVACY_DISCLOSURE}</small><input value={draft.experienceNote} onChange={(e) => setDraft((d) => ({ ...d, experienceNote: e.target.value }))} placeholder="Excellent work. Ask for Mike." /></label>
             </div>
             <div className="modalActions"><button className="secondary" onClick={() => setShowForm(false)}>Cancel</button><button className="primary" disabled={busy || !draft.name.trim() || !draft.propertyIds.length} onClick={() => void save()}>{busy ? 'Saving…' : 'Save'}</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* Section 5 — offered whenever save() finds an existing contact
+          whose normalized phone or email exactly matches the draft
+          being created. Never auto-applied; "Create new anyway" stays
+          one tap away for the rare true-coincidence case. Rendered
+          AFTER (so it stacks visually on top of) the Add/Edit form
+          above — save() leaves that form open underneath while this
+          confirmation is decided, so nothing entered is lost if the
+          landlord backs out of this prompt. */}
+      {dedupeMatch && (
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setDedupeMatch(null)}>
+          <div className="modal">
+            <div className="modalTop"><h2>Use existing contact?</h2><button className="iconButton" onClick={() => setDedupeMatch(null)}>×</button></div>
+            <p>You already have <strong>{dedupeMatch.business_name || dedupeMatch.name}</strong> in PropCrew with this phone number or email. Use that contact and link them to the selected propert{draft.propertyIds.length === 1 ? 'y' : 'ies'} instead of creating a new entry?</p>
+            <div className="modalActions">
+              <button className="secondary" disabled={busy} onClick={() => { setDedupeMatch(null); void save(true) }}>Create new anyway</button>
+              <button className="primary" disabled={busy} onClick={() => void useDedupeMatch()}>Use existing contact</button>
+            </div>
           </div>
         </div>
       )}
