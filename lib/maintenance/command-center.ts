@@ -137,6 +137,22 @@ export function isUrgentCase(row: Pick<MaintenanceCaseRow, 'priority'>, linkedSe
   return linkedSessionOutcomes.some((o) => o === 'escalated_urgent')
 }
 
+/**
+ * Display-only dedup for the Command Center / Active Requests cards.
+ * `urgent` and the priority pill are two separate facts that can say
+ * the same word: when the case is urgent BECAUSE priority is literally
+ * 'Urgent', the priority pill already communicates it, so the dedicated
+ * "Urgent" badge would be a redundant second pill reading the same
+ * word. When urgent is instead driven by a linked Guided Intake
+ * escalation (priority left at its default, e.g. 'Normal'), the badge
+ * is the only place that fact appears, so it still renders. Purely a
+ * display decision — isUrgentCase() above (the deterministic safety
+ * classification) is untouched.
+ */
+export function showsDedicatedUrgentBadge(row: Pick<MaintenanceCaseRow, 'priority'>, urgent: boolean): boolean {
+  return urgent && row.priority !== 'Urgent'
+}
+
 export function nextActionFor(row: Pick<MaintenanceCaseRow, 'status' | 'assigned_contact_id'>): NextAction {
   if (row.status === 'Completed') return 'completed'
   if (row.status === 'Scheduled') return 'scheduled'

@@ -34,7 +34,7 @@
 // NOT-applied schema gaps (a "Needs More Information" status value and
 // a landlord-only internal note).
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
@@ -45,6 +45,7 @@ import { NewMaintenanceRequestModal } from '../../components/maintenance/NewMain
 import type { NewMaintenanceRequestPayload } from '../../lib/maintenance/new-request'
 import {
   enrichMaintenanceCases, sortCasesForCommandCenter, summarizeCommandCenter, relevantContactsForProperty,
+  showsDedicatedUrgentBadge,
   NEXT_ACTION_LABEL,
   type MaintenanceCaseRow, type TenantRequestLink, type IntakeSessionOutcome,
   type PropCrewContactRef, type PropCrewLinkRef, type EnrichedMaintenanceCase, type MaintenanceCaseStatus,
@@ -95,6 +96,11 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
   const [openCaseId, setOpenCaseId] = useState<string | null>(null)
   const [showNewRequest, setShowNewRequest] = useState(false)
   const [newRequestError, setNewRequestError] = useState('')
+  // Bug fix (real-device iPhone testing, M3.1 follow-up) — see
+  // changeStatus() below for the root-cause writeup; matches the
+  // identical fix in app/page.tsx's updateRequestStatus().
+  const [statusUpdateMessage, setStatusUpdateMessage] = useState('')
+  const statusUpdateMessageTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   async function load() {
     if (!supabase) return
@@ -161,13 +167,34 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
     await load()
   }
 
+  // Bug fix (real-device iPhone testing, M3.1 follow-up): identical root
+  // cause and fix as app/page.tsx's updateRequestStatus() — the write
+  // persisted immediately, but this handler blocked on a full portfolio
+  // reload() before the case card/detail modal showed anything new,
+  // with no interim feedback, which read as "did nothing" on a real
+  // device. Fix: patch the one canonical `cases` array immediately
+  // (active/history split, the Command Center summary counts, and the
+  // open case's own detail view all derive from this same array), show
+  // a brief confirmation, and reload() in the background afterward
+  // instead of gating the UI on it.
+  function flashStatusUpdateMessage(text: string) {
+    setStatusUpdateMessage(text)
+    if (statusUpdateMessageTimer.current) window.clearTimeout(statusUpdateMessageTimer.current)
+    statusUpdateMessageTimer.current = setTimeout(() => setStatusUpdateMessage(''), 2500)
+  }
+
   async function changeStatus(caseId: string, status: MaintenanceCaseStatus) {
     if (!supabase) return
     setBusy(true)
     const { error: e } = await supabase.from('maintenance_requests').update({ status }).eq('id', caseId)
-    if (e) setError(e.message)
+    if (e) {
+      setError(e.message)
+    } else {
+      setCases((prev) => prev.map((c) => (c.id === caseId ? { ...c, status } : c)))
+      flashStatusUpdateMessage('Status updated.')
+      void load()
+    }
     setBusy(false)
-    await load()
   }
 
   // Tenant Connect M3.1 — portfolio-level "+ New Maintenance Request"
@@ -249,6 +276,7 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
           propertyLabel={propertyLabel(openCase.property_id)}
           contacts={contactsForOpenCase}
           busy={busy}
+          statusUpdateMessage={statusUpdateMessage}
           onAssign={(contactId) => void assignContact(openCase.id, contactId)}
           onStatusChange={(status) => void changeStatus(openCase.id, status)}
           onClose={() => setOpenCaseId(null)}
@@ -276,7 +304,7 @@ function MaintenanceCaseCard({ caseRow, propertyLabel, onOpen }: { caseRow: Enri
   return (
     <button className={`maintenanceCommandCenterCard${caseRow.urgent ? ' maintenanceCommandCenterCardUrgent' : ''}`} onClick={onOpen}>
       <div className="maintenanceCommandCenterCardTop">
-        {caseRow.urgent && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}
+        {showsDedicatedUrgentBadge(caseRow, caseRow.urgent) && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}
         <span className={`statusPill priority${caseRow.priority}`}>{caseRow.priority}</span>
         <span className={`statusPill ${caseRow.source === 'tenant' ? 'tenantSourceBadge' : 'landlordSourceBadge'}`}>{caseRow.source === 'tenant' ? 'Tenant' : 'Landlord'}</span>
       </div>

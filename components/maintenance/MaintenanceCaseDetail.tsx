@@ -51,12 +51,19 @@ import { NEXT_ACTION_LABEL } from '../../lib/maintenance/command-center'
 const STATUSES: MaintenanceCaseStatus[] = ['Submitted', 'Scheduled', 'In Progress', 'Completed']
 
 export function MaintenanceCaseDetail({
-  caseRow, propertyLabel, contacts, busy, onAssign, onStatusChange, onClose,
+  caseRow, propertyLabel, contacts, busy, statusUpdateMessage, onAssign, onStatusChange, onClose,
 }: {
   caseRow: EnrichedMaintenanceCase
   propertyLabel: string
   contacts: PropCrewContactRef[]
   busy: boolean
+  // Bug fix (real-device iPhone testing, M3.1 follow-up): a brief,
+  // caller-owned confirmation string ("Status updated.") shown right
+  // after a status change, so the landlord sees feedback without
+  // needing to close this modal or reload. Purely a display prop —
+  // still a "dumb" component: the caller (app/page.tsx or
+  // app/maintenance/page.tsx) owns setting and clearing it.
+  statusUpdateMessage?: string
   onAssign: (contactId: string | null) => void
   onStatusChange: (status: MaintenanceCaseStatus) => void
   onClose: () => void
@@ -115,6 +122,7 @@ export function MaintenanceCaseDetail({
               {STATUSES.map((s) => <option key={s}>{s}</option>)}
             </select>
           </label>
+          {statusUpdateMessage && <p className="maintenanceStatusUpdateNotice" role="status">{statusUpdateMessage}</p>}
           <p className="muted maintenanceNextAction">Next: {NEXT_ACTION_LABEL[caseRow.nextAction]}</p>
 
           {caseRow.status !== 'Completed' && (

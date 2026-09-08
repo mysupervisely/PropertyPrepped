@@ -44,8 +44,8 @@ describe('Portfolio-level Command Center — reachable, real, and reads the cano
 })
 
 describe('Property-level view — enhanced, not replaced', () => {
-  it('the existing per-request row now shows a deterministic urgency badge (from the enriched case, not a client-side guess)', () => {
-    expect(pageSource).toContain('{req.urgent && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}')
+  it('the existing per-request row now shows a deterministic urgency badge (from the enriched case, not a client-side guess) — see the Bug 2 dedup guard below for why the render condition also checks priority', () => {
+    expect(pageSource).toContain('{showsDedicatedUrgentBadge(req, req.urgent) && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}')
   })
 
   it('the existing tenant-source badge and category lookup remain byte-for-byte intact (V1 regression guard)', () => {

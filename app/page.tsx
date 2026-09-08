@@ -51,7 +51,7 @@ import { beginReadingFileBytes, toDurableUploadableFile } from '../lib/uploads/d
 import { logUploadDiagnostic, initialUploadDebugState, type UploadDebugState } from '../lib/uploads/diagnostics'
 import { UploadDebugPanel } from '../components/uploads/UploadDebugPanel'
 import { logPhotoUploadDiagnostic, safeFileSummary, safeFileListSummary, safeErrorSummary } from '../lib/property-photos/diagnostics'
-import { enrichMaintenanceCases, relevantContactsForProperty, type IntakeSessionOutcome, type PropCrewLinkRef, type MaintenanceCaseStatus } from '../lib/maintenance/command-center'
+import { enrichMaintenanceCases, relevantContactsForProperty, showsDedicatedUrgentBadge, type IntakeSessionOutcome, type PropCrewLinkRef, type MaintenanceCaseStatus } from '../lib/maintenance/command-center'
 import { MaintenanceCaseDetail } from '../components/maintenance/MaintenanceCaseDetail'
 import { NewMaintenanceRequestModal } from '../components/maintenance/NewMaintenanceRequestModal'
 import type { NewMaintenanceRequestPayload } from '../lib/maintenance/new-request'
@@ -449,6 +449,13 @@ export default function Home() {
   const [authReady, setAuthReady] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // Bug fix (real-device iPhone testing, M3.1 follow-up): a brief,
+  // auto-dismissing confirmation for fast row-level mutations (currently
+  // just the maintenance status <select>) that update local state
+  // immediately rather than waiting on a full loadPortfolio() refetch —
+  // see updateRequestStatus() below for the root-cause writeup.
+  const [statusUpdateMessage, setStatusUpdateMessage] = useState('')
+  const statusUpdateMessageTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const { plan } = useSubscription(user)
   const entitlements = useMemo(() => entitlementsFor(plan), [plan])
@@ -1773,11 +1780,39 @@ export default function Home() {
     setBusy(false)
   }
 
+  // Bug fix (real-device iPhone testing, M3.1 follow-up): the status
+  // change persisted correctly, but this handler used to block on a
+  // full ~18-query loadPortfolio() refetch before the row's <select>
+  // (its only visual state) reflected anything new, with zero interim
+  // feedback — slow enough on a real device/network that it read as
+  // "did nothing," prompting a manual reload that only "worked" because
+  // the already-saved value came back on the fresh load. Root cause:
+  // the write was fast, the required-before-considered-done refetch was
+  // not, and nothing on screen said "saved" in between. Fix: patch the
+  // one canonical maintenanceRequests array immediately (every other
+  // maintenance-derived value — selectedRequests, enrichedSelectedRequests,
+  // openRequests/completedRequests, PropWatch's open-maintenance count —
+  // derives from this same array, so this one patch propagates
+  // everywhere without extra code), show a brief confirmation, and run
+  // the full-portfolio refetch afterward in the background instead of
+  // gating the UI on it.
+  function flashStatusUpdateMessage(text: string) {
+    setStatusUpdateMessage(text)
+    if (statusUpdateMessageTimer.current) window.clearTimeout(statusUpdateMessageTimer.current)
+    statusUpdateMessageTimer.current = setTimeout(() => setStatusUpdateMessage(''), 2500)
+  }
+
   async function updateRequestStatus(id: string, status: string) {
     if (!supabase) return
     setBusy(true); setError('')
     const { error: e } = await supabase.from('maintenance_requests').update({ status }).eq('id', id)
-    if (e) setError(e.message); else await loadPortfolio()
+    if (e) {
+      setError(e.message)
+    } else {
+      setMaintenanceRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)))
+      flashStatusUpdateMessage('Status updated.')
+      void loadPortfolio()
+    }
     setBusy(false)
   }
 
@@ -2331,7 +2366,8 @@ export default function Home() {
 
             <h3 className="maintenanceHubSectionTitle">Active Requests</h3>
             <div className="financialStats landlordStats"><div className="financialStat"><span>Open requests</span><strong>{openRequests.length}</strong></div><div className="financialStat"><span>Completed requests</span><strong>{completedRequests.length}</strong></div></div>
-            {selectedRequests.length ? <div className="maintenanceList">{enrichedSelectedRequests.map((req) => <article className="maintenanceRow requestRow" key={req.id}><div className="maintenanceDate"><strong>{new Date(req.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(req.created_at).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div>{req.urgent && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}<span className={`statusPill priority${req.priority}`}>{req.priority}</span>{req.source === 'tenant' && <span className="statusPill tenantSourceBadge">Tenant</span>}<h3>{req.title}</h3><p>{req.source === 'tenant' && categoryByMaintenanceRequestId.has(req.id) ? `${maintenanceCategoryLabel(categoryByMaintenanceRequestId.get(req.id)!)} · ` : ''}{req.tenant_name}{req.tenant_email ? ` · ${req.tenant_email}` : ''}</p></div></div>{req.description && <p className="requestDescription">{req.description}</p>}<div className="maintenanceActions"><button className="secondary" onClick={() => setOpenMaintenanceCaseId(req.id)}>Manage</button><select aria-label={`Status for ${req.title}`} value={req.status} onChange={(e) => void updateRequestStatus(req.id, e.target.value)}>{requestStatuses.map((s) => <option key={s}>{s}</option>)}</select><button className="dangerLink" onClick={() => void removeRequest(req.id)}>Remove</button></div></div></article>)}</div> : <EmptyModule title="No maintenance requests yet" text="Requests your tenant submits, and any you log yourself, show up here." action="New Maintenance Request" onClick={() => setShowNewMaintenanceRequest(true)} />}
+            {statusUpdateMessage && <div className="globalNotice">{statusUpdateMessage}</div>}
+            {selectedRequests.length ? <div className="maintenanceList">{enrichedSelectedRequests.map((req) => <article className="maintenanceRow requestRow" key={req.id}><div className="maintenanceDate"><strong>{new Date(req.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(req.created_at).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div>{showsDedicatedUrgentBadge(req, req.urgent) && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}<span className={`statusPill priority${req.priority}`}>{req.priority}</span>{req.source === 'tenant' && <span className="statusPill tenantSourceBadge">Tenant</span>}<h3>{req.title}</h3><p>{req.source === 'tenant' && categoryByMaintenanceRequestId.has(req.id) ? `${maintenanceCategoryLabel(categoryByMaintenanceRequestId.get(req.id)!)} · ` : ''}{req.tenant_name}{req.tenant_email ? ` · ${req.tenant_email}` : ''}</p></div></div>{req.description && <p className="requestDescription">{req.description}</p>}<div className="maintenanceActions"><button className="secondary" onClick={() => setOpenMaintenanceCaseId(req.id)}>Manage</button><select aria-label={`Status for ${req.title}`} value={req.status} disabled={busy} onChange={(e) => void updateRequestStatus(req.id, e.target.value)}>{requestStatuses.map((s) => <option key={s}>{s}</option>)}</select><button className="dangerLink" onClick={() => void removeRequest(req.id)}>Remove</button></div></div></article>)}</div> : <EmptyModule title="No maintenance requests yet" text="Requests your tenant submits, and any you log yourself, show up here." action="New Maintenance Request" onClick={() => setShowNewMaintenanceRequest(true)} />}
 
             <div className="sectionHead workspaceHeading maintenanceServiceHistoryHead"><div><p className="eyebrow">SERVICE HISTORY</p><h2>Property service history</h2><p>Repairs, preventative work, vendors, costs and receipts in one timeline.</p></div><button className="secondary" onClick={() => setShowModuleForm('Maintenance')}>+ Log service record</button></div>
             {selectedMaintenance.length ? <div className="maintenanceList">{selectedMaintenance.map((item) => { const doc=selectedDocs.find(d=>d.id===item.document_id); return <article className="maintenanceRow" key={item.id}><div className="maintenanceDate"><strong>{new Date(`${item.service_date}T12:00:00`).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(`${item.service_date}T12:00:00`).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div><span className="statusPill">{item.status}</span><h3>{item.description}</h3><p>{item.category}{item.vendor ? ` · ${item.vendor}` : ''}</p></div><strong>{money(item.cost)}</strong></div><div className="maintenanceActions">{doc && <button onClick={() => void openDocument(doc)}>Open {doc.name}</button>}{item.financial_transaction_id && <span>Linked to Ledger</span>}<button className="dangerLink" onClick={() => void removeModuleRecord('maintenance_records', item.id, item.financial_transaction_id)}>Remove</button></div></div></article>})}</div> : <EmptyModule title="No maintenance records yet" text="Add repairs, service calls, vendors, costs and receipts as they happen." action="Add maintenance" onClick={() => setShowModuleForm('Maintenance')} />}
@@ -2372,6 +2408,7 @@ export default function Home() {
             propertyLabel={`${selected.address}${selected.city ? `, ${selected.city}` : ''}`}
             contacts={relevantMaintenanceContacts}
             busy={busy}
+            statusUpdateMessage={statusUpdateMessage}
             onAssign={(contactId) => void assignMaintenanceContact(openMaintenanceCase.id, contactId)}
             onStatusChange={(status: MaintenanceCaseStatus) => void updateRequestStatus(openMaintenanceCase.id, status)}
             onClose={() => setOpenMaintenanceCaseId(null)}

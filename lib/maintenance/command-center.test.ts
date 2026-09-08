@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   isUrgentCase, nextActionFor, enrichMaintenanceCases, sortCasesForCommandCenter,
-  casesForProperty, relevantContactsForProperty, summarizeCommandCenter,
+  casesForProperty, relevantContactsForProperty, summarizeCommandCenter, showsDedicatedUrgentBadge,
   type MaintenanceCaseRow, type TenantRequestLink, type IntakeSessionOutcome,
   type PropCrewContactRef, type PropCrewLinkRef,
 } from './command-center'
@@ -30,6 +30,37 @@ describe('isUrgentCase — deterministic only, never a heuristic', () => {
     expect(isUrgentCase({ priority: 'Normal' }, [])).toBe(false)
     expect(isUrgentCase({ priority: 'High' }, ['escalated_to_dispatch'])).toBe(false)
     expect(isUrgentCase({ priority: 'Normal' }, [null])).toBe(false)
+  })
+})
+
+describe('showsDedicatedUrgentBadge — Bug 2 fix: dedup the "Urgent" badge against the priority pill, without touching isUrgentCase()', () => {
+  it('hides the dedicated badge when urgency comes from priority itself — the priority pill already says "Urgent"', () => {
+    expect(showsDedicatedUrgentBadge({ priority: 'Urgent' }, true)).toBe(false)
+  })
+
+  it('still shows the dedicated badge when urgency comes from a linked intake escalation and priority is NOT literally "Urgent" — otherwise this fact would appear nowhere', () => {
+    expect(showsDedicatedUrgentBadge({ priority: 'Normal' }, true)).toBe(true)
+    expect(showsDedicatedUrgentBadge({ priority: 'Low' }, true)).toBe(true)
+  })
+
+  it('never shows the badge when the case is not urgent at all', () => {
+    expect(showsDedicatedUrgentBadge({ priority: 'Normal' }, false)).toBe(false)
+    expect(showsDedicatedUrgentBadge({ priority: 'Urgent' }, false)).toBe(false)
+  })
+
+  it('composes with isUrgentCase/enrichMaintenanceCases exactly as the two render sites call it, for every case shape the app actually produces', () => {
+    const landlordUrgent = enrichMaintenanceCases([makeCase({ id: 'a', priority: 'Urgent', source: 'landlord' })], [], [])[0]
+    expect(showsDedicatedUrgentBadge(landlordUrgent, landlordUrgent.urgent)).toBe(false) // priority pill alone covers it
+
+    const tenantEscalated = enrichMaintenanceCases(
+      [makeCase({ id: 'b', priority: 'Normal', source: 'tenant' })],
+      [{ id: 'tr1', maintenance_request_id: 'b', category: 'plumbing' }],
+      [{ request_id: 'tr1', outcome: 'escalated_urgent' }],
+    )[0]
+    expect(showsDedicatedUrgentBadge(tenantEscalated, tenantEscalated.urgent)).toBe(true) // only the badge communicates this
+
+    const notUrgent = enrichMaintenanceCases([makeCase({ id: 'c', priority: 'Normal', source: 'landlord' })], [], [])[0]
+    expect(showsDedicatedUrgentBadge(notUrgent, notUrgent.urgent)).toBe(false)
   })
 })
 

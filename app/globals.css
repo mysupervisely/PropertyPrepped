@@ -373,6 +373,13 @@ h2, h3, p { margin-top: 0; }
 .checkoutSyncingNote { opacity: .75; font-style: italic; }
 .globalError { margin: 14px 0 0; border-radius: 10px; padding: 11px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .globalError button { border: 0; background: transparent; color: inherit; font-size: 20px; }
+/* Bug fix (real-device iPhone testing, M3.1 follow-up): brief,
+   auto-dismissing confirmation for fast row-level mutations (currently
+   the maintenance status <select>) — see updateRequestStatus() in
+   app/page.tsx and changeStatus() in app/maintenance/page.tsx. Reuses
+   the existing .successMessage palette, just laid out like .globalError. */
+.globalNotice { margin: 14px 0 0; border-radius: 10px; padding: 11px 12px; background: var(--brand-soft); border: 1px solid #cadfd4; color: var(--brand); font-size: 13px; }
+.maintenanceStatusUpdateNotice { margin: 4px 0 0; font-size: 13px; color: var(--brand); font-weight: 600; }
 .loadingState { color: var(--muted); }
 .setupCard { width: min(620px, 100%); }
 .setupCard > p { color: var(--muted); line-height: 1.6; }
