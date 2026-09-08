@@ -2031,3 +2031,9 @@ h2, h3, p { margin-top: 0; }
 @media (max-width: 560px) {
   .maintenanceCaseDetailModal { max-width: 100%; }
 }
+
+/* Tenant Connect M3.1 — the property Maintenance hub: a small section
+   label between Active Requests and Service History so the two stay
+   visually distinct without a heavy divider or a second full sectionHead. */
+.maintenanceHubSectionTitle { font-size: 13px; font-weight: 750; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 4px 0 10px; }
+.maintenanceServiceHistoryHead { margin-top: 30px; }

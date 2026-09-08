@@ -24,9 +24,10 @@ describe('Tenant Connect V1 lives inside Property > Rent > Tenant, not a new des
     expect(nearby).toContain('<TenantRequestsPanel')
   })
 
-  it('the pre-existing owner-manual-log (maintenance_requests / "+ Log request") path is untouched', () => {
-    expect(source).toContain('+ Log request')
-    expect(source).toContain("setShowRequestForm(true)")
+  it('Tenant Connect M3.1: the old "+ Log request" modal (setShowRequestForm/requestDraft/saveRequest) was replaced by the shared NewMaintenanceRequestModal (+ New Maintenance Request), reachable from Details > Maintenance — same canonical maintenance_requests table, improved form (no forced tenant name, current-tenant prefill). See docs/tenant-connect-m3.1-maintenance-workflow-unification.md.', () => {
+    expect(source).not.toContain('setShowRequestForm')
+    expect(source).not.toContain('requestDraft')
+    expect(source).toContain('+ New Maintenance Request')
     expect(source).toContain("client.from('maintenance_requests').select('*')")
   })
 

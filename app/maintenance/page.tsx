@@ -41,6 +41,8 @@ import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { AuthHeader } from '../../components/AuthHeader'
 import { MaintenanceCaseDetail } from '../../components/maintenance/MaintenanceCaseDetail'
+import { NewMaintenanceRequestModal } from '../../components/maintenance/NewMaintenanceRequestModal'
+import type { NewMaintenanceRequestPayload } from '../../lib/maintenance/new-request'
 import {
   enrichMaintenanceCases, sortCasesForCommandCenter, summarizeCommandCenter, relevantContactsForProperty,
   NEXT_ACTION_LABEL,
@@ -50,6 +52,12 @@ import {
 import { maintenanceCategoryLabel } from '../../lib/maintenance/categories'
 
 type PropertyRef = { id: string; address: string; city: string }
+// Tenant Connect M3.1 — same shape lib/leases/status.ts's
+// selectCurrentLease()/normalizeTenants() already expect (LeaseWithId &
+// TenantLeaseFields), fetched here for the SAME tenant-prefill purpose
+// app/page.tsx's property-level "+ New Maintenance Request" uses —
+// portfolio-wide since this page has no single selected property.
+type LeaseRef = { id: string; property_id: string; tenant_name: string; tenant_email: string | null; tenant_phone: string | null; start_date: string | null; end_date: string | null }
 
 export default function MaintenancePage() {
   const { user, ready } = useAuthUser()
@@ -79,11 +87,14 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
   const [intakeSessions, setIntakeSessions] = useState<IntakeSessionOutcome[]>([])
   const [contacts, setContacts] = useState<PropCrewContactRef[]>([])
   const [contactLinks, setContactLinks] = useState<PropCrewLinkRef[]>([])
+  const [leases, setLeases] = useState<LeaseRef[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [openCaseId, setOpenCaseId] = useState<string | null>(null)
+  const [showNewRequest, setShowNewRequest] = useState(false)
+  const [newRequestError, setNewRequestError] = useState('')
 
   async function load() {
     if (!supabase) return
@@ -96,6 +107,7 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
       { data: linkRows },
       { data: tenantRequestRows },
       { data: sessionRows },
+      { data: leaseRows },
     ] = await Promise.all([
       supabase.from('properties').select('id,address,city').order('created_at', { ascending: true }),
       supabase.from('maintenance_requests').select('*').order('created_at', { ascending: false }),
@@ -108,6 +120,8 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
       // (landlord-logged) maintenance case list from loading.
       supabase.from('tenant_requests').select('id,maintenance_request_id,category'),
       supabase.from('maintenance_intake_sessions').select('request_id,outcome'),
+      // Tenant Connect M3.1 — for the "+ New Maintenance Request" tenant-prefill only.
+      supabase.from('leases').select('id,property_id,tenant_name,tenant_email,tenant_phone,start_date,end_date'),
     ])
     const firstError = propError || caseError || contactError
     if (firstError) { setError(firstError.message); setLoading(false); return }
@@ -117,6 +131,7 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
     setContactLinks((linkRows || []) as PropCrewLinkRef[])
     setTenantRequests((tenantRequestRows || []) as TenantRequestLink[])
     setIntakeSessions((sessionRows || []) as IntakeSessionOutcome[])
+    setLeases((leaseRows || []) as LeaseRef[])
     setLoading(false)
   }
 
@@ -155,6 +170,25 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
     await load()
   }
 
+  // Tenant Connect M3.1 — portfolio-level "+ New Maintenance Request"
+  // entry point (Section 2's "also provide a portfolio-level entry that
+  // first asks/selects the property"). Same canonical maintenance_requests
+  // insert app/page.tsx's property-level save does; the created row
+  // appears here automatically on the next load() (this page IS the
+  // Command Center), never a separate copy.
+  async function saveNewRequest(payload: NewMaintenanceRequestPayload) {
+    if (!supabase || !user || !payload.propertyId || !payload.title) return
+    setBusy(true); setNewRequestError('')
+    const { error: e } = await supabase.from('maintenance_requests').insert({
+      owner_id: user.id, property_id: payload.propertyId,
+      tenant_name: payload.tenantName, tenant_email: payload.tenantEmail,
+      title: payload.title, description: payload.description, priority: payload.priority, status: payload.status,
+    })
+    if (e) setNewRequestError(e.message)
+    else { setShowNewRequest(false); await load() }
+    setBusy(false)
+  }
+
   return (
     <main className="shell">
       <AuthHeader />
@@ -164,6 +198,8 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
         <h1>Maintenance Command Center</h1>
         <p>Every active maintenance case across your portfolio, tenant- and landlord-reported alike, in one place.</p>
       </section>
+
+      <div className="sectionHead workspaceHeading"><div /><button className="primary" onClick={() => setShowNewRequest(true)}>+ New Maintenance Request</button></div>
 
       {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
 
@@ -216,6 +252,17 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
           onAssign={(contactId) => void assignContact(openCase.id, contactId)}
           onStatusChange={(status) => void changeStatus(openCase.id, status)}
           onClose={() => setOpenCaseId(null)}
+        />
+      )}
+
+      {showNewRequest && (
+        <NewMaintenanceRequestModal
+          properties={properties}
+          leases={leases}
+          busy={busy}
+          error={newRequestError}
+          onCancel={() => { setShowNewRequest(false); setNewRequestError('') }}
+          onSave={(payload) => void saveNewRequest(payload)}
         />
       )}
     </main>

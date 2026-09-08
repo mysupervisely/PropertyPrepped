@@ -26,7 +26,7 @@ import { DOCUMENT_TYPES } from '../lib/document-intelligence/types'
 import { findDocumentLinks } from '../lib/documents/document-links'
 import {
   buildLeaseDateItems, buildInsuranceDateItems, buildMortgageDateItems, buildMaintenanceDateItems,
-  buildOpenMaintenanceItems, splitAttentionAndUpcoming, sortByDaysUntilAscending, limitItems,
+  buildOpenMaintenanceRequestItems, splitAttentionAndUpcoming, sortByDaysUntilAscending, limitItems,
   type DashboardDateItem, type OpenMaintenanceItem, type NavTarget,
 } from '../lib/dashboard/attention'
 import {
@@ -53,6 +53,8 @@ import { UploadDebugPanel } from '../components/uploads/UploadDebugPanel'
 import { logPhotoUploadDiagnostic, safeFileSummary, safeFileListSummary, safeErrorSummary } from '../lib/property-photos/diagnostics'
 import { enrichMaintenanceCases, relevantContactsForProperty, type IntakeSessionOutcome, type PropCrewLinkRef, type MaintenanceCaseStatus } from '../lib/maintenance/command-center'
 import { MaintenanceCaseDetail } from '../components/maintenance/MaintenanceCaseDetail'
+import { NewMaintenanceRequestModal } from '../components/maintenance/NewMaintenanceRequestModal'
+import type { NewMaintenanceRequestPayload } from '../lib/maintenance/new-request'
 import { TenantConnectStatusCard } from '../components/tenant-connect/TenantConnectStatusCard'
 import { TenantRequestsPanel } from '../components/tenant-connect/TenantRequestsPanel'
 
@@ -267,7 +269,6 @@ const tabs: Tab[] = ['Overview', 'Rent', 'Details', 'PropCrew', 'Documents', 'Ta
 const propertySubTabs: PropertySubTab[] = ['Mortgage', 'Insurance', 'Maintenance', 'Systems', 'Ownership']
 const rentSubTabs: RentSubTab[] = ['Lease', 'Ledger', 'Tenant']
 const docCategories = ['All', ...DOCUMENT_CATEGORIES]
-const requestPriorities = ['Low', 'Normal', 'High', 'Urgent']
 const requestStatuses = ['Submitted', 'Scheduled', 'In Progress', 'Completed']
 
 const money = (n: number) => new Intl.NumberFormat('en-US', {
@@ -535,6 +536,13 @@ export default function Home() {
   const [intakeSessions, setIntakeSessions] = useState<IntakeSessionOutcome[]>([])
   const [contactLinks, setContactLinks] = useState<PropCrewLinkRef[]>([])
   const [openMaintenanceCaseId, setOpenMaintenanceCaseId] = useState<string | null>(null)
+  // Tenant Connect M3.1 — the landlord's own "+ New Maintenance Request"
+  // entry point (property-level; the portfolio-level one lives in
+  // app/maintenance/page.tsx). Replaces the old showRequestForm modal's
+  // call site — the underlying canonical maintenance_requests insert is
+  // unchanged, only the form/fields improved (see saveNewMaintenanceRequest below).
+  const [showNewMaintenanceRequest, setShowNewMaintenanceRequest] = useState(false)
+  const [newMaintenanceRequestError, setNewMaintenanceRequestError] = useState('')
   // Property Profile 2.0
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   // QA: the greeting briefly showed the email-prefix fallback (e.g.
@@ -570,7 +578,6 @@ export default function Home() {
   const [propCrewPrefill, setPropCrewPrefill] = useState<{ name: string; businessName?: string; phone?: string; email?: string; website?: string } | null>(null)
   const [showTransaction, setShowTransaction] = useState(false)
   const [showModuleForm, setShowModuleForm] = useState<'Lease'|'Mortgage'|'Insurance'|'Maintenance'|null>(null)
-  const [showRequestForm, setShowRequestForm] = useState(false)
   const [showDocIntelId, setShowDocIntelId] = useState<string | null>(null)
   // QA: Move / Refile — moveDraft holds the in-progress edits for the
   // document currently being moved (moveDocId), and moveError surfaces the
@@ -588,7 +595,6 @@ export default function Home() {
   const [mortgageDraft, setMortgageDraft] = useState({ lender:'', loanNumber:'', originalBalance:'', currentBalance:'', interestRate:'', monthlyPayment:'', escrowAmount:'', loanTermYears:'30', maturityDate:'', documentId:'' })
   const [insuranceDraft, setInsuranceDraft] = useState({ carrier:'', policyNumber:'', annualPremium:'', deductible:'', effectiveDate:'', expirationDate:'', documentId:'' })
   const [maintenanceDraft, setMaintenanceDraft] = useState({ serviceDate:new Date().toISOString().slice(0,10), status:'Completed', category:'Repair', vendor:'', description:'', cost:'', documentId:'', addToFinancials:true })
-  const [requestDraft, setRequestDraft] = useState({ tenantName:'', tenantEmail:'', title:'', description:'', priority:'Normal', status:'Submitted' })
   const [financialYear, setFinancialYear] = useState(String(new Date().getFullYear()))
   const [transactionDraft, setTransactionDraft] = useState({ date: new Date().toISOString().slice(0, 10), type: 'Expense' as 'Income' | 'Expense', category: 'Repairs', vendor: '', description: '', amount: '', documentId: '', recurring: false })
   const [showAdd, setShowAdd] = useState(false)
@@ -732,6 +738,14 @@ export default function Home() {
     const { needsAttention, upcoming } = splitAttentionAndUpcoming(dateItems)
     const vacancy = entitlements.canUsePropWatch ? buildVacancyItems(properties, leases, propertyLabelById) : []
 
+    // Tenant Connect M3.1 — PropWatch's Open Maintenance now reads from
+    // canonical maintenance_requests (active = status !== 'Completed',
+    // the SAME definition the Maintenance Command Center itself uses),
+    // not the free-text maintenance_records.status field — see
+    // buildOpenMaintenanceRequestItems' own header comment (lib/
+    // dashboard/attention.ts) for the full root-cause this fixes.
+    const enrichedRequestsForPropWatch = enrichMaintenanceCases(maintenanceRequests, tenantRequests, intakeSessions)
+
     // Property-First UX Cleanup: property cards show "one or two
     // important alerts if applicable" — a per-property count of the SAME
     // needsAttention items above (before NEEDS_ATTENTION_LIMIT truncates
@@ -763,15 +777,20 @@ export default function Home() {
     return {
       attentionItems: limitItems(sortByDaysUntilAscending(needsAttention), NEEDS_ATTENTION_LIMIT),
       upcomingItems: limitItems(sortByDaysUntilAscending(upcoming), UPCOMING_LIMIT),
-      openMaintenanceItems: limitItems(buildOpenMaintenanceItems(maintenanceRecords, propertyLabelById), OPEN_MAINTENANCE_LIMIT),
+      openMaintenanceItems: limitItems(buildOpenMaintenanceRequestItems(enrichedRequestsForPropWatch, propertyLabelById), OPEN_MAINTENANCE_LIMIT),
       recentActivity: limitItems(activity, RECENT_ACTIVITY_LIMIT),
       vacancyItems: vacancy,
       attentionCountByProperty: attentionCounts,
       rentStatusByProperty: rentByProperty,
     }
-  }, [leases, insurancePolicies, mortgages, maintenanceRecords, documents, transactions, propertyNotes, properties, contacts, propertyLabelById, rentPayments, propertySystems, entitlements, tenantRequests])
+  }, [leases, insurancePolicies, mortgages, maintenanceRecords, maintenanceRequests, intakeSessions, documents, transactions, propertyNotes, properties, contacts, propertyLabelById, rentPayments, propertySystems, entitlements, tenantRequests])
 
-  const openMaintenanceCount = useMemo(() => maintenanceRecords.filter((m) => m.status !== 'Completed').length, [maintenanceRecords])
+  // Tenant Connect M3.1 — same canonical-source fix as openMaintenanceItems
+  // above, for the property-card "open maintenance" count.
+  const openMaintenanceCount = useMemo(
+    () => enrichMaintenanceCases(maintenanceRequests, tenantRequests, intakeSessions).filter((c) => c.active).length,
+    [maintenanceRequests, tenantRequests, intakeSessions],
+  )
 
   function goToNav(propertyId: string, nav: NavTarget) {
     openProperty(propertyId, nav.tab, nav.docsSubTab, nav.propSubTab, nav.rentSubTab)
@@ -1732,11 +1751,25 @@ export default function Home() {
   // (used by DocumentIntelligencePanel's vendor check and
   // PropertySystemsPanel's provider dropdown) via onChanged={loadPortfolio}.
 
-  async function saveRequest() {
-    if (!supabase || !user || !selectedId || !requestDraft.tenantName.trim() || !requestDraft.title.trim()) return
-    setBusy(true); setError('')
-    const { error: e } = await supabase.from('maintenance_requests').insert({ owner_id:user.id, property_id:selectedId, tenant_name:requestDraft.tenantName.trim(), tenant_email:requestDraft.tenantEmail.trim()||null, title:requestDraft.title.trim(), description:requestDraft.description.trim(), priority:requestDraft.priority, status:requestDraft.status })
-    if (e) setError(e.message); else { setShowRequestForm(false); setRequestDraft({ tenantName:'', tenantEmail:'', title:'', description:'', priority:'Normal', status:'Submitted' }); await loadPortfolio() }
+  // Tenant Connect M3.1 — the landlord's own "+ New Maintenance Request"
+  // save path. Same canonical maintenance_requests insert saveRequest()
+  // always made (source defaults to 'landlord' at the DB layer,
+  // Milestone 26); the improvement is entirely in what's collected
+  // beforehand (lib/maintenance/new-request.ts's
+  // buildNewMaintenanceRequestPayload — tenant fields optional, never a
+  // fabricated tenant). `ownerId` is scoped to the CALLER's own auth.uid()
+  // here, never client-suppliable — RLS's maintenance_requests_insert_own
+  // policy (Milestone 26) still requires it match regardless.
+  async function saveNewMaintenanceRequest(payload: NewMaintenanceRequestPayload, onDone: () => void) {
+    if (!supabase || !user || !payload.propertyId || !payload.title) return
+    setBusy(true); setNewMaintenanceRequestError('')
+    const { error: e } = await supabase.from('maintenance_requests').insert({
+      owner_id: user.id, property_id: payload.propertyId,
+      tenant_name: payload.tenantName, tenant_email: payload.tenantEmail,
+      title: payload.title, description: payload.description, priority: payload.priority, status: payload.status,
+    })
+    if (e) setNewMaintenanceRequestError(e.message)
+    else { onDone(); await loadPortfolio() }
     setBusy(false)
   }
 
@@ -2193,7 +2226,19 @@ export default function Home() {
           })()}
 
           {rentSubTab === 'Tenant' && (selected.property_type === 'Rental Property' ? <>
-            <div className="sectionHead workspaceHeading"><div><p className="eyebrow">TENANT REQUESTS</p><h2>Maintenance requests</h2><p>Owner-side tracking for tenant maintenance requests.</p></div><button className="primary" onClick={() => setShowRequestForm(true)}>+ Log request</button></div><div className="financialStats landlordStats"><div className="financialStat"><span>Open requests</span><strong>{openRequests.length}</strong></div><div className="financialStat"><span>Completed requests</span><strong>{completedRequests.length}</strong></div></div>{selectedRequests.length ? <div className="maintenanceList">{enrichedSelectedRequests.map((req) => <article className="maintenanceRow requestRow" key={req.id}><div className="maintenanceDate"><strong>{new Date(req.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(req.created_at).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div>{req.urgent && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}<span className={`statusPill priority${req.priority}`}>{req.priority}</span>{req.source === 'tenant' && <span className="statusPill tenantSourceBadge">Tenant</span>}<h3>{req.title}</h3><p>{req.source === 'tenant' && categoryByMaintenanceRequestId.has(req.id) ? `${maintenanceCategoryLabel(categoryByMaintenanceRequestId.get(req.id)!)} · ` : ''}{req.tenant_name}{req.tenant_email ? ` · ${req.tenant_email}` : ''}</p></div></div>{req.description && <p className="requestDescription">{req.description}</p>}<div className="maintenanceActions"><button className="secondary" onClick={() => setOpenMaintenanceCaseId(req.id)}>Manage</button><select aria-label={`Status for ${req.title}`} value={req.status} onChange={(e) => void updateRequestStatus(req.id, e.target.value)}>{requestStatuses.map((s) => <option key={s}>{s}</option>)}</select><button className="dangerLink" onClick={() => void removeRequest(req.id)}>Remove</button></div></div></article>)}</div> : <EmptyModule title="No maintenance requests yet" text="Log tenant requests as they come in by phone, email or in person." action="Log request" onClick={() => setShowRequestForm(true)} />}
+            {/* Tenant Connect M3.1 (Property Maintenance Workflow
+                Unification): the Active Requests list + "Manage"/
+                PropCrew-assignment UI that M3 first added here has moved
+                to Details > Maintenance — the property's one, obvious
+                Maintenance hub (Active Requests above Service History),
+                so a landlord isn't expected to know maintenance requests
+                live under a "Tenant" sub-tab. This tab keeps exactly
+                what's genuinely tenant-relationship-specific: the
+                Tenant Connect invite/status card and the tenant's own
+                conversation thread. Nothing here was removed from the
+                app — see Details > Maintenance. */}
+            <div className="sectionHead workspaceHeading"><div><p className="eyebrow">TENANT REQUESTS</p><h2>Tenant Connect</h2><p>Invite status and the tenant&apos;s own conversation thread.</p></div></div>
+            {selectedRequests.length > 0 && <p className="muted">Maintenance requests for this property — including ones your tenant has submitted — are managed from <strong>Details → Maintenance</strong>.</p>}
             {/* Tenant Connect V1: replaces the old TenantConnectPanel
                 call site here (that component's own general multi-
                 conversation UI is broader than this milestone's "one
@@ -2205,22 +2250,6 @@ export default function Home() {
                 submitted Requests list/conversation view. */}
             {supabase && <TenantConnectStatusCard supabase={supabase} propertyId={selected.id} ownerId={user.id} currentLease={currentLease} tenantConnectEnabled={entitlements.tenantConnect} onChanged={() => void loadPortfolio()} />}
             {supabase && <TenantRequestsPanel supabase={supabase} propertyId={selected.id} ownerId={user.id} tenantConnectEnabled={entitlements.tenantConnect} />}
-            {/* Maintenance Coordination M3 (Landlord Command Center V1) —
-                the SAME shared detail/actions modal app/maintenance/
-                page.tsx's portfolio view uses, mounted here too so this
-                property's own "Manage" button (above) opens it without a
-                second implementation. */}
-            {openMaintenanceCase && (
-              <MaintenanceCaseDetail
-                caseRow={openMaintenanceCase}
-                propertyLabel={`${selected.address}${selected.city ? `, ${selected.city}` : ''}`}
-                contacts={relevantMaintenanceContacts}
-                busy={busy}
-                onAssign={(contactId) => void assignMaintenanceContact(openMaintenanceCase.id, contactId)}
-                onStatusChange={(status: MaintenanceCaseStatus) => void updateRequestStatus(openMaintenanceCase.id, status)}
-                onClose={() => setOpenMaintenanceCaseId(null)}
-              />
-            )}
           </> : <div className="emptyState"><strong>Tenant requests apply to Rental Property only.</strong><span>Change this property's type from Edit property facts if that's not correct.</span></div>)}
         </section>}
 
@@ -2284,7 +2313,29 @@ export default function Home() {
 
           {propertySubTab === 'Insurance' && <><div className="sectionHead workspaceHeading"><div><p className="eyebrow">INSURANCE</p><h2>Coverage records</h2><p>Keep policy details, premiums, deductibles and expiration dates visible.</p></div><button className="primary" onClick={() => setShowModuleForm('Insurance')}>+ Add policy</button></div>{selectedInsurance.length ? <div className="moduleGrid">{selectedInsurance.map((policy) => { const doc=selectedDocs.find(d=>d.id===policy.document_id); const days=policy.expiration_date ? Math.ceil((new Date(`${policy.expiration_date}T12:00:00`).getTime()-Date.now())/86400000) : null; return <article className="recordCard" key={policy.id}><div className="recordTop"><div><span className={`statusPill ${days !== null && days < 45 ? 'warning' : ''}`}>{days !== null && days < 0 ? 'Expired' : days !== null && days < 45 ? 'Renew soon' : 'Active'}</span><h3>{policy.carrier}</h3><p>{policy.policy_number || 'Policy number not added'}</p></div><button className="recordDelete" onClick={() => void removeModuleRecord('insurance_policies', policy.id)}>×</button></div><div className="recordMetrics"><div><span>Annual premium</span><strong>{money(policy.annual_premium)}</strong></div><div><span>Deductible</span><strong>{money(policy.deductible)}</strong></div></div><div className="recordRows">{policy.effective_date && <div><span>Effective</span><strong>{new Date(`${policy.effective_date}T12:00:00`).toLocaleDateString()}</strong></div>}{policy.expiration_date && <div><span>Expires</span><strong>{new Date(`${policy.expiration_date}T12:00:00`).toLocaleDateString()}</strong></div>}{doc && <div><span>Policy document</span><button onClick={() => void openDocument(doc)}>{doc.name}</button></div>}</div></article>})}</div> : <EmptyModule title="No insurance policies yet" text="Add your carrier, policy, premium, deductible and declaration page." action="Add policy" onClick={() => setShowModuleForm('Insurance')} />}</>}
 
-          {propertySubTab === 'Maintenance' && <><div className="sectionHead workspaceHeading"><div><p className="eyebrow">MAINTENANCE</p><h2>Property service history</h2><p>Repairs, preventative work, vendors, costs and receipts in one timeline.</p></div><button className="primary" onClick={() => setShowModuleForm('Maintenance')}>+ Add maintenance</button></div>{selectedMaintenance.length ? <div className="maintenanceList">{selectedMaintenance.map((item) => { const doc=selectedDocs.find(d=>d.id===item.document_id); return <article className="maintenanceRow" key={item.id}><div className="maintenanceDate"><strong>{new Date(`${item.service_date}T12:00:00`).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(`${item.service_date}T12:00:00`).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div><span className="statusPill">{item.status}</span><h3>{item.description}</h3><p>{item.category}{item.vendor ? ` · ${item.vendor}` : ''}</p></div><strong>{money(item.cost)}</strong></div><div className="maintenanceActions">{doc && <button onClick={() => void openDocument(doc)}>Open {doc.name}</button>}{item.financial_transaction_id && <span>Linked to Ledger</span>}<button className="dangerLink" onClick={() => void removeModuleRecord('maintenance_records', item.id, item.financial_transaction_id)}>Remove</button></div></div></article>})}</div> : <EmptyModule title="No maintenance records yet" text="Add repairs, service calls, vendors, costs and receipts as they happen." action="Add maintenance" onClick={() => setShowModuleForm('Maintenance')} />}</>}
+          {propertySubTab === 'Maintenance' && <>
+            {/* Tenant Connect M3.1 (Property Maintenance Workflow
+                Unification) — THE property-level Maintenance hub: Active
+                Requests (canonical maintenance_requests — the SAME
+                table/rows the portfolio Command Center reads, tenant-
+                and landlord-originated alike) above, durable Service
+                History (maintenance_records — repairs/vendors/costs/
+                receipts) below, clearly separated but both reachable
+                from this one destination. No parallel data model: this
+                section reuses the exact same enrichedSelectedRequests /
+                MaintenanceCaseDetail / assignMaintenanceContact wiring
+                M3 already built (previously mounted under Rent > Tenant —
+                real-device testing found that location insufficiently
+                discoverable). */}
+            <div className="sectionHead workspaceHeading"><div><p className="eyebrow">MAINTENANCE</p><h2>Maintenance</h2><p>Active requests needing action, and your durable service history below.</p></div><button className="primary" onClick={() => setShowNewMaintenanceRequest(true)}>+ New Maintenance Request</button></div>
+
+            <h3 className="maintenanceHubSectionTitle">Active Requests</h3>
+            <div className="financialStats landlordStats"><div className="financialStat"><span>Open requests</span><strong>{openRequests.length}</strong></div><div className="financialStat"><span>Completed requests</span><strong>{completedRequests.length}</strong></div></div>
+            {selectedRequests.length ? <div className="maintenanceList">{enrichedSelectedRequests.map((req) => <article className="maintenanceRow requestRow" key={req.id}><div className="maintenanceDate"><strong>{new Date(req.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(req.created_at).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div>{req.urgent && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}<span className={`statusPill priority${req.priority}`}>{req.priority}</span>{req.source === 'tenant' && <span className="statusPill tenantSourceBadge">Tenant</span>}<h3>{req.title}</h3><p>{req.source === 'tenant' && categoryByMaintenanceRequestId.has(req.id) ? `${maintenanceCategoryLabel(categoryByMaintenanceRequestId.get(req.id)!)} · ` : ''}{req.tenant_name}{req.tenant_email ? ` · ${req.tenant_email}` : ''}</p></div></div>{req.description && <p className="requestDescription">{req.description}</p>}<div className="maintenanceActions"><button className="secondary" onClick={() => setOpenMaintenanceCaseId(req.id)}>Manage</button><select aria-label={`Status for ${req.title}`} value={req.status} onChange={(e) => void updateRequestStatus(req.id, e.target.value)}>{requestStatuses.map((s) => <option key={s}>{s}</option>)}</select><button className="dangerLink" onClick={() => void removeRequest(req.id)}>Remove</button></div></div></article>)}</div> : <EmptyModule title="No maintenance requests yet" text="Requests your tenant submits, and any you log yourself, show up here." action="New Maintenance Request" onClick={() => setShowNewMaintenanceRequest(true)} />}
+
+            <div className="sectionHead workspaceHeading maintenanceServiceHistoryHead"><div><p className="eyebrow">SERVICE HISTORY</p><h2>Property service history</h2><p>Repairs, preventative work, vendors, costs and receipts in one timeline.</p></div><button className="secondary" onClick={() => setShowModuleForm('Maintenance')}>+ Log service record</button></div>
+            {selectedMaintenance.length ? <div className="maintenanceList">{selectedMaintenance.map((item) => { const doc=selectedDocs.find(d=>d.id===item.document_id); return <article className="maintenanceRow" key={item.id}><div className="maintenanceDate"><strong>{new Date(`${item.service_date}T12:00:00`).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(`${item.service_date}T12:00:00`).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div><span className="statusPill">{item.status}</span><h3>{item.description}</h3><p>{item.category}{item.vendor ? ` · ${item.vendor}` : ''}</p></div><strong>{money(item.cost)}</strong></div><div className="maintenanceActions">{doc && <button onClick={() => void openDocument(doc)}>Open {doc.name}</button>}{item.financial_transaction_id && <span>Linked to Ledger</span>}<button className="dangerLink" onClick={() => void removeModuleRecord('maintenance_records', item.id, item.financial_transaction_id)}>Remove</button></div></div></article>})}</div> : <EmptyModule title="No maintenance records yet" text="Add repairs, service calls, vendors, costs and receipts as they happen." action="Add maintenance" onClick={() => setShowModuleForm('Maintenance')} />}
+          </>}
 
           {propertySubTab === 'Systems' && <PropertySystemsPanel propertyId={selected.id} ownerId={user.id} systems={selectedSystems} contacts={selectedContacts} documents={selectedDocs} onRefresh={() => void loadPortfolio()} />}
 
@@ -2307,6 +2358,37 @@ export default function Home() {
             onPrefillConsumed={() => setPropCrewPrefill(null)}
           />
         </section>}
+
+        {/* Tenant Connect M3 (Command Center) / M3.1 (Workflow
+            Unification) — mounted here, unconditional on which tab is
+            active, since "Manage" (Details > Maintenance) is the only
+            way to open a case and the case shouldn't close just because
+            some other click changes propertySubTab underneath it. The
+            SAME shared components the portfolio Command Center
+            (app/maintenance/page.tsx) uses — one implementation. */}
+        {openMaintenanceCase && (
+          <MaintenanceCaseDetail
+            caseRow={openMaintenanceCase}
+            propertyLabel={`${selected.address}${selected.city ? `, ${selected.city}` : ''}`}
+            contacts={relevantMaintenanceContacts}
+            busy={busy}
+            onAssign={(contactId) => void assignMaintenanceContact(openMaintenanceCase.id, contactId)}
+            onStatusChange={(status: MaintenanceCaseStatus) => void updateRequestStatus(openMaintenanceCase.id, status)}
+            onClose={() => setOpenMaintenanceCaseId(null)}
+          />
+        )}
+        {showNewMaintenanceRequest && (
+          <NewMaintenanceRequestModal
+            properties={properties}
+            fixedPropertyId={selected.id}
+            fixedPropertyLabel={`${selected.address}${selected.city ? `, ${selected.city}` : ''}`}
+            leases={leases}
+            busy={busy}
+            error={newMaintenanceRequestError}
+            onCancel={() => { setShowNewMaintenanceRequest(false); setNewMaintenanceRequestError('') }}
+            onSave={(payload) => void saveNewMaintenanceRequest(payload, () => setShowNewMaintenanceRequest(false))}
+          />
+        )}
 
         {showModuleForm && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowModuleForm(null)}><div className="modal moduleModal"><div className="modalTop"><div><p className="eyebrow">{showModuleForm.toUpperCase()}</p><h2>{showModuleForm === 'Lease' ? (editingLeaseId ? 'Edit lease' : 'Add lease') : `Add ${showModuleForm.toLowerCase()}`}</h2></div><button className="iconButton" onClick={() => setShowModuleForm(null)}>×</button></div>
           {showModuleForm === 'Lease' && <div className="leaseFormGroups">
@@ -2335,8 +2417,6 @@ export default function Home() {
           {showModuleForm === 'Insurance' && <div className="formGrid"><label>Carrier<input value={insuranceDraft.carrier} onChange={e=>setInsuranceDraft({...insuranceDraft,carrier:e.target.value})} /></label><label>Policy number<input value={insuranceDraft.policyNumber} onChange={e=>setInsuranceDraft({...insuranceDraft,policyNumber:e.target.value})} /></label><label>Annual premium<input inputMode="decimal" value={insuranceDraft.annualPremium} onChange={e=>setInsuranceDraft({...insuranceDraft,annualPremium:e.target.value})} /></label><label>Deductible<input inputMode="decimal" value={insuranceDraft.deductible} onChange={e=>setInsuranceDraft({...insuranceDraft,deductible:e.target.value})} /></label><label>Effective date<input type="date" value={insuranceDraft.effectiveDate} onChange={e=>setInsuranceDraft({...insuranceDraft,effectiveDate:e.target.value})} /></label><label>Expiration date<input type="date" value={insuranceDraft.expirationDate} onChange={e=>setInsuranceDraft({...insuranceDraft,expirationDate:e.target.value})} /></label><label className="fullField">Policy document<select value={insuranceDraft.documentId} onChange={e=>setInsuranceDraft({...insuranceDraft,documentId:e.target.value})}><option value="">No attachment</option>{selectedDocs.filter(d=>d.category==='Insurance'||d.category==='Other').map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label></div>}
           {showModuleForm === 'Maintenance' && <div className="formGrid"><label>Service date<input type="date" value={maintenanceDraft.serviceDate} onChange={e=>setMaintenanceDraft({...maintenanceDraft,serviceDate:e.target.value})} /></label><label>Status<select value={maintenanceDraft.status} onChange={e=>setMaintenanceDraft({...maintenanceDraft,status:e.target.value})}><option>Completed</option><option>Scheduled</option><option>In progress</option><option>Needs follow-up</option></select></label><label>Category<select value={maintenanceDraft.category} onChange={e=>setMaintenanceDraft({...maintenanceDraft,category:e.target.value})}>{MAINTENANCE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></label><label>Vendor<input value={maintenanceDraft.vendor} onChange={e=>setMaintenanceDraft({...maintenanceDraft,vendor:e.target.value})} /></label><label>Cost<input inputMode="decimal" value={maintenanceDraft.cost} onChange={e=>setMaintenanceDraft({...maintenanceDraft,cost:e.target.value})} /></label><label>Receipt / invoice<select value={maintenanceDraft.documentId} onChange={e=>setMaintenanceDraft({...maintenanceDraft,documentId:e.target.value})}><option value="">No attachment</option>{selectedDocs.filter(d=>['Receipts','Warranties','Other'].includes(d.category)).map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><label className="fullField">Description<input value={maintenanceDraft.description} onChange={e=>setMaintenanceDraft({...maintenanceDraft,description:e.target.value})} placeholder="HVAC repair, annual service, roof inspection…" /></label><label className="recurringCheck fullField"><input type="checkbox" checked={maintenanceDraft.addToFinancials} onChange={e=>setMaintenanceDraft({...maintenanceDraft,addToFinancials:e.target.checked})} /><span>Add this cost to Financials</span><small>PropRoster creates a linked Maintenance expense so you only enter the cost once.</small></label></div>}
           <div className="modalActions"><button className="secondary" onClick={() => setShowModuleForm(null)}>Cancel</button><button className="primary" disabled={busy} onClick={() => void (showModuleForm==='Lease'?saveLease():showModuleForm==='Mortgage'?saveMortgage():showModuleForm==='Insurance'?saveInsurance():saveMaintenance())}>{busy?'Saving…':'Save'}</button></div></div></div>}
-
-        {showRequestForm && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowRequestForm(false)}><div className="modal moduleModal"><div className="modalTop"><div><p className="eyebrow">TENANT REQUESTS</p><h2>Log maintenance request</h2></div><button className="iconButton" onClick={() => setShowRequestForm(false)}>×</button></div><div className="formGrid"><label>Tenant name<input value={requestDraft.tenantName} onChange={e=>setRequestDraft({...requestDraft,tenantName:e.target.value})} placeholder="Taylor Morgan" /></label><label>Tenant email<input type="email" value={requestDraft.tenantEmail} onChange={e=>setRequestDraft({...requestDraft,tenantEmail:e.target.value})} placeholder="tenant@example.com" /></label><label>Priority<select value={requestDraft.priority} onChange={e=>setRequestDraft({...requestDraft,priority:e.target.value})}>{requestPriorities.map(p=><option key={p}>{p}</option>)}</select></label><label>Status<select value={requestDraft.status} onChange={e=>setRequestDraft({...requestDraft,status:e.target.value})}>{requestStatuses.map(s=><option key={s}>{s}</option>)}</select></label><label className="fullField">Issue / title<input value={requestDraft.title} onChange={e=>setRequestDraft({...requestDraft,title:e.target.value})} placeholder="Leaking kitchen faucet" /></label><label className="fullField">Description<input value={requestDraft.description} onChange={e=>setRequestDraft({...requestDraft,description:e.target.value})} placeholder="Details the tenant shared…" /></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowRequestForm(false)}>Cancel</button><button className="primary" disabled={busy || !requestDraft.tenantName.trim() || !requestDraft.title.trim()} onClick={() => void saveRequest()}>{busy?'Saving…':'Save request'}</button></div></div></div>}
 
         {showEdit && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowEdit(false)}><div className="modal"><div className="modalTop"><div><p className="eyebrow">PROPERTY SETTINGS</p><h2>Edit property</h2></div><button className="iconButton" onClick={() => setShowEdit(false)}>×</button></div><div className="formGrid"><label>Street address<AddressAutocomplete value={editDraft.address} onTextChange={(v) => setEditDraft({ ...editDraft, address: v })} onSelect={(addr) => setEditDraft((d) => ({ ...d, ...applyNormalizedAddress(addr, d.address) }))} placeholder="123 Example Street" /></label><label>City, state & ZIP<input value={editDraft.city} onChange={(e) => setEditDraft({ ...editDraft, city: e.target.value })} placeholder="Example City, FL 12345" /></label><label>Property type<select value={editDraft.type} onChange={(e) => setEditDraft({ ...editDraft, type: e.target.value })}><option>Rental Property</option><option>Primary Residence</option><option>Vacation Home</option><option>Commercial</option><option>Land</option><option>Other</option></select></label><label>Purchase price<input inputMode="decimal" value={editDraft.purchasePrice} onChange={(e) => setEditDraft({ ...editDraft, purchasePrice: e.target.value })} placeholder="390000" /></label><label>Estimated value<input inputMode="decimal" value={editDraft.value} onChange={(e) => setEditDraft({ ...editDraft, value: e.target.value })} placeholder="520000" /></label><label>Mortgage balance<input inputMode="decimal" value={editDraft.mortgage} onChange={(e) => setEditDraft({ ...editDraft, mortgage: e.target.value })} placeholder="310000" /></label><label>Financing status<select value={editDraft.financingStatus} onChange={(e) => setEditDraft({ ...editDraft, financingStatus: e.target.value })}>{FINANCING_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label><label>Monthly rent<input inputMode="decimal" value={editDraft.rent} onChange={(e) => setEditDraft({ ...editDraft, rent: e.target.value })} placeholder="2950" /></label><label>Monthly property expenses<input inputMode="decimal" value={editDraft.monthlyExpenses} onChange={(e) => setEditDraft({ ...editDraft, monthlyExpenses: e.target.value })} placeholder="1925" /></label><label>Purchase date<input type="date" value={editDraft.purchaseDate} onChange={(e) => setEditDraft({ ...editDraft, purchaseDate: e.target.value })} /></label><label>Beds<input inputMode="numeric" value={editDraft.beds} onChange={(e) => setEditDraft({ ...editDraft, beds: e.target.value })} placeholder="3" /></label><label>Baths<input inputMode="decimal" value={editDraft.baths} onChange={(e) => setEditDraft({ ...editDraft, baths: e.target.value })} placeholder="2.5" /></label><label>Square feet<input inputMode="numeric" value={editDraft.squareFeet} onChange={(e) => setEditDraft({ ...editDraft, squareFeet: e.target.value })} placeholder="1850" /></label><label>Year built<input inputMode="numeric" value={editDraft.yearBuilt} onChange={(e) => setEditDraft({ ...editDraft, yearBuilt: e.target.value })} placeholder="1998" /></label><label>Lot size (sqft)<input inputMode="numeric" value={editDraft.lotSizeSqft} onChange={(e) => setEditDraft({ ...editDraft, lotSizeSqft: e.target.value })} placeholder="6500" /></label><label>Annual property tax<input inputMode="decimal" value={editDraft.propertyTaxAnnual} onChange={(e) => setEditDraft({ ...editDraft, propertyTaxAnnual: e.target.value })} placeholder="4200" /></label><label>HOA / month<input inputMode="decimal" value={editDraft.hoaMonthly} onChange={(e) => setEditDraft({ ...editDraft, hoaMonthly: e.target.value })} placeholder="0" /></label></div><div className="editPropertyFooter"><button className="dangerButton" onClick={() => setShowDeleteConfirm(true)}>Delete Property</button><div className="modalActions compactActions"><button className="secondary" onClick={() => setShowEdit(false)}>Cancel</button><button className="primary" disabled={busy || !editDraft.address.trim() || !editDraft.city.trim()} onClick={() => void updateProperty()}>{busy ? 'Saving…' : 'Save Changes'}</button></div></div></div></div>}
 

@@ -195,6 +195,44 @@ export function buildOpenMaintenanceItems(records: MaintenanceInput[], propertyL
     .sort((a, b) => b.date.localeCompare(a.date))
 }
 
+// -- Open Maintenance, canonical source (Tenant Connect M3.1) -------------
+//
+// ROOT CAUSE this section fixes: public.maintenance_records.status has NO
+// CHECK constraint — it's free text, and the property-level "Log
+// service"/Service History form has always offered 'In progress'/'Needs
+// follow-up' alongside 'Completed'/'Scheduled'. buildOpenMaintenanceItems
+// above (kept, unmodified, for any caller still using it) treats ANY
+// non-'Completed' row as "open" — so a genuinely FINISHED historical
+// repair (e.g. "Freon and capacitor" — Breezy Air — $500) that happens to
+// carry a leftover/incorrectly-set 'In progress' status looks identical,
+// in PropWatch, to real, actionable open work. This is exactly the
+// overlap M3.1 exists to resolve: maintenance_records is meant to be
+// durable SERVICE HISTORY; ACTIVE, actionable work now has its own
+// canonical home (public.maintenance_requests, M3's Command Center).
+//
+// THE FIX: PropWatch's Open Maintenance section is repointed at
+// canonical maintenance_requests cases instead — the exact same "active"
+// definition (status !== 'Completed') the Command Center itself uses
+// (lib/maintenance/command-center.ts's EnrichedMaintenanceCase.active),
+// so PropWatch and the Command Center can never disagree about what
+// counts as open. maintenance_records' own status field, and every
+// existing row's value, is untouched — nothing here rewrites data, and
+// buildOpenMaintenanceItems still exists for any legitimate future
+// service-history-specific use.
+export type OpenMaintenanceRequestInput = { id: string; property_id: string; title: string; status: string; urgent: boolean; created_at: string }
+
+export function buildOpenMaintenanceRequestItems(cases: OpenMaintenanceRequestInput[], propertyLabelById: PropertyLabelLookup): OpenMaintenanceItem[] {
+  return cases
+    .filter((c) => c.status !== 'Completed')
+    .map((c) => ({
+      id: c.id, description: c.title, category: c.urgent ? 'Urgent' : 'Maintenance', vendor: null,
+      propertyId: c.property_id, propertyLabel: labelFor(c.property_id, propertyLabelById),
+      date: c.created_at, status: c.status,
+      nav: { tab: 'Details', propSubTab: 'Maintenance' } as NavTarget,
+    }))
+    .sort((a, b) => b.date.localeCompare(a.date))
+}
+
 // -- Generic sort/limit helpers -------------------------------------------
 
 /** Soonest-first — the order Upcoming (and Needs Attention, where "most urgent first" means the same thing) should render in. */
