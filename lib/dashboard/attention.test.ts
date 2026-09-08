@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildLeaseDateItems, buildInsuranceDateItems, buildMortgageDateItems, buildMaintenanceDateItems,
-  buildOpenMaintenanceItems, splitAttentionAndUpcoming, sortByDaysUntilAscending, limitItems,
+  buildOpenMaintenanceItems, buildOpenMaintenanceRequestItems, splitAttentionAndUpcoming, sortByDaysUntilAscending, limitItems,
 } from './attention'
 
 const TODAY = new Date(2026, 5, 17) // June 17, 2026
@@ -97,6 +97,52 @@ describe('buildOpenMaintenanceItems', () => {
       { id: 'mt2', property_id: 'p1', description: 'newer', category: 'Repair', vendor: null, status: 'Scheduled', service_date: dateStr(-1) },
     ], propertyLabelById)
     expect(items.map((i) => i.id)).toEqual(['mt2', 'mt1'])
+  })
+})
+
+// Tenant Connect M3.1 — PropWatch's Open Maintenance is repointed at
+// canonical maintenance_requests cases, exactly fixing the "a completed
+// historical service record whose free-text status was left/set to
+// something other than 'Completed' still shows as active work" overlap
+// (see this function's own header comment in attention.ts).
+describe('buildOpenMaintenanceRequestItems — canonical source, agrees with the Command Center\'s own "active" definition', () => {
+  it('includes every non-Completed canonical case, excludes Completed ones', () => {
+    const items = buildOpenMaintenanceRequestItems([
+      { id: 'r1', property_id: 'p1', title: 'AC not cooling', status: 'Submitted', urgent: false, created_at: '2026-06-01T00:00:00Z' },
+      { id: 'r2', property_id: 'p1', title: 'Leaking faucet', status: 'In Progress', urgent: false, created_at: '2026-06-02T00:00:00Z' },
+      { id: 'r3', property_id: 'p1', title: 'Furnace fixed', status: 'Completed', urgent: false, created_at: '2026-05-01T00:00:00Z' },
+    ], propertyLabelById)
+    expect(items.map((i) => i.id).sort()).toEqual(['r1', 'r2'])
+  })
+
+  it('a completed historical maintenance_records-style item (finished repair) is no longer what this function reads at all — it takes canonical cases, never maintenance_records rows', () => {
+    // The actual fix: this function's input type has no `service_date`/
+    // `vendor`/`cost` fields at all — it is structurally impossible to
+    // accidentally feed it a maintenance_records row.
+    const items = buildOpenMaintenanceRequestItems([
+      { id: 'case-1', property_id: 'p1', title: 'Freon and capacitor', status: 'Completed', urgent: false, created_at: '2026-01-01T00:00:00Z' },
+    ], propertyLabelById)
+    expect(items).toEqual([])
+  })
+
+  it('an urgent case is labeled with an "Urgent" category so it stands out in the same list', () => {
+    const items = buildOpenMaintenanceRequestItems([
+      { id: 'r1', property_id: 'p1', title: 'Gas smell', status: 'Submitted', urgent: true, created_at: '2026-06-01T00:00:00Z' },
+    ], propertyLabelById)
+    expect(items[0].category).toBe('Urgent')
+  })
+
+  it('sorts most recent created_at first, same ordering convention as buildOpenMaintenanceItems', () => {
+    const items = buildOpenMaintenanceRequestItems([
+      { id: 'r1', property_id: 'p1', title: 'older', status: 'Submitted', urgent: false, created_at: '2026-01-01T00:00:00Z' },
+      { id: 'r2', property_id: 'p1', title: 'newer', status: 'Submitted', urgent: false, created_at: '2026-06-01T00:00:00Z' },
+    ], propertyLabelById)
+    expect(items.map((i) => i.id)).toEqual(['r2', 'r1'])
+  })
+
+  it('deep-links to the same Details > Maintenance destination as the legacy function, so a click always lands the landlord in the property Maintenance hub', () => {
+    const items = buildOpenMaintenanceRequestItems([{ id: 'r1', property_id: 'p1', title: 'x', status: 'Submitted', urgent: false, created_at: '2026-06-01T00:00:00Z' }], propertyLabelById)
+    expect(items[0].nav).toEqual({ tab: 'Details', propSubTab: 'Maintenance' })
   })
 })
 
