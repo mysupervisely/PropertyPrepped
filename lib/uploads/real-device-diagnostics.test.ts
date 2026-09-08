@@ -80,10 +80,13 @@ describe('Smart Upload analysis diagnostics — every server-side failure reason
 
 describe('Camera flow is distinguishable from regular Smart Upload (Section 4)', () => {
   it('the Take Photo input tags every downstream call with the smart-upload-camera flow, not a separate implementation', () => {
-    expect(smartUploadModalSource).toContain("onFiles(e.target.files, 'smart-upload-camera')")
-    expect(smartUploadModalSource).toContain("function handleFiles(fileList: FileList | null, flow: 'smart-upload' | 'smart-upload-camera' = 'smart-upload')")
-    expect(smartUploadModalSource).toContain('void processFile(file, batchId, flow)')
-    expect(smartUploadModalSource).toContain('uploadDocumentForReview(supabase, ownerId, file, batchId, \'SmartUpload\', flow)')
+    // V1.2: every call site below now also threads a per-file
+    // bytesPromise (lib/uploads/durable-file.ts) — the flow-tagging
+    // itself is unchanged, only additive.
+    expect(smartUploadModalSource).toContain("onFiles(e.target.files, bytesPromises, 'smart-upload-camera')")
+    expect(smartUploadModalSource).toContain("function handleFiles(fileList: FileList | null, bytesPromises: Promise<ArrayBuffer>[], flow: 'smart-upload' | 'smart-upload-camera' = 'smart-upload')")
+    expect(smartUploadModalSource).toContain('void processFile(file, batchId, flow, bytesPromises[i])')
+    expect(smartUploadModalSource).toContain('uploadDocumentForReview(supabase, ownerId, file, batchId, \'SmartUpload\', flow, bytesPromise)')
     expect(smartUploadModalSource).toContain('analyzeDocument(supabase, documentId, flow)')
   })
 
@@ -178,11 +181,19 @@ describe('Confirmed MIME fixes from commit 87beb80 remain intact', () => {
   it('profile photo validation is still permissive on a blank type (the confirmed fix), not the old strict check', () => {
     expect(profileSource).not.toContain("if (!file.type.startsWith('image/')) { setPhotoError('Choose an image file.'); return }")
     expect(profileSource).toContain('validateImageFile(file)')
-    expect(profileSource).toContain('toUploadableImageFile(file, validation.contentType)')
+    // V1.2: the MIME-correction contentType still flows through
+    // unchanged — it's now delivered via toDurableUploadableFile()
+    // (lib/uploads/durable-file.ts) instead of the old, picker-resource-
+    // tied toUploadableImageFile() wrap. See upload-reliability-
+    // wiring.test.ts for the full V1.2 root-cause coverage.
+    expect(profileSource).toContain('toDurableUploadableFile(file, validation.contentType, bytesPromise)')
   })
 
-  it('Smart Upload engine and Upload Multiple still normalize an image file before .upload()', () => {
+  it('Smart Upload engine still normalizes an image file before .upload() when no early bytesPromise is available (Smart Import\'s pre-existing, unchanged call path)', () => {
     expect(engineSource).toContain('toUploadableImageFile(file, resolvedContentType)')
-    expect(pageSource).toContain('toUploadableImageFile(file, resolvedContentType)')
+  })
+
+  it('Upload Multiple normalizes an image file\'s content type, now via the durable, byte-safe path (V1.2)', () => {
+    expect(pageSource).toContain('toDurableUploadableFile(file, looksLikeImage ? resolvedContentType : file.type || undefined, bytesPromises[index])')
   })
 })

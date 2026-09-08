@@ -22,18 +22,29 @@ describe('Profile photo — the confirmed root cause is fixed', () => {
   })
 
   it('validates via the shared, permissive-on-missing-type validateImageFile()', () => {
-    expect(profileSource).toContain("import { validateImageFile, toUploadableImageFile } from '../../lib/uploads/image-file'")
+    expect(profileSource).toContain("import { validateImageFile } from '../../lib/uploads/image-file'")
     expect(profileSource).toContain('validateImageFile(file)')
   })
 
-  it('rewraps the file with toUploadableImageFile() BEFORE it reaches .upload() — the confirmed fix, not just passing contentType as an ignored option', () => {
+  it('V1.2: rewraps the file with toDurableUploadableFile() BEFORE it reaches .upload() — reads the ALREADY-STARTED bytesPromise rather than re-wrapping the original picker-tied File, fixing the confirmed "No content provided" root cause (lib/uploads/durable-file.ts)', () => {
+    expect(profileSource).toContain("import { beginReadingFileBytes, toDurableUploadableFile } from '../../lib/uploads/durable-file'")
     const fnStart = profileSource.indexOf('async function uploadPhoto(')
     const fnEnd = profileSource.indexOf('\n  }', profileSource.indexOf('setPhotoBusy(false)', fnStart))
     const fnBody = profileSource.slice(fnStart, fnEnd)
-    const rewrapIdx = fnBody.indexOf('toUploadableImageFile(file, validation.contentType)')
+    const rewrapIdx = fnBody.indexOf('toDurableUploadableFile(file, validation.contentType, bytesPromise)')
     const uploadIdx = fnBody.indexOf(".storage.from('profile-photos').upload(path, uploadable,")
     expect(rewrapIdx).toBeGreaterThan(-1)
     expect(uploadIdx).toBeGreaterThan(rewrapIdx)
+  })
+
+  it('V1.2: the input\'s onChange begins reading the file\'s bytes SYNCHRONOUSLY, before resetting the input\'s value — the confirmed fix ordering', () => {
+    const inputIdx = profileSource.indexOf('<input type="file" accept="image/*" disabled={photoBusy}')
+    const inputEnd = profileSource.indexOf('/>', inputIdx)
+    const inputBody = profileSource.slice(inputIdx, inputEnd)
+    const readIdx = inputBody.indexOf('beginReadingFileBytes(file)')
+    const resetIdx = inputBody.indexOf("e.target.value = ''")
+    expect(readIdx).toBeGreaterThan(-1)
+    expect(resetIdx).toBeGreaterThan(readIdx)
   })
 
   it('checks the DB upsert error and cleans up the orphaned storage object on failure (was already correct — re-verified, not re-broken)', () => {
@@ -62,17 +73,19 @@ describe('Smart Upload / Take Photo shared engine — the confirmed root cause i
     // The capture input's onChange feeds handleFiles() -> processFile() -> uploadDocumentForReview(), the SAME function this file fixes.
     // V1.1: it now also tags this call 'smart-upload-camera' (see the
     // dedicated describe block below) — same pipeline, distinguishable flow.
-    expect(smartUploadModalSource).toContain("onFiles(e.target.files, 'smart-upload-camera')")
-    expect(smartUploadModalSource).toContain('Array.from(fileList).forEach((file) => { void processFile(file, batchId, flow) })')
+    expect(smartUploadModalSource).toContain("onFiles(e.target.files, bytesPromises, 'smart-upload-camera')")
+    expect(smartUploadModalSource).toContain('Array.from(fileList).forEach((file, i) => { void processFile(file, batchId, flow, bytesPromises[i]) })')
   })
 
-  it('normalizes an image file with resolveImageContentType()/toUploadableImageFile() before it reaches .upload(), leaving PDFs untouched', () => {
+  it('normalizes an image file with resolveImageContentType() before it reaches .upload(), leaving PDFs\' content type untouched; V1.2 builds the actual uploadable File from an early-started bytesPromise when the caller provides one (lib/uploads/durable-file.ts), falling back to the original toUploadableImageFile() wrap for Smart Import\'s pre-existing calls that don\'t yet pass one', () => {
     const fnStart = engineSource.indexOf('export async function uploadDocumentForReview(')
     const fnEnd = engineSource.indexOf('\nexport type AnalyzeResult')
     const fnBody = engineSource.slice(fnStart, fnEnd)
     expect(fnBody).toContain('resolveImageContentType(file)')
+    expect(fnBody).toContain('toDurableUploadableFile(file, resolvedContentType, bytesPromise)')
     expect(fnBody).toContain('toUploadableImageFile(file, resolvedContentType)')
     expect(fnBody).toContain('looksLikeImage')
+    expect(fnBody).toContain('bytesPromise?: Promise<ArrayBuffer>')
     expect(fnBody).toMatch(/\.upload\(path, uploadable,/)
   })
 
@@ -90,7 +103,7 @@ describe('Smart Upload / Take Photo shared engine — the confirmed root cause i
     // awaited sequentially in a way that would let one file's rejection
     // stop the loop from reaching the next file.
     const handleFilesBody = smartUploadModalSource.slice(smartUploadModalSource.indexOf('function handleFiles('), smartUploadModalSource.indexOf('function handleFiles(') + 400)
-    expect(handleFilesBody).toMatch(/forEach\(\(file\) => \{ void processFile\(file, batchId, flow\) \}\)/)
+    expect(handleFilesBody).toMatch(/forEach\(\(file, i\) => \{ void processFile\(file, batchId, flow, bytesPromises\[i\]\) \}\)/)
   })
 
   it('logs diagnostics at every real stage', () => {
@@ -102,12 +115,12 @@ describe('Smart Upload / Take Photo shared engine — the confirmed root cause i
 })
 
 describe('"Upload Multiple" (app/page.tsx addDocumentFiles) — the confirmed root cause is fixed', () => {
-  it('normalizes an image file before .upload(), leaving PDFs/non-images untouched', () => {
+  it('resolves an image file\'s content type, then builds the actual uploadable File from an early-started bytesPromise (V1.2 — lib/uploads/durable-file.ts), leaving PDFs/non-images\' content type untouched but equally protected against the confirmed byte-loss root cause', () => {
     const fnStart = pageSource.indexOf('async function addDocumentFiles(')
     const fnEnd = pageSource.indexOf('\n  }', fnStart)
     const fnBody = pageSource.slice(fnStart, fnEnd)
     expect(fnBody).toContain('resolveImageContentType(file)')
-    expect(fnBody).toContain('toUploadableImageFile(file, resolvedContentType)')
+    expect(fnBody).toContain('toDurableUploadableFile(file, looksLikeImage ? resolvedContentType : file.type || undefined, bytesPromises[index])')
     expect(fnBody).toMatch(/\.upload\(path, uploadable,/)
   })
 
@@ -118,20 +131,47 @@ describe('"Upload Multiple" (app/page.tsx addDocumentFiles) — the confirmed ro
     expect(fnBody).toContain('continue')
   })
 
-  it('logs diagnostics at every real stage', () => {
+  it('logs diagnostics at every real stage, including the new V1.2 payload-ready/read-error stages', () => {
     const fnStart = pageSource.indexOf('async function addDocumentFiles(')
     const fnEnd = pageSource.indexOf('\n  }', fnStart)
     const fnBody = pageSource.slice(fnStart, fnEnd)
-    for (const stage of ['UPLOAD_FILE_RECEIVED', 'UPLOAD_NORMALIZATION_COMPLETE', 'UPLOAD_STORAGE_START', 'UPLOAD_STORAGE_SUCCESS', 'UPLOAD_STORAGE_ERROR', 'UPLOAD_DB_ERROR', 'UPLOAD_DB_SUCCESS']) {
+    for (const stage of ['UPLOAD_FILE_RECEIVED', 'UPLOAD_PAYLOAD_READY', 'UPLOAD_NORMALIZATION_COMPLETE', 'UPLOAD_STORAGE_START', 'UPLOAD_STORAGE_SUCCESS', 'UPLOAD_STORAGE_ERROR', 'UPLOAD_DB_ERROR', 'UPLOAD_DB_SUCCESS']) {
       expect(fnBody).toContain(`'${stage}'`)
     }
   })
+
+  it('the input begins reading every selected file\'s bytes SYNCHRONOUSLY before resetting its own value — and now resets it at all, fixing the separate "can\'t re-select the same file" gap this input previously had', () => {
+    const inputIdx = pageSource.indexOf('<input type="file" multiple disabled={busy} onChange={(e) => {')
+    const inputEnd = pageSource.indexOf('}} /></label>', inputIdx)
+    const inputBody = pageSource.slice(inputIdx, inputEnd)
+    const readIdx = inputBody.indexOf('beginReadingFileBytes')
+    const resetIdx = inputBody.indexOf("e.target.value = ''")
+    expect(readIdx).toBeGreaterThan(-1)
+    expect(resetIdx).toBeGreaterThan(readIdx)
+  })
 })
 
-describe('Property photos are unaffected — already fixed in the earlier iOS investigations, not touched by this pass', () => {
-  it('still uses its own toUploadableFile() from lib/property-photos/validate.ts, not the new shared module', () => {
+describe('Property photos — V1.2 applies the same durable-byte fix on top of the already-fixed MIME correction', () => {
+  it('still uses its own validation/content-type logic from lib/property-photos/validate.ts, not the new shared image-file module', () => {
     expect(pageSource).toContain("from '../lib/property-photos/validate'")
     expect(pageSource).toContain('toUploadableFile(')
+  })
+
+  it('both the cover-photo picker (handleImage) and the gallery-add picker begin reading bytes synchronously before their input value is reset, and rebuild the actual uploaded File from those bytes via toDurableUploadableFile()', () => {
+    expect(pageSource).toContain('import { beginReadingFileBytes, toDurableUploadableFile } from \'../lib/uploads/durable-file\'')
+    const handleImageStart = pageSource.indexOf('const handleImage = (e: ChangeEvent<HTMLInputElement>) => {')
+    const handleImageEnd = pageSource.indexOf('\n  }', handleImageStart)
+    const handleImageBody = pageSource.slice(handleImageStart, handleImageEnd)
+    const readIdx = handleImageBody.indexOf('beginReadingFileBytes(file)')
+    const resetIdx = handleImageBody.indexOf("e.target.value = ''")
+    expect(readIdx).toBeGreaterThan(-1)
+    expect(resetIdx).toBeGreaterThan(readIdx)
+    expect(handleImageBody).toContain('toDurableUploadableFile(file, validation.contentType, bytesPromise)')
+
+    const addPhotoFilesStart = pageSource.indexOf('async function addPhotoFiles(')
+    const addPhotoFilesEnd = pageSource.indexOf('\n  async function', addPhotoFilesStart + 1)
+    const addPhotoFilesBody = pageSource.slice(addPhotoFilesStart, addPhotoFilesEnd)
+    expect(addPhotoFilesBody).toContain('toDurableUploadableFile(file, validation.contentType, bytesPromises[i])')
   })
 })
 

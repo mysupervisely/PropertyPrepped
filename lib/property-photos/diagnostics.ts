@@ -34,6 +34,10 @@ export type PhotoUploadStage =
   | 'ui_state'
   | 'PHOTO_PICKER_SELECTED'
   | 'PHOTO_VALIDATION_RESULT'
+  // V1.2 (real iPhone storage payload root-cause fix) — see
+  // lib/uploads/durable-file.ts's header for the full trace.
+  | 'PHOTO_PAYLOAD_READY'
+  | 'PHOTO_PAYLOAD_READ_ERROR'
   | 'PHOTO_UPLOAD_START'
   | 'PHOTO_UPLOAD_SUCCESS'
   | 'PHOTO_UPLOAD_ERROR'

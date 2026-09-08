@@ -28,6 +28,17 @@ export type UploadStage =
   | 'UPLOAD_VALIDATION_ACCEPTED'
   | 'UPLOAD_VALIDATION_REJECTED'
   | 'UPLOAD_NORMALIZATION_COMPLETE'
+  // V1.2 (real iPhone storage payload root-cause fix): logged once the
+  // file's actual bytes have been read into memory and the durable,
+  // picker-resource-independent upload File is built — see
+  // lib/uploads/durable-file.ts's header for the full root-cause trace
+  // ("No content provided"). Carries originalSize/originalByteLength/
+  // normalizedSize/normalizedByteLength in `details` — a mismatch
+  // between originalSize and originalByteLength (nonzero size, zero
+  // bytes actually read) is the critical evidence this stage exists to
+  // surface.
+  | 'UPLOAD_PAYLOAD_READY'
+  | 'UPLOAD_PAYLOAD_READ_ERROR'
   | 'UPLOAD_STORAGE_START'
   | 'UPLOAD_STORAGE_SUCCESS'
   | 'UPLOAD_STORAGE_ERROR'
@@ -98,6 +109,17 @@ export type UploadDebugState = {
   reportedMime: string
   validation: 'pending' | 'accepted' | 'rejected'
   validationReason?: string
+  // V1.2 — Section 3/10's byte-length evidence, filled in once
+  // toDurableUploadableFile() (lib/uploads/durable-file.ts) actually
+  // reads the file. `originalByteLength`/`normalizedByteLength` are
+  // the REAL bytes read via arrayBuffer(), not just the picker's
+  // reported `.size` — the whole point is to catch a mismatch between
+  // the two (nonzero size, zero bytes actually readable).
+  originalSize?: number
+  originalByteLength?: number
+  normalizedSize?: number
+  normalizedByteLength?: number
+  payloadError?: string
   storageUpload: 'pending' | 'success' | 'failed'
   storageError?: string
   databaseRecord: 'pending' | 'success' | 'failed' | 'skipped'

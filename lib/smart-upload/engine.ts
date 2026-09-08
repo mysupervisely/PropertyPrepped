@@ -29,6 +29,7 @@ import { shouldCreateFinancialTransaction, shouldCreateMaintenanceRecord } from 
 import { findMatchingContact } from './match-contact'
 import type { SmartUploadContact } from './types'
 import { resolveImageContentType, toUploadableImageFile } from '../uploads/image-file'
+import { toDurableUploadableFile } from '../uploads/durable-file'
 import { logUploadDiagnostic, safeErrorSummary, type UploadFlow } from '../uploads/diagnostics'
 
 export const safeName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -68,6 +69,16 @@ export async function uploadDocumentForReview(
   // SmartUploadModal's camera input passes 'smart-upload-camera', so a
   // real-device console log can tell the two apart.
   flow: UploadFlow = 'smart-upload',
+  // V1.2 (real iPhone storage payload root-cause fix — see
+  // lib/uploads/durable-file.ts's header for the full "No content
+  // provided" trace). MUST have been started by the caller
+  // SYNCHRONOUSLY at file-selection time, before that picker's
+  // `<input>`'s value was ever reset. Optional, defaulting to
+  // undefined, so Smart Import's pre-existing call (which predates this
+  // fix and does not yet capture bytes this early) keeps working
+  // exactly as before — only SmartUploadModal's callers (Smart Upload,
+  // Take Photo) pass one.
+  bytesPromise?: Promise<ArrayBuffer>,
 ): Promise<UploadResult> {
   logUploadDiagnostic(flow, 'UPLOAD_FILE_RECEIVED', { extension: file.name, reportedMime: file.type, size: file.size, source })
 
@@ -82,11 +93,31 @@ export async function uploadDocumentForReview(
   // gives resolveMimeType() (lib/document-intelligence/analyze-
   // request.ts) a corrected mime_type to store, rather than relying
   // solely on its own extension-fallback for a blank-type iOS file.
-  // PDFs (and anything else non-image) pass through untouched — this
-  // never touches the file for a document type it doesn't apply to.
+  // PDFs (and anything else non-image) pass through untouched for the
+  // MIME-correction step — but every file (image or not) is equally
+  // exposed to the confirmed byte-loss root cause below, since all of
+  // them come from the same picker input.
   const looksLikeImage = file.type.startsWith('image/') || (!file.type && /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name))
   const resolvedContentType = looksLikeImage ? resolveImageContentType(file) : file.type || undefined
-  const uploadable = looksLikeImage ? toUploadableImageFile(file, resolvedContentType) : file
+
+  let uploadable: File
+  if (bytesPromise) {
+    try {
+      const durable = await toDurableUploadableFile(file, resolvedContentType, bytesPromise)
+      uploadable = durable.file
+      logUploadDiagnostic(flow, 'UPLOAD_PAYLOAD_READY', { originalSize: file.size, originalByteLength: durable.byteLength, normalizedMime: uploadable.type || '(unchanged)' })
+      if (file.size > 0 && durable.byteLength === 0) {
+        // The critical evidence: the picker reported a real size, but
+        // nothing was actually readable by the time we got here.
+        logUploadDiagnostic(flow, 'UPLOAD_PAYLOAD_READ_ERROR', { error: { message: `reported ${file.size} bytes but 0 bytes were readable` } })
+      }
+    } catch (err) {
+      logUploadDiagnostic(flow, 'UPLOAD_PAYLOAD_READ_ERROR', { error: safeErrorSummary(err) })
+      return { ok: false, error: 'Could not read the selected file. Please try again.' }
+    }
+  } else {
+    uploadable = looksLikeImage ? toUploadableImageFile(file, resolvedContentType) : file
+  }
   logUploadDiagnostic(flow, 'UPLOAD_NORMALIZATION_COMPLETE', { normalizedMime: uploadable.type || '(unchanged)' })
 
   const path = `${ownerId}/smart-upload/${batchId}/${crypto.randomUUID()}-${safeName(file.name)}`

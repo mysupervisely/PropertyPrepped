@@ -29,6 +29,15 @@ export function UploadDebugPanel({ state }: { state: UploadDebugState }) {
         <dt>Extension</dt><dd>{state.extension}</dd>
         <dt>Type</dt><dd>{state.reportedMime}</dd>
         <dt>Validation</dt><dd>{state.validation === 'pending' ? 'Pending…' : state.validation === 'accepted' ? 'Accepted' : `Rejected — ${state.validationReason || 'unknown reason'}`}</dd>
+        {/* V1.2 — the actual bytes read via arrayBuffer(), not just the
+            picker's reported .size. A nonzero size with 0 bytes here is
+            the exact signature of the confirmed iOS "No content
+            provided" root cause (lib/uploads/durable-file.ts). */}
+        {state.originalSize !== undefined && <><dt>Original size</dt><dd>{state.originalSize} bytes</dd></>}
+        {state.originalByteLength !== undefined && <><dt>Original bytes read</dt><dd>{state.originalByteLength}</dd></>}
+        {state.normalizedSize !== undefined && <><dt>Normalized size</dt><dd>{state.normalizedSize} bytes</dd></>}
+        {state.normalizedByteLength !== undefined && <><dt>Normalized bytes read</dt><dd>{state.normalizedByteLength}</dd></>}
+        {state.payloadError && <><dt>Payload read error</dt><dd>{state.payloadError}</dd></>}
         <dt>Storage upload</dt><dd>{statusText(state.storageUpload, state.storageError)}</dd>
         <dt>Database record</dt><dd>{statusText(state.databaseRecord, state.databaseError)}</dd>
         <dt>Render URL</dt><dd>{statusText(state.renderUrl, state.renderError)}</dd>

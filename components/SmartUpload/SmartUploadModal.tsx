@@ -35,6 +35,7 @@ import {
 import { ReceiptReview, type ReceiptSaveInput } from './ReceiptReview'
 import { PrepareOnlyReview } from './PrepareOnlyReview'
 import { initialSmartUploadDebugState, type SmartUploadDebugState } from '../../lib/uploads/diagnostics'
+import { beginReadingFileBytes } from '../../lib/uploads/durable-file'
 
 type ItemStatus = 'Uploading' | 'Analyzing' | 'Ready' | 'Failed' | 'Unsupported'
 
@@ -137,7 +138,7 @@ export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean
     setItems((prev) => prev.map((it) => (it.id === itemId ? { ...it, status: 'Ready', documentType: result.documentType, analysis: result.analysis, debug: { ...it.debug, analysis: 'success' } } : it)))
   }
 
-  async function processFile(file: File, batchId: string, flow: 'smart-upload' | 'smart-upload-camera' = 'smart-upload') {
+  async function processFile(file: File, batchId: string, flow: 'smart-upload' | 'smart-upload-camera' = 'smart-upload', bytesPromise?: Promise<ArrayBuffer>) {
     if (!supabase || !ownerId) return
     const localId = crypto.randomUUID()
     const debug = initialSmartUploadDebugState(file, flow)
@@ -163,7 +164,7 @@ export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean
     // (supabase/milestone-12-smart-upload.sql). category is a neutral
     // placeholder; it's refined once the property/type are confirmed
     // (Save below sets it to a real DOCUMENT_CATEGORIES value).
-    const uploadResult = await uploadDocumentForReview(supabase, ownerId, file, batchId, 'SmartUpload', flow)
+    const uploadResult = await uploadDocumentForReview(supabase, ownerId, file, batchId, 'SmartUpload', flow, bytesPromise)
     if (!uploadResult.ok) {
       setItems((prev) => prev.map((it) => (it.id === localId ? { ...it, status: 'Failed', error: uploadResult.error, debug: { ...it.debug, storageUpload: 'failed', storageError: uploadResult.error, databaseRecord: 'skipped', analysis: 'skipped' } } : it)))
       return
@@ -177,11 +178,11 @@ export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean
     await runAnalyze(uploadResult.documentId, uploadResult.itemId, flow)
   }
 
-  function handleFiles(fileList: FileList | null, flow: 'smart-upload' | 'smart-upload-camera' = 'smart-upload') {
+  function handleFiles(fileList: FileList | null, bytesPromises: Promise<ArrayBuffer>[], flow: 'smart-upload' | 'smart-upload-camera' = 'smart-upload') {
     if (!fileList || !fileList.length) return
     const batchId = crypto.randomUUID()
     setGlobalError('')
-    Array.from(fileList).forEach((file) => { void processFile(file, batchId, flow) })
+    Array.from(fileList).forEach((file, i) => { void processFile(file, batchId, flow, bytesPromises[i]) })
   }
 
   async function selectProperty(item: QueueItem, propertyId: string) {
@@ -302,7 +303,16 @@ export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean
   )
 }
 
-function SmartUploadEntry({ onFiles, compact }: { onFiles: (files: FileList | null, flow?: 'smart-upload' | 'smart-upload-camera') => void; compact?: boolean }) {
+function SmartUploadEntry({ onFiles, compact }: { onFiles: (files: FileList | null, bytesPromises: Promise<ArrayBuffer>[], flow?: 'smart-upload' | 'smart-upload-camera') => void; compact?: boolean }) {
+  // V1.2 (real iPhone storage payload root-cause fix — see
+  // lib/uploads/durable-file.ts's header): begin reading every file's
+  // bytes HERE, synchronously, in the onChange itself, before onFiles()
+  // even runs and before the input's value is reset — anchoring the
+  // read to the moment the picker's underlying resource is still
+  // guaranteed valid, no matter how many `await`s happen afterward.
+  function readSelected(fileList: FileList | null): Promise<ArrayBuffer>[] {
+    return fileList ? Array.from(fileList).map(beginReadingFileBytes) : []
+  }
   return (
     <div className={`smartUploadEntry ${compact ? 'smartUploadEntryCompact' : ''}`}>
       {!compact && <p className="smartUploadEntryPrompt">How would you like to add something?</p>}
@@ -315,17 +325,17 @@ function SmartUploadEntry({ onFiles, compact }: { onFiles: (files: FileList | nu
             Upload Multiple below; only the diagnostic flow label differs,
             so a real-device console log can tell a camera capture apart
             from a Photo Library selection. */}
-        <input type="file" accept="image/*" capture="environment" onChange={(e) => { onFiles(e.target.files, 'smart-upload-camera'); e.target.value = '' }} />
+        <input type="file" accept="image/*" capture="environment" onChange={(e) => { const bytesPromises = readSelected(e.target.files); onFiles(e.target.files, bytesPromises, 'smart-upload-camera'); e.target.value = '' }} />
       </label>
       <label className="smartUploadEntryOption">
         <span className="smartUploadEntryIcon" aria-hidden="true">📄</span>
         <span><strong>Choose File</strong><small>PDF, image, or supported document</small></span>
-        <input type="file" accept={SMART_UPLOAD_ACCEPT} onChange={(e) => { onFiles(e.target.files); e.target.value = '' }} />
+        <input type="file" accept={SMART_UPLOAD_ACCEPT} onChange={(e) => { const bytesPromises = readSelected(e.target.files); onFiles(e.target.files, bytesPromises); e.target.value = '' }} />
       </label>
       <label className="smartUploadEntryOption">
         <span className="smartUploadEntryIcon" aria-hidden="true">🗂️</span>
         <span><strong>Upload Multiple</strong><small>Select several files</small></span>
-        <input type="file" accept={SMART_UPLOAD_ACCEPT} multiple onChange={(e) => { onFiles(e.target.files); e.target.value = '' }} />
+        <input type="file" accept={SMART_UPLOAD_ACCEPT} multiple onChange={(e) => { const bytesPromises = readSelected(e.target.files); onFiles(e.target.files, bytesPromises); e.target.value = '' }} />
       </label>
       {/* Milestone 14, item 1 / Final Launch Fixes: secondary to the
           three options above — a brief explainer plus a link out to the

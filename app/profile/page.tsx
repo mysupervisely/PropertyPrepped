@@ -17,7 +17,8 @@ import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { AuthHeader } from '../../components/AuthHeader'
 import { COMMON_TIMEZONES, type UserProfile } from '../../lib/user-profile/types'
-import { validateImageFile, toUploadableImageFile } from '../../lib/uploads/image-file'
+import { validateImageFile } from '../../lib/uploads/image-file'
+import { beginReadingFileBytes, toDurableUploadableFile } from '../../lib/uploads/durable-file'
 import { logUploadDiagnostic, safeErrorSummary, initialUploadDebugState, type UploadDebugState } from '../../lib/uploads/diagnostics'
 import { UploadDebugPanel } from '../../components/uploads/UploadDebugPanel'
 
@@ -97,7 +98,7 @@ export default function ProfilePage() {
     return () => { cancelled = true }
   }, [profile?.photo_path])
 
-  async function uploadPhoto(file: File) {
+  async function uploadPhoto(file: File, bytesPromise: Promise<ArrayBuffer>) {
     if (!supabase || !user) return
     setPhotoDebug(initialUploadDebugState(file))
     logUploadDiagnostic('profile-photo', 'UPLOAD_FILE_RECEIVED', { extension: file.name, reportedMime: file.type, size: file.size })
@@ -119,12 +120,41 @@ export default function ProfilePage() {
     logUploadDiagnostic('profile-photo', 'UPLOAD_VALIDATION_ACCEPTED', { normalizedMime: validation.contentType })
     setPhotoDebug((d) => d && { ...d, validation: 'accepted' })
 
-    // THE confirmed fix (see lib/uploads/image-file.ts's own header):
-    // @supabase/storage-js reads the File object's own `.type`
-    // directly, never the `contentType` upload option, so an
-    // empty-type iOS file must be re-wrapped with the corrected type
-    // set ON the object before it ever reaches `.upload()`.
-    const uploadable = toUploadableImageFile(file, validation.contentType)
+    // V1.2 (real iPhone storage payload root-cause fix — see
+    // lib/uploads/durable-file.ts's header for the full trace): the OLD
+    // fix here — toUploadableImageFile(), a lazy `new File([file], ...)`
+    // wrap — corrects the MIME type but still references the SAME
+    // picker-backed resource as `file`. On iOS Safari, this input's own
+    // onChange (below) resets its `.value` right after calling this
+    // function, and by the time @supabase/storage-js's fetch() call
+    // actually streams the file's bytes, that resource can already be
+    // invalid — producing a real, nonzero-looking upload that Storage's
+    // server rejects with "No content provided" because it received no
+    // actual file content. `bytesPromise` was started by the onChange
+    // handler BEFORE the input was reset, so awaiting it here reads the
+    // bytes from a point in time when the resource was still guaranteed
+    // valid; toDurableUploadableFile() builds a plain, in-memory-backed
+    // File from those bytes (still carrying the corrected content type)
+    // that is entirely decoupled from the original picker resource.
+    let uploadable: File
+    try {
+      const durable = await toDurableUploadableFile(file, validation.contentType, bytesPromise)
+      uploadable = durable.file
+      logUploadDiagnostic('profile-photo', 'UPLOAD_PAYLOAD_READY', { originalSize: file.size, originalByteLength: durable.byteLength, normalizedMime: uploadable.type })
+      setPhotoDebug((d) => d && { ...d, originalSize: file.size, originalByteLength: durable.byteLength, normalizedSize: uploadable.size, normalizedByteLength: durable.byteLength })
+      if (file.size > 0 && durable.byteLength === 0) {
+        // The critical evidence: the picker reported a real size, but
+        // nothing was actually readable — exactly the confirmed root
+        // cause, now visible instead of only discovered downstream as
+        // an opaque Storage error.
+        logUploadDiagnostic('profile-photo', 'UPLOAD_PAYLOAD_READ_ERROR', { error: { message: `reported ${file.size} bytes but 0 bytes were readable` } })
+      }
+    } catch (err) {
+      logUploadDiagnostic('profile-photo', 'UPLOAD_PAYLOAD_READ_ERROR', { error: safeErrorSummary(err) })
+      setPhotoDebug((d) => d && { ...d, payloadError: safeErrorSummary(err)?.message || 'could not read file', storageUpload: 'failed', databaseRecord: 'skipped', renderUrl: 'skipped' })
+      setPhotoError('Could not read the selected photo. Please try again.')
+      return
+    }
     logUploadDiagnostic('profile-photo', 'UPLOAD_NORMALIZATION_COMPLETE', { normalizedMime: uploadable.type })
 
     setPhotoBusy(true)
@@ -276,7 +306,15 @@ export default function ProfilePage() {
           <div className="profilePhotoActions">
             <label className="secondary profilePhotoUploadButton">
               {photoBusy ? 'Uploading…' : photoUrl ? 'Change photo' : 'Add photo'}
-              <input type="file" accept="image/*" disabled={photoBusy} onChange={(e) => { const file = e.target.files?.[0]; if (file) void uploadPhoto(file); e.target.value = '' }} />
+              <input type="file" accept="image/*" disabled={photoBusy} onChange={(e) => {
+                const file = e.target.files?.[0]
+                // V1.2: beginReadingFileBytes() MUST be called here,
+                // synchronously, BEFORE the input's value is reset below
+                // — see lib/uploads/durable-file.ts's header for why.
+                const bytesPromise = file ? beginReadingFileBytes(file) : null
+                if (file && bytesPromise) void uploadPhoto(file, bytesPromise)
+                e.target.value = ''
+              }} />
             </label>
             {photoUrl && <button className="dangerLink" disabled={photoBusy} onClick={() => void removePhoto()}>Remove photo</button>}
           </div>

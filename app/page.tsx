@@ -47,6 +47,7 @@ import type { TenantRequest } from '../lib/tenant-connect/types'
 import { maintenanceCategoryLabel } from '../lib/maintenance/categories'
 import { validatePropertyPhotoFile, toUploadableFile, classifyPhotoSelection, isFirstCoverPhoto } from '../lib/property-photos/validate'
 import { resolveImageContentType, toUploadableImageFile } from '../lib/uploads/image-file'
+import { beginReadingFileBytes, toDurableUploadableFile } from '../lib/uploads/durable-file'
 import { logUploadDiagnostic, initialUploadDebugState, type UploadDebugState } from '../lib/uploads/diagnostics'
 import { UploadDebugPanel } from '../components/uploads/UploadDebugPanel'
 import { logPhotoUploadDiagnostic, safeFileSummary, safeFileListSummary, safeErrorSummary } from '../lib/property-photos/diagnostics'
@@ -918,23 +919,42 @@ export default function Home() {
 
   const handleImage = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    // V1.2 (real iPhone storage payload root-cause fix — see
+    // lib/uploads/durable-file.ts's header for the full trace):
+    // beginReadingFileBytes() MUST be called here, synchronously,
+    // before the input's value is reset below. This picker's selected
+    // file is especially exposed to the confirmed root cause — it sits
+    // in `coverFile` React state, unused, until "Save Property" is
+    // clicked (addProperty(), possibly much later), so the OLD fix
+    // (toUploadableFile()'s lazy `new File([file], ...)` wrap, still
+    // referencing the SAME picker-backed resource as `file`) had the
+    // most time of any flow in this app to hit iOS Safari's picker-
+    // resource invalidation. Reading the bytes now, before the reset,
+    // and storing an already-durable (in-memory-backed) File in
+    // `coverFile` instead removes that window entirely.
+    const bytesPromise = file ? beginReadingFileBytes(file) : null
     e.target.value = ''
-    if (!file) return
+    if (!file || !bytesPromise) return
     logPhotoUploadDiagnostic('file_selected', { site: 'add-property-cover', ...safeFileSummary(file) })
     const validation = validatePropertyPhotoFile(file)
     logPhotoUploadDiagnostic('validation_result', { site: 'add-property-cover', ok: validation.ok, ...(validation.ok ? { contentType: validation.contentType } : { reason: validation.reason }) })
     if (!validation.ok) { setError(validation.reason); return }
-    // iOS production-bug investigation: rewrap NOW, at selection time,
-    // not just right before upload — coverFile is what actually gets
-    // uploaded later in addProperty(), so this is the object that must
-    // carry the corrected type (see toUploadableFile's own doc comment
-    // for why the type must live ON the object, not in an upload
-    // option, for @supabase/storage-js to send it correctly).
-    const uploadable = toUploadableFile(file, validation.contentType)
-    setCoverFile(uploadable)
-    const reader = new FileReader()
-    reader.onload = () => setImagePreview(String(reader.result || ''))
-    reader.readAsDataURL(uploadable)
+    void (async () => {
+      try {
+        const durable = await toDurableUploadableFile(file, validation.contentType, bytesPromise)
+        logPhotoUploadDiagnostic('PHOTO_PAYLOAD_READY', { site: 'add-property-cover', originalSize: file.size, byteLength: durable.byteLength })
+        if (file.size > 0 && durable.byteLength === 0) {
+          logPhotoUploadDiagnostic('PHOTO_PAYLOAD_READ_ERROR', { site: 'add-property-cover', error: { message: `reported ${file.size} bytes but 0 bytes were readable` } })
+        }
+        setCoverFile(durable.file)
+        const reader = new FileReader()
+        reader.onload = () => setImagePreview(String(reader.result || ''))
+        reader.readAsDataURL(durable.file)
+      } catch (err) {
+        logPhotoUploadDiagnostic('PHOTO_PAYLOAD_READ_ERROR', { site: 'add-property-cover', error: safeErrorSummary(err) })
+        setError('Could not read the selected photo. Please try again.')
+      }
+    })()
   }
 
   // Section 8: check the plan boundary BEFORE opening the add-property
@@ -1214,7 +1234,7 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authReady, user])
 
-  async function addDocumentFiles(files: FileList | File[]) {
+  async function addDocumentFiles(files: FileList | File[], bytesPromises: Promise<ArrayBuffer>[]) {
     if (!supabase || !user || !selectedId) return
     const incoming = Array.from(files)
     if (!incoming.length) return
@@ -1241,7 +1261,28 @@ export default function Home() {
       logUploadDiagnostic('upload-multiple', 'UPLOAD_FILE_RECEIVED', { extension: file.name, reportedMime: file.type, size: file.size })
       const looksLikeImage = file.type.startsWith('image/') || (!file.type && /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name))
       const resolvedContentType = looksLikeImage ? resolveImageContentType(file) : file.type || undefined
-      const uploadable = looksLikeImage ? toUploadableImageFile(file, resolvedContentType) : file
+      // V1.2 (real iPhone storage payload root-cause fix — see
+      // lib/uploads/durable-file.ts's header): the durable, already-read
+      // File is built from the bytesPromise the caller's onChange
+      // started BEFORE resetting the input — never from the original
+      // picker-tied `file` reference directly (applies to PDFs and
+      // other non-image files too, not just images — every file here
+      // comes from the same input, so every file is equally exposed).
+      let uploadable: File
+      try {
+        const durable = await toDurableUploadableFile(file, looksLikeImage ? resolvedContentType : file.type || undefined, bytesPromises[index])
+        uploadable = durable.file
+        logUploadDiagnostic('upload-multiple', 'UPLOAD_PAYLOAD_READY', { originalSize: file.size, originalByteLength: durable.byteLength, normalizedMime: uploadable.type || '(unchanged)' })
+        patchFileDebug(index, { originalSize: file.size, originalByteLength: durable.byteLength, normalizedSize: uploadable.size, normalizedByteLength: durable.byteLength })
+        if (file.size > 0 && durable.byteLength === 0) {
+          logUploadDiagnostic('upload-multiple', 'UPLOAD_PAYLOAD_READ_ERROR', { error: { message: `reported ${file.size} bytes but 0 bytes were readable` } })
+        }
+      } catch (err) {
+        logUploadDiagnostic('upload-multiple', 'UPLOAD_PAYLOAD_READ_ERROR', { error: safeErrorSummary(err) })
+        patchFileDebug(index, { payloadError: safeErrorSummary(err)?.message || 'could not read file', storageUpload: 'failed', databaseRecord: 'skipped', renderUrl: 'skipped' })
+        setError(`"${file.name}" could not be read. Please try selecting it again.`)
+        continue
+      }
       logUploadDiagnostic('upload-multiple', 'UPLOAD_NORMALIZATION_COMPLETE', { normalizedMime: uploadable.type || '(unchanged)' })
       patchFileDebug(index, { validation: 'accepted' })
 
@@ -1274,7 +1315,7 @@ export default function Home() {
     setBusy(false)
   }
 
-  async function addPhotoFiles(files: FileList | File[]) {
+  async function addPhotoFiles(files: FileList | File[], bytesPromises: Promise<ArrayBuffer>[]) {
     if (!supabase || !user || !selectedId) return
     // Post-selection-failure investigation (V2) — the FileList must be
     // copied to a plain array SYNCHRONOUSLY, before any `await`, or a
@@ -1303,9 +1344,34 @@ export default function Home() {
     // lib/property-photos/validate.ts so it's testable with real,
     // multi-file File[] batches directly (see validate.test.ts) instead
     // of only via this component's source text.
-    const { results, accepted: incoming, rejectionMessage } = classifyPhotoSelection(incomingRaw)
+    const { results, rejectionMessage } = classifyPhotoSelection(incomingRaw)
     for (const { file, validation } of results) {
       logPhotoUploadDiagnostic('PHOTO_VALIDATION_RESULT', { site: 'gallery-add', accepted: validation.ok, size: file.size, ...(validation.ok ? { contentType: validation.contentType } : { reason: validation.reason }) })
+    }
+    // V1.2 (real iPhone storage payload root-cause fix — see
+    // lib/uploads/durable-file.ts's header): classifyPhotoSelection()'s
+    // own `accepted[].file` is a lazy `new File([originalFile], ...)`
+    // wrap of the SAME picker-tied resource `originalFile` references
+    // — deliberately not used for the actual upload below. Each
+    // accepted file is rebuilt here from the bytesPromise the caller's
+    // onChange started BEFORE resetting the input, giving a durable,
+    // in-memory-backed File no matter how much of this loop's own
+    // `await`s have already run by the time we get to it.
+    const incoming: { file: File; contentType: string | undefined }[] = []
+    for (let i = 0; i < results.length; i++) {
+      const { file, validation } = results[i]
+      if (!validation.ok) continue
+      try {
+        const durable = await toDurableUploadableFile(file, validation.contentType, bytesPromises[i])
+        logPhotoUploadDiagnostic('PHOTO_PAYLOAD_READY', { site: 'gallery-add', originalSize: file.size, byteLength: durable.byteLength })
+        if (file.size > 0 && durable.byteLength === 0) {
+          logPhotoUploadDiagnostic('PHOTO_PAYLOAD_READ_ERROR', { site: 'gallery-add', error: { message: `reported ${file.size} bytes but 0 bytes were readable` } })
+        }
+        incoming.push({ file: durable.file, contentType: validation.contentType })
+      } catch (err) {
+        logPhotoUploadDiagnostic('PHOTO_PAYLOAD_READ_ERROR', { site: 'gallery-add', error: safeErrorSummary(err) })
+        surfaceError(`"${file.name}" could not be read. Please try selecting it again.`)
+      }
     }
     if (!incoming.length) {
       if (rejectionMessage) surfaceError(rejectionMessage)
@@ -1328,10 +1394,11 @@ export default function Home() {
     try {
       const hasCover = selectedPhotos.some((photo) => photo.is_cover)
       for (let index = 0; index < incoming.length; index++) {
-        // iOS production-bug follow-up: `file` here is already the
-        // toUploadableFile()-corrected object (real fix — see
-        // lib/property-photos/validate.ts's header for the full trace of
-        // why @supabase/storage-js needs the type set ON the object).
+        // `file` here is already a durable, MIME-corrected,
+        // in-memory-backed object (V1.2's toDurableUploadableFile(),
+        // above — see lib/uploads/durable-file.ts's header for the full
+        // trace of why both the corrected type AND already-read bytes
+        // need to live on the object handed to @supabase/storage-js).
         const { file, contentType } = incoming[index]
         const path = `${user.id}/${selectedId}/photos/${crypto.randomUUID()}-${safeName(file.name)}`
         logPhotoUploadDiagnostic('PHOTO_UPLOAD_START', { site: 'gallery-add', propertyId: selectedId, bucket: 'property-photos', path, contentType, size: file.size })
@@ -1931,7 +1998,15 @@ export default function Home() {
 
           {documentsSubTab === 'Photos' && <>
           <div className="sectionHead workspaceHeading"><div><p className="eyebrow">PROPERTY PHOTOS</p><h2>Visual record</h2><p>Keep listing photos, renovation progress, inspections and property-condition photos together.</p></div></div>
-          <label className="photoUploader"><span>+</span><strong>{busy ? 'Uploading…' : 'Add property photos'}</strong><small>Select multiple images at once. The first photo becomes the cover if there is no cover yet.</small><input type="file" accept="image/*" multiple disabled={busy} onChange={(e) => { const files = e.target.files; e.target.value = ''; if (files) void addPhotoFiles(files) }} /></label>
+          <label className="photoUploader"><span>+</span><strong>{busy ? 'Uploading…' : 'Add property photos'}</strong><small>Select multiple images at once. The first photo becomes the cover if there is no cover yet.</small><input type="file" accept="image/*" multiple disabled={busy} onChange={(e) => {
+                const files = e.target.files
+                // V1.2: begin reading every file's bytes here,
+                // synchronously, BEFORE the input's value is reset below
+                // — see lib/uploads/durable-file.ts's header.
+                const bytesPromises = files ? Array.from(files).map(beginReadingFileBytes) : []
+                e.target.value = ''
+                if (files) void addPhotoFiles(files, bytesPromises)
+              }} /></label>
           <div className="photoGallery">{selectedPhotos.length ? selectedPhotos.map((photo) => <div className={`galleryItem ${photo.is_cover ? 'coverItem' : ''}`} key={photo.id}>{photo.signedUrl ? <img src={photo.signedUrl} alt={photo.name} /> : <div className="heroPlaceholder">Photo unavailable</div>}<div className="galleryMeta"><span>{photo.name}</span><div className="galleryButtons">{!photo.is_cover && <button onClick={() => void setCover(photo)}>Set cover</button>}<button className="removePhoto" onClick={() => void removePhoto(photo)}>×</button></div></div></div>) : <div className="emptyGallery"><strong>No photos uploaded yet</strong><span>Add photos to build this property's visual history.</span></div>}</div>
           </>}
         </section>}
@@ -1945,7 +2020,18 @@ export default function Home() {
                   <h3>Upload normally</h3>
                   <p>Choose a category, then drop in a file — no AI involved.</p>
                   <label>File category<select value={uploadCategory} onChange={(e) => setUploadCategory(e.target.value)}>{DOCUMENT_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></label>
-                  <label className={`dropZone ${isDragging ? 'dragging' : ''}`} onDragEnter={(e) => { e.preventDefault(); setIsDragging(true) }} onDragOver={(e) => e.preventDefault()} onDragLeave={() => setIsDragging(false)} onDrop={(e: DragEvent<HTMLLabelElement>) => { e.preventDefault(); setIsDragging(false); void addDocumentFiles(e.dataTransfer.files) }}><span className="uploadIcon">↑</span><strong>{busy ? 'Uploading…' : 'Drop a file here or choose one'}</strong><small>PDF, spreadsheets, receipts, contracts and more · up to 50 MB each</small><input type="file" multiple disabled={busy} onChange={(e) => e.target.files && void addDocumentFiles(e.target.files)} /></label>
+                  <label className={`dropZone ${isDragging ? 'dragging' : ''}`} onDragEnter={(e) => { e.preventDefault(); setIsDragging(true) }} onDragOver={(e) => e.preventDefault()} onDragLeave={() => setIsDragging(false)} onDrop={(e: DragEvent<HTMLLabelElement>) => { e.preventDefault(); setIsDragging(false); void addDocumentFiles(e.dataTransfer.files, Array.from(e.dataTransfer.files).map(beginReadingFileBytes)) }}><span className="uploadIcon">↑</span><strong>{busy ? 'Uploading…' : 'Drop a file here or choose one'}</strong><small>PDF, spreadsheets, receipts, contracts and more · up to 50 MB each</small><input type="file" multiple disabled={busy} onChange={(e) => {
+                    const files = e.target.files
+                    // V1.2: begin reading every file's bytes here,
+                    // synchronously, BEFORE the input's value is reset
+                    // below — see lib/uploads/durable-file.ts's header.
+                    // This input previously never reset its value at
+                    // all, meaning the browser wouldn't fire onChange
+                    // again for a re-selected file — fixed here too.
+                    const bytesPromises = files ? Array.from(files).map(beginReadingFileBytes) : []
+                    e.target.value = ''
+                    if (files) void addDocumentFiles(files, bytesPromises)
+                  }} /></label>
                   {documentUploadDebug.length > 0 && <div className="uploadDebugPanelGroup">{documentUploadDebug.map((state, i) => <UploadDebugPanel key={i} state={state} />)}</div>}
                 </div>
                 <div className="addDocumentOption addDocumentOptionSmart">
