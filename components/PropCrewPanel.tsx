@@ -565,44 +565,57 @@ export function PropCrewPanel({
         <div className="emptyModule"><strong>No PropCrew providers yet</strong><span>Add contractors, agents, lenders and other professionals as you work with them.</span><div className="propCrewHeaderActions">{linkableContacts.length > 0 && <button className="secondary" onClick={() => setShowLinkExisting(true)}>Link Existing Contact</button>}<button className="primary" onClick={openAddChooser}>+ Add to PropCrew</button></div></div>
       )}
 
-      {/* PropCrew Mobile Contact Import V1: the first step, ALWAYS
-          shown now — "Choose from Contacts" (native picker) OR "Import
-          Contact Card" (vCard fallback), whichever this browser
-          actually supports, plus "Enter Manually." Never both import
-          options at once, and never a native-picker button on a
+      {/* PropCrew Mobile Contact Import V1 (UX polish pass): the first
+          step, ALWAYS shown — "Choose from Contacts" (native picker) OR
+          "Import from iPhone Contacts" (vCard fallback), whichever this
+          browser actually supports, plus "Enter Manually." Never both
+          import options at once, and never a native-picker button on a
           browser that doesn't support it (Section 3: "never claim
           contact access is available when it is not") — pickerSupported
-          alone decides which import option renders. */}
+          alone decides which import option renders. Copy is
+          deliberately plain-language: no "WebKit," "Contact Picker
+          API," "vCard," or "browser compatibility" anywhere in this
+          user-facing block — see docs/propcrew-mobile-contact-import-v1.md
+          for that explanation instead. */}
       {showAddChooser && (
         <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && closeAddChooser()}>
           <div className="modal addDocumentModal">
-            <div className="modalTop"><div><p className="eyebrow">PROPCREW</p><h2>Add a PropCrew member</h2></div><button className="iconButton" onClick={closeAddChooser}>×</button></div>
+            <div className="modalTop"><div><p className="eyebrow">PROPCREW</p><h2>Add to PropCrew</h2></div><button className="iconButton" onClick={closeAddChooser}>×</button></div>
             {pickerError && <p className="errorMessage">{pickerError}</p>}
             {vcardError && <p className="errorMessage">{vcardError}</p>}
-            {!pickerSupported && (
-              <p className="muted propCrewPickerUnsupportedNote">This browser can&apos;t open your contacts directly. In your Contacts app, share the contact and save it as a file, then import that file below — or enter the details yourself.</p>
-            )}
             <div className="addDocumentChooser">
               {pickerSupported ? (
                 <div className="addDocumentOption addDocumentOptionSmart">
                   <h3>Choose from Contacts</h3>
-                  <p>Choose one contact from your device — only that contact&apos;s name, phone and email are imported, nothing else from your address book.</p>
-                  <button className="primary" disabled={pickerBusy} onClick={() => void pickFromContacts()}>{pickerBusy ? 'Opening contacts…' : 'Choose a contact'}</button>
+                  <p>Select a contact from your phone and we&apos;ll prefill the details for you to review.</p>
+                  <button className="primary" disabled={pickerBusy} onClick={() => void pickFromContacts()}>{pickerBusy ? 'Opening contacts…' : 'Choose from Contacts'}</button>
                 </div>
               ) : (
                 <div className="addDocumentOption addDocumentOptionSmart">
-                  <h3>Import Contact Card</h3>
-                  <p>Select a contact card (.vcf) file you&apos;ve saved from your Contacts app — only that one file is read, nothing else from your address book.</p>
+                  <h3>Import from iPhone Contacts</h3>
+                  <div className="propCrewImportSteps">
+                    <p className="propCrewImportStepsTitle">Import an existing contact</p>
+                    <ol>
+                      <li>Open Contacts and select the person.</li>
+                      <li>Tap Share Contact.</li>
+                      <li>Choose Save to Files.</li>
+                      <li>Return to PropRoster and tap Import Contact Card.</li>
+                    </ol>
+                  </div>
                   <input ref={vcardInputRef} type="file" accept=".vcf,text/vcard,text/x-vcard" hidden onChange={(e) => void handleVCardFile(e)} />
-                  <button className="primary" disabled={vcardBusy} onClick={() => vcardInputRef.current?.click()}>{vcardBusy ? 'Reading file…' : 'Import a contact card'}</button>
+                  <button className="primary" disabled={vcardBusy} onClick={() => vcardInputRef.current?.click()}>{vcardBusy ? 'Reading file…' : 'Import Contact Card'}</button>
+                  <p className="muted propCrewImportHelper">Choose the contact file you saved from Contacts.</p>
                 </div>
               )}
               <div className="addDocumentOption">
                 <h3>Enter Manually</h3>
                 <p>Type in their name, category, contact details and notes yourself.</p>
-                <button className="secondary" onClick={openAdd}>Enter manually</button>
+                <button className="secondary" onClick={openAdd}>Enter Manually</button>
               </div>
             </div>
+            {!pickerSupported && (
+              <p className="muted propCrewImportFutureNote">Direct contact selection for iPhone is planned for a future PropRoster app.</p>
+            )}
           </div>
         </div>
       )}

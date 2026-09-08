@@ -25,23 +25,73 @@ describe('Section 3 — iOS/unsupported-browser fallback: honest, never a dead c
 
   it('the native-picker button is rendered ONLY when pickerSupported is true; the vCard import button is rendered ONLY when it is false — never both, never neither', () => {
     const idx = PANEL_SOURCE.indexOf('<div className="addDocumentChooser">')
-    const body = PANEL_SOURCE.slice(idx, idx + 1600)
+    const body = PANEL_SOURCE.slice(idx, idx + 2000)
     expect(body).toContain('{pickerSupported ? (')
     expect(body).toContain('Choose from Contacts')
+    expect(body).toContain('Import from iPhone Contacts')
     expect(body).toContain('Import Contact Card')
     expect(body).toContain(') : (')
   })
 
-  it('an explanatory note is shown when the picker is unsupported, and it is honest about what is happening (never claims contact access it does not have)', () => {
+  it('a plain-language, honest note is shown when the picker is unsupported — never claims direct contact access exists, never promises a release date', () => {
     const idx = PANEL_SOURCE.indexOf('{!pickerSupported && (')
+    expect(idx).toBeGreaterThan(-1)
     const body = PANEL_SOURCE.slice(idx, idx + 300)
-    expect(body).toMatch(/can&apos;t open your contacts directly/)
+    expect(body).toContain('Direct contact selection for iPhone is planned for a future PropRoster app.')
+    expect(body).not.toMatch(/\d{4}|Q[1-4]\s*20\d\d|coming (soon|in)/i)
+  })
+
+  it('the visible instructional copy for the iPhone fallback is a plain-language numbered list, not a technical explanation', () => {
+    const idx = PANEL_SOURCE.indexOf('propCrewImportStepsTitle')
+    const body = PANEL_SOURCE.slice(idx, idx + 500)
+    expect(body).toContain('Import an existing contact')
+    expect(body).toContain('<li>Open Contacts and select the person.</li>')
+    expect(body).toContain('<li>Tap Share Contact.</li>')
+    expect(body).toContain('<li>Choose Save to Files.</li>')
+    expect(body).toContain('<li>Return to PropRoster and tap Import Contact Card.</li>')
+    // Plain language only — the visible <li> text itself never names the
+    // underlying technology (that explanation lives in code comments
+    // and docs/propcrew-mobile-contact-import-v1.md instead).
+    const listItems = [...body.matchAll(/<li>([^<]*)<\/li>/g)].map((m) => m[1])
+    for (const item of listItems) expect(item).not.toMatch(/WebKit|Contact Picker API|vCard|browser compatibility/i)
   })
 
   it('Enter Manually remains present and unconditional, calling the same openAdd() as before', () => {
     const idx = PANEL_SOURCE.indexOf('<h3>Enter Manually</h3>')
     expect(idx).toBeGreaterThan(-1)
     expect(PANEL_SOURCE.slice(idx, idx + 300)).toContain('onClick={openAdd}')
+  })
+})
+
+describe('UX polish pass — supported-device (native picker) copy stays extremely simple', () => {
+  it('the supported-device card shows only the plain-language supporting line — no iPhone/vCard instructions or terminology anywhere in it', () => {
+    const idx = PANEL_SOURCE.indexOf('{pickerSupported ? (')
+    const body = PANEL_SOURCE.slice(idx, PANEL_SOURCE.indexOf(') : (', idx))
+    expect(body).toContain('<h3>Choose from Contacts</h3>')
+    expect(body).toContain('Select a contact from your phone and we&apos;ll prefill the details for you to review.')
+    expect(body).not.toMatch(/iPhone|Contacts app|Share Contact|Save to Files|propCrewImportSteps/i)
+  })
+
+  it('the primary button reads "Choose from Contacts" (busy state: "Opening contacts…"), matching its own heading', () => {
+    expect(PANEL_SOURCE).toContain("onClick={() => void pickFromContacts()}>{pickerBusy ? 'Opening contacts…' : 'Choose from Contacts'}</button>")
+  })
+
+  it('"Enter Manually" is present as the secondary action on the supported-device path too, unconditionally', () => {
+    const idx = PANEL_SOURCE.indexOf('<div className="addDocumentOption">\n                <h3>Enter Manually</h3>')
+    expect(idx).toBeGreaterThan(-1)
+  })
+})
+
+describe('UX polish pass — Import Contact Card action (the primary iPhone/unsupported-device action)', () => {
+  it('the button reads "Import Contact Card" (busy state: "Reading file…") and includes a short helper line beneath it', () => {
+    expect(PANEL_SOURCE).toContain("onClick={() => vcardInputRef.current?.click()}>{vcardBusy ? 'Reading file…' : 'Import Contact Card'}</button>")
+    expect(PANEL_SOURCE).toContain('<p className="muted propCrewImportHelper">Choose the contact file you saved from Contacts.</p>')
+  })
+
+  it('none of the fallback UI uses warning/error styling for the normal (non-error) state — only the existing shared .errorMessage class is used, and only when something actually failed', () => {
+    const idx = PANEL_SOURCE.indexOf('Import from iPhone Contacts')
+    const body = PANEL_SOURCE.slice(idx, PANEL_SOURCE.indexOf('propCrewImportFutureNote') + 50)
+    expect(body).not.toMatch(/className="[^"]*\b(warning|danger|pillBad)\b/)
   })
 })
 
