@@ -2,7 +2,7 @@
 
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import type { User } from '@supabase/supabase-js'
+import { isAuthSessionMissingError, type User } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { DOCUMENT_CATEGORIES, FINANCIAL_CATEGORIES, MAINTENANCE_CATEGORIES, RENT_PAYMENT_METHODS } from '../lib/property-categories'
 import { useSubscription } from '../lib/useSubscription'
@@ -51,6 +51,7 @@ import { beginReadingFileBytes, toDurableUploadableFile } from '../lib/uploads/d
 import { logUploadDiagnostic, initialUploadDebugState, type UploadDebugState } from '../lib/uploads/diagnostics'
 import { UploadDebugPanel } from '../components/uploads/UploadDebugPanel'
 import { logPhotoUploadDiagnostic, safeFileSummary, safeFileListSummary, safeErrorSummary } from '../lib/property-photos/diagnostics'
+import { friendlyPortfolioLoadMessage } from '../lib/dashboard/portfolio-load-status'
 import { enrichMaintenanceCases, relevantContactsForProperty, showsDedicatedUrgentBadge, type IntakeSessionOutcome, type PropCrewLinkRef, type MaintenanceCaseStatus } from '../lib/maintenance/command-center'
 import { MaintenanceCaseDetail } from '../components/maintenance/MaintenanceCaseDetail'
 import { NewMaintenanceRequestModal } from '../components/maintenance/NewMaintenanceRequestModal'
@@ -449,6 +450,19 @@ export default function Home() {
   const [authReady, setAuthReady] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // Mobile Authentication & Layout Reliability V1 — see
+  // docs/mobile-auth-layout-reliability-v1.md and loadPortfolio() below
+  // for the full root-cause writeup. hasLoadedPortfolio distinguishes
+  // "successfully loaded at least once this session" (real data, even
+  // if genuinely empty) from "never successfully loaded" (state
+  // unknown — must never render as a 0-property dashboard).
+  // portfolioLoadFailed is set only when the MOST RECENT attempt ended
+  // in a query error; combined with !hasLoadedPortfolio, it gates the
+  // dedicated recovery screen. autoRetriedRef bounds the one automatic
+  // retry to exactly once per sign-in — never a loop, never a storm.
+  const [hasLoadedPortfolio, setHasLoadedPortfolio] = useState(false)
+  const [portfolioLoadFailed, setPortfolioLoadFailed] = useState(false)
+  const autoRetriedRef = useRef(false)
   // Bug fix (real-device iPhone testing, M3.1 follow-up): a brief,
   // auto-dismissing confirmation for fast row-level mutations (currently
   // just the maintenance status <select>) that update local state
@@ -633,18 +647,58 @@ export default function Home() {
       setAuthReady(true)
       return
     }
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user ?? null)
+    const client = supabase
+    let cancelled = false
+    // Mobile Authentication & Layout Reliability V1 — root cause: a
+    // real (not fabricated) session-validation error like "JWT issued
+    // at future" is a normal, expected, self-resolving outcome of
+    // ordinary token-refresh timing (see this milestone's own
+    // completion report for the full clock-skew evidence) — it does
+    // NOT mean the user signed out. Previously, getUser()'s `error`
+    // field was discarded entirely (`.then(({ data }) => ...)`), so
+    // ANY such transient failure set `user` to null exactly like a
+    // real sign-out. This gives the client's OWN refreshSession() path
+    // — a real refresh-token exchange against Supabase, never a local
+    // bypass of JWT validation — exactly ONE chance to recover before
+    // concluding the user is actually signed out. Skipped entirely
+    // when there's clearly no session to refresh (AuthSessionMissingError
+    // — the ordinary "never signed in" case), so a first-time/anonymous
+    // visit never pays for an extra network round-trip.
+    async function bootstrapAuth() {
+      const { data, error: getUserError } = await client.auth.getUser()
+      if (cancelled) return
+      if (data.user) {
+        setUser(data.user)
+        setAuthReady(true)
+        return
+      }
+      if (getUserError && !isAuthSessionMissingError(getUserError)) {
+        const { data: refreshed } = await client.auth.refreshSession()
+        if (cancelled) return
+        setUser(refreshed.user ?? null)
+        setAuthReady(true)
+        return
+      }
+      setUser(null)
       setAuthReady(true)
-    })
+    }
+    void bootstrapAuth()
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
       setSelectedId(null)
     })
-    return () => listener.subscription.unsubscribe()
+    return () => { cancelled = true; listener.subscription.unsubscribe() }
   }, [])
 
   useEffect(() => {
+    // A new sign-in (or sign-out) always starts this session's
+    // load-status tracking fresh — never inherits "already loaded" or
+    // "already used its one auto-retry" from a previous user on a
+    // shared device, and never suppresses a genuine retry opportunity
+    // for the newly-signed-in user.
+    setHasLoadedPortfolio(false)
+    setPortfolioLoadFailed(false)
+    autoRetriedRef.current = false
     if (user) void loadPortfolio()
     else {
       setProperties([])
@@ -907,9 +961,28 @@ export default function Home() {
     ])
     const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError || contactError || requestError || systemError || noteError || ownershipError || rentPaymentError || taxRecordError || taxCustomItemError
     if (firstError) {
+      // Mobile Authentication & Layout Reliability V1 — root-cause
+      // writeup in docs/mobile-auth-layout-reliability-v1.md. The raw
+      // error (which can be a real, transient session-validation
+      // failure like "JWT issued at future") is still logged here for
+      // diagnostics, exactly as before — only the user-facing text
+      // changed, to a friendly, non-technical, always-the-same message
+      // (never the raw Postgres/PostgREST string as the headline).
       logPhotoUploadDiagnostic('PHOTO_RELOAD_ERROR', { stage: 'query', error: safeErrorSummary(firstError) })
-      setError(firstError.message)
+      setError(friendlyPortfolioLoadMessage())
+      setPortfolioLoadFailed(true)
       setBusy(false)
+      // Exactly one automatic, bounded retry — only when this session
+      // has NEVER yet successfully loaded (a reload failure on top of
+      // already-good data does not need this; the existing data stays
+      // on screen with just the error banner, which is correct). Never
+      // schedules a second automatic retry (autoRetriedRef), so a
+      // persistent failure surfaces the manual "Try again" state
+      // instead of silently hammering the backend.
+      if (!hasLoadedPortfolio && !autoRetriedRef.current) {
+        autoRetriedRef.current = true
+        window.setTimeout(() => { void loadPortfolio() }, 2000)
+      }
       return
     }
 
@@ -970,6 +1043,8 @@ export default function Home() {
     setIntakeSessions((intakeSessionRows || []) as IntakeSessionOutcome[])
     setContactLinks((contactLinkRows || []) as PropCrewLinkRef[])
     setRentPayments((rentPaymentRows || []) as RentPaymentRecord[])
+    setHasLoadedPortfolio(true)
+    setPortfolioLoadFailed(false)
     setBusy(false)
   }
 
@@ -1949,6 +2024,41 @@ export default function Home() {
 
   if (!user) {
     return <LandingPage />
+  }
+
+  // Mobile Authentication & Layout Reliability V1 — see loadPortfolio()
+  // above for the full root-cause writeup. Two states the dashboard
+  // previously conflated with "authenticated and genuinely empty":
+  // still loading for the first time this session, and a first-load
+  // query failure (which can be a transient session-validation error —
+  // never assumed to mean the user actually has zero properties). Both
+  // gates are keyed on hasLoadedPortfolio, so neither ever applies
+  // again once a load has succeeded even once — a LATER reload failure
+  // leaves the last-good data on screen with only the existing
+  // {error} banner (stale-but-real data, not a misleading zero-state).
+  if (!hasLoadedPortfolio && busy) {
+    return (
+      <main className="shell">
+        <AuthHeader onSmartUploadCompleted={() => void loadPortfolio()} />
+        <div className="loadingState portfolioLoadingState">Loading your portfolio…</div>
+      </main>
+    )
+  }
+
+  if (!hasLoadedPortfolio && portfolioLoadFailed) {
+    return (
+      <main className="shell">
+        <AuthHeader onSmartUploadCompleted={() => void loadPortfolio()} />
+        <section className="authShell portfolioRecoveryShell">
+          <div className="authCard portfolioRecoveryCard">
+            <p className="eyebrow">PROPROSTER</p>
+            <h1>Couldn&apos;t load your portfolio</h1>
+            <p className="authIntro">{friendlyPortfolioLoadMessage()}</p>
+            <button className="primary authSubmit" disabled={busy} onClick={() => void loadPortfolio()}>{busy ? 'Trying again…' : 'Try again'}</button>
+          </div>
+        </section>
+      </main>
+    )
   }
 
   if (selected) {

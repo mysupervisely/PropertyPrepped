@@ -381,6 +381,17 @@ h2, h3, p { margin-top: 0; }
 .globalNotice { margin: 14px 0 0; border-radius: 10px; padding: 11px 12px; background: var(--brand-soft); border: 1px solid #cadfd4; color: var(--brand); font-size: 13px; }
 .maintenanceStatusUpdateNotice { margin: 4px 0 0; font-size: 13px; color: var(--brand); font-weight: 600; }
 .loadingState { color: var(--muted); }
+/* Mobile Authentication & Layout Reliability V1 — the two dashboard
+   states that previously had no distinct visual treatment: still
+   loading the portfolio for the first time this session, and a
+   first-load failure (see app/page.tsx's hasLoadedPortfolio/
+   loadPortfolio() for the full writeup). Reuses .authShell/.authIntro/
+   .authSubmit for consistent design language; .portfolioRecoveryCard
+   only overrides the oversized 40px .authCard heading, which reads
+   right for a full sign-in page but not this compact retry card. */
+.portfolioLoadingState { padding: 80px 20px; text-align: center; }
+.portfolioRecoveryCard { width: min(460px, 100%); background: white; border: 1px solid var(--line); border-radius: 22px; padding: 32px; text-align: center; }
+.portfolioRecoveryCard h1 { font-size: 22px; margin: 0 0 10px; }
 .setupCard { width: min(620px, 100%); }
 .setupCard > p { color: var(--muted); line-height: 1.6; }
 .setupCard h1 { margin-bottom: 16px; }
@@ -1460,13 +1471,26 @@ h2, h3, p { margin-top: 0; }
   .reusePreferenceField .modeToggle { width: 100%; }
   .reusePreferenceField .modeToggle button { flex: 1; }
 }
-@media (max-width: 380px) {
-  /* The new hamburger button adds real width to .topbar's left side —
-     at the very narrowest supported widths (320-375px) there isn't
-     always room for it alongside a full-width .accountActions button
-     row on the same line. Let the topbar wrap to a second row here
-     rather than overflow, instead of touching the shared .topbar rule
-     other pages also use. */
+@media (max-width: 480px) {
+  /* Mobile Authentication & Layout Reliability V1 — root cause of the
+     reported left-edge clipping/misalignment, confirmed by direct
+     measurement (getBoundingClientRect(), not guessed): .topbar's two
+     flex children (.topbarBrandGroup, .topbarActions) do not wrap by
+     default, and at exactly 390-393px — ordinary, common iPhone
+     viewport widths — their combined content (hamburger + wordmark on
+     the left; search + "+ Smart Upload" on the right, its label text
+     never shortened) is ~26-29px wider than the available row, pushing
+     the WHOLE PAGE ~29px wider than the viewport and making it
+     horizontally scrollable, something this app should never do. Once
+     a page can scroll horizontally at all, any incidental sideways
+     touch movement leaves every OTHERWISE-correctly-sized section
+     (the welcome heading, PropWatch, My Properties — none of which
+     overflow on their own) shifted and partially off the left edge —
+     one root cause explaining every symptom in the bug report at once.
+     This breakpoint previously only covered 320-380px (missing
+     381-480px, exactly where the overflow was measured); widening it
+     is the same existing, already-correct wrap mechanism, just applied
+     to the width range where it was actually needed. */
   .topbar { flex-wrap: wrap; row-gap: 10px; }
   .topbarBrandGroup { flex: 1 1 auto; min-width: 0; }
 }
