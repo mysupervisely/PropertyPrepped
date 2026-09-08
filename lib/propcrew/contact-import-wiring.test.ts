@@ -20,7 +20,7 @@ describe('Manual entry is fully preserved', () => {
       expect(PANEL_SOURCE).toContain(field)
     }
     expect(PANEL_SOURCE).toContain('{PROPCREW_PRIVATE_NOTE_LABEL}<small>{PROPCREW_PRIVACY_DISCLOSURE}</small>')
-    expect(PANEL_SOURCE).toContain('async function save()')
+    expect(PANEL_SOURCE).toContain('async function save(force = false) {')
     expect(PANEL_SOURCE).toContain("supabase.from('property_contacts').insert(payload)")
     expect(PANEL_SOURCE).toContain("supabase.from('property_contacts').update(payload).eq('id', editingId)")
   })
@@ -32,11 +32,11 @@ describe('Manual entry is fully preserved', () => {
     expect(slice).toContain('onClick={openAdd}')
   })
 
-  it('openAddChooser() skips the chooser entirely and behaves exactly like the old direct openAdd() when the picker is unsupported', () => {
+  it('PropCrew Mobile Contact Import V1: openAddChooser() now ALWAYS shows the chooser (superseding the old "skip straight to the manual form when unsupported" behavior) — every browser now has a real, working import option (native picker or vCard) alongside Enter Manually, so there is never a dead option to skip past', () => {
     const idx = PANEL_SOURCE.indexOf('function openAddChooser')
     const slice = PANEL_SOURCE.slice(idx, idx + 300)
-    expect(slice).toContain('if (pickerSupported) setShowAddChooser(true)')
-    expect(slice).toContain('else openAdd()')
+    expect(slice).toContain('setShowAddChooser(true)')
+    expect(slice).not.toContain('if (pickerSupported) setShowAddChooser(true)')
   })
 })
 
@@ -59,8 +59,8 @@ describe('Contact-picker support is feature-detected, not assumed', () => {
 describe('Selecting a contact pre-fills the existing form, never auto-saves', () => {
   it('applyImportCandidate() sets draft/showForm — the SAME state the manual flow uses — and never calls save()', () => {
     const idx = PANEL_SOURCE.indexOf('function applyImportCandidate')
-    const slice = PANEL_SOURCE.slice(idx, PANEL_SOURCE.indexOf('async function pickFromContacts'))
-    expect(slice).toContain('setDraft({ ...emptyDraft, name: candidate.name, phone, email,')
+    const slice = PANEL_SOURCE.slice(idx, PANEL_SOURCE.indexOf('async function handleVCardFile'))
+    expect(slice).toContain("setDraft({ ...emptyDraft, name: candidate.name, businessName: candidate.businessName || '', phone, email,")
     expect(slice).toContain('setShowForm(true)')
     expect(slice).not.toContain('void save()')
     expect(slice).not.toMatch(/\bsave\(\)/)
