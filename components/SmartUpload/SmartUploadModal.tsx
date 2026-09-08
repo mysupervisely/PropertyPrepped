@@ -34,6 +34,8 @@ import {
 } from '../../lib/smart-upload/engine'
 import { ReceiptReview, type ReceiptSaveInput } from './ReceiptReview'
 import { PrepareOnlyReview } from './PrepareOnlyReview'
+import { initialSmartUploadDebugState, type SmartUploadDebugState } from '../../lib/uploads/diagnostics'
+import { beginReadingFileBytes } from '../../lib/uploads/durable-file'
 
 type ItemStatus = 'Uploading' | 'Analyzing' | 'Ready' | 'Failed' | 'Unsupported'
 
@@ -51,6 +53,11 @@ type QueueItem = {
   createdMaintenanceRecordId: string | null
   createdContactId: string | null
   saving: boolean
+  // V1.1 (real-device diagnostics) — Section 2/8: "Needs attention"
+  // alone doesn't say whether upload or analysis failed. This carries
+  // the same per-stage breakdown for every item, independent of the
+  // others — one item's Failed status/debug never touches another's.
+  debug: SmartUploadDebugState
 }
 
 export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean; onClose: () => void; onCompleted?: () => void }) {
@@ -117,25 +124,31 @@ export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean
   // lib/smart-upload/engine.ts's analyzeDocument() — the same function
   // Smart Import's queue calls — so there is exactly one implementation
   // of "call Document Intelligence, then read back the result."
-  async function runAnalyze(documentId: string, itemId: string) {
+  // Merges into the item's OWN existing debug object via a functional
+  // setItems update — never a stale `items` closure snapshot, so this
+  // is safe to call from deep inside an async chain regardless of how
+  // many other items have been added/patched in the meantime.
+  async function runAnalyze(documentId: string, itemId: string, flow: 'smart-upload' | 'smart-upload-camera') {
     if (!supabase) return
-    const result = await analyzeDocument(supabase, documentId)
+    const result = await analyzeDocument(supabase, documentId, flow)
     if (!result.ok) {
-      patchItem(itemId, { status: 'Failed', error: result.error })
+      setItems((prev) => prev.map((it) => (it.id === itemId ? { ...it, status: 'Failed', error: result.error, debug: { ...it.debug, analysis: 'failed', analysisError: result.error } } : it)))
       return
     }
-    patchItem(itemId, { status: 'Ready', documentType: result.documentType, analysis: result.analysis })
+    setItems((prev) => prev.map((it) => (it.id === itemId ? { ...it, status: 'Ready', documentType: result.documentType, analysis: result.analysis, debug: { ...it.debug, analysis: 'success' } } : it)))
   }
 
-  async function processFile(file: File, batchId: string) {
+  async function processFile(file: File, batchId: string, flow: 'smart-upload' | 'smart-upload-camera' = 'smart-upload', bytesPromise?: Promise<ArrayBuffer>) {
     if (!supabase || !ownerId) return
     const localId = crypto.randomUUID()
+    const debug = initialSmartUploadDebugState(file, flow)
 
     if (!isSupportedForSmartUpload(file)) {
       setItems((prev) => [...prev, {
         id: localId, documentId: '', fileName: file.name, status: 'Unsupported',
         error: 'This file type isn’t supported for Smart Upload (PDF, JPEG, PNG, and WEBP only).',
         confirmedPropertyId: null, completedAt: null, createdFinancialTransactionId: null, createdMaintenanceRecordId: null, createdContactId: null, saving: false,
+        debug: { ...debug, validation: 'rejected', validationReason: 'Unsupported file type' },
       }])
       return
     }
@@ -143,6 +156,7 @@ export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean
     setItems((prev) => [...prev, {
       id: localId, documentId: '', fileName: file.name, status: 'Uploading',
       confirmedPropertyId: null, completedAt: null, createdFinancialTransactionId: null, createdMaintenanceRecordId: null, createdContactId: null, saving: false,
+      debug: { ...debug, validation: 'accepted' },
     }])
 
     // property_id is deliberately null here — Smart Upload analyzes
@@ -150,25 +164,25 @@ export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean
     // (supabase/milestone-12-smart-upload.sql). category is a neutral
     // placeholder; it's refined once the property/type are confirmed
     // (Save below sets it to a real DOCUMENT_CATEGORIES value).
-    const uploadResult = await uploadDocumentForReview(supabase, ownerId, file, batchId, 'SmartUpload')
+    const uploadResult = await uploadDocumentForReview(supabase, ownerId, file, batchId, 'SmartUpload', flow, bytesPromise)
     if (!uploadResult.ok) {
-      patchItem(localId, { status: 'Failed', error: uploadResult.error })
+      setItems((prev) => prev.map((it) => (it.id === localId ? { ...it, status: 'Failed', error: uploadResult.error, debug: { ...it.debug, storageUpload: 'failed', storageError: uploadResult.error, databaseRecord: 'skipped', analysis: 'skipped' } } : it)))
       return
     }
 
     // Re-key the item to the REAL smart_upload_items.id now that it
     // exists, so every later write (property confirmation, Save) targets
     // the real row.
-    setItems((prev) => prev.map((it) => (it.id === localId ? { ...it, id: uploadResult.itemId, documentId: uploadResult.documentId, status: 'Analyzing' } : it)))
+    setItems((prev) => prev.map((it) => (it.id === localId ? { ...it, id: uploadResult.itemId, documentId: uploadResult.documentId, status: 'Analyzing', debug: { ...it.debug, storageUpload: 'success', databaseRecord: 'success' } } : it)))
 
-    await runAnalyze(uploadResult.documentId, uploadResult.itemId)
+    await runAnalyze(uploadResult.documentId, uploadResult.itemId, flow)
   }
 
-  function handleFiles(fileList: FileList | null) {
+  function handleFiles(fileList: FileList | null, bytesPromises: Promise<ArrayBuffer>[], flow: 'smart-upload' | 'smart-upload-camera' = 'smart-upload') {
     if (!fileList || !fileList.length) return
     const batchId = crypto.randomUUID()
     setGlobalError('')
-    Array.from(fileList).forEach((file) => { void processFile(file, batchId) })
+    Array.from(fileList).forEach((file, i) => { void processFile(file, batchId, flow, bytesPromises[i]) })
   }
 
   async function selectProperty(item: QueueItem, propertyId: string) {
@@ -289,24 +303,39 @@ export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean
   )
 }
 
-function SmartUploadEntry({ onFiles, compact }: { onFiles: (files: FileList | null) => void; compact?: boolean }) {
+function SmartUploadEntry({ onFiles, compact }: { onFiles: (files: FileList | null, bytesPromises: Promise<ArrayBuffer>[], flow?: 'smart-upload' | 'smart-upload-camera') => void; compact?: boolean }) {
+  // V1.2 (real iPhone storage payload root-cause fix — see
+  // lib/uploads/durable-file.ts's header): begin reading every file's
+  // bytes HERE, synchronously, in the onChange itself, before onFiles()
+  // even runs and before the input's value is reset — anchoring the
+  // read to the moment the picker's underlying resource is still
+  // guaranteed valid, no matter how many `await`s happen afterward.
+  function readSelected(fileList: FileList | null): Promise<ArrayBuffer>[] {
+    return fileList ? Array.from(fileList).map(beginReadingFileBytes) : []
+  }
   return (
     <div className={`smartUploadEntry ${compact ? 'smartUploadEntryCompact' : ''}`}>
       {!compact && <p className="smartUploadEntryPrompt">How would you like to add something?</p>}
       <label className="smartUploadEntryOption">
         <span className="smartUploadEntryIcon" aria-hidden="true">📷</span>
         <span><strong>Take Photo</strong><small>Use your camera</small></span>
-        <input type="file" accept="image/*" capture="environment" onChange={(e) => { onFiles(e.target.files); e.target.value = '' }} />
+        {/* V1.1: this is the ONE input tagged 'smart-upload-camera' —
+            everything downstream (uploadDocumentForReview, analyzeDocument,
+            the debug panel) is the exact same pipeline as Choose File/
+            Upload Multiple below; only the diagnostic flow label differs,
+            so a real-device console log can tell a camera capture apart
+            from a Photo Library selection. */}
+        <input type="file" accept="image/*" capture="environment" onChange={(e) => { const bytesPromises = readSelected(e.target.files); onFiles(e.target.files, bytesPromises, 'smart-upload-camera'); e.target.value = '' }} />
       </label>
       <label className="smartUploadEntryOption">
         <span className="smartUploadEntryIcon" aria-hidden="true">📄</span>
         <span><strong>Choose File</strong><small>PDF, image, or supported document</small></span>
-        <input type="file" accept={SMART_UPLOAD_ACCEPT} onChange={(e) => { onFiles(e.target.files); e.target.value = '' }} />
+        <input type="file" accept={SMART_UPLOAD_ACCEPT} onChange={(e) => { const bytesPromises = readSelected(e.target.files); onFiles(e.target.files, bytesPromises); e.target.value = '' }} />
       </label>
       <label className="smartUploadEntryOption">
         <span className="smartUploadEntryIcon" aria-hidden="true">🗂️</span>
         <span><strong>Upload Multiple</strong><small>Select several files</small></span>
-        <input type="file" accept={SMART_UPLOAD_ACCEPT} multiple onChange={(e) => { onFiles(e.target.files); e.target.value = '' }} />
+        <input type="file" accept={SMART_UPLOAD_ACCEPT} multiple onChange={(e) => { const bytesPromises = readSelected(e.target.files); onFiles(e.target.files, bytesPromises); e.target.value = '' }} />
       </label>
       {/* Milestone 14, item 1 / Final Launch Fixes: secondary to the
           three options above — a brief explainer plus a link out to the
@@ -342,9 +371,37 @@ function SmartUploadQueue({ items, onOpen }: { items: QueueItem[]; onOpen: (id: 
               <span className="smartUploadQueueName">{item.fileName}{item.completedAt && ' — Saved'}</span>
               <span className={`statusPill ${QUEUE_STATUS_TONE[item.status]}`}>{item.completedAt ? 'Saved' : QUEUE_STATUS_LABEL[item.status]}</span>
             </button>
+            {/* V1.1 (real-device diagnostics) — Section 2: "Needs
+                attention" alone doesn't say whether upload or analysis
+                failed. Shown directly in the list (not only after
+                tapping in) so the product owner can see every file's
+                real stage from an iPhone with no Web Inspector. One
+                item's own debug line — never affects any other item's
+                already-rendered row. */}
+            {item.status === 'Failed' && !item.completedAt && <SmartUploadDebugLine debug={item.debug} />}
           </li>
         ))}
       </ul>
+    </div>
+  )
+}
+
+function SmartUploadDebugLine({ debug }: { debug: SmartUploadDebugState }) {
+  const stageFailed = debug.storageUpload === 'failed' ? 'Upload' : debug.databaseRecord === 'failed' ? 'Database record' : debug.analysis === 'failed' ? 'Analysis' : debug.validation === 'rejected' ? 'Validation' : null
+  const reason = debug.storageUpload === 'failed' ? debug.storageError : debug.databaseRecord === 'failed' ? debug.databaseError : debug.analysis === 'failed' ? debug.analysisError : debug.validationReason
+  return (
+    <div className="smartUploadDebugLine">
+      <p className="uploadDebugTitle">Debug ({debug.flow})</p>
+      <dl>
+        <dt>File received</dt><dd>{debug.fileReceived ? 'Yes' : 'No'}</dd>
+        <dt>Type</dt><dd>{debug.reportedMime}</dd>
+        <dt>Validation</dt><dd>{debug.validation === 'accepted' ? 'Accepted' : debug.validation === 'rejected' ? 'Rejected' : 'Pending…'}</dd>
+        <dt>Upload</dt><dd>{debug.storageUpload === 'pending' ? 'Pending…' : debug.storageUpload === 'success' ? 'Success' : 'Failed'}</dd>
+        <dt>Database record</dt><dd>{debug.databaseRecord === 'pending' ? 'Pending…' : debug.databaseRecord === 'success' ? 'Success' : debug.databaseRecord === 'skipped' ? 'Skipped' : 'Failed'}</dd>
+        <dt>Analysis</dt><dd>{debug.analysis === 'pending' ? 'Pending…' : debug.analysis === 'success' ? 'Success' : debug.analysis === 'skipped' ? 'Skipped' : 'Failed'}</dd>
+        {stageFailed && <><dt>Failing stage</dt><dd>{stageFailed}</dd></>}
+        {reason && <><dt>Reason</dt><dd>{reason}</dd></>}
+      </dl>
     </div>
   )
 }

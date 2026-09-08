@@ -23,14 +23,14 @@ const addPropertyBody = sliceFunction('async function addProperty()', 'function 
 describe('Property photo upload — M2.1 fixes (still in place)', () => {
   it('handleImage validates the picked cover photo and surfaces a rejection instead of silently accepting/dropping it', () => {
     const fnStart = source.indexOf('const handleImage = ')
-    const fnBody = source.slice(fnStart, fnStart + 700)
+    const fnBody = source.slice(fnStart, fnStart + 1600)
     expect(fnBody).toContain('validatePropertyPhotoFile(file)')
     expect(fnBody).toContain('setError(validation.reason)')
   })
 
   it('handleImage resets the file input value after reading the file, so re-selecting the same file fires change again', () => {
     const fnStart = source.indexOf('const handleImage = ')
-    const fnBody = source.slice(fnStart, fnStart + 700)
+    const fnBody = source.slice(fnStart, fnStart + 1600)
     expect(fnBody).toContain("e.target.value = ''")
   })
 
@@ -51,7 +51,7 @@ describe('Property photo upload — M2.1 fixes (still in place)', () => {
   it('the gallery photo-upload input resets its value after each selection', () => {
     const idx = source.indexOf("<input type=\"file\" accept=\"image/*\" multiple disabled={busy}")
     expect(idx).toBeGreaterThan(-1)
-    expect(source.slice(idx, idx + 250)).toContain("e.target.value = ''")
+    expect(source.slice(idx, idx + 700)).toContain("e.target.value = ''")
   })
 
   it('still uses the existing property-photos bucket and property_photos table — no new storage system was introduced', () => {
@@ -61,12 +61,12 @@ describe('Property photo upload — M2.1 fixes (still in place)', () => {
   })
 })
 
-describe('Property photo upload — iOS production-bug fix (toUploadableFile)', () => {
-  it('handleImage rewraps the file with toUploadableFile() at selection time, before it is ever stored in coverFile state', () => {
+describe('Property photo upload — iOS production-bug fix (toUploadableFile), extended by V1.2\'s durable-byte fix', () => {
+  it('handleImage rebuilds the file with toDurableUploadableFile() at selection time, before it is ever stored in coverFile state (V1.2 — lib/uploads/durable-file.ts, superseding the old lazy toUploadableFile() wrap for the actual uploaded object)', () => {
     const fnStart = source.indexOf('const handleImage = ')
-    const fnBody = source.slice(fnStart, fnStart + 1300)
-    const rewrapIdx = fnBody.indexOf('toUploadableFile(file, validation.contentType)')
-    const setCoverIdx = fnBody.indexOf('setCoverFile(')
+    const fnBody = source.slice(fnStart, fnStart + 2500)
+    const rewrapIdx = fnBody.indexOf('toDurableUploadableFile(file, validation.contentType, bytesPromise)')
+    const setCoverIdx = fnBody.indexOf('setCoverFile(durable.file)')
     expect(rewrapIdx).toBeGreaterThan(-1)
     expect(setCoverIdx).toBeGreaterThan(-1)
     expect(rewrapIdx).toBeLessThan(setCoverIdx)
@@ -184,11 +184,20 @@ describe('Property photo upload — V2 post-selection-failure investigation', ()
 
   it("the gallery input captures e.target.files into a local const BEFORE resetting e.target.value, so the reset can't clear what was already captured", () => {
     const idx = source.indexOf("<input type=\"file\" accept=\"image/*\" multiple disabled={busy}")
-    const handlerBody = source.slice(idx, idx + 250)
+    const handlerBody = source.slice(idx, idx + 700)
     const filesIdx = handlerBody.indexOf('const files = e.target.files')
     const resetIdx = handlerBody.indexOf("e.target.value = ''")
     expect(filesIdx).toBeGreaterThan(-1)
     expect(resetIdx).toBeGreaterThan(filesIdx)
+  })
+
+  it('V1.2: that same input also begins reading every selected file\'s bytes BEFORE resetting its value — see lib/uploads/durable-file.ts for why this matters beyond the FileList-emptiness class of bug above', () => {
+    const idx = source.indexOf("<input type=\"file\" accept=\"image/*\" multiple disabled={busy}")
+    const handlerBody = source.slice(idx, idx + 700)
+    const readIdx = handlerBody.indexOf('beginReadingFileBytes')
+    const resetIdx = handlerBody.indexOf("e.target.value = ''")
+    expect(readIdx).toBeGreaterThan(-1)
+    expect(resetIdx).toBeGreaterThan(readIdx)
   })
 
   it('addPhotoFiles() wraps its upload loop in try/catch/finally — an unexpected exception can no longer escape as a silent, unhandled promise rejection', () => {
@@ -209,7 +218,7 @@ describe('Property photo upload — V2 post-selection-failure investigation', ()
   })
 
   it('both real upload call sites are invoked fire-and-forget with no .catch() — confirming the try/catch above is load-bearing, not redundant belt-and-suspenders', () => {
-    expect(source).toContain('void addPhotoFiles(files)')
+    expect(source).toContain('void addPhotoFiles(files, bytesPromises)')
     expect(source).toContain('void addProperty()')
     expect(source).not.toMatch(/addPhotoFiles\([^)]*\)\.catch/)
     expect(source).not.toMatch(/addProperty\(\)\.catch/)

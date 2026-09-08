@@ -28,6 +28,9 @@ import type { ApplyFields, DocumentAnalysisOutput } from '../document-intelligen
 import { shouldCreateFinancialTransaction, shouldCreateMaintenanceRecord } from './idempotency'
 import { findMatchingContact } from './match-contact'
 import type { SmartUploadContact } from './types'
+import { resolveImageContentType, toUploadableImageFile } from '../uploads/image-file'
+import { toDurableUploadableFile } from '../uploads/durable-file'
+import { logUploadDiagnostic, safeErrorSummary, type UploadFlow } from '../uploads/diagnostics'
 
 export const safeName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_')
 
@@ -56,27 +59,98 @@ export async function uploadDocumentForReview(
   file: File,
   batchId: string,
   source: UploadSource,
+  // V1.1 (real-device diagnostics): shared by Smart Upload, Smart
+  // Import, and the header's "Take Photo" capture input
+  // (SmartUploadModal.tsx's camera-input onChange feeds the exact same
+  // handleFiles -> processFile -> this function pipeline — there is no
+  // separate "Take Photo" upload path to fix). `flow` defaults to
+  // 'smart-upload' so every pre-existing caller (Smart Import, and any
+  // call site that predates this parameter) is unaffected; only
+  // SmartUploadModal's camera input passes 'smart-upload-camera', so a
+  // real-device console log can tell the two apart.
+  flow: UploadFlow = 'smart-upload',
+  // V1.2 (real iPhone storage payload root-cause fix — see
+  // lib/uploads/durable-file.ts's header for the full "No content
+  // provided" trace). MUST have been started by the caller
+  // SYNCHRONOUSLY at file-selection time, before that picker's
+  // `<input>`'s value was ever reset. Optional, defaulting to
+  // undefined, so Smart Import's pre-existing call (which predates this
+  // fix and does not yet capture bytes this early) keeps working
+  // exactly as before — only SmartUploadModal's callers (Smart Upload,
+  // Take Photo) pass one.
+  bytesPromise?: Promise<ArrayBuffer>,
 ): Promise<UploadResult> {
-  const path = `${ownerId}/smart-upload/${batchId}/${crypto.randomUUID()}-${safeName(file.name)}`
-  const { error: uploadError } = await supabase.storage.from('property-documents').upload(path, file, { contentType: file.type || undefined, upsert: false })
-  if (uploadError) return { ok: false, error: uploadError.message }
+  logUploadDiagnostic(flow, 'UPLOAD_FILE_RECEIVED', { extension: file.name, reportedMime: file.type, size: file.size, source })
 
+  // property-documents has NO allowed_mime_types allowlist (unlike
+  // property-photos/profile-photos), so the confirmed "@supabase/
+  // storage-js ignores the contentType option" bug (see
+  // lib/uploads/image-file.ts's header) can't cause Storage to reject
+  // an image upload here the way it could on those two buckets — but
+  // the SAME normalization is still applied, for two real reasons: (1)
+  // consistency — this is the one other place besides property/profile
+  // photos that regularly receives camera-originated images, and (2) it
+  // gives resolveMimeType() (lib/document-intelligence/analyze-
+  // request.ts) a corrected mime_type to store, rather than relying
+  // solely on its own extension-fallback for a blank-type iOS file.
+  // PDFs (and anything else non-image) pass through untouched for the
+  // MIME-correction step — but every file (image or not) is equally
+  // exposed to the confirmed byte-loss root cause below, since all of
+  // them come from the same picker input.
+  const looksLikeImage = file.type.startsWith('image/') || (!file.type && /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name))
+  const resolvedContentType = looksLikeImage ? resolveImageContentType(file) : file.type || undefined
+
+  let uploadable: File
+  if (bytesPromise) {
+    try {
+      const durable = await toDurableUploadableFile(file, resolvedContentType, bytesPromise)
+      uploadable = durable.file
+      logUploadDiagnostic(flow, 'UPLOAD_PAYLOAD_READY', { originalSize: file.size, originalByteLength: durable.byteLength, normalizedMime: uploadable.type || '(unchanged)' })
+      if (file.size > 0 && durable.byteLength === 0) {
+        // The critical evidence: the picker reported a real size, but
+        // nothing was actually readable by the time we got here.
+        logUploadDiagnostic(flow, 'UPLOAD_PAYLOAD_READ_ERROR', { error: { message: `reported ${file.size} bytes but 0 bytes were readable` } })
+      }
+    } catch (err) {
+      logUploadDiagnostic(flow, 'UPLOAD_PAYLOAD_READ_ERROR', { error: safeErrorSummary(err) })
+      return { ok: false, error: 'Could not read the selected file. Please try again.' }
+    }
+  } else {
+    uploadable = looksLikeImage ? toUploadableImageFile(file, resolvedContentType) : file
+  }
+  logUploadDiagnostic(flow, 'UPLOAD_NORMALIZATION_COMPLETE', { normalizedMime: uploadable.type || '(unchanged)' })
+
+  const path = `${ownerId}/smart-upload/${batchId}/${crypto.randomUUID()}-${safeName(file.name)}`
+  logUploadDiagnostic(flow, 'UPLOAD_STORAGE_START', { path })
+  const { error: uploadError } = await supabase.storage.from('property-documents').upload(path, uploadable, { contentType: resolvedContentType, upsert: false })
+  if (uploadError) {
+    logUploadDiagnostic(flow, 'UPLOAD_STORAGE_ERROR', { error: safeErrorSummary(uploadError) })
+    return { ok: false, error: uploadError.message }
+  }
+  logUploadDiagnostic(flow, 'UPLOAD_STORAGE_SUCCESS', { path })
+
+  logUploadDiagnostic(flow, 'UPLOAD_DB_START', {})
   const { data: docRow, error: docError } = await supabase
     .from('property_documents')
-    .insert({ owner_id: ownerId, property_id: null, name: file.name, category: 'Other', storage_path: path, size_bytes: file.size, mime_type: file.type || null })
+    .insert({ owner_id: ownerId, property_id: null, name: file.name, category: 'Other', storage_path: path, size_bytes: uploadable.size, mime_type: uploadable.type || null })
     .select('id')
     .single()
   if (docError || !docRow) {
+    logUploadDiagnostic(flow, 'UPLOAD_DB_ERROR', { error: safeErrorSummary(docError) })
     await supabase.storage.from('property-documents').remove([path])
     return { ok: false, error: docError?.message || 'Could not save this file.' }
   }
+  logUploadDiagnostic(flow, 'UPLOAD_DB_SUCCESS', {})
 
   const { data: itemRow, error: itemError } = await supabase
     .from('smart_upload_items')
     .insert({ owner_id: ownerId, document_id: docRow.id, batch_id: batchId, source })
     .select('id')
     .single()
-  if (itemError || !itemRow) return { ok: false, error: itemError?.message || 'Could not start this upload.' }
+  if (itemError || !itemRow) {
+    logUploadDiagnostic(flow, 'UPLOAD_DB_ERROR', { error: safeErrorSummary(itemError), stage: 'smart_upload_items' })
+    return { ok: false, error: itemError?.message || 'Could not start this upload.' }
+  }
 
   return { ok: true, documentId: docRow.id, itemId: itemRow.id }
 }
@@ -93,10 +167,26 @@ export type AnalyzeResult =
  * neither SmartUploadModal nor Smart Import's queue do; a Failed item
  * only re-runs this through an explicit user-triggered Retry.
  */
-export async function analyzeDocument(supabase: SupabaseClient, documentId: string): Promise<AnalyzeResult> {
+export async function analyzeDocument(supabase: SupabaseClient, documentId: string, flow: UploadFlow = 'smart-upload'): Promise<AnalyzeResult> {
+  // V1.1 (real-device diagnostics): Section 8's "trace Needs attention"
+  // ask. Every code path below that can turn into a raw-Failed item is
+  // now a distinct, logged reason — see
+  // docs/upload-reliability-real-device-diagnostics.md for the full
+  // enumeration this was built from (lib/document-intelligence/
+  // analyze-request.ts's own status codes: AI not configured, monthly
+  // AI_LIMIT_REACHED, unsupported resolved MIME (415), file too
+  // large/empty, signed-URL/download failure, and the provider call
+  // itself failing — each already returns its OWN specific `error`
+  // string from the server; this only makes sure that string is logged
+  // as UPLOAD_ANALYSIS_ERROR, not silently swallowed into a bare
+  // "Failed" with nothing recorded).
+  logUploadDiagnostic(flow, 'UPLOAD_ANALYSIS_START', {})
   const { data: sessionData } = await supabase.auth.getSession()
   const token = sessionData.session?.access_token
-  if (!token) return { ok: false, error: 'Your session expired — please sign in again.' }
+  if (!token) {
+    logUploadDiagnostic(flow, 'UPLOAD_ANALYSIS_ERROR', { error: { message: 'session expired' } })
+    return { ok: false, error: 'Your session expired — please sign in again.' }
+  }
   try {
     const resp = await fetch('/api/document-intelligence/analyze', {
       method: 'POST',
@@ -104,8 +194,12 @@ export async function analyzeDocument(supabase: SupabaseClient, documentId: stri
       body: JSON.stringify({ documentId, documentType: 'Other' as DocumentType }),
     })
     const body = await resp.json().catch(() => ({}))
-    if (!resp.ok) return { ok: false, error: body?.error || 'Analysis failed.' }
-  } catch {
+    if (!resp.ok) {
+      logUploadDiagnostic(flow, 'UPLOAD_ANALYSIS_ERROR', { error: { message: body?.error || 'Analysis failed.', status: resp.status } })
+      return { ok: false, error: body?.error || 'Analysis failed.' }
+    }
+  } catch (err) {
+    logUploadDiagnostic(flow, 'UPLOAD_ANALYSIS_ERROR', { error: safeErrorSummary(err), stage: 'fetch' })
     return { ok: false, error: 'Analysis failed. Please try again.' }
   }
   const [{ data: docRow }, { data: analysisRows }] = await Promise.all([
@@ -113,7 +207,11 @@ export async function analyzeDocument(supabase: SupabaseClient, documentId: stri
     supabase.from('document_analyses').select('structured_data').eq('document_id', documentId).order('analysis_version', { ascending: false }).limit(1),
   ])
   const latest = analysisRows?.[0]?.structured_data as DocumentAnalysisOutput | undefined
-  if (!latest) return { ok: false, error: 'Analysis completed but the result could not be loaded.' }
+  if (!latest) {
+    logUploadDiagnostic(flow, 'UPLOAD_ANALYSIS_ERROR', { error: { message: 'result row missing after a successful analyze call' }, stage: 'read-back' })
+    return { ok: false, error: 'Analysis completed but the result could not be loaded.' }
+  }
+  logUploadDiagnostic(flow, 'UPLOAD_ANALYSIS_SUCCESS', {})
   return { ok: true, documentType: (docRow?.document_type as DocumentType) || 'Other', analysis: latest }
 }
 

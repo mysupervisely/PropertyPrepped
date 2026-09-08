@@ -1954,3 +1954,24 @@ h2, h3, p { margin-top: 0; }
 @media (max-width: 460px) {
   .guidedIntakeCategoryGrid { grid-template-columns: 1fr; }
 }
+
+/* Upload Reliability Audit — temporary on-screen debug panel (Section
+   11). Deliberately plain/boxed so it reads as a temporary debug
+   affordance, not a permanent design element — remove alongside
+   UploadDebugPanel.tsx once root causes are confirmed fixed on a real
+   device. */
+.uploadDebugPanel { margin-top: 12px; border: 1px dashed var(--muted); border-radius: 10px; padding: 10px 12px; background: #fafbfa; font-size: 12px; }
+.uploadDebugTitle { margin: 0 0 6px; font-weight: 750; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-size: 10px; }
+.uploadDebugPanel dl, .smartUploadDebugLine dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; }
+.uploadDebugPanel dt, .smartUploadDebugLine dt { color: var(--muted); }
+.uploadDebugPanel dd, .smartUploadDebugLine dd { margin: 0; word-break: break-word; }
+/* "Upload Multiple" renders one panel per file — stacked, each keeping
+   its own border so a failing file's panel is visually distinct from a
+   succeeding sibling's, never merged into one ambiguous block. */
+.uploadDebugPanelGroup { display: grid; gap: 8px; }
+/* Real-Device Diagnostics V1.1 — Smart Upload's per-item debug line,
+   shown directly in the queue list (not only after tapping into the
+   item) so a "Needs attention" file's real failing stage is visible
+   from an iPhone with no Web Inspector. Same temporary/boxed treatment
+   as .uploadDebugPanel, scoped smaller to fit inside a list row. */
+.smartUploadDebugLine { margin: 6px 0 2px; border: 1px dashed var(--muted); border-radius: 8px; padding: 8px 10px; background: #fafbfa; font-size: 11px; }
