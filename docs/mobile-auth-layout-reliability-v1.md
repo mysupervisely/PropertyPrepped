@@ -212,6 +212,74 @@ horizontal overflow at 320/375/390/393/430px, and zero overflow at
 not wrap at any of those wider widths, confirming the 480px breakpoint
 doesn't reach that far).
 
+### Follow-up: the header fix did not fully solve it — real-device evidence and the remaining cause
+
+Real-iPhone testing on the resulting Deploy Preview confirmed the
+header fix helped (header itself renders correctly) but the greeting
+heading ("Good afternoon, Kiro.") and the PropWatch heading/eyebrow
+("PropWatch" / "Stay ahead of what needs attention.") still clipped on
+the left, while the Portfolio Snapshot card remained correctly
+positioned. Critically, the report explicitly noted the page is **not**
+uniformly shifted left — some elements are fine, others aren't — which
+disproves the "one overflow makes the whole page scrollable, then
+scroll drift clips everything" mechanism above as a *complete*
+explanation. That mechanism is real (it's what the header fix
+addressed) but was not the only one.
+
+This environment has no WebKit/Safari engine and no network access to
+fetch one, so the remaining defect could not be reproduced pixel-for-
+pixel here the way the header overflow was. Two independent,
+evidence-supported (not guessed) structural fixes were made instead,
+each targeted at a concrete, verifiable difference between the
+"working" and "clipped" elements:
+
+**1. `.sectionHead`'s flex-item min-width gap** (affects PropWatch, and
+by the same construction My Properties). `.sectionHead { display: flex;
+justify-content: space-between; align-items: end; }` has no
+`flex-wrap`, and its first child — an unstyled `<div>` wrapping the
+eyebrow + heading — has no `min-width` override. A flex item's default
+`min-width: auto` lets it refuse to shrink below its own content's
+intrinsic width, which is exactly the class of bug already found and
+fixed for `.topbar`'s children in this same file. Direct comparison
+with the working element, per this follow-up's own instruction:
+`.portfolioSnapshotHead` (Portfolio Snapshot's header row, which never
+clipped) uses `align-items: center` and pairs a short, single-line `h2`
+with a button — never under intrinsic-width pressure. `.sectionHead`
+pairs a longer, sometimes-multi-line heading with a button and uses
+`align-items: end` — exactly the shape of row where a flex item's
+default `min-width: auto` bites. **Fix:** `.sectionHead > div:first-child
+{ min-width: 0; }` plus the same `flex-wrap: wrap` safety net at
+`≤480px` already proven for `.topbar`. Zero effect when a row already
+fits (verified at 600-1440px — same single-row layout, same
+`buttonLeft`/height as before).
+
+**2. `.welcomeIntro h1`'s negative letter-spacing.** Comparing the
+clipped element (`h1`, "Good afternoon, Kiro.") against its own
+sibling in the same block (`<p>`, "Here's your portfolio at a
+glance.") — which real-device testing did **not** report as
+clipped — the one property unique to the `h1` is a fixed,
+comparatively large negative `letter-spacing: -0.6px` override (its
+sibling `<p>` has none). Negative letter-spacing shifting or clipping
+a line's leading character(s) is a documented WebKit rendering risk;
+this codebase has no way to confirm or rule it out directly without a
+real WebKit engine, so this is reported with that caveat rather than
+as a certainty. **Fix:** removed the override, falling back to the
+base `h1` rule's smaller, em-relative `-0.02em` — already used on
+every other page's heading (Profile, Smart Import, Pricing, Search,
+the marketing landing page) with no similar report. The visual
+tightening intent is preserved, just less aggressive; the shared base
+rule and every other page using it are untouched.
+
+Neither fix uses `overflow-x: hidden`, arbitrary padding, or any other
+compensating hack — both are structural (a missing flex `min-width`
+override; an unnecessarily aggressive per-element style override),
+verified to have zero effect on the desktop/tablet layout, and are the
+smallest changes the gathered evidence supports. If clipping persists
+after this fix on a real device, the next step would need actual
+Safari DevTools remote inspection (or an environment with WebKit and
+device/network access) to pin down conclusively — an honest limit of
+what this sandboxed environment can verify.
+
 ## Explicitly deferred / out of scope for this milestone
 
 - No Supabase dashboard, RLS, schema, environment variable, or Netlify

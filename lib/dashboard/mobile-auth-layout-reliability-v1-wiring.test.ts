@@ -217,3 +217,39 @@ describe('Mobile layout — header horizontal-overflow fix (measured, not guesse
     expect(readFile('components/SmartUploadButton.tsx')).toContain('<span>Smart Upload</span>')
   })
 })
+
+describe('Mobile layout — remaining left-edge clipping fix (real-iPhone follow-up: greeting heading + PropWatch heading)', () => {
+  it('.sectionHead\'s first child (the eyebrow+heading wrapper — PropWatch, My Properties, etc.) gets min-width: 0, closing the same "flex item refuses to shrink below its content" gap already fixed for .topbar', () => {
+    expect(cssSource).toContain('.sectionHead > div:first-child { min-width: 0; }')
+  })
+
+  it('.sectionHead gets a flex-wrap safety net at <=480px — the same proven pattern as .topbar — so a row that still does not fit wraps to two lines instead of overflowing', () => {
+    const idx = cssSource.indexOf('.sectionHead > div:first-child { min-width: 0; }')
+    const body = cssSource.slice(idx, idx + 400)
+    expect(body).toMatch(/@media \(max-width: 480px\) \{\s*\.sectionHead \{ flex-wrap: wrap; \}\s*\}/)
+  })
+
+  it('.portfolioSnapshotHead (the working comparison point) is untouched — this fix only changes .sectionHead, never the header pattern that already worked correctly', () => {
+    expect(cssSource).toContain('.portfolioSnapshotHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }')
+  })
+
+  it('.welcomeIntro h1 no longer overrides letter-spacing — falls back to the base h1 rule\'s smaller, em-relative value already used safely elsewhere (Profile, Smart Import, Pricing, Search, the marketing landing page)', () => {
+    expect(cssSource).toContain('.welcomeIntro h1 { font-size: clamp(24px, 3vw, 32px); }')
+    expect(cssSource).not.toMatch(/\.welcomeIntro h1 \{[^}]*letter-spacing/)
+  })
+
+  it('the base h1 rule (the fallback .welcomeIntro h1 now uses) is untouched — this is a targeted removal of one override, not a change to shared typography', () => {
+    expect(cssSource).toContain('h1 { font-size: clamp(34px, 5vw, 55px); line-height: 1.15; margin: 0; letter-spacing: -0.02em; }')
+  })
+
+  it('the welcome subtitle (<p>, the sibling real-device testing did NOT report as clipped) is untouched — this fix is scoped to the one element that was actually reported', () => {
+    expect(cssSource).toContain(".welcomeIntro > p:last-child { font-size: 15px; margin-top: 4px; }")
+  })
+
+  it('no global overflow-x:hidden and no compensating negative/arbitrary padding were added as a substitute for the structural fix', () => {
+    expect(cssSource).not.toMatch(/^(html|body)\s*\{[^}]*overflow-x:\s*hidden/m)
+    const idx = cssSource.indexOf('.sectionHead > div:first-child { min-width: 0; }')
+    const body = cssSource.slice(Math.max(0, idx - 50), idx + 500)
+    expect(body).not.toMatch(/margin-left:\s*-|padding-left:\s*\d{2,}px/)
+  })
+})
