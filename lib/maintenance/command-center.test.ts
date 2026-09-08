@@ -153,9 +153,9 @@ describe('casesForProperty — strict per-property scoping', () => {
 
 describe('relevantContactsForProperty', () => {
   const contacts: PropCrewContactRef[] = [
-    { id: 'c1', property_id: 'prop-1', owner_id: 'owner-1', name: 'Ace Plumbing', business_name: null, role: 'Plumber' },
-    { id: 'c2', property_id: 'prop-2', owner_id: 'owner-1', name: 'Bolt Electric', business_name: null, role: 'Electrician' },
-    { id: 'c3', property_id: 'prop-3', owner_id: 'owner-1', name: 'Cool Air HVAC', business_name: null, role: 'HVAC' },
+    { id: 'c1', property_id: 'prop-1', owner_id: 'owner-1', name: 'Ace Plumbing', business_name: null, role: 'Plumber', email: null },
+    { id: 'c2', property_id: 'prop-2', owner_id: 'owner-1', name: 'Bolt Electric', business_name: null, role: 'Electrician', email: null },
+    { id: 'c3', property_id: 'prop-3', owner_id: 'owner-1', name: 'Cool Air HVAC', business_name: null, role: 'HVAC', email: null },
   ]
 
   it('includes a contact whose PRIMARY property_id matches', () => {

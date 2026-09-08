@@ -92,7 +92,16 @@ describe('PropCrew assignment — records the landlord\'s decision only', () => 
 describe('Status model — reuses the existing four canonical values, no conflicting one-off system', () => {
   it('MaintenanceCaseDetail offers exactly the pre-existing Submitted/Scheduled/In Progress/Completed values, never a new one', () => {
     expect(caseDetailSource).toContain("const STATUSES: MaintenanceCaseStatus[] = ['Submitted', 'Scheduled', 'In Progress', 'Completed']")
-    expect(caseDetailSource).not.toMatch(/needs.?info/i)
+    // Scoped to the case-status <select> itself, not the whole file:
+    // Tenant Connect Provider Outreach V1 legitimately introduces its
+    // own, entirely separate 'needs_information' vocabulary (a provider
+    // OUTREACH state, never a maintenance_requests.status value — see
+    // lib/maintenance/provider-outreach.ts's own header) rendered
+    // elsewhere in this same component, so a file-wide text match is no
+    // longer the right guard. What must still never happen is a "needs
+    // info"-flavored option inside THIS select.
+    const statusFieldSource = caseDetailSource.slice(caseDetailSource.indexOf('maintenanceStatusField'), caseDetailSource.indexOf('maintenanceStatusUpdateNotice'))
+    expect(statusFieldSource).not.toMatch(/needs.?info/i)
   })
 
   it('"Mark Completed" is a fast path to the SAME status write as the select — not a second, parallel completion mechanism', () => {
