@@ -56,7 +56,22 @@ h2, h3, p { margin-top: 0; }
    marketing-style intro headline elsewhere, and slightly shorter so the
    whole welcome area stays compact. */
 .welcomeIntro { padding: 30px 0 14px; }
-.welcomeIntro h1 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -0.6px; }
+/* Mobile Authentication & Layout Reliability V1 (real-iPhone follow-up):
+   this rule used to also set letter-spacing: -0.6px — a fixed-px,
+   larger-magnitude override unique to this one heading (its sibling
+   subtitle <p> has no letter-spacing override at all, and was NOT among
+   the elements real-device testing found clipped — only this h1 was).
+   Negative letter-spacing shifting/clipping a line's very first
+   character(s) is a known WebKit rendering risk this environment has
+   no way to reproduce directly (no WebKit engine, no real device, no
+   network access here — see docs/mobile-auth-layout-reliability-v1.md
+   for the full writeup); removing the override falls back to the base
+   h1 rule's smaller, em-relative -0.02em, already used without a
+   similar report anywhere else this exact base rule applies (Profile,
+   Smart Import, Pricing, Search, the marketing landing page). Purely a
+   safety change — the visual tightening this override existed for is
+   still present, just less aggressive. */
+.welcomeIntro h1 { font-size: clamp(24px, 3vw, 32px); }
 .welcomeIntro > p:last-child { font-size: 15px; margin-top: 4px; }
 @media (max-width: 460px) {
   /* Mobile Dashboard Spacing Micro-Fix: combined with .portfolioSnapshot's
@@ -71,8 +86,31 @@ h2, h3, p { margin-top: 0; }
 .stat span, .miniStats span, .heroMetrics span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 7px; }
 .stat strong { font-size: 25px; letter-spacing: -0.6px; }
 .sectionHead { display: flex; justify-content: space-between; align-items: end; gap: 18px; margin-bottom: 16px; }
+/* Mobile Authentication & Layout Reliability V1 (real-iPhone follow-up):
+   .sectionHead's first child (the eyebrow+heading wrapper — an
+   unstyled <div>, e.g. PropWatch's "PropWatch"/"Stay ahead of what
+   needs attention.", or My Properties' own heading+count) is a flex
+   item with no min-width override, so its browser-default `min-width:
+   auto` lets it refuse to shrink/wrap below its own content's
+   intrinsic width — the exact same class of bug already found and
+   fixed for .topbar's children (see that fix, same file, above) —
+   forcing the row wider than available space with no flex-wrap to
+   fall back on. Unlike .portfolioSnapshotHead (align-items: center,
+   a plain h2 + button, no long secondary heading beside it — the
+   "looks correct" comparison point), .sectionHead pairs a genuinely
+   long, sometimes-multi-line heading against a second flex item
+   (a button), which is exactly where this default bites. Fixed the
+   same way as .topbar: an explicit min-width: 0 on the text-wrapping
+   child, plus a flex-wrap safety net so a row that still doesn't fit
+   wraps to two lines instead of overflowing. Zero visual effect when
+   the row already fits (every desktop/tablet case, and most mobile
+   ones) — this only changes behavior when content genuinely doesn't fit. */
+.sectionHead > div:first-child { min-width: 0; }
 .sectionHead h2 { margin-bottom: 4px; font-size: 22px; }
 .sectionHead p { color: var(--muted); margin-bottom: 0; font-size: 14px; }
+@media (max-width: 480px) {
+  .sectionHead { flex-wrap: wrap; }
+}
 .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
 .propertyCard { overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 17px; transition: transform .15s ease, border-color .15s ease; }
 .propertyCard:hover { transform: translateY(-2px); border-color: #c9d2cd; }
@@ -381,6 +419,17 @@ h2, h3, p { margin-top: 0; }
 .globalNotice { margin: 14px 0 0; border-radius: 10px; padding: 11px 12px; background: var(--brand-soft); border: 1px solid #cadfd4; color: var(--brand); font-size: 13px; }
 .maintenanceStatusUpdateNotice { margin: 4px 0 0; font-size: 13px; color: var(--brand); font-weight: 600; }
 .loadingState { color: var(--muted); }
+/* Mobile Authentication & Layout Reliability V1 — the two dashboard
+   states that previously had no distinct visual treatment: still
+   loading the portfolio for the first time this session, and a
+   first-load failure (see app/page.tsx's hasLoadedPortfolio/
+   loadPortfolio() for the full writeup). Reuses .authShell/.authIntro/
+   .authSubmit for consistent design language; .portfolioRecoveryCard
+   only overrides the oversized 40px .authCard heading, which reads
+   right for a full sign-in page but not this compact retry card. */
+.portfolioLoadingState { padding: 80px 20px; text-align: center; }
+.portfolioRecoveryCard { width: min(460px, 100%); background: white; border: 1px solid var(--line); border-radius: 22px; padding: 32px; text-align: center; }
+.portfolioRecoveryCard h1 { font-size: 22px; margin: 0 0 10px; }
 .setupCard { width: min(620px, 100%); }
 .setupCard > p { color: var(--muted); line-height: 1.6; }
 .setupCard h1 { margin-bottom: 16px; }
@@ -1460,13 +1509,26 @@ h2, h3, p { margin-top: 0; }
   .reusePreferenceField .modeToggle { width: 100%; }
   .reusePreferenceField .modeToggle button { flex: 1; }
 }
-@media (max-width: 380px) {
-  /* The new hamburger button adds real width to .topbar's left side —
-     at the very narrowest supported widths (320-375px) there isn't
-     always room for it alongside a full-width .accountActions button
-     row on the same line. Let the topbar wrap to a second row here
-     rather than overflow, instead of touching the shared .topbar rule
-     other pages also use. */
+@media (max-width: 480px) {
+  /* Mobile Authentication & Layout Reliability V1 — root cause of the
+     reported left-edge clipping/misalignment, confirmed by direct
+     measurement (getBoundingClientRect(), not guessed): .topbar's two
+     flex children (.topbarBrandGroup, .topbarActions) do not wrap by
+     default, and at exactly 390-393px — ordinary, common iPhone
+     viewport widths — their combined content (hamburger + wordmark on
+     the left; search + "+ Smart Upload" on the right, its label text
+     never shortened) is ~26-29px wider than the available row, pushing
+     the WHOLE PAGE ~29px wider than the viewport and making it
+     horizontally scrollable, something this app should never do. Once
+     a page can scroll horizontally at all, any incidental sideways
+     touch movement leaves every OTHERWISE-correctly-sized section
+     (the welcome heading, PropWatch, My Properties — none of which
+     overflow on their own) shifted and partially off the left edge —
+     one root cause explaining every symptom in the bug report at once.
+     This breakpoint previously only covered 320-380px (missing
+     381-480px, exactly where the overflow was measured); widening it
+     is the same existing, already-correct wrap mechanism, just applied
+     to the width range where it was actually needed. */
   .topbar { flex-wrap: wrap; row-gap: 10px; }
   .topbarBrandGroup { flex: 1 1 auto; min-width: 0; }
 }
