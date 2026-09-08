@@ -51,6 +51,8 @@ import { beginReadingFileBytes, toDurableUploadableFile } from '../lib/uploads/d
 import { logUploadDiagnostic, initialUploadDebugState, type UploadDebugState } from '../lib/uploads/diagnostics'
 import { UploadDebugPanel } from '../components/uploads/UploadDebugPanel'
 import { logPhotoUploadDiagnostic, safeFileSummary, safeFileListSummary, safeErrorSummary } from '../lib/property-photos/diagnostics'
+import { enrichMaintenanceCases, relevantContactsForProperty, type IntakeSessionOutcome, type PropCrewLinkRef, type MaintenanceCaseStatus } from '../lib/maintenance/command-center'
+import { MaintenanceCaseDetail } from '../components/maintenance/MaintenanceCaseDetail'
 import { TenantConnectStatusCard } from '../components/tenant-connect/TenantConnectStatusCard'
 import { TenantRequestsPanel } from '../components/tenant-connect/TenantRequestsPanel'
 
@@ -523,6 +525,16 @@ export default function Home() {
   // properties — loaded here for the SAME reason maintenanceRequests is
   // (PropWatch needs every property's rows, not just the selected one).
   const [tenantRequests, setTenantRequests] = useState<TenantRequest[]>([])
+  // Maintenance Coordination M3 (Landlord Command Center V1) — the two
+  // additional, read-only pieces needed to enrich a canonical
+  // maintenance_requests case with urgency (from Guided Intake's own
+  // deterministic outcome) and its full set of relevant PropCrew
+  // contacts (property_contacts.property_id UNION property_contact_links).
+  // Same defensive "may legitimately be empty until migrated" pattern
+  // as tenantRequests above — see loadPortfolio()'s own comment.
+  const [intakeSessions, setIntakeSessions] = useState<IntakeSessionOutcome[]>([])
+  const [contactLinks, setContactLinks] = useState<PropCrewLinkRef[]>([])
+  const [openMaintenanceCaseId, setOpenMaintenanceCaseId] = useState<string | null>(null)
   // Property Profile 2.0
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   // QA: the greeting briefly showed the email-prefix fallback (e.g.
@@ -786,6 +798,15 @@ export default function Home() {
   const categoryByMaintenanceRequestId = new Map(tenantRequests.filter((r) => r.maintenance_request_id).map((r) => [r.maintenance_request_id as string, r.category]))
   const openRequests = selectedRequests.filter((row) => row.status !== 'Completed')
   const completedRequests = selectedRequests.filter((row) => row.status === 'Completed')
+  // Maintenance Coordination M3 (Landlord Command Center V1) — the same
+  // enrichment lib/maintenance/command-center.ts's own tests cover
+  // directly; used here only for the urgency badge (M3's own "clearly
+  // distinguish urgent safety flags" requirement — deterministic only,
+  // see that module's header) and to look up the currently-open case
+  // for the shared MaintenanceCaseDetail modal below.
+  const enrichedSelectedRequests = enrichMaintenanceCases(selectedRequests, tenantRequests, intakeSessions)
+  const openMaintenanceCase = enrichedSelectedRequests.find((c) => c.id === openMaintenanceCaseId) || null
+  const relevantMaintenanceContacts = selectedId ? relevantContactsForProperty(contacts, contactLinks, selectedId) : []
   const selectedSystems = propertySystems.filter((row) => row.property_id === selectedId)
   const selectedNotes = propertyNotes.filter((row) => row.property_id === selectedId)
   const selectedOwnership = propertyOwnership.filter((row) => row.property_id === selectedId)
@@ -831,6 +852,8 @@ export default function Home() {
       { data: ownershipRows, error: ownershipError }, { data: profileRow }, { data: rentPaymentRows, error: rentPaymentError },
       { data: taxRecordRows, error: taxRecordError }, { data: taxCustomItemRows, error: taxCustomItemError },
       { data: tenantRequestRows },
+      { data: intakeSessionRows },
+      { data: contactLinkRows },
     ] = await Promise.all([
       client.from('properties').select('*').order('created_at', { ascending: true }),
       client.from('property_documents').select('*').order('created_at', { ascending: false }),
@@ -850,6 +873,11 @@ export default function Home() {
       client.from('property_tax_records').select('*'),
       client.from('property_tax_custom_items').select('*'),
       client.from('tenant_requests').select('*').order('created_at', { ascending: false }),
+      // Maintenance Coordination M3 — same defensive exclusion from
+      // firstError as tenant_requests above; neither table's absence may
+      // ever block the rest of the property workspace from loading.
+      client.from('maintenance_intake_sessions').select('request_id,outcome'),
+      client.from('property_contact_links').select('contact_id,property_id'),
     ])
     const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError || contactError || requestError || systemError || noteError || ownershipError || rentPaymentError || taxRecordError || taxCustomItemError
     if (firstError) {
@@ -913,6 +941,8 @@ export default function Home() {
     // (PropWatch shows nothing new, the Rent > Tenant Requests panel
     // shows its own empty state) until the migration lands.
     setTenantRequests((tenantRequestRows || []) as TenantRequest[])
+    setIntakeSessions((intakeSessionRows || []) as IntakeSessionOutcome[])
+    setContactLinks((contactLinkRows || []) as PropCrewLinkRef[])
     setRentPayments((rentPaymentRows || []) as RentPaymentRecord[])
     setBusy(false)
   }
@@ -1718,6 +1748,23 @@ export default function Home() {
     setBusy(false)
   }
 
+  // Maintenance Coordination M3 (Landlord Command Center V1) — records
+  // ONLY the landlord's own assignment decision on the pre-existing
+  // assigned_contact_id column (Milestone 11). Never messages the
+  // provider, never exposes tenant info to them, never implies
+  // acceptance/scheduling — see this milestone's own explicit scope
+  // limits. Shared by both this property-level view and the portfolio
+  // Command Center (app/maintenance/page.tsx) via the same
+  // MaintenanceCaseDetail component; this function is this page's own
+  // reload-after-write wrapper, matching updateRequestStatus() above.
+  async function assignMaintenanceContact(id: string, contactId: string | null) {
+    if (!supabase) return
+    setBusy(true); setError('')
+    const { error: e } = await supabase.from('maintenance_requests').update({ assigned_contact_id: contactId }).eq('id', id)
+    if (e) setError(e.message); else await loadPortfolio()
+    setBusy(false)
+  }
+
   async function removeRequest(id: string) {
     if (!supabase) return
     setBusy(true); setError('')
@@ -2146,7 +2193,7 @@ export default function Home() {
           })()}
 
           {rentSubTab === 'Tenant' && (selected.property_type === 'Rental Property' ? <>
-            <div className="sectionHead workspaceHeading"><div><p className="eyebrow">TENANT REQUESTS</p><h2>Maintenance requests</h2><p>Owner-side tracking for tenant maintenance requests.</p></div><button className="primary" onClick={() => setShowRequestForm(true)}>+ Log request</button></div><div className="financialStats landlordStats"><div className="financialStat"><span>Open requests</span><strong>{openRequests.length}</strong></div><div className="financialStat"><span>Completed requests</span><strong>{completedRequests.length}</strong></div></div>{selectedRequests.length ? <div className="maintenanceList">{selectedRequests.map((req) => <article className="maintenanceRow requestRow" key={req.id}><div className="maintenanceDate"><strong>{new Date(req.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(req.created_at).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div><span className={`statusPill priority${req.priority}`}>{req.priority}</span>{req.source === 'tenant' && <span className="statusPill tenantSourceBadge">Tenant</span>}<h3>{req.title}</h3><p>{req.source === 'tenant' && categoryByMaintenanceRequestId.has(req.id) ? `${maintenanceCategoryLabel(categoryByMaintenanceRequestId.get(req.id)!)} · ` : ''}{req.tenant_name}{req.tenant_email ? ` · ${req.tenant_email}` : ''}</p></div></div>{req.description && <p className="requestDescription">{req.description}</p>}<div className="maintenanceActions"><select aria-label={`Status for ${req.title}`} value={req.status} onChange={(e) => void updateRequestStatus(req.id, e.target.value)}>{requestStatuses.map((s) => <option key={s}>{s}</option>)}</select><button className="dangerLink" onClick={() => void removeRequest(req.id)}>Remove</button></div></div></article>)}</div> : <EmptyModule title="No maintenance requests yet" text="Log tenant requests as they come in by phone, email or in person." action="Log request" onClick={() => setShowRequestForm(true)} />}
+            <div className="sectionHead workspaceHeading"><div><p className="eyebrow">TENANT REQUESTS</p><h2>Maintenance requests</h2><p>Owner-side tracking for tenant maintenance requests.</p></div><button className="primary" onClick={() => setShowRequestForm(true)}>+ Log request</button></div><div className="financialStats landlordStats"><div className="financialStat"><span>Open requests</span><strong>{openRequests.length}</strong></div><div className="financialStat"><span>Completed requests</span><strong>{completedRequests.length}</strong></div></div>{selectedRequests.length ? <div className="maintenanceList">{enrichedSelectedRequests.map((req) => <article className="maintenanceRow requestRow" key={req.id}><div className="maintenanceDate"><strong>{new Date(req.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(req.created_at).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div>{req.urgent && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}<span className={`statusPill priority${req.priority}`}>{req.priority}</span>{req.source === 'tenant' && <span className="statusPill tenantSourceBadge">Tenant</span>}<h3>{req.title}</h3><p>{req.source === 'tenant' && categoryByMaintenanceRequestId.has(req.id) ? `${maintenanceCategoryLabel(categoryByMaintenanceRequestId.get(req.id)!)} · ` : ''}{req.tenant_name}{req.tenant_email ? ` · ${req.tenant_email}` : ''}</p></div></div>{req.description && <p className="requestDescription">{req.description}</p>}<div className="maintenanceActions"><button className="secondary" onClick={() => setOpenMaintenanceCaseId(req.id)}>Manage</button><select aria-label={`Status for ${req.title}`} value={req.status} onChange={(e) => void updateRequestStatus(req.id, e.target.value)}>{requestStatuses.map((s) => <option key={s}>{s}</option>)}</select><button className="dangerLink" onClick={() => void removeRequest(req.id)}>Remove</button></div></div></article>)}</div> : <EmptyModule title="No maintenance requests yet" text="Log tenant requests as they come in by phone, email or in person." action="Log request" onClick={() => setShowRequestForm(true)} />}
             {/* Tenant Connect V1: replaces the old TenantConnectPanel
                 call site here (that component's own general multi-
                 conversation UI is broader than this milestone's "one
@@ -2158,6 +2205,22 @@ export default function Home() {
                 submitted Requests list/conversation view. */}
             {supabase && <TenantConnectStatusCard supabase={supabase} propertyId={selected.id} ownerId={user.id} currentLease={currentLease} tenantConnectEnabled={entitlements.tenantConnect} onChanged={() => void loadPortfolio()} />}
             {supabase && <TenantRequestsPanel supabase={supabase} propertyId={selected.id} ownerId={user.id} tenantConnectEnabled={entitlements.tenantConnect} />}
+            {/* Maintenance Coordination M3 (Landlord Command Center V1) —
+                the SAME shared detail/actions modal app/maintenance/
+                page.tsx's portfolio view uses, mounted here too so this
+                property's own "Manage" button (above) opens it without a
+                second implementation. */}
+            {openMaintenanceCase && (
+              <MaintenanceCaseDetail
+                caseRow={openMaintenanceCase}
+                propertyLabel={`${selected.address}${selected.city ? `, ${selected.city}` : ''}`}
+                contacts={relevantMaintenanceContacts}
+                busy={busy}
+                onAssign={(contactId) => void assignMaintenanceContact(openMaintenanceCase.id, contactId)}
+                onStatusChange={(status: MaintenanceCaseStatus) => void updateRequestStatus(openMaintenanceCase.id, status)}
+                onClose={() => setOpenMaintenanceCaseId(null)}
+              />
+            )}
           </> : <div className="emptyState"><strong>Tenant requests apply to Rental Property only.</strong><span>Change this property's type from Edit property facts if that's not correct.</span></div>)}
         </section>}
 

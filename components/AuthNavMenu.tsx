@@ -55,6 +55,11 @@ const NAV_LINKS: { href: string; label: string }[] = [
   // document library — every property_documents row the caller owns,
   // including ones Smart Upload/Portfolio Import left unassigned.
   { href: '/documents', label: 'Documents' },
+  // Tenant Connect + Maintenance Coordination M3: portfolio-wide view
+  // across every property's maintenance_requests, same table each
+  // property workspace's own Rent > Tenant tab already reads/writes —
+  // not a second maintenance system.
+  { href: '/maintenance', label: 'Maintenance' },
   // Tax Center V1: organizes the SAME ledger data property-level Rent
   // ledgers write to, by tax year.
   { href: '/tax-center', label: 'Tax Center' },

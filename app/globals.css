@@ -1975,3 +1975,59 @@ h2, h3, p { margin-top: 0; }
    from an iPhone with no Web Inspector. Same temporary/boxed treatment
    as .uploadDebugPanel, scoped smaller to fit inside a list row. */
 .smartUploadDebugLine { margin: 6px 0 2px; border: 1px dashed var(--muted); border-radius: 8px; padding: 8px 10px; background: #fafbfa; font-size: 11px; }
+
+/* ==========================================================================
+   Tenant Connect + Maintenance Coordination M3 — Landlord Maintenance
+   Command Center V1. Mobile-first throughout (readable cards, obvious
+   urgency, large tap targets, no horizontal scrolling) — reuses
+   .statusPill/.pillBad/.pillGood/.financialStat/.emptyState/.modal/
+   .overlay/.sectionHead wholesale; only what's genuinely new is below.
+   ========================================================================== */
+
+.statusPill.landlordSourceBadge { background: #eef2ef; color: var(--muted); margin-left: 6px; }
+.statusPill.maintenanceCategoryBadge { background: var(--brand-soft); color: var(--brand); margin-left: 6px; }
+.statusPill.maintenanceUrgentBadge { margin-right: 6px; }
+
+/* Portfolio Command Center (app/maintenance/page.tsx) — a card grid, not
+   a desktop table, so it works well on iPhone without horizontal scroll. */
+.maintenanceSummaryStats { margin-top: 18px; }
+.maintenanceCommandCenterList { display: grid; gap: 12px; margin-top: 14px; }
+.maintenanceCommandCenterCard {
+  display: grid; gap: 5px; text-align: left; width: 100%;
+  background: white; border: 1px solid var(--line); border-radius: 15px; padding: 16px 18px;
+  cursor: pointer; transition: border-color .15s ease;
+}
+.maintenanceCommandCenterCard:hover { border-color: var(--brand); }
+.maintenanceCommandCenterCardUrgent { border-color: #e2a49d; background: #fefaf9; }
+.maintenanceCommandCenterCardTop { display: flex; flex-wrap: wrap; gap: 6px; }
+.maintenanceCommandCenterCardProperty { font-size: 13px; color: var(--muted); }
+.maintenanceCommandCenterCardTitle { font-size: 16px; font-weight: 650; }
+.maintenanceCommandCenterCardMeta, .maintenanceCommandCenterCardNext { font-size: 12px; }
+.maintenanceHistoryToggle { margin-top: 18px; }
+.maintenanceCommandCenterHistory { opacity: .85; }
+
+/* Shared case detail/actions modal (components/maintenance/
+   MaintenanceCaseDetail.tsx) — mounted from both the Command Center and
+   the property-level Rent > Tenant tab, so this is the ONE place this
+   layout is styled. */
+.maintenanceCaseDetailModal { display: grid; gap: 14px; max-width: 520px; }
+.maintenanceUrgentBanner {
+  display: grid; gap: 3px; background: #fdeceb; color: #8a3d35;
+  border: 1px solid #e2a49d; border-radius: 12px; padding: 12px 14px; font-size: 13px;
+}
+.maintenanceUrgentBanner strong { font-size: 14px; }
+.maintenanceCaseMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.maintenanceCaseOverview { display: grid; gap: 8px; }
+.maintenanceCaseDescription {
+  white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 13px;
+  background: #f9fbfa; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 0;
+}
+.maintenanceCaseActionArea { display: grid; gap: 12px; border-top: 1px solid var(--line); padding-top: 14px; }
+.maintenanceAssignField, .maintenanceStatusField { display: grid; gap: 5px; font-size: 13px; font-weight: 650; }
+.maintenanceAssignField select, .maintenanceStatusField select { font-weight: 400; padding: 10px; border-radius: 10px; border: 1px solid var(--line); }
+.maintenanceAssignedNote, .maintenanceNextAction { font-size: 12px; margin: 0; }
+.maintenanceMarkCompleted { width: 100%; }
+
+@media (max-width: 560px) {
+  .maintenanceCaseDetailModal { max-width: 100%; }
+}

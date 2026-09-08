@@ -1,0 +1,127 @@
+'use client'
+
+// PropRoster — Tenant Connect + Maintenance Coordination, M3: Landlord
+// Maintenance Command Center V1.
+//
+// The shared "open a case, see everything, act on it" detail/actions
+// modal — mounted from BOTH the new portfolio-wide Command Center
+// (app/maintenance/page.tsx) and the existing property-level
+// Maintenance requests list (app/page.tsx's Rent > Tenant tab), so
+// there is exactly one detail/actions experience, not two competing
+// ones. Deliberately a "dumb" component: every write goes through a
+// caller-supplied callback (onAssign/onStatusChange) — this file never
+// touches Supabase directly, so both call sites keep using their own
+// already-established loadPortfolio()/reload pattern afterward.
+//
+// SCOPE (M3 only — see this milestone's own brief):
+// - Overview: property, source, category (tenant-sourced only),
+//   tenant name/email, the case's own `description` (for a
+//   tenant-sourced case this IS the full structured Guided Intake
+//   summary — GuidedIntake.tsx builds it via buildSummary() and it is
+//   copied verbatim onto this row by the M1.1 trigger; nothing here
+//   re-fetches or re-renders raw maintenance_intake_answers rows).
+// - Safety/urgency: a prominent, non-dismissible banner when `urgent`
+//   is true — never a control the landlord can toggle here. Urgency
+//   itself is decided entirely upstream (Guided Intake's deterministic
+//   safety logic, or the case's own landlord-set Urgent priority) and
+//   is read-only in this component, by design — this UI cannot
+//   override or downgrade a safety classification.
+// - PropCrew assignment: assign/change/remove ONLY — records the
+//   landlord's decision on assigned_contact_id. Never sends a message,
+//   never exposes tenant info to the provider, never implies
+//   acceptance/scheduling (see this milestone's own explicit "do NOT"
+//   list).
+// - Status: the pre-existing four-value canonical status model only
+//   (Submitted/Scheduled/In Progress/Completed) — no new status value.
+//   "Mark Completed" is a one-tap fast path to the same status change
+//   the select below can also make.
+//
+// KNOWN GAP (documented, not implemented — see this milestone's own
+// completion report and docs/tenant-connect-m3-landlord-command-
+// center.md): "Mark Needs More Information" and a landlord-only
+// internal note both have no home in the current schema. Neither
+// button/field exists here. Do not add either without the smallest-
+// compatible migration documented there being reviewed and applied
+// first.
+
+import type { EnrichedMaintenanceCase, MaintenanceCaseStatus, PropCrewContactRef } from '../../lib/maintenance/command-center'
+import { maintenanceCategoryLabel } from '../../lib/maintenance/categories'
+import { NEXT_ACTION_LABEL } from '../../lib/maintenance/command-center'
+
+const STATUSES: MaintenanceCaseStatus[] = ['Submitted', 'Scheduled', 'In Progress', 'Completed']
+
+export function MaintenanceCaseDetail({
+  caseRow, propertyLabel, contacts, busy, onAssign, onStatusChange, onClose,
+}: {
+  caseRow: EnrichedMaintenanceCase
+  propertyLabel: string
+  contacts: PropCrewContactRef[]
+  busy: boolean
+  onAssign: (contactId: string | null) => void
+  onStatusChange: (status: MaintenanceCaseStatus) => void
+  onClose: () => void
+}) {
+  const assignedContact = contacts.find((c) => c.id === caseRow.assigned_contact_id) || null
+
+  return (
+    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal maintenanceCaseDetailModal">
+        <div className="modalTop">
+          <div>
+            <p className="eyebrow">{propertyLabel}</p>
+            <h2>{caseRow.title}</h2>
+          </div>
+          <button className="iconButton" onClick={onClose} aria-label="Close">×</button>
+        </div>
+
+        {caseRow.urgent && (
+          <div className="maintenanceUrgentBanner" role="alert">
+            <strong>Urgent — safety concern reported.</strong>
+            <span>This classification is set automatically by deterministic Guided Intake safety rules and cannot be changed here.</span>
+          </div>
+        )}
+
+        <div className="maintenanceCaseMeta">
+          <span className={`statusPill priority${caseRow.priority}`}>{caseRow.priority}</span>
+          <span className={`statusPill ${caseRow.source === 'tenant' ? 'tenantSourceBadge' : 'landlordSourceBadge'}`}>{caseRow.source === 'tenant' ? 'Tenant' : 'Landlord'}</span>
+          {caseRow.category && <span className="statusPill maintenanceCategoryBadge">{maintenanceCategoryLabel(caseRow.category)}</span>}
+          <span className="muted">{new Date(caseRow.created_at).toLocaleString()}</span>
+        </div>
+
+        <div className="maintenanceCaseOverview">
+          <p><strong>{caseRow.tenant_name}</strong>{caseRow.tenant_email ? ` · ${caseRow.tenant_email}` : ''}</p>
+          {caseRow.description && <pre className="maintenanceCaseDescription">{caseRow.description}</pre>}
+        </div>
+
+        <div className="maintenanceCaseActionArea">
+          <label className="maintenanceAssignField">
+            <span>Assigned PropCrew contact</span>
+            <select
+              aria-label="Assigned PropCrew contact"
+              value={caseRow.assigned_contact_id || ''}
+              disabled={busy}
+              onChange={(e) => onAssign(e.target.value || null)}
+            >
+              <option value="">Unassigned</option>
+              {contacts.map((c) => <option key={c.id} value={c.id}>{c.name}{c.business_name ? ` (${c.business_name})` : ''} · {c.role}</option>)}
+            </select>
+          </label>
+          {assignedContact && <p className="muted maintenanceAssignedNote">Recorded as your decision only — {assignedContact.name} has not been notified or contacted.</p>}
+          {!contacts.length && <p className="muted maintenanceAssignedNote">No PropCrew contacts for this property yet. Add one from PropCrew.</p>}
+
+          <label className="maintenanceStatusField">
+            <span>Status</span>
+            <select aria-label="Case status" value={caseRow.status} disabled={busy} onChange={(e) => onStatusChange(e.target.value as MaintenanceCaseStatus)}>
+              {STATUSES.map((s) => <option key={s}>{s}</option>)}
+            </select>
+          </label>
+          <p className="muted maintenanceNextAction">Next: {NEXT_ACTION_LABEL[caseRow.nextAction]}</p>
+
+          {caseRow.status !== 'Completed' && (
+            <button className="primary maintenanceMarkCompleted" disabled={busy} onClick={() => onStatusChange('Completed')}>Mark Completed</button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
