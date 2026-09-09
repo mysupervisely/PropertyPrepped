@@ -44,14 +44,17 @@
 // compatible migration documented there being reviewed and applied
 // first.
 
+import { useState } from 'react'
 import type { EnrichedMaintenanceCase, MaintenanceCaseStatus, PropCrewContactRef } from '../../lib/maintenance/command-center'
 import { maintenanceCategoryLabel } from '../../lib/maintenance/categories'
 import { NEXT_ACTION_LABEL } from '../../lib/maintenance/command-center'
+import { PROVIDER_OUTREACH_STATUS_LABEL, type ProviderOutreachRow } from '../../lib/maintenance/provider-outreach'
 
 const STATUSES: MaintenanceCaseStatus[] = ['Submitted', 'Scheduled', 'In Progress', 'Completed']
 
 export function MaintenanceCaseDetail({
   caseRow, propertyLabel, contacts, busy, statusUpdateMessage, onAssign, onStatusChange, onClose,
+  outreach, outreachBusy, outreachError, onSendOutreach,
 }: {
   caseRow: EnrichedMaintenanceCase
   propertyLabel: string
@@ -67,8 +70,21 @@ export function MaintenanceCaseDetail({
   onAssign: (contactId: string | null) => void
   onStatusChange: (status: MaintenanceCaseStatus) => void
   onClose: () => void
+  // Tenant Connect: Provider Outreach V1 — the most recent outreach row
+  // for the CURRENTLY assigned contact (null when never contacted), so
+  // this component just renders it (Section 6); the actual send still
+  // goes through onSendOutreach() — the caller's own page-level
+  // handler does the real POST to /api/maintenance/provider-outreach/send,
+  // matching the same "dumb component, write via callback" contract
+  // onAssign/onStatusChange already use. This component owns only the
+  // LOCAL confirm-dialog UI state below, never the write itself.
+  outreach?: ProviderOutreachRow | null
+  outreachBusy?: boolean
+  outreachError?: string
+  onSendOutreach?: () => void
 }) {
   const assignedContact = contacts.find((c) => c.id === caseRow.assigned_contact_id) || null
+  const [showContactConfirm, setShowContactConfirm] = useState(false)
 
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -113,8 +129,40 @@ export function MaintenanceCaseDetail({
               {contacts.map((c) => <option key={c.id} value={c.id}>{c.name}{c.business_name ? ` (${c.business_name})` : ''} · {c.role}</option>)}
             </select>
           </label>
-          {assignedContact && <p className="muted maintenanceAssignedNote">Recorded as your decision only — {assignedContact.name} has not been notified or contacted.</p>}
+          {assignedContact && !outreach && <p className="muted maintenanceAssignedNote">Recorded as your decision only — {assignedContact.name} has not been notified or contacted.</p>}
           {!contacts.length && <p className="muted maintenanceAssignedNote">No PropCrew contacts for this property yet. Add one from PropCrew.</p>}
+
+          {/* Tenant Connect: Provider Outreach V1 (Section 1/6) — only
+              ever offered when the assigned contact actually has an
+              email on file; never automatic just because a contact was
+              assigned (Section 1's own explicit instruction). */}
+          {assignedContact && (
+            <div className="providerOutreachSection">
+              <span className="maintenanceAssignFieldLabel">PropCrew</span>
+              {outreach ? (
+                <p className="muted maintenanceOutreachStatus">
+                  <strong>{assignedContact.name}{assignedContact.business_name ? ` – ${assignedContact.business_name}` : ''}</strong>
+                  <br />
+                  {outreach.status === 'sent' ? (
+                    <>Request sent<br />{new Date(outreach.sent_at).toLocaleString()}</>
+                  ) : (
+                    <strong>{PROVIDER_OUTREACH_STATUS_LABEL[outreach.status]}</strong>
+                  )}
+                  {outreach.status === 'needs_information' && outreach.provider_message && (
+                    <><br /><em>&quot;{outreach.provider_message}&quot;</em></>
+                  )}
+                </p>
+              ) : null}
+              {outreachError && <p className="errorMessage">{outreachError}</p>}
+              {assignedContact.email ? (
+                (!outreach || outreach.status !== 'sent') && (
+                  <button type="button" className="secondary" disabled={busy || outreachBusy} onClick={() => setShowContactConfirm(true)}>Contact PropCrew</button>
+                )
+              ) : (
+                <p className="muted maintenanceOutreachStatus">Add an email address for {assignedContact.name} in PropCrew to contact them through PropRoster.</p>
+              )}
+            </div>
+          )}
 
           <label className="maintenanceStatusField">
             <span>Status</span>
@@ -130,6 +178,30 @@ export function MaintenanceCaseDetail({
           )}
         </div>
       </div>
+
+      {/* Section 1's own example confirmation, verbatim structure —
+          landlord authorization is required before any email goes out;
+          this is the one and only place onSendOutreach() is ever
+          called. Stacks on top of the modal above it (later in DOM
+          order, same .overlay/.modal pattern already used elsewhere in
+          this app for a nested confirm). */}
+      {showContactConfirm && assignedContact && (
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowContactConfirm(false)}>
+          <div className="modal">
+            <div className="modalTop"><h2>Contact {assignedContact.name}{assignedContact.business_name ? ` at ${assignedContact.business_name}` : ''}?</h2><button className="iconButton" onClick={() => setShowContactConfirm(false)}>×</button></div>
+            <p>PropRoster will send the maintenance request to {assignedContact.name} so they can review and respond.</p>
+            <div className="maintenanceCaseMeta">
+              <span className="muted">{propertyLabel}</span>
+              <span className="muted">{caseRow.title}</span>
+              <span className="muted">{assignedContact.email}</span>
+            </div>
+            <div className="modalActions">
+              <button className="secondary" onClick={() => setShowContactConfirm(false)}>Cancel</button>
+              <button className="primary" disabled={outreachBusy} onClick={() => { setShowContactConfirm(false); onSendOutreach?.() }}>{outreachBusy ? 'Sending…' : 'Send Request'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

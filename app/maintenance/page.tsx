@@ -51,6 +51,8 @@ import {
   type PropCrewContactRef, type PropCrewLinkRef, type EnrichedMaintenanceCase, type MaintenanceCaseStatus,
 } from '../../lib/maintenance/command-center'
 import { maintenanceCategoryLabel } from '../../lib/maintenance/categories'
+import { latestOutreachForContact, type ProviderOutreachRow } from '../../lib/maintenance/provider-outreach'
+import { sendProviderOutreach as postProviderOutreach, providerOutreachErrorMessage } from '../../lib/maintenance/provider-outreach-client'
 
 type PropertyRef = { id: string; address: string; city: string }
 // Tenant Connect M3.1 — same shape lib/leases/status.ts's
@@ -89,6 +91,13 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
   const [contacts, setContacts] = useState<PropCrewContactRef[]>([])
   const [contactLinks, setContactLinks] = useState<PropCrewLinkRef[]>([])
   const [leases, setLeases] = useState<LeaseRef[]>([])
+  // Tenant Connect: Provider Outreach V1 — same defensive
+  // "legitimately empty until migrated" pattern as tenantRequests/
+  // intakeSessions above; outreachBusy/outreachError are local to the
+  // currently-open case's Send Request action only.
+  const [providerOutreach, setProviderOutreach] = useState<ProviderOutreachRow[]>([])
+  const [outreachBusy, setOutreachBusy] = useState(false)
+  const [outreachError, setOutreachError] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -114,10 +123,11 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
       { data: tenantRequestRows },
       { data: sessionRows },
       { data: leaseRows },
+      { data: providerOutreachRows },
     ] = await Promise.all([
       supabase.from('properties').select('id,address,city').order('created_at', { ascending: true }),
       supabase.from('maintenance_requests').select('*').order('created_at', { ascending: false }),
-      supabase.from('property_contacts').select('id,property_id,owner_id,name,business_name,role').order('created_at', { ascending: false }),
+      supabase.from('property_contacts').select('id,property_id,owner_id,name,business_name,role,email').order('created_at', { ascending: false }),
       supabase.from('property_contact_links').select('contact_id,property_id'),
       // Tenant Connect tables: same defensive pattern app/page.tsx's own
       // loadPortfolio() already established — these may legitimately not
@@ -128,6 +138,9 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
       supabase.from('maintenance_intake_sessions').select('request_id,outcome'),
       // Tenant Connect M3.1 — for the "+ New Maintenance Request" tenant-prefill only.
       supabase.from('leases').select('id,property_id,tenant_name,tenant_email,tenant_phone,start_date,end_date'),
+      // Tenant Connect: Provider Outreach V1 — same defensive pattern as
+      // tenant_requests/maintenance_intake_sessions above.
+      supabase.from('maintenance_provider_outreach').select('id, maintenance_request_id, contact_id, status, provider_message, sent_at, responded_at').order('sent_at', { ascending: false }),
     ])
     const firstError = propError || caseError || contactError
     if (firstError) { setError(firstError.message); setLoading(false); return }
@@ -138,6 +151,7 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
     setTenantRequests((tenantRequestRows || []) as TenantRequestLink[])
     setIntakeSessions((sessionRows || []) as IntakeSessionOutcome[])
     setLeases((leaseRows || []) as LeaseRef[])
+    setProviderOutreach((providerOutreachRows || []) as ProviderOutreachRow[])
     setLoading(false)
   }
 
@@ -157,6 +171,12 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
 
   const openCase = sorted.find((c) => c.id === openCaseId) || null
   const contactsForOpenCase = openCase ? relevantContactsForProperty(contacts, contactLinks, openCase.property_id) : []
+  // Tenant Connect: Provider Outreach V1 (Section 6/8) — see
+  // app/page.tsx's identical derivation for the request-scoping and
+  // reassignment-is-a-separate-event rationale.
+  const outreachForOpenCase = openCase?.assigned_contact_id
+    ? latestOutreachForContact(providerOutreach.filter((o) => o.maintenance_request_id === openCase.id), openCase.assigned_contact_id)
+    : null
 
   async function assignContact(caseId: string, contactId: string | null) {
     if (!supabase) return
@@ -195,6 +215,17 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
       void load()
     }
     setBusy(false)
+  }
+
+  // Tenant Connect: Provider Outreach V1 (Section 1) — identical
+  // handler/contract to app/page.tsx's sendMaintenanceOutreach().
+  async function sendOutreach(caseId: string) {
+    if (!supabase) return
+    setOutreachBusy(true); setOutreachError('')
+    const result = await postProviderOutreach(supabase, caseId)
+    setOutreachBusy(false)
+    if (!result.sent) { setOutreachError(providerOutreachErrorMessage(result.reason)); return }
+    await load()
   }
 
   // Tenant Connect M3.1 — portfolio-level "+ New Maintenance Request"
@@ -279,7 +310,11 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
           statusUpdateMessage={statusUpdateMessage}
           onAssign={(contactId) => void assignContact(openCase.id, contactId)}
           onStatusChange={(status) => void changeStatus(openCase.id, status)}
-          onClose={() => setOpenCaseId(null)}
+          onClose={() => { setOpenCaseId(null); setOutreachError('') }}
+          outreach={outreachForOpenCase}
+          outreachBusy={outreachBusy}
+          outreachError={outreachError}
+          onSendOutreach={() => void sendOutreach(openCase.id)}
         />
       )}
 

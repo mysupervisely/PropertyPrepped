@@ -217,7 +217,7 @@ export function casesForProperty<T extends { property_id: string }>(cases: T[], 
   return cases.filter((c) => c.property_id === propertyId)
 }
 
-/** Only the columns this module needs from property_contacts. */
+/** Only the columns this module needs from property_contacts. `email` was added for Tenant Connect Provider Outreach V1 — the "Contact PropCrew" action needs it to decide whether outreach is even offered (Section 1: "when an assigned contact has an email address"). */
 export type PropCrewContactRef = {
   id: string
   property_id: string
@@ -225,6 +225,7 @@ export type PropCrewContactRef = {
   name: string
   business_name: string | null
   role: string
+  email: string | null
 }
 
 export type PropCrewLinkRef = { contact_id: string; property_id: string }

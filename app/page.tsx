@@ -53,6 +53,8 @@ import { UploadDebugPanel } from '../components/uploads/UploadDebugPanel'
 import { logPhotoUploadDiagnostic, safeFileSummary, safeFileListSummary, safeErrorSummary } from '../lib/property-photos/diagnostics'
 import { friendlyPortfolioLoadMessage } from '../lib/dashboard/portfolio-load-status'
 import { enrichMaintenanceCases, relevantContactsForProperty, showsDedicatedUrgentBadge, type IntakeSessionOutcome, type PropCrewLinkRef, type MaintenanceCaseStatus } from '../lib/maintenance/command-center'
+import { latestOutreachForContact, type ProviderOutreachRow } from '../lib/maintenance/provider-outreach'
+import { sendProviderOutreach as postProviderOutreach, providerOutreachErrorMessage } from '../lib/maintenance/provider-outreach-client'
 import { MaintenanceCaseDetail } from '../components/maintenance/MaintenanceCaseDetail'
 import { NewMaintenanceRequestModal } from '../components/maintenance/NewMaintenanceRequestModal'
 import type { NewMaintenanceRequestPayload } from '../lib/maintenance/new-request'
@@ -557,6 +559,14 @@ export default function Home() {
   const [intakeSessions, setIntakeSessions] = useState<IntakeSessionOutcome[]>([])
   const [contactLinks, setContactLinks] = useState<PropCrewLinkRef[]>([])
   const [openMaintenanceCaseId, setOpenMaintenanceCaseId] = useState<string | null>(null)
+  // Tenant Connect: Provider Outreach V1 — same "portfolio-wide,
+  // legitimately empty until the migration lands" pattern as
+  // tenantRequests/intakeSessions above. outreachBusy/outreachError are
+  // local to the currently-open case's Send Request action, not part of
+  // the reloaded array.
+  const [providerOutreach, setProviderOutreach] = useState<ProviderOutreachRow[]>([])
+  const [outreachBusy, setOutreachBusy] = useState(false)
+  const [outreachError, setOutreachError] = useState('')
   // Tenant Connect M3.1 — the landlord's own "+ New Maintenance Request"
   // entry point (property-level; the portfolio-level one lives in
   // app/maintenance/page.tsx). Replaces the old showRequestForm modal's
@@ -886,6 +896,19 @@ export default function Home() {
   // for the shared MaintenanceCaseDetail modal below.
   const enrichedSelectedRequests = enrichMaintenanceCases(selectedRequests, tenantRequests, intakeSessions)
   const openMaintenanceCase = enrichedSelectedRequests.find((c) => c.id === openMaintenanceCaseId) || null
+  // Tenant Connect: Provider Outreach V1 (Section 6) — the most recent
+  // outreach row for the open case's CURRENTLY assigned contact only.
+  // latestOutreachForContact() itself only filters by contact_id (see
+  // its own header) — providerOutreach is fetched portfolio-wide, so
+  // this first narrows to THIS request's own rows before calling it;
+  // otherwise the same PropCrew contact assigned to a different request
+  // elsewhere in the portfolio could leak that other request's outreach
+  // status here. Reassigning to a different contact naturally shows
+  // nothing until a fresh, explicit send (Section 8 — no special-case
+  // code needed beyond this same request-scoped filter).
+  const openMaintenanceOutreach = openMaintenanceCase?.assigned_contact_id
+    ? latestOutreachForContact(providerOutreach.filter((o) => o.maintenance_request_id === openMaintenanceCase.id), openMaintenanceCase.assigned_contact_id)
+    : null
   const relevantMaintenanceContacts = selectedId ? relevantContactsForProperty(contacts, contactLinks, selectedId) : []
   const selectedSystems = propertySystems.filter((row) => row.property_id === selectedId)
   const selectedNotes = propertyNotes.filter((row) => row.property_id === selectedId)
@@ -934,6 +957,7 @@ export default function Home() {
       { data: tenantRequestRows },
       { data: intakeSessionRows },
       { data: contactLinkRows },
+      { data: providerOutreachRows },
     ] = await Promise.all([
       client.from('properties').select('*').order('created_at', { ascending: true }),
       client.from('property_documents').select('*').order('created_at', { ascending: false }),
@@ -958,6 +982,13 @@ export default function Home() {
       // ever block the rest of the property workspace from loading.
       client.from('maintenance_intake_sessions').select('request_id,outcome'),
       client.from('property_contact_links').select('contact_id,property_id'),
+      // Tenant Connect: Provider Outreach V1 — RLS-scoped SELECT only
+      // (maintenance_provider_outreach_select_own); this is the
+      // landlord's own read path for Section 6's visibility requirement.
+      // Same defensive exclusion from firstError as tenant_requests
+      // above: legitimately empty/errored until this milestone's own
+      // migration is reviewed and applied.
+      client.from('maintenance_provider_outreach').select('id, maintenance_request_id, contact_id, status, provider_message, sent_at, responded_at').order('sent_at', { ascending: false }),
     ])
     const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError || contactError || requestError || systemError || noteError || ownershipError || rentPaymentError || taxRecordError || taxCustomItemError
     if (firstError) {
@@ -1042,6 +1073,7 @@ export default function Home() {
     setTenantRequests((tenantRequestRows || []) as TenantRequest[])
     setIntakeSessions((intakeSessionRows || []) as IntakeSessionOutcome[])
     setContactLinks((contactLinkRows || []) as PropCrewLinkRef[])
+    setProviderOutreach((providerOutreachRows || []) as ProviderOutreachRow[])
     setRentPayments((rentPaymentRows || []) as RentPaymentRecord[])
     setHasLoadedPortfolio(true)
     setPortfolioLoadFailed(false)
@@ -1908,6 +1940,23 @@ export default function Home() {
     setBusy(false)
   }
 
+  // Tenant Connect: Provider Outreach V1 (Section 1) — the landlord's own
+  // explicit "Send Request" action, confirmed via MaintenanceCaseDetail's
+  // own confirm dialog before this is ever called. Unlike
+  // notifyTenantConnect (best-effort, never surfaced), a failed/blocked
+  // send here IS the whole point of the action, so the result is always
+  // shown — providerOutreachErrorMessage() keeps the API's own `reason`
+  // strings (e.g. 'already_pending') out of the UI, matching this app's
+  // existing "never show a raw API string" convention.
+  async function sendMaintenanceOutreach(requestId: string) {
+    if (!supabase) return
+    setOutreachBusy(true); setOutreachError('')
+    const result = await postProviderOutreach(supabase, requestId)
+    setOutreachBusy(false)
+    if (!result.sent) { setOutreachError(providerOutreachErrorMessage(result.reason)); return }
+    await loadPortfolio()
+  }
+
   async function removeRequest(id: string) {
     if (!supabase) return
     setBusy(true); setError('')
@@ -2521,7 +2570,11 @@ export default function Home() {
             statusUpdateMessage={statusUpdateMessage}
             onAssign={(contactId) => void assignMaintenanceContact(openMaintenanceCase.id, contactId)}
             onStatusChange={(status: MaintenanceCaseStatus) => void updateRequestStatus(openMaintenanceCase.id, status)}
-            onClose={() => setOpenMaintenanceCaseId(null)}
+            onClose={() => { setOpenMaintenanceCaseId(null); setOutreachError('') }}
+            outreach={openMaintenanceOutreach}
+            outreachBusy={outreachBusy}
+            outreachError={outreachError}
+            onSendOutreach={() => void sendMaintenanceOutreach(openMaintenanceCase.id)}
           />
         )}
         {showNewMaintenanceRequest && (

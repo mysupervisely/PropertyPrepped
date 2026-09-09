@@ -2116,6 +2116,14 @@ h2, h3, p { margin-top: 0; }
 .maintenanceAssignedNote, .maintenanceNextAction { font-size: 12px; margin: 0; }
 .maintenanceMarkCompleted { width: 100%; }
 
+/* Tenant Connect: Provider Outreach V1 (Section 6) — the landlord-side
+   "PropCrew" status block inside MaintenanceCaseDetail, styled to match
+   the assign/status fields immediately above it rather than introducing
+   a second visual language. */
+.providerOutreachSection { display: grid; gap: 8px; font-size: 13px; }
+.maintenanceAssignFieldLabel { font-weight: 650; }
+.maintenanceOutreachStatus { font-size: 13px; line-height: 1.5; margin: 0; }
+
 @media (max-width: 560px) {
   .maintenanceCaseDetailModal { max-width: 100%; }
 }
@@ -2125,3 +2133,25 @@ h2, h3, p { margin-top: 0; }
    visually distinct without a heavy divider or a second full sectionHead. */
 .maintenanceHubSectionTitle { font-size: 13px; font-weight: 750; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 4px 0 10px; }
 .maintenanceServiceHistoryHead { margin-top: 30px; }
+
+/* Tenant Connect: Provider Outreach V1 — the account-less, mobile-first
+   provider page (app/provider/[token]/page.tsx). Deliberately its own
+   small set of rules (not .shell/.authShell) since this page has no
+   header/nav at all — just a single centered card, the same "light
+   PropRoster branding" visual language as .authCard elsewhere. */
+.providerShell { min-height: 100vh; padding: 24px 16px; display: grid; place-items: start center; background: var(--bg); }
+.providerCard { width: min(480px, 100%); background: white; border: 1px solid var(--line); border-radius: 18px; padding: 24px 20px; margin-top: 24px; }
+.providerBrand { margin-bottom: 18px; }
+.providerInvalid h1 { font-size: 22px; margin-bottom: 8px; }
+.providerInvalid p { color: var(--muted); }
+.providerField { margin-bottom: 16px; }
+.providerLabel { display: block; font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 4px; }
+.providerField p { margin: 0; line-height: 1.5; }
+.providerActions { display: grid; gap: 10px; margin-top: 20px; }
+.providerActionButton { width: 100%; text-align: center; padding: 14px 16px; }
+.providerQuestionField { display: grid; gap: 10px; margin-top: 20px; }
+.providerQuestionField textarea { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; background: white; color: var(--text); outline: none; font: inherit; resize: vertical; }
+.providerQuestionField textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+.providerQuestionActions { display: flex; gap: 10px; justify-content: flex-end; }
+.providerConfirmation { margin-top: 20px; padding: 14px 16px; background: var(--brand-soft); border: 1px solid #cadfd4; border-radius: 12px; color: var(--brand); }
+.providerQuestionEcho { margin-top: 8px; font-style: italic; }
