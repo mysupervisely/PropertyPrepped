@@ -17,7 +17,7 @@
 
 import { useEffect, useState } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { tenantConnectStatusLabel, findAccessForLease } from '../../lib/tenant-connect/helpers'
+import { tenantConnectStatusLabel, findAccessForLease, staleInvitedEmail } from '../../lib/tenant-connect/helpers'
 import { notifyTenantConnect } from '../../lib/tenant-connect/notify-client'
 import type { TenantPropertyAccess } from '../../lib/tenant-connect/types'
 
@@ -83,9 +83,14 @@ export function TenantConnectStatusCard({
       .insert({ property_id: propertyId, owner_id: ownerId, tenant_email: currentLease.tenant_email.trim().toLowerCase(), lease_id: currentLease.id })
       .select('id')
       .single()
+    if (err || !inserted) { setBusy(false); setError(err?.message || 'Unable to send invite.'); return }
+    const result = await notifyTenantConnect(supabase, 'invite', { accessId: inserted.id })
     setBusy(false)
-    if (err || !inserted) { setError(err?.message || 'Unable to send invite.'); return }
-    void notifyTenantConnect(supabase, 'invite', { accessId: inserted.id })
+    // Bug fix: the access row above was genuinely created (the tenant
+    // now shows "Invited"), so this is deliberately NOT the same
+    // wording as a failed write — only the email itself didn't go out,
+    // and "Resend Invitation" is right there for the landlord to retry.
+    if (!result?.sent) setError('Invitation created, but the email could not be sent. Use "Resend Invitation" to try again.')
     await load()
     onChanged?.()
   }
@@ -93,8 +98,24 @@ export function TenantConnectStatusCard({
   async function resend() {
     if (!access) return
     setBusy(true)
-    void notifyTenantConnect(supabase, 'invite', { accessId: access.id })
+    setError('')
+    // Bug fix (real-invite testing) — see staleInvitedEmail()'s own
+    // header for the full root-cause writeup: Resend Invitation was
+    // silently re-sending to a stale stored email whenever the landlord
+    // corrected the tenant's email after the initial invite. Re-sync
+    // the access row first, before sending, so both the send
+    // destination and the tenant's acceptance credential are current.
+    const syncTo = staleInvitedEmail(access, currentLease?.tenant_email)
+    if (syncTo) {
+      const { error: syncErr } = await supabase.from('tenant_property_access').update({ tenant_email: syncTo }).eq('id', access.id)
+      if (syncErr) { setBusy(false); setError(syncErr.message); return }
+      await load()
+    }
+    const result = await notifyTenantConnect(supabase, 'invite', { accessId: access.id })
     setBusy(false)
+    // Bug fix: resend has no OTHER action behind it — sending the email
+    // IS the whole point — so a failure must be shown, not swallowed.
+    if (!result?.sent) setError('Could not send the invitation email. Please try again in a moment.')
   }
 
   async function revoke() {
