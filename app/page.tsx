@@ -9,6 +9,7 @@ import { useSubscription } from '../lib/useSubscription'
 import { canCreateProperty, entitlementsFor } from '../lib/billing/entitlements'
 import { UpgradePrompt } from '../components/UpgradePrompt'
 import LandingPage from '../components/LandingPage'
+import { postSignupRedirectPath, INTENDED_ROLE_STORAGE_KEY, type IntendedRole } from '../lib/tenant-connect/onboarding'
 import { AuthHeader } from '../components/AuthHeader'
 import DocumentIntelligencePanel, { type ApplyAction } from '../components/DocumentIntelligencePanel'
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
@@ -140,6 +141,10 @@ type PropertyDocument = {
   classification_source: string | null
   analysis_status: string
   analysis_error: string | null
+  // Tenant-Facing Experience V1 — explicit landlord opt-in only; a
+  // tenant's Documents tab shows exactly the rows where this is true
+  // (via tenant_documents_view), never anything else on this table.
+  tenant_visible: boolean
 }
 
 type PropertyPhoto = {
@@ -450,6 +455,29 @@ function LeaseHistoryRow({ lease, doc, onEdit, onDelete, onOpenDocument }: {
   </article>
 }
 
+// Tenant-Facing Experience V1 — the one place an "I'm a tenant" signup
+// choice ever has an effect: a self-clearing, one-shot redirect fired
+// on the first real sign-in after a signup that required email
+// confirmation (an already-confirmed signup redirects immediately from
+// LandingPage.tsx itself and never sets this flag at all — see
+// onboarding.ts's own header for why this is a routing hint only,
+// never a persisted account "role"). Safe to call on every auth-state
+// change/page load: it's a no-op whenever the flag isn't present,
+// and it removes the flag the one time it fires, so an ordinary
+// landlord visiting "/" on every later sign-in is completely
+// unaffected.
+function redirectIfIntendedTenant() {
+  try {
+    if (window.localStorage.getItem(INTENDED_ROLE_STORAGE_KEY) === ('tenant' satisfies IntendedRole)) {
+      window.localStorage.removeItem(INTENDED_ROLE_STORAGE_KEY)
+      window.location.href = postSignupRedirectPath('tenant')
+    }
+  } catch {
+    // Storage unavailable — the landlord dashboard is still the correct
+    // fallback (same default this app already had before this feature).
+  }
+}
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
   const [authReady, setAuthReady] = useState(false)
@@ -690,6 +718,7 @@ export default function Home() {
       if (data.user) {
         setUser(data.user)
         setAuthReady(true)
+        redirectIfIntendedTenant()
         return
       }
       if (getUserError && !isAuthSessionMissingError(getUserError)) {
@@ -697,6 +726,7 @@ export default function Home() {
         if (cancelled) return
         setUser(refreshed.user ?? null)
         setAuthReady(true)
+        if (refreshed.user) redirectIfIntendedTenant()
         return
       }
       setUser(null)
@@ -706,6 +736,7 @@ export default function Home() {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
       setSelectedId(null)
+      if (session?.user) redirectIfIntendedTenant()
     })
     return () => { cancelled = true; listener.subscription.unsubscribe() }
   }, [])
@@ -1672,6 +1703,17 @@ export default function Home() {
     }
   }
 
+  // Tenant-Facing Experience V1 — explicit, one-document-at-a-time
+  // opt-in/out. Writes go through the SAME pre-existing owner-only
+  // documents_update_own policy every other document edit here already
+  // uses; no new write path, no new policy.
+  async function toggleDocumentTenantVisible(doc: PropertyDocument) {
+    if (!supabase) return
+    const { error: err } = await supabase.from('property_documents').update({ tenant_visible: !doc.tenant_visible }).eq('id', doc.id)
+    if (err) setError(err.message)
+    await loadPortfolio()
+  }
+
   async function removeDocument(doc: PropertyDocument) {
     if (!supabase) return
     setBusy(true)
@@ -2308,7 +2350,7 @@ export default function Home() {
               <div className="fileName"><strong>{doc.name}</strong><span>{doc.category}{doc.document_type ? ` · ${doc.document_type}` : ''} · {new Date(doc.created_at).toLocaleDateString()}</span></div>
             </div>
             {doc.analysis_status && doc.analysis_status !== 'Not Analyzed' && <span className={`aiStatusPill ${doc.analysis_status === 'Completed' ? 'pillGood' : doc.analysis_status === 'Failed' ? 'pillBad' : 'pillWarn'}`}>{doc.analysis_status === 'Completed' ? 'AI Analyzed' : doc.analysis_status === 'Failed' ? 'Needs attention' : doc.analysis_status}</span>}
-            <div className="rowActions documentCardActions"><button onClick={() => void openDocument(doc)}>Open</button><button className="aiButton" onClick={() => setShowDocIntelId(doc.id)}>{doc.analysis_status === 'Completed' ? 'View AI Analysis' : 'Analyze with PropRoster AI'}</button><button onClick={() => openMoveDocument(doc)}>Move</button><button onClick={() => void removeDocument(doc)}>Remove</button></div>
+            <div className="rowActions documentCardActions"><button onClick={() => void openDocument(doc)}>Open</button><button className="aiButton" onClick={() => setShowDocIntelId(doc.id)}>{doc.analysis_status === 'Completed' ? 'View AI Analysis' : 'Analyze with PropRoster AI'}</button><button onClick={() => openMoveDocument(doc)}>Move</button><button className={doc.tenant_visible ? 'active' : ''} onClick={() => void toggleDocumentTenantVisible(doc)}>{doc.tenant_visible ? 'Shared with tenant ✓' : 'Share with tenant'}</button><button onClick={() => void removeDocument(doc)}>Remove</button></div>
           </div>) : <div className="emptyState"><strong>{docCategory === 'All' ? 'No documents here yet' : `No ${docCategory} documents yet`}</strong><span>Use + Add Document above to upload a file or run Smart Upload.</span></div>}</div>
           </>}
 

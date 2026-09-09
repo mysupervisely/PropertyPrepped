@@ -32,7 +32,11 @@ describe('Auth bootstrap — a session-validation failure is never treated as a 
   it('a real user is set immediately when getUser() succeeds — the common, fast path is unchanged', () => {
     const idx = pageSource.indexOf('async function bootstrapAuth')
     const body = pageSource.slice(idx, pageSource.indexOf('void bootstrapAuth()'))
-    expect(body).toContain('if (data.user) {\n        setUser(data.user)\n        setAuthReady(true)\n        return\n      }')
+    // Tenant-Facing Experience V1 added one more line here
+    // (redirectIfIntendedTenant()) — a self-clearing, no-op-unless-flag-
+    // set call (see that function's own header), so the fast path
+    // itself (setUser/setAuthReady) is still exactly what it was.
+    expect(body).toContain('if (data.user) {\n        setUser(data.user)\n        setAuthReady(true)\n        redirectIfIntendedTenant()\n        return\n      }')
   })
 
   it('a real getUser() error (not "no session at all") gets exactly ONE refreshSession() recovery attempt — a genuine Supabase refresh-token exchange, never a local bypass of validation', () => {
@@ -61,7 +65,11 @@ describe('Auth bootstrap — a session-validation failure is never treated as a 
   })
 
   it('onAuthStateChange (the auth library\'s OWN state machine) is left completely untouched — this fix never second-guesses a genuine SIGNED_OUT event the library itself decided on, which would weaken auth, not strengthen it', () => {
-    expect(pageSource).toContain('const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {\n      setUser(session?.user ?? null)\n      setSelectedId(null)\n    })')
+    // Tenant-Facing Experience V1 added one more line here (the same
+    // self-clearing, no-op-unless-flag-set redirectIfIntendedTenant()
+    // call) — still never touches what setUser/setSelectedId themselves
+    // decide based on the library's own session value.
+    expect(pageSource).toContain('const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {\n      setUser(session?.user ?? null)\n      setSelectedId(null)\n      if (session?.user) redirectIfIntendedTenant()\n    })')
   })
 })
 

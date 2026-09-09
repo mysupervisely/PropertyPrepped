@@ -24,6 +24,7 @@ import Link from 'next/link'
 import { supabase } from '../lib/supabase'
 import { Wordmark } from './Wordmark'
 import { PLANS, PUBLIC_PLAN_ORDER, PLAN_FEATURE_HIGHLIGHTS, EARLY_ACCESS_PRICING } from '../lib/billing/plans'
+import { postSignupRedirectPath, INTENDED_ROLE_STORAGE_KEY, type IntendedRole } from '../lib/tenant-connect/onboarding'
 
 function HouseIcon() {
   return (
@@ -157,6 +158,13 @@ export default function LandingPage() {
   const [error, setError] = useState('')
   const [authMessage, setAuthMessage] = useState('')
   const signInCardRef = useRef<HTMLDivElement>(null)
+  // Tenant-Facing Experience V1 — "How will you use PropRoster?" (signup
+  // only; irrelevant once signing back in to an existing account, which
+  // may already hold either or both contexts — see onboarding.ts's own
+  // header for why this is never persisted as a stored "role"). Defaults
+  // to the pre-existing landlord flow so every other behavior here is
+  // unchanged unless a visitor actively picks "I'm a tenant."
+  const [intendedRole, setIntendedRole] = useState<IntendedRole>('owner')
 
   async function submitAuth() {
     if (!supabase || !email.trim() || password.length < 6) return
@@ -168,8 +176,23 @@ export default function LandingPage() {
       if (signInError) setError(signInError.message)
     } else {
       const { data, error: signUpError } = await supabase.auth.signUp({ email: email.trim(), password })
-      if (signUpError) setError(signUpError.message)
-      else if (!data.session) setAuthMessage('Account created. Check your email to confirm your address, then sign in.')
+      if (signUpError) {
+        setError(signUpError.message)
+      } else if (data.session) {
+        // Auto-confirmed (no email-verification step required for this
+        // project) — the account already exists AND is signed in right
+        // now, so the redirect can happen immediately; no need to leave
+        // anything in localStorage for a later visit to act on.
+        if (intendedRole === 'tenant') window.location.href = postSignupRedirectPath('tenant')
+      } else {
+        // Email confirmation required — there is no session yet to act
+        // on, so the choice is remembered for the ONE time app/page.tsx
+        // sees this account's first real sign-in (after they click the
+        // confirmation link and sign in) and is cleared immediately
+        // after — see app/page.tsx's own auth-state-change handler.
+        try { if (intendedRole === 'tenant') window.localStorage.setItem(INTENDED_ROLE_STORAGE_KEY, intendedRole) } catch { /* best-effort only */ }
+        setAuthMessage('Account created. Check your email to confirm your address, then sign in.')
+      }
     }
     setBusy(false)
   }
@@ -262,6 +285,16 @@ export default function LandingPage() {
             <p className="eyebrow">{authMode === 'signin' ? 'WELCOME BACK' : 'CREATE YOUR ACCOUNT'}</p>
             <h2>{authMode === 'signin' ? 'Sign in to PropRoster' : 'Create your PropRoster account'}</h2>
             <p className="landingCardSub">{authMode === 'signin' ? 'Access your properties, documents, financials and investment tools.' : 'Free to start — organize your first property in minutes.'}</p>
+
+            {authMode === 'signup' && (
+              <div className="landingRoleChoice">
+                <span className="landingRoleChoiceLabel">How will you use PropRoster?</span>
+                <div className="landingRoleChoiceOptions">
+                  <button type="button" className={intendedRole === 'owner' ? 'active' : ''} aria-pressed={intendedRole === 'owner'} onClick={() => setIntendedRole('owner')}>I manage properties</button>
+                  <button type="button" className={intendedRole === 'tenant' ? 'active' : ''} aria-pressed={intendedRole === 'tenant'} onClick={() => setIntendedRole('tenant')}>I&rsquo;m a tenant</button>
+                </div>
+              </div>
+            )}
 
             <label htmlFor="landing-email">Email</label>
             <div className="landingInputField">

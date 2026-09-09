@@ -103,9 +103,11 @@ describe('Tenant Portal (app/tenant/page.tsx) is isolated from the landlord appl
     expect(source).toContain("from('property_messages')")
   })
 
-  it('NEVER queries the owner-facing properties/leases base tables directly (Round 6, Concern 2 — those carry landlord-only financial/valuation/private columns with no tenant-facing RLS policy any more; the restricted views above are the only tenant read path)', () => {
-    expect(source).not.toMatch(/\.from\(['"]properties['"]\)/)
+  it('NEVER queries the owner-facing properties/leases base tables directly for THIS ACCOUNT\'S TENANT DATA (Round 6, Concern 2 — those carry landlord-only financial/valuation/private columns with no tenant-facing RLS policy any more; the restricted views above are the only tenant read path). The one narrow exception: Tenant-Facing Experience V1\'s dual-role check queries properties as an OWNERSHIP EXISTENCE check only (never reads/renders any property\'s actual columns) to decide whether to show a "Landlord Dashboard" link — a fundamentally different operation from reading tenant/lease data.', () => {
     expect(source).not.toMatch(/\.from\(['"]leases['"]\)/)
+    const propertiesQueries = source.match(/\.from\('properties'\)[^\n]*/g) || []
+    expect(propertiesQueries.length).toBe(1)
+    expect(propertiesQueries[0]).toBe(".from('properties').select('id').limit(1).then(({ data }) => setHasOwnedProperties(Boolean(data && data.length)))")
   })
 
   it('accepts an invite via the SECURITY DEFINER RPC, never a direct client UPDATE of tenant_property_access', () => {
@@ -113,8 +115,17 @@ describe('Tenant Portal (app/tenant/page.tsx) is isolated from the landlord appl
     expect(source).not.toMatch(/tenant_property_access['"]\)\s*\.update\(/)
   })
 
-  it('has a sign-in gate consistent with every other standalone route', () => {
-    expect(source).toContain('Sign in required')
+  // Tenant-Facing Experience V1: a signed-out visitor now gets a REAL,
+  // working tenant-context sign-in/signup form right here — no longer
+  // just a "Sign in required" message linking back to "/" (the landlord
+  // dashboard), per that milestone's own explicit "do not make them
+  // navigate through the landlord dashboard" instruction.
+  it('has its OWN tenant-context sign-in/signup form for a signed-out visitor — not a link back to the landlord dashboard', () => {
+    expect(source).toContain('function TenantSignIn()')
+    expect(source).toContain('supabase.auth.signInWithPassword')
+    expect(source).toContain('supabase.auth.signUp')
+    expect(source).not.toContain('Sign in required')
+    expect(source).not.toMatch(/<Link[^>]*href="\/"[^>]*>Go to sign in/)
   })
 })
 

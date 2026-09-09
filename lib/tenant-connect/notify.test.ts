@@ -1,14 +1,43 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
-import { buildInviteEmail, buildNewRequestEmail, buildLandlordUpdateEmail, isTenantConnectEmailConfigured, sendTenantConnectEmail } from './notify'
+import { buildInviteEmail, buildNewRequestEmail, buildLandlordUpdateEmail, isTenantConnectEmailConfigured, sendTenantConnectEmail, tenantInviteLink } from './notify'
 
 const FULL_ENV = { RESEND_API_KEY: 're_test_key', TENANT_CONNECT_FROM_EMAIL: 'tenantconnect@proproster.com' }
 
+describe('tenantInviteLink', () => {
+  it('builds a /tenant?invite=<accessId> link from the given origin', () => {
+    expect(tenantInviteLink('https://proproster.com', 'access-123')).toBe('https://proproster.com/tenant?invite=access-123')
+  })
+
+  it('strips a trailing slash on the origin (same convention as providerOutreachLink)', () => {
+    expect(tenantInviteLink('https://proproster.com/', 'access-123')).toBe('https://proproster.com/tenant?invite=access-123')
+  })
+
+  it('works against a Deploy Preview origin — never a hardcoded/env-var host', () => {
+    expect(tenantInviteLink('https://deploy-preview-60--sensational-platypus-3da0b7.netlify.app', 'a1')).toBe(
+      'https://deploy-preview-60--sensational-platypus-3da0b7.netlify.app/tenant?invite=a1',
+    )
+  })
+})
+
 describe('buildInviteEmail', () => {
-  it('addresses the invite to the property, never echoes a raw token/link', () => {
-    const email = buildInviteEmail('5531 Turtle Crossing Loop')
+  // Tenant-Facing Experience V1: the milestone's own explicit
+  // instruction ("Invitation email should contain a clear 'Connect to
+  // your rental' button/link") supersedes this file's earlier
+  // no-link design — see buildInviteEmail's own updated header for why
+  // this is still safe: the link is never a bearer credential, only a
+  // deep-link into the tenant sign-in flow.
+  it('addresses the invite to the property and includes the "Connect to your rental" link, dynamically — never hardcoded', () => {
+    const email = buildInviteEmail('5531 Turtle Crossing Loop', 'https://proproster.com/tenant?invite=abc-123')
     expect(email.subject).toContain('invited')
     expect(email.body).toContain('5531 Turtle Crossing Loop')
-    expect(email.body).not.toMatch(/https?:\/\//)
+    expect(email.body).toContain('Connect to your rental')
+    expect(email.body).toContain('https://proproster.com/tenant?invite=abc-123')
+  })
+
+  it('never hardcodes an example property address or link', () => {
+    const email = buildInviteEmail('9 Example Ave', 'https://proproster.com/tenant?invite=xyz-789')
+    expect(email.body).not.toContain('5531 Turtle Crossing Loop')
+    expect(email.body).not.toContain('abc-123')
   })
 })
 
