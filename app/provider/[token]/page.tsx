@@ -12,6 +12,8 @@
 
 import { createAdminClient } from '../../../lib/supabase-server'
 import { buildProviderSafeView, type ProviderOutreachStatus } from '../../../lib/maintenance/provider-outreach'
+import { buildProviderSafeAvailability, windowsForRequestId, type AvailabilityWindow } from '../../../lib/maintenance/availability'
+import { latestAppointmentForOutreach, type AppointmentRow } from '../../../lib/maintenance/appointments'
 import { ProviderResponseActions } from '../../../components/provider/ProviderResponseActions'
 import { Wordmark } from '../../../components/Wordmark'
 import { createHash } from 'crypto'
@@ -40,10 +42,33 @@ async function loadOutreach(rawToken: string) {
   const { data: property } = await admin.from('properties').select('address, city').eq('id', request.property_id).maybeSingle()
   if (!property) return null
 
+  // Scheduling Coordination V1 — availability is only ever meaningful
+  // once the provider has accepted (Section 5); resolved the same
+  // one-hop way the landlord view resolves it (tenant_requests.
+  // maintenance_request_id), narrow-selected. A landlord-created case
+  // has no linked tenant_requests row at all, which naturally resolves
+  // to "no availability supplied" below — never an error.
+  let availability: ReturnType<typeof buildProviderSafeAvailability> = []
+  let appointment: AppointmentRow | null = null
+  if (outreach.status === 'accepted') {
+    const { data: tenantRequest } = await admin.from('tenant_requests').select('id').eq('maintenance_request_id', outreach.maintenance_request_id).maybeSingle()
+    if (tenantRequest) {
+      const { data: windowRows } = await admin.from('maintenance_availability_windows').select('id, request_id, window_date, window_label').eq('request_id', tenantRequest.id)
+      availability = buildProviderSafeAvailability(windowsForRequestId((windowRows || []) as AvailabilityWindow[], tenantRequest.id))
+    }
+    const { data: appointmentRows } = await admin
+      .from('maintenance_appointments')
+      .select('id, maintenance_request_id, outreach_id, proposed_start_at, proposed_by, matched_availability, status, confirmed_at, created_at')
+      .eq('outreach_id', outreach.id)
+    appointment = latestAppointmentForOutreach((appointmentRows || []) as AppointmentRow[], outreach.id)
+  }
+
   return {
     expired: false as const,
     outreachId: outreach.id as string,
     providerMessage: outreach.provider_message as string | null,
+    availability,
+    appointment,
     view: buildProviderSafeView({
       propertyAddress: property.address,
       propertyCity: property.city,
@@ -98,6 +123,8 @@ export default async function ProviderOutreachPage({ params }: { params: Promise
               token={token}
               initialStatus={result.view.status}
               initialMessage={result.providerMessage}
+              availability={result.availability}
+              initialAppointment={result.appointment}
             />
           </>
         )}

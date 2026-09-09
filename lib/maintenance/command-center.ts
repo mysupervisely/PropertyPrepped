@@ -92,11 +92,12 @@ export type MaintenanceCaseRow = {
   created_at: string
 }
 
-/** Only the columns this module actually needs from tenant_requests. */
+/** Only the columns this module actually needs from tenant_requests. `entry_preference` was added for Scheduling Coordination V1 — optional here since not every consumer of this type fetches it, but present on app/maintenance/page.tsx's own select() so its landlord view can resolve it via lib/maintenance/availability.ts's entryPreferenceForMaintenanceRequest(). */
 export type TenantRequestLink = {
   id: string
   maintenance_request_id: string | null
   category: string
+  entry_preference?: 'someone_home' | 'contact_before_entering' | 'other' | null
 }
 
 /** Only the columns this module actually needs from maintenance_intake_sessions. */

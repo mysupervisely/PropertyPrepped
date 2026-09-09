@@ -23,6 +23,7 @@ import { URGENT_STEP_ID, type IntakeStep } from '../../lib/maintenance/intake/ty
 import { URGENT_GUIDANCE } from '../../lib/maintenance/intake/urgent'
 import { submitGuidedIntake } from '../../lib/maintenance/intake/submit'
 import { draftStorageKey, serializeDraft, parseDraft, type IntakeDraft } from '../../lib/maintenance/intake/draft'
+import { flattenAvailabilityInput, WINDOW_LABELS, WINDOW_LABEL_RANGE, ENTRY_PREFERENCES, ENTRY_PREFERENCE_LABEL, type AvailabilityDayInput, type EntryPreference } from '../../lib/maintenance/availability'
 
 type Phase = 'category' | 'question' | 'urgent' | 'review' | 'submitting' | 'error' | 'done'
 
@@ -56,6 +57,16 @@ export function GuidedIntake({ supabase, propertyId, ownerId, tenantAccessId, on
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [photos, setPhotos] = useState<File[]>([])
   const [extraNote, setExtraNote] = useState('')
+  // Scheduling Coordination V1 (Section 2/3) — collected on the review
+  // screen, right before submit, rather than as its own decision-tree
+  // step: availability/entry-preference are the same for every
+  // category's tree, so this is asked exactly once regardless of which
+  // tree the tenant walked, instead of duplicating it into every
+  // definitions/*.ts file. Both are fully optional (Section 2: "do not
+  // force"; an omitted entry preference is stored as null, never a
+  // guessed default — see submit.ts).
+  const [availabilityDays, setAvailabilityDays] = useState<AvailabilityDayInput[]>([{ date: '', morning: false, afternoon: false, evening: false }])
+  const [entryPreference, setEntryPreference] = useState<EntryPreference | ''>('')
   const [errorMessage, setErrorMessage] = useState('')
   const [resumeOffer, setResumeOffer] = useState<IntakeDraft | null>(null)
 
@@ -147,6 +158,8 @@ export function GuidedIntake({ supabase, propertyId, ownerId, tenantAccessId, on
       answeredSteps: walked,
       outcome: isUrgentSubmission ? 'escalated_urgent' : 'escalated_to_dispatch',
       photos: photos.map((file) => ({ file })),
+      availabilityWindows: flattenAvailabilityInput(availabilityDays),
+      entryPreference: entryPreference || null,
     })
 
     if (!result.ok) {
@@ -157,6 +170,18 @@ export function GuidedIntake({ supabase, propertyId, ownerId, tenantAccessId, on
     clearDraft(tenantAccessId)
     setPhase('done')
     onSubmitted(result.tenantRequestId)
+  }
+
+  function updateAvailabilityDay(index: number, patch: Partial<AvailabilityDayInput>) {
+    setAvailabilityDays((days) => days.map((d, i) => (i === index ? { ...d, ...patch } : d)))
+  }
+
+  function addAvailabilityDay() {
+    setAvailabilityDays((days) => [...days, { date: '', morning: false, afternoon: false, evening: false }])
+  }
+
+  function removeAvailabilityDay(index: number) {
+    setAvailabilityDays((days) => (days.length > 1 ? days.filter((_, i) => i !== index) : days))
   }
 
   function getUrgentReason() {
@@ -272,6 +297,50 @@ export function GuidedIntake({ supabase, propertyId, ownerId, tenantAccessId, on
               <h3>Review before you submit</h3>
               <pre className="guidedIntakeSummary">{description}</pre>
               {photos.length > 0 && <p className="muted">{photos.length} photo{photos.length > 1 ? 's' : ''} attached</p>}
+
+              {/* Scheduling Coordination V1 (Section 2/3) — optional,
+                  request-specific, coarse day-parts only. The entry-
+                  preference distinction is deliberately right next to
+                  availability, per this milestone's own product
+                  principle: availability is never permission to enter. */}
+              <div className="guidedIntakeAvailability">
+                <h3>When can someone come?</h3>
+                <p className="muted">Optional — this helps your landlord and PropCrew schedule a visit.</p>
+                {availabilityDays.map((day, i) => (
+                  <div className="guidedIntakeAvailabilityDay" key={i}>
+                    <div className="guidedIntakeAvailabilityDayRow">
+                      <input type="date" aria-label={`Day ${i + 1}`} value={day.date} onChange={(e) => updateAvailabilityDay(i, { date: e.target.value })} />
+                      {availabilityDays.length > 1 && <button type="button" className="iconButton" aria-label="Remove this day" onClick={() => removeAvailabilityDay(i)}>×</button>}
+                    </div>
+                    <div className="guidedIntakeAvailabilityBlocks">
+                      {WINDOW_LABELS.map((label) => (
+                        <button
+                          type="button"
+                          key={label}
+                          className={`guidedIntakeAvailabilityBlock${day[label] ? ' guidedIntakeAvailabilityBlockActive' : ''}`}
+                          onClick={() => updateAvailabilityDay(i, { [label]: !day[label] })}
+                        >
+                          {label[0].toUpperCase() + label.slice(1)}
+                          <span className="muted">{WINDOW_LABEL_RANGE[label].display}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <button type="button" className="secondary guidedIntakeAddDay" onClick={addAvailabilityDay}>+ Add another day</button>
+
+                <p className="guidedIntakeEntryNote">Availability tells us when someone can come. It does not authorize entry into your home.</p>
+                <fieldset className="guidedIntakeEntryPreference">
+                  <legend>Entry preference (optional)</legend>
+                  {ENTRY_PREFERENCES.map((pref) => (
+                    <label key={pref} className="guidedIntakeEntryOption">
+                      <input type="radio" name="entryPreference" checked={entryPreference === pref} onChange={() => setEntryPreference(pref)} />
+                      {ENTRY_PREFERENCE_LABEL[pref]}
+                    </label>
+                  ))}
+                </fieldset>
+              </div>
+
               <label>Anything else to add? (optional)<textarea rows={3} value={extraNote} onChange={(e) => setExtraNote(e.target.value)} /></label>
               <div className="guidedIntakeNav">
                 <button className="secondary" onClick={goBack}>Back</button>

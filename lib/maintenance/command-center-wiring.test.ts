@@ -73,8 +73,9 @@ describe('PropCrew assignment — records the landlord\'s decision only', () => 
     }
   })
 
-  it('the shared detail component never sends a message, creates a provider token, or schedules an appointment — assignment is a plain <select> writing a decision, nothing else ("Scheduled" the pre-existing status VALUE is fine; a scheduling FEATURE is not)', () => {
-    expect(caseDetailSource).not.toMatch(/property_messages|access_token|provider_token|notifyTenantConnect|schedule_appointment|appointment/i)
+  it('the assignment <select> itself never sends a message, creates a provider token, or schedules an appointment — it is a plain decision write, nothing else. Scoped to the assignment field specifically (not the whole file): Scheduling Coordination V1 legitimately adds its OWN separate, explicitly landlord-confirmed appointment feature elsewhere in this same component (Section 7 of that milestone) — a file-wide match would now collide with that unrelated, intentional feature.', () => {
+    const assignFieldSource = caseDetailSource.slice(caseDetailSource.indexOf('maintenanceAssignField'), caseDetailSource.indexOf('providerOutreachSection'))
+    expect(assignFieldSource).not.toMatch(/property_messages|access_token|provider_token|notifyTenantConnect|schedule_appointment|appointment/i)
     expect(caseDetailSource).toContain('has not been notified or contacted')
   })
 

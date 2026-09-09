@@ -2039,8 +2039,28 @@ h2, h3, p { margin-top: 0; }
 
 .guidedIntakeDone { margin-top: 16px; display: grid; gap: 14px; text-align: center; }
 
+/* Tenant Connect: Scheduling Coordination V1 — availability + entry
+   preference, mobile-first (Section 13: no dense calendar, native date
+   input, large tap targets, no horizontal overflow). */
+.guidedIntakeAvailability { display: grid; gap: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.guidedIntakeAvailability h3 { margin: 0; font-size: 15px; }
+.guidedIntakeAvailabilityDay { display: grid; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.guidedIntakeAvailabilityDay:first-of-type { border-top: none; padding-top: 0; }
+.guidedIntakeAvailabilityDayRow { display: flex; align-items: center; gap: 8px; }
+.guidedIntakeAvailabilityDayRow input[type="date"] { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; font-family: inherit; font-size: 15px; }
+.guidedIntakeAvailabilityBlocks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.guidedIntakeAvailabilityBlock { border: 1px solid var(--line); background: white; border-radius: 10px; padding: 10px 6px; min-height: 52px; font-weight: 650; font-size: 13px; display: grid; gap: 2px; justify-items: center; text-align: center; }
+.guidedIntakeAvailabilityBlock .muted { font-weight: 400; font-size: 11px; }
+.guidedIntakeAvailabilityBlockActive { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
+.guidedIntakeAddDay { width: 100%; }
+.guidedIntakeEntryNote { margin: 4px 0 0; font-size: 12.5px; color: var(--muted); }
+.guidedIntakeEntryPreference { border: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.guidedIntakeEntryPreference legend { font-size: 13px; font-weight: 650; padding: 0; margin-bottom: 2px; }
+.guidedIntakeEntryOption { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 400; }
+
 @media (max-width: 460px) {
   .guidedIntakeCategoryGrid { grid-template-columns: 1fr; }
+  .guidedIntakeAvailabilityBlocks { grid-template-columns: 1fr; }
 }
 
 /* Upload Reliability Audit — temporary on-screen debug panel (Section
@@ -2124,6 +2144,16 @@ h2, h3, p { margin-top: 0; }
 .maintenanceAssignFieldLabel { font-weight: 650; }
 .maintenanceOutreachStatus { font-size: 13px; line-height: 1.5; margin: 0; }
 
+/* Tenant Connect: Scheduling Coordination V1 — landlord-side tenant
+   availability display and appointment proposal/confirmation, styled
+   to match the surrounding maintenanceCaseActionArea fields. */
+.maintenanceAvailabilitySection { display: grid; gap: 8px; font-size: 13px; border-top: 1px solid var(--line); padding-top: 14px; margin-top: 4px; }
+.maintenanceAvailabilityList { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.maintenanceAvailabilityList li { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.maintenanceEntryPreference { margin: 0; }
+.maintenanceAppointmentProposal { display: grid; gap: 8px; }
+.maintenanceAppointmentConfirmed { color: var(--brand); }
+
 @media (max-width: 560px) {
   .maintenanceCaseDetailModal { max-width: 100%; }
 }
@@ -2155,3 +2185,14 @@ h2, h3, p { margin-top: 0; }
 .providerQuestionActions { display: flex; gap: 10px; justify-content: flex-end; }
 .providerConfirmation { margin-top: 20px; padding: 14px 16px; background: var(--brand-soft); border: 1px solid #cadfd4; border-radius: 12px; color: var(--brand); }
 .providerQuestionEcho { margin-top: 8px; font-style: italic; }
+
+/* Tenant Connect: Scheduling Coordination V1 — provider-side "Choose a
+   visit time" (Section 5), mobile-first, no calendar widget. */
+.providerScheduling { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 16px; display: grid; gap: 12px; }
+.providerScheduling h3 { margin: 0; font-size: 15px; }
+.providerAvailabilityList { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.providerAvailabilityList li { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+.providerAppointmentStatus { margin: 0; font-size: 14px; font-weight: 650; color: var(--brand); }
+.providerProposeField { display: grid; gap: 10px; }
+.providerProposeField label { display: block; font-size: 13px; font-weight: 650; }
+.providerProposeField input[type="datetime-local"] { width: 100%; margin-top: 6px; border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; font-family: inherit; font-size: 15px; }

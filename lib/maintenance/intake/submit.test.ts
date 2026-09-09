@@ -131,4 +131,44 @@ describe('submitGuidedIntake', () => {
     const result = await submitGuidedIntake({ supabase: client as never, ...baseParams })
     expect(result.ok).toBe(true)
   })
+
+  it('Scheduling Coordination V1: persists entry_preference on the tenant_requests row when supplied', async () => {
+    const { client, calls } = makeFakeSupabase()
+    await submitGuidedIntake({ supabase: client as never, ...baseParams, entryPreference: 'someone_home' })
+    const payload = calls.find((c) => c.table === 'tenant_requests')!.payload as Record<string, unknown>
+    expect(payload.entry_preference).toBe('someone_home')
+  })
+
+  it('Scheduling Coordination V1: entry_preference is null, never a guessed default, when the tenant skips it', async () => {
+    const { client, calls } = makeFakeSupabase()
+    await submitGuidedIntake({ supabase: client as never, ...baseParams })
+    const payload = calls.find((c) => c.table === 'tenant_requests')!.payload as Record<string, unknown>
+    expect(payload.entry_preference).toBeNull()
+  })
+
+  it('Scheduling Coordination V1: bulk-inserts every supplied availability window, linked to the just-created tenant_requests row', async () => {
+    const { client, calls } = makeFakeSupabase()
+    await submitGuidedIntake({
+      supabase: client as never, ...baseParams,
+      availabilityWindows: [{ window_date: '2026-09-15', window_label: 'morning' }, { window_date: '2026-09-16', window_label: 'afternoon' }],
+    })
+    const windowCall = calls.find((c) => c.table === 'maintenance_availability_windows')
+    expect(windowCall).toBeDefined()
+    const rows = windowCall!.payload as { request_id: string; window_date: string; window_label: string }[]
+    expect(rows.length).toBe(2)
+    expect(rows[0]).toMatchObject({ window_date: '2026-09-15', window_label: 'morning' })
+    expect(rows.every((r) => /^tenant_requests-/.test(r.request_id))).toBe(true)
+  })
+
+  it('Scheduling Coordination V1: never inserts availability rows when the tenant supplied none (skipping is fully supported)', async () => {
+    const { client, calls } = makeFakeSupabase()
+    await submitGuidedIntake({ supabase: client as never, ...baseParams })
+    expect(calls.some((c) => c.table === 'maintenance_availability_windows')).toBe(false)
+  })
+
+  it('Scheduling Coordination V1: a failed availability insert does not roll back or hide the already-submitted tenant request', async () => {
+    const { client } = makeFakeSupabase({ failOn: 'maintenance_availability_windows' })
+    const result = await submitGuidedIntake({ supabase: client as never, ...baseParams, availabilityWindows: [{ window_date: '2026-09-15', window_label: 'morning' }] })
+    expect(result.ok).toBe(true)
+  })
 })

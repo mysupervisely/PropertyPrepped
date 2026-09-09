@@ -55,6 +55,9 @@ import { friendlyPortfolioLoadMessage } from '../lib/dashboard/portfolio-load-st
 import { enrichMaintenanceCases, relevantContactsForProperty, showsDedicatedUrgentBadge, type IntakeSessionOutcome, type PropCrewLinkRef, type MaintenanceCaseStatus } from '../lib/maintenance/command-center'
 import { latestOutreachForContact, type ProviderOutreachRow } from '../lib/maintenance/provider-outreach'
 import { sendProviderOutreach as postProviderOutreach, providerOutreachErrorMessage } from '../lib/maintenance/provider-outreach-client'
+import { windowsForMaintenanceRequest, entryPreferenceForMaintenanceRequest, type AvailabilityWindow } from '../lib/maintenance/availability'
+import { latestAppointmentForOutreach, type AppointmentRow } from '../lib/maintenance/appointments'
+import { confirmAppointment as postConfirmAppointment, appointmentErrorMessage } from '../lib/maintenance/appointments-client'
 import { MaintenanceCaseDetail } from '../components/maintenance/MaintenanceCaseDetail'
 import { NewMaintenanceRequestModal } from '../components/maintenance/NewMaintenanceRequestModal'
 import type { NewMaintenanceRequestPayload } from '../lib/maintenance/new-request'
@@ -567,6 +570,13 @@ export default function Home() {
   const [providerOutreach, setProviderOutreach] = useState<ProviderOutreachRow[]>([])
   const [outreachBusy, setOutreachBusy] = useState(false)
   const [outreachError, setOutreachError] = useState('')
+  // Scheduling Coordination V1 — same portfolio-wide, defensively-empty
+  // pattern; appointmentBusy/appointmentError are local to the
+  // currently-open case's Confirm/Decline action.
+  const [availabilityWindows, setAvailabilityWindows] = useState<AvailabilityWindow[]>([])
+  const [appointments, setAppointments] = useState<AppointmentRow[]>([])
+  const [appointmentBusy, setAppointmentBusy] = useState(false)
+  const [appointmentError, setAppointmentError] = useState('')
   // Tenant Connect M3.1 — the landlord's own "+ New Maintenance Request"
   // entry point (property-level; the portfolio-level one lives in
   // app/maintenance/page.tsx). Replaces the old showRequestForm modal's
@@ -909,6 +919,16 @@ export default function Home() {
   const openMaintenanceOutreach = openMaintenanceCase?.assigned_contact_id
     ? latestOutreachForContact(providerOutreach.filter((o) => o.maintenance_request_id === openMaintenanceCase.id), openMaintenanceCase.assigned_contact_id)
     : null
+  // Scheduling Coordination V1 (Section 4/6) — availability/entry
+  // preference resolve via the same tenant_requests one-hop join
+  // category already uses; a landlord-created case (no linked
+  // tenant_requests row) naturally resolves to "not provided", never an
+  // error. The appointment is scoped to the CURRENT outreach specifically
+  // (not just the request), so reassigning the provider never carries
+  // over a stale appointment from a previous outreach.
+  const openMaintenanceAvailability = openMaintenanceCase ? windowsForMaintenanceRequest(availabilityWindows, tenantRequests, openMaintenanceCase.id) : []
+  const openMaintenanceEntryPreference = openMaintenanceCase ? entryPreferenceForMaintenanceRequest(tenantRequests, openMaintenanceCase.id) : null
+  const openMaintenanceAppointment = openMaintenanceOutreach ? latestAppointmentForOutreach(appointments, openMaintenanceOutreach.id) : null
   const relevantMaintenanceContacts = selectedId ? relevantContactsForProperty(contacts, contactLinks, selectedId) : []
   const selectedSystems = propertySystems.filter((row) => row.property_id === selectedId)
   const selectedNotes = propertyNotes.filter((row) => row.property_id === selectedId)
@@ -958,6 +978,8 @@ export default function Home() {
       { data: intakeSessionRows },
       { data: contactLinkRows },
       { data: providerOutreachRows },
+      { data: availabilityWindowRows },
+      { data: appointmentRows },
     ] = await Promise.all([
       client.from('properties').select('*').order('created_at', { ascending: true }),
       client.from('property_documents').select('*').order('created_at', { ascending: false }),
@@ -989,6 +1011,10 @@ export default function Home() {
       // above: legitimately empty/errored until this milestone's own
       // migration is reviewed and applied.
       client.from('maintenance_provider_outreach').select('id, maintenance_request_id, contact_id, status, provider_message, sent_at, responded_at').order('sent_at', { ascending: false }),
+      // Scheduling Coordination V1 — same defensive "may legitimately
+      // not exist yet" exclusion from firstError as the above two.
+      client.from('maintenance_availability_windows').select('id, request_id, window_date, window_label'),
+      client.from('maintenance_appointments').select('id, maintenance_request_id, outreach_id, proposed_start_at, proposed_by, matched_availability, status, confirmed_at, created_at').order('created_at', { ascending: false }),
     ])
     const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError || contactError || requestError || systemError || noteError || ownershipError || rentPaymentError || taxRecordError || taxCustomItemError
     if (firstError) {
@@ -1074,6 +1100,8 @@ export default function Home() {
     setIntakeSessions((intakeSessionRows || []) as IntakeSessionOutcome[])
     setContactLinks((contactLinkRows || []) as PropCrewLinkRef[])
     setProviderOutreach((providerOutreachRows || []) as ProviderOutreachRow[])
+    setAvailabilityWindows((availabilityWindowRows || []) as AvailabilityWindow[])
+    setAppointments((appointmentRows || []) as AppointmentRow[])
     setRentPayments((rentPaymentRows || []) as RentPaymentRecord[])
     setHasLoadedPortfolio(true)
     setPortfolioLoadFailed(false)
@@ -1957,6 +1985,20 @@ export default function Home() {
     await loadPortfolio()
   }
 
+  // Scheduling Coordination V1 (Section 7) — the landlord's explicit
+  // confirm/decline action; a provider's proposal never becomes a
+  // confirmed appointment on its own. Confirming also moves
+  // maintenance_requests.status to 'Scheduled' server-side (the route's
+  // own job, not this handler's).
+  async function respondToAppointment(appointmentId: string, action: 'confirm' | 'decline') {
+    if (!supabase) return
+    setAppointmentBusy(true); setAppointmentError('')
+    const result = await postConfirmAppointment(supabase, appointmentId, action)
+    setAppointmentBusy(false)
+    if (!result.ok) { setAppointmentError(appointmentErrorMessage(result.reason)); return }
+    await loadPortfolio()
+  }
+
   async function removeRequest(id: string) {
     if (!supabase) return
     setBusy(true); setError('')
@@ -2570,11 +2612,18 @@ export default function Home() {
             statusUpdateMessage={statusUpdateMessage}
             onAssign={(contactId) => void assignMaintenanceContact(openMaintenanceCase.id, contactId)}
             onStatusChange={(status: MaintenanceCaseStatus) => void updateRequestStatus(openMaintenanceCase.id, status)}
-            onClose={() => { setOpenMaintenanceCaseId(null); setOutreachError('') }}
+            onClose={() => { setOpenMaintenanceCaseId(null); setOutreachError(''); setAppointmentError('') }}
             outreach={openMaintenanceOutreach}
             outreachBusy={outreachBusy}
             outreachError={outreachError}
             onSendOutreach={() => void sendMaintenanceOutreach(openMaintenanceCase.id)}
+            availabilityWindows={openMaintenanceAvailability}
+            entryPreference={openMaintenanceEntryPreference}
+            appointment={openMaintenanceAppointment}
+            appointmentBusy={appointmentBusy}
+            appointmentError={appointmentError}
+            onConfirmAppointment={openMaintenanceAppointment ? () => void respondToAppointment(openMaintenanceAppointment.id, 'confirm') : undefined}
+            onDeclineAppointment={openMaintenanceAppointment ? () => void respondToAppointment(openMaintenanceAppointment.id, 'decline') : undefined}
           />
         )}
         {showNewMaintenanceRequest && (

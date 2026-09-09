@@ -53,6 +53,9 @@ import {
 import { maintenanceCategoryLabel } from '../../lib/maintenance/categories'
 import { latestOutreachForContact, type ProviderOutreachRow } from '../../lib/maintenance/provider-outreach'
 import { sendProviderOutreach as postProviderOutreach, providerOutreachErrorMessage } from '../../lib/maintenance/provider-outreach-client'
+import { windowsForMaintenanceRequest, entryPreferenceForMaintenanceRequest, type AvailabilityWindow } from '../../lib/maintenance/availability'
+import { latestAppointmentForOutreach, type AppointmentRow } from '../../lib/maintenance/appointments'
+import { confirmAppointment as postConfirmAppointment, appointmentErrorMessage } from '../../lib/maintenance/appointments-client'
 
 type PropertyRef = { id: string; address: string; city: string }
 // Tenant Connect M3.1 — same shape lib/leases/status.ts's
@@ -98,6 +101,12 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
   const [providerOutreach, setProviderOutreach] = useState<ProviderOutreachRow[]>([])
   const [outreachBusy, setOutreachBusy] = useState(false)
   const [outreachError, setOutreachError] = useState('')
+  // Scheduling Coordination V1 — same defensive pattern; appointmentBusy/
+  // appointmentError are local to the currently-open case's action only.
+  const [availabilityWindows, setAvailabilityWindows] = useState<AvailabilityWindow[]>([])
+  const [appointments, setAppointments] = useState<AppointmentRow[]>([])
+  const [appointmentBusy, setAppointmentBusy] = useState(false)
+  const [appointmentError, setAppointmentError] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -124,6 +133,8 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
       { data: sessionRows },
       { data: leaseRows },
       { data: providerOutreachRows },
+      { data: availabilityWindowRows },
+      { data: appointmentRows },
     ] = await Promise.all([
       supabase.from('properties').select('id,address,city').order('created_at', { ascending: true }),
       supabase.from('maintenance_requests').select('*').order('created_at', { ascending: false }),
@@ -134,13 +145,16 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
       // exist yet on an account whose Tenant Connect migrations haven't
       // been applied; a failure here must never block the base
       // (landlord-logged) maintenance case list from loading.
-      supabase.from('tenant_requests').select('id,maintenance_request_id,category'),
+      supabase.from('tenant_requests').select('id,maintenance_request_id,category,entry_preference'),
       supabase.from('maintenance_intake_sessions').select('request_id,outcome'),
       // Tenant Connect M3.1 — for the "+ New Maintenance Request" tenant-prefill only.
       supabase.from('leases').select('id,property_id,tenant_name,tenant_email,tenant_phone,start_date,end_date'),
       // Tenant Connect: Provider Outreach V1 — same defensive pattern as
       // tenant_requests/maintenance_intake_sessions above.
       supabase.from('maintenance_provider_outreach').select('id, maintenance_request_id, contact_id, status, provider_message, sent_at, responded_at').order('sent_at', { ascending: false }),
+      // Scheduling Coordination V1 — same defensive pattern.
+      supabase.from('maintenance_availability_windows').select('id, request_id, window_date, window_label'),
+      supabase.from('maintenance_appointments').select('id, maintenance_request_id, outreach_id, proposed_start_at, proposed_by, matched_availability, status, confirmed_at, created_at').order('created_at', { ascending: false }),
     ])
     const firstError = propError || caseError || contactError
     if (firstError) { setError(firstError.message); setLoading(false); return }
@@ -152,6 +166,8 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
     setIntakeSessions((sessionRows || []) as IntakeSessionOutcome[])
     setLeases((leaseRows || []) as LeaseRef[])
     setProviderOutreach((providerOutreachRows || []) as ProviderOutreachRow[])
+    setAvailabilityWindows((availabilityWindowRows || []) as AvailabilityWindow[])
+    setAppointments((appointmentRows || []) as AppointmentRow[])
     setLoading(false)
   }
 
@@ -177,6 +193,11 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
   const outreachForOpenCase = openCase?.assigned_contact_id
     ? latestOutreachForContact(providerOutreach.filter((o) => o.maintenance_request_id === openCase.id), openCase.assigned_contact_id)
     : null
+  // Scheduling Coordination V1 (Section 4/6) — see app/page.tsx's
+  // identical derivation for the join/scoping rationale.
+  const availabilityForOpenCase = openCase ? windowsForMaintenanceRequest(availabilityWindows, tenantRequests, openCase.id) : []
+  const entryPreferenceForOpenCase = openCase ? entryPreferenceForMaintenanceRequest(tenantRequests, openCase.id) : null
+  const appointmentForOpenCase = outreachForOpenCase ? latestAppointmentForOutreach(appointments, outreachForOpenCase.id) : null
 
   async function assignContact(caseId: string, contactId: string | null) {
     if (!supabase) return
@@ -225,6 +246,17 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
     const result = await postProviderOutreach(supabase, caseId)
     setOutreachBusy(false)
     if (!result.sent) { setOutreachError(providerOutreachErrorMessage(result.reason)); return }
+    await load()
+  }
+
+  // Scheduling Coordination V1 (Section 7) — identical handler/contract
+  // to app/page.tsx's respondToAppointment().
+  async function respondToAppointment(appointmentId: string, action: 'confirm' | 'decline') {
+    if (!supabase) return
+    setAppointmentBusy(true); setAppointmentError('')
+    const result = await postConfirmAppointment(supabase, appointmentId, action)
+    setAppointmentBusy(false)
+    if (!result.ok) { setAppointmentError(appointmentErrorMessage(result.reason)); return }
     await load()
   }
 
@@ -310,11 +342,18 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
           statusUpdateMessage={statusUpdateMessage}
           onAssign={(contactId) => void assignContact(openCase.id, contactId)}
           onStatusChange={(status) => void changeStatus(openCase.id, status)}
-          onClose={() => { setOpenCaseId(null); setOutreachError('') }}
+          onClose={() => { setOpenCaseId(null); setOutreachError(''); setAppointmentError('') }}
           outreach={outreachForOpenCase}
           outreachBusy={outreachBusy}
           outreachError={outreachError}
           onSendOutreach={() => void sendOutreach(openCase.id)}
+          availabilityWindows={availabilityForOpenCase}
+          entryPreference={entryPreferenceForOpenCase}
+          appointment={appointmentForOpenCase}
+          appointmentBusy={appointmentBusy}
+          appointmentError={appointmentError}
+          onConfirmAppointment={appointmentForOpenCase ? () => void respondToAppointment(appointmentForOpenCase.id, 'confirm') : undefined}
+          onDeclineAppointment={appointmentForOpenCase ? () => void respondToAppointment(appointmentForOpenCase.id, 'decline') : undefined}
         />
       )}
 
