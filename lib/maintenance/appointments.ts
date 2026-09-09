@@ -26,12 +26,20 @@ export const APPOINTMENT_STATUS_LABEL: Record<AppointmentStatus, string> = {
   cancelled: 'Cancelled',
 }
 
-/** Mirrors public.maintenance_appointments exactly. */
+/**
+ * Mirrors public.maintenance_appointments exactly.
+ *
+ * proposed_local_start_at is a PROPERTY-LOCAL wall-clock string
+ * ("YYYY-MM-DDTHH:mm:00", no timezone offset) — deliberately never
+ * fed to `new Date(...)` anywhere in this app (Scheduling V1 Timezone
+ * Correction). Use lib/maintenance/availability.ts's
+ * parseStoredLocalTimestamp()/formatAppointmentDateTime() to read it.
+ */
 export type AppointmentRow = {
   id: string
   maintenance_request_id: string
   outreach_id: string
-  proposed_start_at: string
+  proposed_local_start_at: string
   proposed_by: 'provider' | 'landlord'
   matched_availability: boolean
   status: AppointmentStatus

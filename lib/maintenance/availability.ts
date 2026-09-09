@@ -126,6 +126,59 @@ export function parseLocalDateTime(value: string): { date: string; hour: number;
   return { date: m[1], hour, minute }
 }
 
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : `${n}`
+}
+
+/**
+ * Scheduling V1 Timezone Correction — the ONLY function that produces
+ * the string written to maintenance_appointments.proposed_local_start_at
+ * (a `timestamp` column, deliberately WITHOUT time zone). Formats the
+ * already-parsed wall-clock parts back into a plain "YYYY-MM-
+ * DDTHH:mm:00" literal — never via `new Date(...).toISOString()`, which
+ * would reinterpret a timezone-less local value using whatever runtime
+ * happens to execute it (the exact bug this correction fixes: a
+ * provider's "10:00 AM at the property" must never silently become a
+ * different hour because the server runs in UTC).
+ */
+export function formatLocalTimestampForStorage(at: { date: string; hour: number; minute: number }): string {
+  return `${at.date}T${pad2(at.hour)}:${pad2(at.minute)}:00`
+}
+
+/**
+ * Parses a stored proposed_local_start_at value back into its raw wall-
+ * clock parts — deliberately regex-based, never `new Date(...)`, so no
+ * reader's runtime timezone can reinterpret it. Lenient about a
+ * trailing ":ss" or ".ffffff" (however Postgres/PostgREST happens to
+ * serialize a `timestamp` column) since only the date/hour/minute this
+ * feature actually stores ever matter.
+ */
+export function parseStoredLocalTimestamp(value: string): { date: string; hour: number; minute: number } | null {
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/.exec(value)
+  if (!m) return null
+  return { date: m[1], hour: Number(m[2]), minute: Number(m[3]) }
+}
+
+/**
+ * The one display format every appointment render call site should use
+ * — e.g. "Tue, Sep 15 · 10:00 AM". The calendar-date portion reuses the
+ * SAME noon-anchored `new Date(...)` trick this app already relies on
+ * for date-only values elsewhere (safe: noon sits ±12h from any
+ * timezone offset, so it can never roll over to the adjacent day); the
+ * time-of-day portion is formatted directly from the parsed wall-clock
+ * hour/minute and NEVER constructed into a Date at all, so it can never
+ * be shifted by the reader's or server's timezone — exactly preserving
+ * the provider-selected time end to end.
+ */
+export function formatAppointmentDateTime(value: string): string {
+  const parsed = parseStoredLocalTimestamp(value)
+  if (!parsed) return value
+  const datePart = new Date(`${parsed.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+  const period = parsed.hour >= 12 ? 'PM' : 'AM'
+  const hour12 = parsed.hour % 12 === 0 ? 12 : parsed.hour % 12
+  return `${datePart} · ${hour12}:${pad2(parsed.minute)} ${period}`
+}
+
 /** Deterministic containment check — a proposed wall-clock hour falls inside a window's label range on the SAME date. No AI, no fuzzy matching (Section 6's own explicit instruction). */
 export function isTimeWithinWindow(window: { window_date: string; window_label: WindowLabel }, at: { date: string; hour: number }): boolean {
   if (window.window_date !== at.date) return false

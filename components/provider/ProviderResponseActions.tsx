@@ -12,7 +12,7 @@
 
 import { useState } from 'react'
 import type { ProviderOutreachStatus } from '../../lib/maintenance/provider-outreach'
-import { groupWindowsByDate, WINDOW_LABEL_RANGE, type ProviderSafeAvailabilityWindow } from '../../lib/maintenance/availability'
+import { groupWindowsByDate, WINDOW_LABEL_RANGE, formatAppointmentDateTime, type ProviderSafeAvailabilityWindow } from '../../lib/maintenance/availability'
 import type { AppointmentRow } from '../../lib/maintenance/appointments'
 
 const CONFIRMATIONS: Record<Exclude<ProviderOutreachStatus, 'sent'>, string> = {
@@ -118,7 +118,7 @@ export function ProviderResponseActions({
       ) : proposed ? (
         <p className="providerAppointmentStatus">Proposed time sent — waiting for the property owner to confirm.</p>
       ) : appointment && appointment.status === 'confirmed' ? (
-        <p className="providerAppointmentStatus">Scheduled: {new Date(appointment.proposed_start_at).toLocaleString()}</p>
+        <p className="providerAppointmentStatus">Scheduled: {formatAppointmentDateTime(appointment.proposed_local_start_at)}</p>
       ) : (
         <div className="providerProposeField">
           <label>

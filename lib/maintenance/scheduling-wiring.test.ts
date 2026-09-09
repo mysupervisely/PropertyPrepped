@@ -90,6 +90,13 @@ describe('Provider propose-appointment route — token-only authorization, never
     expect(proposeRouteSource).toContain('matchProposedTime(windows, parsed)')
   })
 
+  it('Scheduling V1 Timezone Correction: stores the proposal via formatLocalTimestampForStorage, never new Date(...).toISOString() on the raw local input', () => {
+    expect(proposeRouteSource).toContain('formatLocalTimestampForStorage(parsed)')
+    expect(stripComments(proposeRouteSource)).not.toMatch(/new Date\(body\.localDateTime\)/)
+    expect(stripComments(proposeRouteSource)).not.toContain('.toISOString()')
+    expect(proposeRouteSource).toContain('proposed_local_start_at')
+  })
+
   it('duplicate-proposal protection: rejects a second proposal while one is already pending', () => {
     expect(proposeRouteSource).toContain('hasPendingAppointmentProposal(')
     expect(proposeRouteSource).toContain("reason: 'already_proposed'")
@@ -137,6 +144,14 @@ describe('Provider page/component — scheduling only after acceptance, no unrel
     expect(providerActionsSource).toContain("status === 'accepted'")
   })
 
+  it('Scheduling V1 Timezone Correction: displays proposed/confirmed times via formatAppointmentDateTime, never new Date(appointment.proposed_local_start_at)', () => {
+    for (const source of [caseDetailSource, providerActionsSource]) {
+      expect(source).not.toMatch(/new Date\(appointment\.proposed/)
+    }
+    expect(caseDetailSource).toContain('formatAppointmentDateTime(appointment.proposed_local_start_at)')
+    expect(providerActionsSource).toContain('formatAppointmentDateTime(appointment.proposed_local_start_at)')
+  })
+
   it('never builds a full calendar widget or pulls in a calendar library', () => {
     expect(stripComments(providerActionsSource)).not.toMatch(/calendar|fullcalendar|react-datepicker/i)
   })
@@ -150,6 +165,11 @@ describe('Migration — additive only, scheduling state kept separate from both 
   it('adds entry_preference as a nullable additive column, never a NOT NULL retroactive requirement', () => {
     expect(migrationSource).toContain('add column if not exists entry_preference text')
     expect(migrationSource).not.toMatch(/entry_preference[^\n]*not null/)
+  })
+
+  it('Scheduling V1 Timezone Correction: proposed_local_start_at is a plain `timestamp`, never `timestamptz` — no property timezone infrastructure exists to convert it correctly', () => {
+    expect(migrationSource).toContain('proposed_local_start_at timestamp not null')
+    expect(migrationSource).not.toMatch(/proposed_start_at\s+timestamptz/)
   })
 
   it('has no client-facing insert/update/delete policy on maintenance_appointments — every write goes through a server route', () => {

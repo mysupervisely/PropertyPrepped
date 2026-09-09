@@ -154,7 +154,7 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
       supabase.from('maintenance_provider_outreach').select('id, maintenance_request_id, contact_id, status, provider_message, sent_at, responded_at').order('sent_at', { ascending: false }),
       // Scheduling Coordination V1 — same defensive pattern.
       supabase.from('maintenance_availability_windows').select('id, request_id, window_date, window_label'),
-      supabase.from('maintenance_appointments').select('id, maintenance_request_id, outreach_id, proposed_start_at, proposed_by, matched_availability, status, confirmed_at, created_at').order('created_at', { ascending: false }),
+      supabase.from('maintenance_appointments').select('id, maintenance_request_id, outreach_id, proposed_local_start_at, proposed_by, matched_availability, status, confirmed_at, created_at').order('created_at', { ascending: false }),
     ])
     const firstError = propError || caseError || contactError
     if (firstError) { setError(firstError.message); setLoading(false); return }

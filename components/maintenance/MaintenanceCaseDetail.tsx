@@ -49,7 +49,7 @@ import type { EnrichedMaintenanceCase, MaintenanceCaseStatus, PropCrewContactRef
 import { maintenanceCategoryLabel } from '../../lib/maintenance/categories'
 import { NEXT_ACTION_LABEL } from '../../lib/maintenance/command-center'
 import { PROVIDER_OUTREACH_STATUS_LABEL, type ProviderOutreachRow } from '../../lib/maintenance/provider-outreach'
-import { groupWindowsByDate, WINDOW_LABEL_RANGE, ENTRY_PREFERENCE_LABEL, type AvailabilityWindow, type EntryPreference } from '../../lib/maintenance/availability'
+import { groupWindowsByDate, WINDOW_LABEL_RANGE, ENTRY_PREFERENCE_LABEL, formatAppointmentDateTime, type AvailabilityWindow, type EntryPreference } from '../../lib/maintenance/availability'
 import type { AppointmentRow } from '../../lib/maintenance/appointments'
 
 const STATUSES: MaintenanceCaseStatus[] = ['Submitted', 'Scheduled', 'In Progress', 'Completed']
@@ -206,7 +206,7 @@ export function MaintenanceCaseDetail({
                 <div className="maintenanceAppointmentProposal">
                   <p className="muted maintenanceOutreachStatus">
                     <strong>Proposed appointment</strong><br />
-                    {new Date(appointment.proposed_start_at).toLocaleString()}
+                    {formatAppointmentDateTime(appointment.proposed_local_start_at)}
                     {!appointment.matched_availability && (
                       <><br /><span className="statusPill pillBad">Outside the tenant&apos;s provided availability</span></>
                     )}
@@ -221,7 +221,7 @@ export function MaintenanceCaseDetail({
               {appointment && appointment.status === 'confirmed' && (
                 <p className="muted maintenanceOutreachStatus maintenanceAppointmentConfirmed">
                   <strong>Scheduled</strong><br />
-                  {new Date(appointment.proposed_start_at).toLocaleString()}
+                  {formatAppointmentDateTime(appointment.proposed_local_start_at)}
                   <br />{assignedContact.name}{assignedContact.business_name ? ` – ${assignedContact.business_name}` : ''}
                 </p>
               )}

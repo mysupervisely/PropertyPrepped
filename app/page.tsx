@@ -1014,7 +1014,7 @@ export default function Home() {
       // Scheduling Coordination V1 — same defensive "may legitimately
       // not exist yet" exclusion from firstError as the above two.
       client.from('maintenance_availability_windows').select('id, request_id, window_date, window_label'),
-      client.from('maintenance_appointments').select('id, maintenance_request_id, outreach_id, proposed_start_at, proposed_by, matched_availability, status, confirmed_at, created_at').order('created_at', { ascending: false }),
+      client.from('maintenance_appointments').select('id, maintenance_request_id, outreach_id, proposed_local_start_at, proposed_by, matched_availability, status, confirmed_at, created_at').order('created_at', { ascending: false }),
     ])
     const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError || contactError || requestError || systemError || noteError || ownershipError || rentPaymentError || taxRecordError || taxCustomItemError
     if (firstError) {

@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { latestAppointmentForOutreach, hasPendingAppointmentProposal, APPOINTMENT_STATUS_LABEL, type AppointmentRow } from './appointments'
 
+// proposed_local_start_at is deliberately a naive, offset-less string
+// (Scheduling V1 Timezone Correction) — never ".000Z"/an offset, which
+// would suggest a real UTC instant this column is NOT.
 const rows: AppointmentRow[] = [
-  { id: 'a1', maintenance_request_id: 'r1', outreach_id: 'o1', proposed_start_at: '2026-09-15T10:00:00.000Z', proposed_by: 'provider', matched_availability: true, status: 'declined', confirmed_at: null, created_at: '2026-09-10T10:00:00Z' },
-  { id: 'a2', maintenance_request_id: 'r1', outreach_id: 'o1', proposed_start_at: '2026-09-16T14:00:00.000Z', proposed_by: 'provider', matched_availability: false, status: 'proposed', confirmed_at: null, created_at: '2026-09-12T10:00:00Z' },
-  { id: 'a3', maintenance_request_id: 'r1', outreach_id: 'o2', proposed_start_at: '2026-09-15T10:00:00.000Z', proposed_by: 'provider', matched_availability: true, status: 'confirmed', confirmed_at: '2026-09-11T10:00:00Z', created_at: '2026-09-11T09:00:00Z' },
+  { id: 'a1', maintenance_request_id: 'r1', outreach_id: 'o1', proposed_local_start_at: '2026-09-15T10:00:00', proposed_by: 'provider', matched_availability: true, status: 'declined', confirmed_at: null, created_at: '2026-09-10T10:00:00Z' },
+  { id: 'a2', maintenance_request_id: 'r1', outreach_id: 'o1', proposed_local_start_at: '2026-09-16T14:00:00', proposed_by: 'provider', matched_availability: false, status: 'proposed', confirmed_at: null, created_at: '2026-09-12T10:00:00Z' },
+  { id: 'a3', maintenance_request_id: 'r1', outreach_id: 'o2', proposed_local_start_at: '2026-09-15T10:00:00', proposed_by: 'provider', matched_availability: true, status: 'confirmed', confirmed_at: '2026-09-11T10:00:00Z', created_at: '2026-09-11T09:00:00Z' },
 ]
 
 describe('latestAppointmentForOutreach', () => {

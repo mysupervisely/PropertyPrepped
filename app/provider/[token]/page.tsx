@@ -58,7 +58,7 @@ async function loadOutreach(rawToken: string) {
     }
     const { data: appointmentRows } = await admin
       .from('maintenance_appointments')
-      .select('id, maintenance_request_id, outreach_id, proposed_start_at, proposed_by, matched_availability, status, confirmed_at, created_at')
+      .select('id, maintenance_request_id, outreach_id, proposed_local_start_at, proposed_by, matched_availability, status, confirmed_at, created_at')
       .eq('outreach_id', outreach.id)
     appointment = latestAppointmentForOutreach((appointmentRows || []) as AppointmentRow[], outreach.id)
   }

@@ -16,7 +16,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '../../../../lib/supabase-server'
 import { hashProviderOutreachToken } from '../../../../lib/maintenance/provider-outreach'
-import { parseLocalDateTime, matchProposedTime, windowsForRequestId, type AvailabilityWindow } from '../../../../lib/maintenance/availability'
+import { parseLocalDateTime, formatLocalTimestampForStorage, matchProposedTime, windowsForRequestId, type AvailabilityWindow } from '../../../../lib/maintenance/availability'
 import { hasPendingAppointmentProposal, type AppointmentRow } from '../../../../lib/maintenance/appointments'
 
 export const runtime = 'nodejs'
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
 
     const { data: existingAppointments } = await admin
       .from('maintenance_appointments')
-      .select('id, maintenance_request_id, outreach_id, proposed_start_at, proposed_by, matched_availability, status, confirmed_at, created_at')
+      .select('id, maintenance_request_id, outreach_id, proposed_local_start_at, proposed_by, matched_availability, status, confirmed_at, created_at')
       .eq('outreach_id', outreach.id)
     // Duplicate-proposal protection (Section 6/9 of Provider Outreach V1,
     // carried forward here) — a double-tap must never create two live
@@ -72,7 +72,13 @@ export async function POST(req: NextRequest) {
       windows = windowsForRequestId((windowRows || []) as AvailabilityWindow[], tenantRequest.id)
     }
     const matched = matchProposedTime(windows, parsed)
-    const proposedStartAt = new Date(body.localDateTime).toISOString()
+    // Scheduling V1 Timezone Correction: NEVER `new Date(body.localDateTime)
+    // .toISOString()` here — that would reinterpret a timezone-less
+    // wall-clock value using this server's own runtime timezone,
+    // silently shifting the hour the provider actually selected.
+    // formatLocalTimestampForStorage() re-serializes the SAME parsed
+    // parts already used for matching above, with zero conversion.
+    const proposedLocalStartAt = formatLocalTimestampForStorage(parsed)
 
     const { data: inserted, error: insertError } = await admin
       .from('maintenance_appointments')
@@ -80,7 +86,7 @@ export async function POST(req: NextRequest) {
         maintenance_request_id: outreach.maintenance_request_id,
         outreach_id: outreach.id,
         owner_id: outreach.owner_id,
-        proposed_start_at: proposedStartAt,
+        proposed_local_start_at: proposedLocalStartAt,
         proposed_by: 'provider',
         matched_availability: matched,
       })

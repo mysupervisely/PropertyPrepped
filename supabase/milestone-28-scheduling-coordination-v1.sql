@@ -111,7 +111,28 @@ create table if not exists public.maintenance_appointments (
   maintenance_request_id uuid not null references public.maintenance_requests(id) on delete cascade,
   outreach_id uuid not null references public.maintenance_provider_outreach(id) on delete cascade,
   owner_id uuid not null references auth.users(id) on delete cascade,
-  proposed_start_at timestamptz not null,
+  -- Scheduling V1 Timezone Correction (pre-apply fix — Migration 28 was
+  -- still unapplied when this was found): deliberately `timestamp`
+  -- WITHOUT time zone, never `timestamptz`. This V1 has no property
+  -- timezone infrastructure (Section header's own "do not add property
+  -- timezone infrastructure" instruction) — a provider's datetime-local
+  -- input ("2026-09-15T10:00") is a PROPERTY-LOCAL wall-clock time with
+  -- no timezone attached at all. Storing it in a `timestamptz` column
+  -- would force Postgres to interpret that timezone-less value using
+  -- the CONNECTING CLIENT'S OWN session timezone (effectively the
+  -- server runtime's, e.g. Netlify's UTC) — silently shifting "10:00 AM
+  -- at the property" to a different hour whenever the server's
+  -- timezone differs from the property's. `timestamp` (no tz) instead
+  -- stores exactly the digits it's given, with zero conversion, exactly
+  -- matching lib/maintenance/availability.ts's own
+  -- formatLocalTimestampForStorage()/parseStoredLocalTimestamp() pair,
+  -- which never construct a `Date` object from this value either.
+  -- Renamed from the original `proposed_start_at` (which read as a
+  -- real UTC instant) to make the "local, no timezone" semantics
+  -- unambiguous to any future reader. A real IANA property timezone
+  -- (and a `timestamptz` column) is exactly what a future calendar
+  -- integration should introduce — deliberately out of scope here.
+  proposed_local_start_at timestamp not null,
   proposed_by text not null default 'provider' check (proposed_by in ('provider', 'landlord')),
   -- Deterministic only (Section 6: "do not use AI to determine whether
   -- times overlap") — computed once, server-side, at proposal time by
