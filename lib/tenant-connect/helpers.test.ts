@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isConversationUnread, messagePreview, tenantDisplayName, tenantConnectStatusLabel, findAccessForLease, staleInvitedEmail, normalizeTenantEmail } from './helpers'
+import { isConversationUnread, messagePreview, tenantDisplayName, tenantConnectStatusLabel, findAccessForLease, staleInvitedEmail, normalizeTenantEmail, emailsMatchForInviteAcceptance } from './helpers'
 
 describe('isConversationUnread', () => {
   it('is false when there is no message yet', () => {
@@ -158,5 +158,49 @@ describe('staleInvitedEmail — root cause of the "Resend Invitation" bug', () =
   it('never syncs a Revoked row', () => {
     const access = { status: 'Revoked' as const, tenant_email: 'na' }
     expect(staleInvitedEmail(access, 'ben@example.com')).toBeNull()
+  })
+})
+
+// Migration 30 root-cause fix: accept_tenant_invite() rejecting an
+// invite with "This invite is not available to accept." even though
+// tenant_access_select's identical-shaped predicate had already let the
+// tenant see the same pending invite on /tenant. emailsMatchForInviteAcceptance()
+// mirrors the SQL comparison (`lower(btrim(a)) = lower(btrim(b))`) so this
+// exact class of failure has a pure-logic regression guard independent
+// of a live database.
+describe('emailsMatchForInviteAcceptance (Migration 30 — btrim() hardening)', () => {
+  it('matches when both sides are already normalized (the common case)', () => {
+    expect(emailsMatchForInviteAcceptance('ben@example.com', 'ben@example.com')).toBe(true)
+  })
+
+  it('matches regardless of case, on either side', () => {
+    expect(emailsMatchForInviteAcceptance('ben@example.com', 'Ben@Example.com')).toBe(true)
+  })
+
+  it('root cause: matches when the AUTHENTICATED email carries incidental whitespace (e.g. mobile autofill) that the stored, already-normalized tenant_email does not', () => {
+    expect(emailsMatchForInviteAcceptance('ben.and.crystal@example.com', ' ben.and.crystal@example.com ')).toBe(true)
+    expect(emailsMatchForInviteAcceptance('ben.and.crystal@example.com', 'ben.and.crystal@example.com\n')).toBe(true) // trailing newline (also stripped by JS .trim(), mirroring SQL btrim()) still matches
+  })
+
+  it('does not match two genuinely different emails, even after trimming', () => {
+    expect(emailsMatchForInviteAcceptance('tenant-a@example.com', ' tenant-b@example.com ')).toBe(false)
+  })
+
+  it('full reported regression sequence: NA placeholder -> landlord corrects lease email -> Resend Invitation re-syncs the stale access row -> a new account signs in with a whitespace-affected but otherwise-matching email -> acceptance now succeeds', () => {
+    // 1. Tenant originally created with a placeholder email.
+    const originalAccess = { status: 'Invited' as const, tenant_email: 'na' }
+    // 2/3. Landlord corrects the lease's tenant email.
+    const correctedLeaseEmail = 'ben.and.crystal@example.com'
+    // 4. PR #60's Resend Invitation fix re-syncs the stale invited email.
+    const syncedEmail = staleInvitedEmail(originalAccess, correctedLeaseEmail)
+    expect(syncedEmail).toBe('ben.and.crystal@example.com')
+    const resyncedAccess = { status: 'Invited' as const, tenant_email: syncedEmail! }
+    // 5/6. Invitation delivered to, and a PropRoster account created/signed
+    // in with, the corrected address — but the device's own autofill adds
+    // a trailing space to the JWT's email claim.
+    const authenticatedEmail = 'ben.and.crystal@example.com '
+    // 7. Acceptance must now succeed (this is exactly what accept_tenant_invite()'s
+    // WHERE clause decides in the database — this mirrors that predicate).
+    expect(emailsMatchForInviteAcceptance(resyncedAccess.tenant_email, authenticatedEmail)).toBe(true)
   })
 })

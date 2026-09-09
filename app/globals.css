@@ -1956,7 +1956,13 @@ h2, h3, p { margin-top: 0; }
    a narrower max-width, big tap targets, no horizontal scrolling.
    ========================================================================== */
 .tenantPortalShell { max-width: 620px; margin: 0 auto; padding: 0 20px 60px; min-height: 100vh; background: var(--bg); }
-.tenantPortalHeader { display: flex; align-items: center; gap: 12px; min-height: 72px; border-bottom: 1px solid var(--line); }
+/* flex-wrap here (not just the 430px breakpoint below) is the actual
+   overflow fix: on a narrow phone, Wordmark + "Tenant Portal" +
+   the conditional "Landlord Dashboard" link + "Log out" no longer fit
+   on one row. Wrapping to a second row is the smallest correction that
+   keeps every existing action reachable without collapsing them behind
+   a new menu control. */
+.tenantPortalHeader { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; min-height: 72px; border-bottom: 1px solid var(--line); }
 .tenantPortalHeaderLabel { color: var(--muted); font-size: 13px; font-weight: 650; padding-left: 10px; border-left: 1px solid var(--line); flex: 1; }
 .tenantPortalLogout { flex-shrink: 0; }
 
@@ -1999,6 +2005,17 @@ h2, h3, p { margin-top: 0; }
   .tenantPortalShell { padding: 0 14px 50px; }
   .tenantPortalSectionHead button { width: 100%; }
   .tenantPortalTabs button { font-size: 13.5px; padding: 12px 8px; }
+
+  /* Tenant header, phone width: shrink the wordmark and drop the
+     redundant "Tenant Portal" text label (the page itself already says
+     that) so the remaining actions — Landlord Dashboard / Log out —
+     have room to sit on their own row without any of it running past
+     the viewport edge. Every action still renders; nothing moves
+     behind a new menu. */
+  .tenantPortalHeader { min-height: auto; padding-block: 12px; row-gap: 8px; }
+  .tenantPortalHeader .brand { font-size: 19px; }
+  .tenantPortalHeaderLabel { display: none; }
+  .tenantPortalSwitchContext, .tenantPortalLogout { flex: 1 1 auto; text-align: center; }
 }
 
 /* Guided Maintenance Intake M2 V1 (Milestone 27) — mobile-first,

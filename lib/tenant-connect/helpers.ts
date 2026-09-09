@@ -111,3 +111,26 @@ export function staleInvitedEmail(
   const normalized = normalizeTenantEmail(currentLeaseEmail)
   return normalized !== access.tenant_email ? normalized : null
 }
+
+/**
+ * Migration 30 root-cause fix (real-device invite-acceptance failure,
+ * "This invite is not available to accept."): a pure-JS mirror of
+ * accept_tenant_invite()'s WHERE clause and tenant_access_select's
+ * Invited-branch predicate in supabase/schema.sql, both now
+ * `lower(btrim(tenant_email)) = lower(btrim(v_email))`.
+ *
+ * Every application-side write to tenant_property_access.tenant_email
+ * already normalizes with normalizeTenantEmail() (trim + lowercase)
+ * before the write, so the stored side of this comparison can be
+ * trusted. The one input NOT under this app's control is the
+ * authenticated caller's own auth.jwt()->>'email' claim, which reflects
+ * whatever a device's autofill/keyboard put in the sign-up/sign-in
+ * email field — that's the side this function defends by trimming
+ * before comparing, exactly like the SQL now does. This is a read-only
+ * predicate mirror for regression testing; it grants nothing on its
+ * own — the real authorization decision is still made exclusively by
+ * accept_tenant_invite() in the database.
+ */
+export function emailsMatchForInviteAcceptance(storedTenantEmail: string, authenticatedEmail: string): boolean {
+  return storedTenantEmail.trim().toLowerCase() === authenticatedEmail.trim().toLowerCase()
+}
