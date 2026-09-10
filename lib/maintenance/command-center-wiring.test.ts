@@ -29,7 +29,11 @@ describe('Portfolio-level Command Center — reachable, real, and reads the cano
 
   it('enriches cases with category (tenant_requests) and urgency (maintenance_intake_sessions) via the shared, tested pure module — never re-implements that logic inline', () => {
     expect(commandCenterPageSource).toContain("import {\n  enrichMaintenanceCases, sortCasesForCommandCenter, summarizeCommandCenter, relevantContactsForProperty,")
-    expect(commandCenterPageSource).toContain('enrichMaintenanceCases(cases, tenantRequests, intakeSessions)')
+    // Phase C: also threads providerOutreach/appointments through (both
+    // already fetched portfolio-wide for this page's own display needs)
+    // so nextAction reflects the full outreach/appointment lifecycle,
+    // not just "assigned or not."
+    expect(commandCenterPageSource).toContain('enrichMaintenanceCases(cases, tenantRequests, intakeSessions, providerOutreach, appointments)')
   })
 
   it('separates Active/Needs Attention from Completed/History, and never deletes a case to do so', () => {
@@ -73,8 +77,8 @@ describe('PropCrew assignment — records the landlord\'s decision only', () => 
     }
   })
 
-  it('the assignment <select> itself never sends a message, creates a provider token, or schedules an appointment — it is a plain decision write, nothing else. Scoped to the assignment field specifically (not the whole file): Scheduling Coordination V1 legitimately adds its OWN separate, explicitly landlord-confirmed appointment feature elsewhere in this same component (Section 7 of that milestone) — a file-wide match would now collide with that unrelated, intentional feature.', () => {
-    const assignFieldSource = caseDetailSource.slice(caseDetailSource.indexOf('maintenanceAssignField'), caseDetailSource.indexOf('providerOutreachSection'))
+  it('the assignment <select> itself never sends a message, creates a provider token, or schedules an appointment — it is a plain decision write, nothing else. Scoped tightly to the assignField element\'s own definition (Phase C: this is now a single shared JSX value rendered in more than one place, so the boundary is its own declaration, not "until the next providerOutreachSection mention" — a file-wide/loosely-scoped match would now collide with this same component\'s unrelated, intentional next-step/appointment copy).', () => {
+    const assignFieldSource = caseDetailSource.slice(caseDetailSource.indexOf('const assignField = ('), caseDetailSource.indexOf('const noContactsNote ='))
     expect(assignFieldSource).not.toMatch(/property_messages|access_token|provider_token|notifyTenantConnect|schedule_appointment|appointment/i)
     expect(caseDetailSource).toContain('has not been notified or contacted')
   })
@@ -100,8 +104,14 @@ describe('Status model — reuses the existing four canonical values, no conflic
     // lib/maintenance/provider-outreach.ts's own header) rendered
     // elsewhere in this same component, so a file-wide text match is no
     // longer the right guard. What must still never happen is a "needs
-    // info"-flavored option inside THIS select.
-    const statusFieldSource = caseDetailSource.slice(caseDetailSource.indexOf('maintenanceStatusField'), caseDetailSource.indexOf('maintenanceStatusUpdateNotice'))
+    // info"-flavored option inside THIS select. Phase C moved this
+    // <select> into the "Advanced" details section — its own </label>
+    // close tag is now the tight, unambiguous boundary (maintenanceStatusUpdateNotice
+    // renders earlier in the file now, right under the Next Step card,
+    // so it's no longer a usable end marker here).
+    const statusFieldStart = caseDetailSource.indexOf('<label className="maintenanceStatusField">')
+    const statusFieldSource = caseDetailSource.slice(statusFieldStart, caseDetailSource.indexOf('</label>', statusFieldStart))
+    expect(statusFieldSource.length).toBeGreaterThan(0)
     expect(statusFieldSource).not.toMatch(/needs.?info/i)
   })
 

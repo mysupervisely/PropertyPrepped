@@ -1006,7 +1006,12 @@ export default function Home() {
   // distinguish urgent safety flags" requirement — deterministic only,
   // see that module's header) and to look up the currently-open case
   // for the shared MaintenanceCaseDetail modal below.
-  const enrichedSelectedRequests = enrichMaintenanceCases(selectedRequests, tenantRequests, intakeSessions)
+  // Simplification + Maintenance Workspace V2, Phase C: passing the
+  // portfolio-wide providerOutreach/appointments state (already fetched
+  // by loadPortfolio() for this page's own display needs — no new
+  // query) so every case's nextAction reflects the full outreach/
+  // appointment lifecycle, not just "assigned or not."
+  const enrichedSelectedRequests = enrichMaintenanceCases(selectedRequests, tenantRequests, intakeSessions, providerOutreach, appointments)
   const openMaintenanceCase = enrichedSelectedRequests.find((c) => c.id === openMaintenanceCaseId) || null
   // Tenant Connect: Provider Outreach V1 (Section 6) — the most recent
   // outreach row for the open case's CURRENTLY assigned contact only.

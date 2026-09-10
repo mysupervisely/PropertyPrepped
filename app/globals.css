@@ -2317,29 +2317,55 @@ h2, h3, p { margin-top: 0; }
   white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 13px;
   background: #f9fbfa; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 0;
 }
-.maintenanceCaseActionArea { display: grid; gap: 12px; border-top: 1px solid var(--line); padding-top: 14px; }
-.maintenanceAssignField, .maintenanceStatusField { display: grid; gap: 5px; font-size: 13px; font-weight: 650; }
-.maintenanceAssignField select, .maintenanceStatusField select { font-weight: 400; padding: 10px; border-radius: 10px; border: 1px solid var(--line); }
+.maintenanceCaseActionArea { display: grid; gap: 12px; }
+.maintenanceAssignField, .maintenanceStatusField { display: grid; gap: 5px; font-size: 13px; font-weight: var(--weight-medium); }
+.maintenanceAssignField select, .maintenanceStatusField select { font-weight: 400; padding: 10px; border-radius: var(--radius-control); border: 1px solid var(--line); }
 .maintenanceAssignedNote, .maintenanceNextAction { font-size: 12px; margin: 0; }
 .maintenanceMarkCompleted { width: 100%; }
+
+/* Simplification + Maintenance Workspace V2, Phase C — the one
+   dominant visual area: whatever caseRow.nextAction says the landlord
+   should look at right now. Brand-soft background (same token every
+   other "this needs your attention" surface in the app already uses —
+   PropWatch, the invite card) is what gives it visual weight without a
+   heavy border or shadow, matching the "quieter, not more stylized"
+   direction. */
+.maintenanceNextStepCard { display: grid; gap: 10px; background: var(--brand-soft); border-radius: var(--radius-card); padding: 16px 18px; }
+.maintenanceNextStepLabel { margin: 0; font-size: var(--text-caption); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-wide); color: var(--brand); text-transform: uppercase; }
+.maintenanceNextStepHeading { margin: 0; font-size: var(--text-card-title); font-weight: var(--weight-semibold); }
+.maintenanceNextStepAppointment { margin: 0; font-size: 14px; line-height: 1.5; }
+.maintenanceNextStepCard .primary, .maintenanceNextStepCard .secondary { width: 100%; text-align: center; }
+.maintenanceNextStepCard .modalActions { flex-direction: column-reverse; }
+.maintenanceProviderQuestion { margin: 0; font-size: 14px; font-style: italic; line-height: 1.5; }
 
 /* Tenant Connect: Provider Outreach V1 (Section 6) — the landlord-side
    "PropCrew" status block inside MaintenanceCaseDetail, styled to match
    the assign/status fields immediately above it rather than introducing
    a second visual language. */
 .providerOutreachSection { display: grid; gap: 8px; font-size: 13px; }
-.maintenanceAssignFieldLabel { font-weight: 650; }
+.maintenanceAssignFieldLabel { font-weight: var(--weight-medium); }
 .maintenanceOutreachStatus { font-size: 13px; line-height: 1.5; margin: 0; }
 
 /* Tenant Connect: Scheduling Coordination V1 — landlord-side tenant
-   availability display and appointment proposal/confirmation, styled
-   to match the surrounding maintenanceCaseActionArea fields. */
-.maintenanceAvailabilitySection { display: grid; gap: 8px; font-size: 13px; border-top: 1px solid var(--line); padding-top: 14px; margin-top: 4px; }
+   availability display, styled to match the surrounding fields. */
+.maintenanceAvailabilitySection { display: grid; gap: 8px; font-size: 13px; }
 .maintenanceAvailabilityList { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .maintenanceAvailabilityList li { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
 .maintenanceEntryPreference { margin: 0; }
-.maintenanceAppointmentProposal { display: grid; gap: 8px; }
 .maintenanceAppointmentConfirmed { color: var(--brand); }
+
+/* Phase C progressive disclosure — plain <details>/<summary>, no new
+   interaction pattern. A visible chevron plus a clear label is what
+   makes a collapsed section "easy to discover" rather than hidden;
+   list-style: none + the ::marker-equivalent below keeps this
+   consistent across browsers instead of relying on each one's own
+   default triangle glyph. */
+.maintenanceDetailsSection { border-top: 1px solid var(--line); padding-top: 10px; }
+.maintenanceDetailsSection summary { cursor: pointer; font-size: 13px; font-weight: var(--weight-semibold); color: var(--muted); list-style: none; display: flex; align-items: center; gap: 6px; }
+.maintenanceDetailsSection summary::-webkit-details-marker { display: none; }
+.maintenanceDetailsSection summary::before { content: '›'; display: inline-block; transition: transform .15s ease; font-size: 15px; }
+.maintenanceDetailsSection[open] summary::before { transform: rotate(90deg); }
+.maintenanceDetailsSection > *:not(summary) { margin-top: 10px; }
 
 @media (max-width: 560px) {
   .maintenanceCaseDetailModal { max-width: 100%; }

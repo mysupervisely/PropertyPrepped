@@ -206,13 +206,21 @@ describe('Bug fix (real-device testing, PR #60): the availability-match badge no
   // lib/maintenance/availability.ts). The landlord UI must not collapse
   // those into the same "Outside the tenant's provided availability"
   // message.
+  // Phase C moved the proposed-appointment display into the Next Step
+  // card's own 'confirm_or_decline' case (lib/maintenance/command-
+  // center.ts's nextActionFor() — this is now a derived state, not a
+  // standalone `appointment && appointment.status === 'proposed'`
+  // check inline in the JSX) — scoped to that case block specifically.
   const proposalBlock = caseDetailSource.slice(
-    caseDetailSource.indexOf('<p className="muted maintenanceOutreachStatus">'),
-    caseDetailSource.indexOf('{appointmentError &&'),
+    caseDetailSource.indexOf("case 'confirm_or_decline':"),
+    caseDetailSource.indexOf("case 'scheduled':"),
   )
 
   it('never shows either availability badge when the tenant provided no availability windows at all', () => {
-    expect(proposalBlock).toContain('availabilityWindows && availabilityWindows.length > 0 && (')
+    expect(proposalBlock).toContain('hasAvailability && (')
+    // hasAvailability itself is defined once, from the same
+    // availabilityWindows.length > 0 check this guard always was.
+    expect(caseDetailSource).toContain('const hasAvailability = Boolean(availabilityWindows && availabilityWindows.length > 0)')
   })
 
   it('shows a positive "Matches tenant availability" pill when windows exist and the proposal matched', () => {

@@ -63,6 +63,9 @@
 // smallest compatible migration this would require, written out but
 // NOT applied.
 
+import { latestOutreachForContact, type ProviderOutreachRow, type ProviderOutreachStatus } from './provider-outreach'
+import { latestAppointmentForOutreach, type AppointmentRow, type AppointmentStatus } from './appointments'
+
 export type MaintenanceCaseStatus = 'Submitted' | 'Scheduled' | 'In Progress' | 'Completed'
 export type MaintenanceCaseSource = 'tenant' | 'landlord'
 
@@ -106,13 +109,43 @@ export type IntakeSessionOutcome = {
   outcome: string | null
 }
 
-export type NextAction = 'assign_provider' | 'awaiting_review' | 'in_progress' | 'scheduled' | 'completed'
+// Simplification + Maintenance Workspace V2, Phase C — this vocabulary
+// replaces the coarser 5-value one M3 originally shipped (assign_provider
+// / awaiting_review / in_progress / scheduled / completed). That set
+// predated Provider Outreach V1 and Scheduling Coordination V1: once a
+// contact was assigned, EVERYTHING from "not yet contacted" through
+// "provider declined" through "appointment awaiting your confirmation"
+// all collapsed into the same vague "awaiting_review" bucket. No schema
+// changed to support this — every one of the states below is derived,
+// at read time, from columns that already exist
+// (maintenance_requests.status/assigned_contact_id,
+// maintenance_provider_outreach.status, maintenance_appointments.status)
+// via nextActionFor() below. Still exactly one persisted status model
+// (MaintenanceCaseStatus, unchanged) — this is a VIEW-level derivation
+// exactly like `active`/`urgent` already were.
+export type NextAction =
+  | 'assign_provider'
+  | 'contact_provider'
+  | 'awaiting_provider'
+  | 'provider_declined'
+  | 'needs_information'
+  | 'awaiting_proposal'
+  | 'confirm_or_decline'
+  | 'scheduled'
+  | 'in_progress'
+  | 'completed'
 
+/** Generic, state-only fallback label — used where the richer, data-composed copy MaintenanceCaseDetail itself builds (e.g. "Contact Mike", "Mike accepted — waiting for a proposed time") isn't available or isn't needed (a compact list badge, a test fixture). Human language throughout, never internal terms like "canonical", "outreach", or "token". */
 export const NEXT_ACTION_LABEL: Record<NextAction, string> = {
-  assign_provider: 'Assign a PropCrew contact',
-  awaiting_review: 'Review and start progress',
-  in_progress: 'In progress',
+  assign_provider: 'Assign a provider',
+  contact_provider: 'Contact the assigned provider',
+  awaiting_provider: 'Waiting for the provider to respond',
+  provider_declined: 'Choose another provider',
+  needs_information: 'Provider needs more information',
+  awaiting_proposal: 'Waiting for a proposed time',
+  confirm_or_decline: 'Confirm the proposed appointment',
   scheduled: 'Scheduled',
+  in_progress: 'In progress',
   completed: 'Completed',
 }
 
@@ -154,13 +187,55 @@ export function showsDedicatedUrgentBadge(row: Pick<MaintenanceCaseRow, 'priorit
   return urgent && row.priority !== 'Urgent'
 }
 
-export function nextActionFor(row: Pick<MaintenanceCaseRow, 'status' | 'assigned_contact_id'>): NextAction {
+/**
+ * The single source of truth for "what should the landlord do next" —
+ * used identically by the portfolio Command Center's list, the
+ * property Maintenance hub's list, and MaintenanceCaseDetail's own
+ * "next step" card, so the same case never shows a different answer
+ * in two places.
+ *
+ * `latestOutreachStatus`/`latestAppointmentStatus` are optional and
+ * default to null (the pre-Phase-C behavior: without them, this can
+ * only tell "assigned" from "not assigned," same as before) — callers
+ * that resolve the assigned contact's latest outreach/appointment
+ * (every real caller in this app does; see app/page.tsx's/app/
+ * maintenance/page.tsx's own openMaintenanceOutreach/openMaintenanceAppointment)
+ * should pass them for the full model. maintenance_requests.status
+ * still wins for the three states it already owns outright
+ * (Completed/In Progress/Scheduled) — this never second-guesses a
+ * landlord's own explicit status choice.
+ */
+export function nextActionFor(
+  row: Pick<MaintenanceCaseRow, 'status' | 'assigned_contact_id'>,
+  latestOutreachStatus?: ProviderOutreachStatus | null,
+  latestAppointmentStatus?: AppointmentStatus | null,
+): NextAction {
   if (row.status === 'Completed') return 'completed'
-  if (row.status === 'Scheduled') return 'scheduled'
   if (row.status === 'In Progress') return 'in_progress'
-  // 'Submitted' — the only status where "what should the landlord do
-  // next" actually branches on whether a PropCrew contact is assigned.
-  return row.assigned_contact_id ? 'awaiting_review' : 'assign_provider'
+  if (row.status === 'Scheduled') return 'scheduled'
+  // 'Submitted' — everything below only ever applies here; a landlord
+  // who already moved a case to In Progress/Scheduled/Completed has
+  // made the real decision, and this never overrides it.
+  if (!row.assigned_contact_id) return 'assign_provider'
+  if (!latestOutreachStatus) return 'contact_provider'
+  if (latestOutreachStatus === 'declined') return 'provider_declined'
+  if (latestOutreachStatus === 'needs_information') return 'needs_information'
+  if (latestOutreachStatus === 'sent') return 'awaiting_provider'
+  // 'accepted' — defers to the appointment lifecycle. Checking
+  // 'confirmed' before 'proposed' is a defensive ordering: in the
+  // normal flow maintenance_requests.status already reads 'Scheduled'
+  // by the time an appointment is confirmed (the confirm route sets
+  // both), so the early return above already fires first — this
+  // fallback just means a still-'Submitted' row with a confirmed
+  // appointment reads as 'scheduled' here too, rather than incorrectly
+  // asking the landlord to confirm an already-confirmed appointment.
+  if (latestAppointmentStatus === 'confirmed') return 'scheduled'
+  if (latestAppointmentStatus === 'proposed') return 'confirm_or_decline'
+  // No proposal yet, or the last one was declined/cancelled — either
+  // way, the provider is expected to propose (or re-propose) a time
+  // through their own existing flow; there is nothing for the landlord
+  // to do yet, so this deliberately is NOT a landlord action.
+  return 'awaiting_proposal'
 }
 
 /**
@@ -169,11 +244,25 @@ export function nextActionFor(row: Pick<MaintenanceCaseRow, 'status' | 'assigned
  * already-existing tables, no new query shape this app doesn't already
  * use elsewhere (app/page.tsx's own categoryByMaintenanceRequestId is
  * the same join pattern, generalized here into one enrichment pass).
+ *
+ * `outreachRows`/`appointmentRows` are optional (default []) —
+ * Phase C addition, portfolio-wide rows both real callers already fetch
+ * for their own display purposes (app/page.tsx's/app/maintenance/page.tsx's
+ * own providerOutreach/appointments state). When supplied, each case's
+ * `nextAction` reflects the full outreach/appointment lifecycle via
+ * nextActionFor() above, resolved the exact same way
+ * openMaintenanceOutreach/openMaintenanceAppointment already are at
+ * both call sites (request-scoped first, then latestOutreachForContact/
+ * latestAppointmentForOutreach) — no new derivation rule, just reused
+ * here so every case in a list gets the same answer the detail view
+ * would show for it, not only the one currently open.
  */
 export function enrichMaintenanceCases(
   cases: MaintenanceCaseRow[],
   tenantRequests: TenantRequestLink[],
   intakeSessions: IntakeSessionOutcome[],
+  outreachRows: ProviderOutreachRow[] = [],
+  appointmentRows: AppointmentRow[] = [],
 ): EnrichedMaintenanceCase[] {
   const tenantRequestByCaseId = new Map<string, TenantRequestLink>()
   for (const tr of tenantRequests) {
@@ -188,12 +277,16 @@ export function enrichMaintenanceCases(
   return cases.map((c) => {
     const tr = tenantRequestByCaseId.get(c.id)
     const outcomes = tr ? outcomesByRequestId.get(tr.id) || [] : []
+    const latestOutreach = c.assigned_contact_id
+      ? latestOutreachForContact(outreachRows.filter((o) => o.maintenance_request_id === c.id), c.assigned_contact_id)
+      : null
+    const latestAppointment = latestOutreach ? latestAppointmentForOutreach(appointmentRows, latestOutreach.id) : null
     return {
       ...c,
       category: tr ? tr.category : null,
       urgent: isUrgentCase(c, outcomes),
       active: c.status !== 'Completed',
-      nextAction: nextActionFor(c),
+      nextAction: nextActionFor(c, latestOutreach?.status, latestAppointment?.status),
     }
   })
 }

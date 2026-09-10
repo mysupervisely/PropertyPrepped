@@ -179,7 +179,13 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
     return p ? `${p.address}${p.city ? `, ${p.city}` : ''}` : 'Property'
   }
 
-  const enriched = useMemo(() => enrichMaintenanceCases(cases, tenantRequests, intakeSessions), [cases, tenantRequests, intakeSessions])
+  // Simplification + Maintenance Workspace V2, Phase C: same reasoning
+  // as app/page.tsx's identical call — providerOutreach/appointments are
+  // already fetched portfolio-wide for this page's own display needs.
+  const enriched = useMemo(
+    () => enrichMaintenanceCases(cases, tenantRequests, intakeSessions, providerOutreach, appointments),
+    [cases, tenantRequests, intakeSessions, providerOutreach, appointments],
+  )
   const sorted = useMemo(() => sortCasesForCommandCenter(enriched), [enriched])
   const summary = useMemo(() => summarizeCommandCenter(enriched), [enriched])
   const active = sorted.filter((c) => c.active)

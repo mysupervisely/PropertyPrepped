@@ -64,16 +64,59 @@ describe('showsDedicatedUrgentBadge — Bug 2 fix: dedup the "Urgent" badge agai
   })
 })
 
-describe('nextActionFor', () => {
-  it('Completed -> completed, Scheduled -> scheduled, In Progress -> in_progress, regardless of assignment', () => {
+describe('nextActionFor — Simplification + Maintenance Workspace V2, Phase C: the full outreach/appointment-aware state machine', () => {
+  it('Completed -> completed, Scheduled -> scheduled, In Progress -> in_progress, regardless of assignment or outreach/appointment state — a landlord\'s own explicit status choice always wins', () => {
     expect(nextActionFor({ status: 'Completed', assigned_contact_id: null })).toBe('completed')
     expect(nextActionFor({ status: 'Scheduled', assigned_contact_id: null })).toBe('scheduled')
     expect(nextActionFor({ status: 'In Progress', assigned_contact_id: 'c1' })).toBe('in_progress')
+    expect(nextActionFor({ status: 'Completed', assigned_contact_id: 'c1' }, 'sent', 'proposed')).toBe('completed')
   })
 
-  it('Submitted branches on assignment: assign_provider when unassigned, awaiting_review when assigned', () => {
+  it('unassigned new request -> assign_provider', () => {
     expect(nextActionFor({ status: 'Submitted', assigned_contact_id: null })).toBe('assign_provider')
-    expect(nextActionFor({ status: 'Submitted', assigned_contact_id: 'c1' })).toBe('awaiting_review')
+  })
+
+  it('assigned but not yet contacted (no outreach at all) -> contact_provider', () => {
+    expect(nextActionFor({ status: 'Submitted', assigned_contact_id: 'c1' })).toBe('contact_provider')
+    expect(nextActionFor({ status: 'Submitted', assigned_contact_id: 'c1' }, null)).toBe('contact_provider')
+  })
+
+  it('outreach sent, no response yet -> awaiting_provider', () => {
+    expect(nextActionFor({ status: 'Submitted', assigned_contact_id: 'c1' }, 'sent')).toBe('awaiting_provider')
+  })
+
+  it('provider declined -> provider_declined (a real landlord action: choose another provider)', () => {
+    expect(nextActionFor({ status: 'Submitted', assigned_contact_id: 'c1' }, 'declined')).toBe('provider_declined')
+  })
+
+  it('provider asked a question -> needs_information', () => {
+    expect(nextActionFor({ status: 'Submitted', assigned_contact_id: 'c1' }, 'needs_information')).toBe('needs_information')
+  })
+
+  it('provider accepted, no appointment proposed yet -> awaiting_proposal (NOT a landlord action — nothing to manufacture)', () => {
+    expect(nextActionFor({ status: 'Submitted', assigned_contact_id: 'c1' }, 'accepted')).toBe('awaiting_proposal')
+    expect(nextActionFor({ status: 'Submitted', assigned_contact_id: 'c1' }, 'accepted', null)).toBe('awaiting_proposal')
+  })
+
+  it('appointment proposed, pending landlord decision -> confirm_or_decline', () => {
+    expect(nextActionFor({ status: 'Submitted', assigned_contact_id: 'c1' }, 'accepted', 'proposed')).toBe('confirm_or_decline')
+  })
+
+  it('appointment declined by the landlord -> back to awaiting_proposal, never stuck on the declined one', () => {
+    expect(nextActionFor({ status: 'Submitted', assigned_contact_id: 'c1' }, 'accepted', 'declined')).toBe('awaiting_proposal')
+  })
+
+  it('appointment confirmed but maintenance_requests.status has not caught up yet (defensive ordering) -> scheduled, never asks to re-confirm', () => {
+    expect(nextActionFor({ status: 'Submitted', assigned_contact_id: 'c1' }, 'accepted', 'confirmed')).toBe('scheduled')
+  })
+
+  it('assignment alone never implies the provider was contacted', () => {
+    expect(nextActionFor({ status: 'Submitted', assigned_contact_id: 'c1' })).not.toBe('awaiting_provider')
+    expect(nextActionFor({ status: 'Submitted', assigned_contact_id: 'c1' })).not.toBe('confirm_or_decline')
+  })
+
+  it('a proposal never implies confirmation — confirm_or_decline only fires for an actually-proposed appointment', () => {
+    expect(nextActionFor({ status: 'Submitted', assigned_contact_id: 'c1' }, 'accepted')).not.toBe('confirm_or_decline')
   })
 })
 
@@ -118,6 +161,47 @@ describe('enrichMaintenanceCases', () => {
     const [enriched] = enrichMaintenanceCases(cases, [], [])
     expect(enriched.active).toBe(false)
     expect(enriched.urgent).toBe(true) // still urgent, just not active
+  })
+
+  describe('Phase C: nextAction reflects the full outreach/appointment lifecycle when those rows are supplied', () => {
+    it('omitting outreach/appointment rows falls back to the coarse assigned/unassigned distinction — never throws, never assumes contact', () => {
+      const [unassigned] = enrichMaintenanceCases([makeCase({ id: 'c1', assigned_contact_id: null })], [], [])
+      expect(unassigned.nextAction).toBe('assign_provider')
+      const [assigned] = enrichMaintenanceCases([makeCase({ id: 'c1', assigned_contact_id: 'contact-1' })], [], [])
+      expect(assigned.nextAction).toBe('contact_provider')
+    })
+
+    it('resolves the CURRENT assigned contact\'s latest outreach, scoped to this exact case — a same contact\'s outreach on a DIFFERENT case never leaks in', () => {
+      const cases = [makeCase({ id: 'case-a', assigned_contact_id: 'contact-1' }), makeCase({ id: 'case-b', assigned_contact_id: 'contact-1' })]
+      const outreach = [
+        { id: 'o1', maintenance_request_id: 'case-a', contact_id: 'contact-1', status: 'sent' as const, provider_message: null, sent_at: '2026-01-01T00:00:00Z', responded_at: null },
+        { id: 'o2', maintenance_request_id: 'case-b', contact_id: 'contact-1', status: 'accepted' as const, provider_message: null, sent_at: '2026-01-02T00:00:00Z', responded_at: '2026-01-02T01:00:00Z' },
+      ]
+      const enriched = enrichMaintenanceCases(cases, [], [], outreach, [])
+      expect(enriched.find((c) => c.id === 'case-a')!.nextAction).toBe('awaiting_provider')
+      expect(enriched.find((c) => c.id === 'case-b')!.nextAction).toBe('awaiting_proposal')
+    })
+
+    it('reassigning to a different contact starts fresh — a PRIOR contact\'s outreach never carries over to the new one', () => {
+      const cases = [makeCase({ id: 'case-a', assigned_contact_id: 'contact-2' })]
+      const outreach = [
+        { id: 'o1', maintenance_request_id: 'case-a', contact_id: 'contact-1', status: 'declined' as const, provider_message: null, sent_at: '2026-01-01T00:00:00Z', responded_at: '2026-01-01T01:00:00Z' },
+      ]
+      const [enriched] = enrichMaintenanceCases(cases, [], [], outreach, [])
+      expect(enriched.nextAction).toBe('contact_provider') // fresh assignment, not provider_declined
+    })
+
+    it('resolves the appointment for the CURRENT outreach specifically, via the same outreach_id chain the detail view already uses', () => {
+      const cases = [makeCase({ id: 'case-a', assigned_contact_id: 'contact-1' })]
+      const outreach = [
+        { id: 'o1', maintenance_request_id: 'case-a', contact_id: 'contact-1', status: 'accepted' as const, provider_message: null, sent_at: '2026-01-01T00:00:00Z', responded_at: '2026-01-01T01:00:00Z' },
+      ]
+      const appointments = [
+        { id: 'a1', maintenance_request_id: 'case-a', outreach_id: 'o1', proposed_local_start_at: '2026-01-05T09:00:00', proposed_by: 'provider' as const, matched_availability: true, status: 'proposed' as const, confirmed_at: null, created_at: '2026-01-03T00:00:00Z' },
+      ]
+      const [enriched] = enrichMaintenanceCases(cases, [], [], outreach, appointments)
+      expect(enriched.nextAction).toBe('confirm_or_decline')
+    })
   })
 })
 
