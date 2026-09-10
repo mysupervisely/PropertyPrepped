@@ -265,7 +265,7 @@ function TenantPortal({ userId }: { userId: string }) {
           </nav>
 
           {view === 'My Rental' && <TenantMyRentalView property={property} lease={lease} />}
-          {view === 'Lease' && <TenantLeaseView lease={lease} />}
+          {view === 'Lease' && supabase && <TenantLeaseView supabase={supabase} lease={lease} />}
           {view === 'Rent' && supabase && <TenantRentView supabase={supabase} lease={lease} />}
           {view === 'Requests' && supabase && <TenantRequestsView supabase={supabase} propertyId={selected.property_id} ownerId={selected.owner_id} tenantAccessId={selected.id} propertyAddress={property?.address || 'your property'} />}
           {view === 'Documents' && supabase && <TenantDocumentsView supabase={supabase} propertyId={selected.property_id} />}
@@ -299,7 +299,37 @@ function TenantMyRentalView({ property, lease }: { property: PropertyRef | null;
   )
 }
 
-function TenantLeaseView({ lease }: { lease: LeaseRef | null }) {
+// Lease file access (PR #60 polish): a signed URL for THIS tenancy's
+// own lease file, resolved server-side via
+// app/api/tenant-connect/lease-document-url — see that route's own
+// header for the full authorization trace. Fetched once per lease on
+// mount (same "fetch, then render a button or a safe empty state"
+// shape TenantDocumentsView already uses), never assumed present —
+// leaseFileUrl stays null (no action shown) until the route confirms a
+// signed lease file actually exists for this lease.
+function TenantLeaseView({ supabase, lease }: { supabase: SupabaseClient; lease: LeaseRef | null }) {
+  const [leaseFileUrl, setLeaseFileUrl] = useState<string | null>(null)
+  const [leaseFileChecked, setLeaseFileChecked] = useState(false)
+
+  useEffect(() => {
+    setLeaseFileUrl(null)
+    setLeaseFileChecked(false)
+    if (!lease) return
+    let cancelled = false
+    supabase.auth.getSession().then(({ data: sessionData }) => {
+      const token = sessionData.session?.access_token
+      if (!token) { if (!cancelled) setLeaseFileChecked(true); return }
+      return fetch('/api/tenant-connect/lease-document-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ leaseId: lease.id }),
+      })
+        .then((res) => res.json().catch(() => ({ url: null })))
+        .then((data) => { if (!cancelled) { setLeaseFileUrl(data.url || null); setLeaseFileChecked(true) } })
+    })
+    return () => { cancelled = true }
+  }, [lease?.id])
+
   if (!lease) return <section className="tenantPortalSection"><p className="muted">No lease on file yet.</p></section>
   return (
     <section className="tenantPortalSection">
@@ -309,6 +339,11 @@ function TenantLeaseView({ lease }: { lease: LeaseRef | null }) {
         <div><span>Lease end</span><strong>{new Date(`${lease.end_date}T12:00:00`).toLocaleDateString()}</strong></div>
         {lease.rent_due_day != null && <div><span>Rent due day</span><strong>{lease.rent_due_day}</strong></div>}
       </div>
+      {leaseFileChecked && (
+        leaseFileUrl
+          ? <button className="secondary tenantPortalLeaseFileButton" onClick={() => window.open(leaseFileUrl, '_blank', 'noopener,noreferrer')}>View signed lease</button>
+          : <p className="muted tenantPortalLeaseFileEmpty">Your landlord hasn&rsquo;t shared a signed lease file yet.</p>
+      )}
     </section>
   )
 }
