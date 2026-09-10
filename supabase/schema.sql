@@ -734,20 +734,11 @@ alter table public.tenant_property_access enable row level security;
 -- Invited and addressed to their own signed-in email (the one-time
 -- bootstrap step needed to discover and accept an invite at all, since
 -- tenant_user_id is null until acceptance so it can't be matched yet).
--- Milestone 30: both the Invited-branch predicate here and
--- accept_tenant_invite()'s WHERE clause below apply btrim() as well as
--- lower() to the email comparison — see milestone-30-tenant-invite-
--- accept-whitespace-fix.sql for the full root-cause trace. The
--- authenticated caller's own auth.jwt()->>'email' claim is outside this
--- app's direct control (it reflects whatever a device's autofill/
--- keyboard put in the sign-up/sign-in email field), so it's the one
--- input to this comparison that isn't already guaranteed trimmed by an
--- application-side write path.
 drop policy if exists "tenant_access_select" on public.tenant_property_access;
 create policy "tenant_access_select" on public.tenant_property_access for select to authenticated using (
   (select auth.uid()) = owner_id
   or (status = 'Active' and tenant_user_id = (select auth.uid()))
-  or (status = 'Invited' and lower(btrim(tenant_email)) = lower(btrim((select auth.jwt() ->> 'email'))))
+  or (status = 'Invited' and lower(tenant_email) = lower((select auth.jwt() ->> 'email')))
 );
 
 -- INSERT: only an owner, only for a property they own, only as a fresh
@@ -827,7 +818,7 @@ begin
   set tenant_user_id = auth.uid(), status = 'Active', accepted_at = now()
   where id = p_access_id
     and status = 'Invited'
-    and lower(btrim(tenant_email)) = lower(btrim(v_email))
+    and lower(tenant_email) = lower(v_email)
   returning * into v_row;
 
   if v_row.id is null then
