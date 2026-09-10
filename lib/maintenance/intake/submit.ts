@@ -28,6 +28,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MaintenanceCategoryId } from '../categories'
 import type { AnsweredStep } from './engine'
+import type { EntryPreference } from '../availability'
 
 export type IntakePhoto = { file: File }
 
@@ -43,6 +44,12 @@ export type SubmitGuidedIntakeParams = {
   answeredSteps: AnsweredStep[]
   outcome: 'escalated_urgent' | 'escalated_to_dispatch'
   photos?: IntakePhoto[]
+  // Scheduling Coordination V1 (Section 2/3) — both optional; a tenant
+  // may skip availability entirely (Section 2: "do not force"), and an
+  // omitted entry preference is simply left null ("not provided"),
+  // never defaulted to something that could be read as authorization.
+  availabilityWindows?: { window_date: string; window_label: 'morning' | 'afternoon' | 'evening' }[]
+  entryPreference?: EntryPreference | null
 }
 
 export type SubmitGuidedIntakeResult =
@@ -60,7 +67,7 @@ export type SubmitGuidedIntakeResult =
  * scoped, not client-side sequencing.
  */
 export async function submitGuidedIntake(params: SubmitGuidedIntakeParams): Promise<SubmitGuidedIntakeResult> {
-  const { supabase, propertyId, ownerId, tenantAccessId, category, treeVersion, title, description, answeredSteps, outcome, photos } = params
+  const { supabase, propertyId, ownerId, tenantAccessId, category, treeVersion, title, description, answeredSteps, outcome, photos, availabilityWindows, entryPreference } = params
 
   const { data: userData } = await supabase.auth.getUser()
   const senderUserId = userData.user?.id
@@ -83,11 +90,24 @@ export async function submitGuidedIntake(params: SubmitGuidedIntakeParams): Prom
 
   const { data: request, error: reqErr } = await supabase
     .from('tenant_requests')
-    .insert({ property_id: propertyId, owner_id: ownerId, tenant_access_id: tenantAccessId, conversation_id: conversationId, category, title, description })
+    .insert({ property_id: propertyId, owner_id: ownerId, tenant_access_id: tenantAccessId, conversation_id: conversationId, category, title, description, entry_preference: entryPreference || null })
     .select('id')
     .single()
   if (reqErr || !request) return { ok: false, error: reqErr?.message || 'Could not submit your report.' }
   const tenantRequestId = request.id as string
+
+  // Scheduling Coordination V1 (Section 2) — same non-fatal-side-effect
+  // principle as the intake session/answers below: the tenant's request
+  // is already safely submitted by this point, so a failed availability
+  // insert is logged, never rolled back or hidden from the tenant.
+  if (availabilityWindows?.length) {
+    const windowRows = availabilityWindows.map((w) => ({
+      request_id: tenantRequestId, owner_id: ownerId, tenant_access_id: tenantAccessId,
+      window_date: w.window_date, window_label: w.window_label,
+    }))
+    const { error: availabilityErr } = await supabase.from('maintenance_availability_windows').insert(windowRows)
+    if (availabilityErr) console.error('guided intake: failed to persist availability windows (request was still submitted)', availabilityErr)
+  }
 
   const { data: session, error: sessionErr } = await supabase
     .from('maintenance_intake_sessions')

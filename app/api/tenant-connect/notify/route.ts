@@ -20,7 +20,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createRequestClient } from '../../../../lib/supabase-server'
-import { buildInviteEmail, buildNewRequestEmail, buildLandlordUpdateEmail, sendTenantConnectEmail } from '../../../../lib/tenant-connect/notify'
+import { buildInviteEmail, buildNewRequestEmail, buildLandlordUpdateEmail, sendTenantConnectEmail, tenantInviteLink, landlordRequestLink, tenantPortalLink } from '../../../../lib/tenant-connect/notify'
 
 export const runtime = 'nodejs'
 
@@ -46,7 +46,8 @@ export async function POST(req: NextRequest) {
       const { data: access } = await supabase.from('tenant_property_access').select('property_id, tenant_email').eq('id', body.accessId).maybeSingle()
       if (!access) return NextResponse.json({ sent: false }, { status: 200 })
       const { data: property } = await supabase.from('properties').select('address').eq('id', access.property_id).maybeSingle()
-      const result = await sendTenantConnectEmail(access.tenant_email, buildInviteEmail(property?.address || 'your property'))
+      const inviteUrl = tenantInviteLink(req.nextUrl.origin, body.accessId)
+      const result = await sendTenantConnectEmail(access.tenant_email, buildInviteEmail(property?.address || 'your property', inviteUrl))
       return NextResponse.json(result, { status: 200 })
     }
 
@@ -66,7 +67,8 @@ export async function POST(req: NextRequest) {
       if (!admin) return NextResponse.json({ sent: false }, { status: 200 })
       const { data: ownerUser } = await admin.auth.admin.getUserById(request.owner_id)
       if (!ownerUser?.user?.email) return NextResponse.json({ sent: false }, { status: 200 })
-      const result = await sendTenantConnectEmail(ownerUser.user.email, buildNewRequestEmail(property?.address || 'your property', request.category, request.title))
+      const requestUrl = landlordRequestLink(req.nextUrl.origin, request.property_id)
+      const result = await sendTenantConnectEmail(ownerUser.user.email, buildNewRequestEmail(property?.address || 'your property', request.category, request.title, requestUrl))
       return NextResponse.json(result, { status: 200 })
     }
 
@@ -81,7 +83,7 @@ export async function POST(req: NextRequest) {
         supabase.from('tenant_property_access').select('tenant_email').eq('id', request.tenant_access_id).maybeSingle(),
       ])
       if (!access?.tenant_email) return NextResponse.json({ sent: false }, { status: 200 })
-      const result = await sendTenantConnectEmail(access.tenant_email, buildLandlordUpdateEmail(property?.address || 'your property', request.title))
+      const result = await sendTenantConnectEmail(access.tenant_email, buildLandlordUpdateEmail(property?.address || 'your property', request.title, tenantPortalLink(req.nextUrl.origin)))
       return NextResponse.json(result, { status: 200 })
     }
 

@@ -50,6 +50,8 @@ import { GuidedIntake } from '../../components/tenant-connect/GuidedIntake'
 
 type PropertyRef = { id: string; address: string; city: string }
 type LeaseRef = { id: string; tenant_name: string; monthly_rent: number; start_date: string; end_date: string; rent_due_day: number | null }
+type RentPaymentRef = { id: string; lease_id: string; rent_period: string; date_received: string; amount: number; payment_method: string }
+type TenantDocumentRef = { id: string; property_id: string; name: string; category: string; storage_path: string; created_at: string }
 
 function money(n: number | null | undefined) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n || 0)
@@ -60,21 +62,85 @@ export default function TenantPortalPage() {
 
   if (!ready) return <main className="authShell"><div className="loadingState">Loading…</div></main>
 
-  if (!user) {
-    return (
-      <main className="authShell">
-        <section className="authCard">
-          <p className="eyebrow">PROPROSTER</p>
-          <h1>Sign in required</h1>
-          <p className="authIntro">Sign in to view your Tenant Portal.</p>
-          <Link className="primary authSubmit" href="/">Go to sign in</Link>
-        </section>
-      </main>
-    )
-  }
+  // Tenant-Facing Experience V1 (Section: "if the invited person does
+  // NOT yet have a PropRoster account... registration should open in
+  // tenant context; do not make them navigate through the landlord
+  // dashboard"). This is the whole fix: sign-up/sign-in happens right
+  // here, not via a "Go to sign in" link back to "/" (the landlord
+  // app). Authorization is untouched either way — RLS's own email-
+  // match (tenant_access_select) and accept_tenant_invite()'s own
+  // re-check are what actually decide whether an invite is visible or
+  // acceptable, exactly as before this page existed.
+  if (!user) return <TenantSignIn />
 
   return <TenantPortal userId={user.id} />
 }
+
+function TenantSignIn() {
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  // Read manually (not next/navigation's useSearchParams) so this
+  // client-only page never needs a Suspense boundary — same convention
+  // app/account/billing/page.tsx already established. Purely a UX hint
+  // (which invite prompted this visit) — NEVER a security token; see
+  // lib/tenant-connect/notify.ts's tenantInviteLink() for why knowing
+  // this id grants nothing by itself.
+  const [inviteHint, setInviteHint] = useState(false)
+  useEffect(() => {
+    setInviteHint(new URLSearchParams(window.location.search).has('invite'))
+  }, [])
+
+  async function submit() {
+    if (!supabase || !email.trim() || password.length < 6) return
+    setBusy(true)
+    setError('')
+    setMessage('')
+    if (authMode === 'signin') {
+      const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+      if (err) setError(err.message)
+    } else {
+      const { data, error: err } = await supabase.auth.signUp({ email: email.trim(), password })
+      if (err) setError(err.message)
+      else if (!data.session) setMessage('Account created. Check your email to confirm your address, then sign in.')
+      // If a session came back immediately, this component just
+      // unmounts on the next render (useAuthUser's own auth-state
+      // listener picks it up) and TenantPortal takes over — no
+      // redirect needed, we're already on the right page.
+    }
+    setBusy(false)
+  }
+
+  return (
+    <main className="authShell">
+      <section className="authCard">
+        <p className="eyebrow">PROPROSTER · TENANT</p>
+        <h1>{authMode === 'signin' ? 'Sign in' : 'Create your account'}</h1>
+        <p className="authIntro">
+          {inviteHint
+            ? 'Sign in or create an account with the email your landlord invited to accept your Tenant Connect invitation.'
+            : 'Sign in or create an account to view your rental, submit maintenance requests, and more.'}
+        </p>
+        <label htmlFor="tenant-auth-email">Email</label>
+        <input id="tenant-auth-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <label htmlFor="tenant-auth-password">Password</label>
+        <input id="tenant-auth-password" type="password" autoComplete={authMode === 'signin' ? 'current-password' : 'new-password'} value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void submit()} />
+        {error && <div className="statusMessage errorMessage" role="alert">{error}</div>}
+        {message && <div className="statusMessage successMessage" role="status">{message}</div>}
+        <button className="primary authSubmit" disabled={busy} onClick={() => void submit()}>{busy ? 'Working…' : authMode === 'signin' ? 'Sign in' : 'Create account'}</button>
+        <button className="authSwitch" onClick={() => { setAuthMode(authMode === 'signin' ? 'signup' : 'signin'); setError(''); setMessage('') }}>
+          {authMode === 'signin' ? 'New here? Create an account' : 'Already have an account? Sign in'}
+        </button>
+      </section>
+    </main>
+  )
+}
+
+type TenantView = 'My Rental' | 'Lease' | 'Rent' | 'Requests' | 'Documents'
+const TENANT_VIEWS: TenantView[] = ['My Rental', 'Lease', 'Rent', 'Requests', 'Documents']
 
 function TenantPortal({ userId }: { userId: string }) {
   const [access, setAccess] = useState<TenantPropertyAccess[]>([])
@@ -82,9 +148,15 @@ function TenantPortal({ userId }: { userId: string }) {
   const [selectedAccessId, setSelectedAccessId] = useState<string | null>(null)
   const [property, setProperty] = useState<PropertyRef | null>(null)
   const [lease, setLease] = useState<LeaseRef | null>(null)
-  const [view, setView] = useState<'Lease' | 'Requests'>('Requests')
+  const [view, setView] = useState<TenantView>('My Rental')
   const [error, setError] = useState('')
   const [acceptBusy, setAcceptBusy] = useState<string | null>(null)
+  // Dual role (Tenant-Facing Experience V1) — Owner and Tenant are not
+  // mutually exclusive; a tenant account that ALSO owns properties gets
+  // a lightweight way back to that context. Same "existence check only,
+  // RLS decides the real answer" approach as AuthNavMenu's own
+  // hasTenantAccess check.
+  const [hasOwnedProperties, setHasOwnedProperties] = useState(false)
 
   async function load() {
     if (!supabase) return
@@ -99,6 +171,11 @@ function TenantPortal({ userId }: { userId: string }) {
   }
 
   useEffect(() => { void load() }, [userId])
+
+  useEffect(() => {
+    if (!supabase) return
+    supabase.from('properties').select('id').limit(1).then(({ data }) => setHasOwnedProperties(Boolean(data && data.length)))
+  }, [userId])
 
   const activeRows = access.filter((a) => a.status === 'Active')
   const pendingRows = access.filter((a) => a.status === 'Invited')
@@ -127,6 +204,12 @@ function TenantPortal({ userId }: { userId: string }) {
     const { error: err } = await supabase.rpc('accept_tenant_invite', { p_access_id: accessId })
     setAcceptBusy(null)
     if (err) { setError(err.message); return }
+    // Section: "After accepting, route them directly to the tenant-
+    // facing experience for the invited rental." load() re-fetches
+    // access (the newly-Active row now becomes `selected` since it's
+    // the only/first Active row), and 'My Rental' is already this
+    // component's default view — no separate redirect needed, this
+    // page IS that experience already.
     await load()
   }
 
@@ -137,6 +220,7 @@ function TenantPortal({ userId }: { userId: string }) {
       <header className="tenantPortalHeader">
         <span className="brand"><Wordmark /></span>
         <span className="tenantPortalHeaderLabel">Tenant Portal</span>
+        {hasOwnedProperties && <Link href="/" className="secondary tenantPortalSwitchContext">Landlord Dashboard</Link>}
         <button type="button" className="secondary tenantPortalLogout" onClick={() => void supabase?.auth.signOut()}>Log out</button>
       </header>
 
@@ -175,20 +259,77 @@ function TenantPortal({ userId }: { userId: string }) {
           </section>
 
           <nav className="tenantPortalTabs" role="tablist" aria-label="Tenant Portal sections">
-            {(['Requests', 'Lease'] as const).map((tab) => (
+            {TENANT_VIEWS.map((tab) => (
               <button key={tab} role="tab" aria-selected={view === tab} className={view === tab ? 'active' : ''} onClick={() => setView(tab)}>{tab}</button>
             ))}
           </nav>
 
-          {view === 'Lease' && <TenantLeaseView lease={lease} />}
+          {view === 'My Rental' && <TenantMyRentalView property={property} lease={lease} />}
+          {view === 'Lease' && supabase && <TenantLeaseView supabase={supabase} lease={lease} />}
+          {view === 'Rent' && supabase && <TenantRentView supabase={supabase} lease={lease} />}
           {view === 'Requests' && supabase && <TenantRequestsView supabase={supabase} propertyId={selected.property_id} ownerId={selected.owner_id} tenantAccessId={selected.id} propertyAddress={property?.address || 'your property'} />}
+          {view === 'Documents' && supabase && <TenantDocumentsView supabase={supabase} propertyId={selected.property_id} />}
         </>
       )}
     </main>
   )
 }
 
-function TenantLeaseView({ lease }: { lease: LeaseRef | null }) {
+// "My Rental" (Section: property address, basic landlord-shared rental
+// information, lease dates, monthly rent, rent due date) — a read-only
+// summary built entirely from data this component already fetches
+// (property/lease), no new query.
+function TenantMyRentalView({ property, lease }: { property: PropertyRef | null; lease: LeaseRef | null }) {
+  return (
+    <section className="tenantPortalSection">
+      <div className="detailRows">
+        <div><span>Address</span><strong>{property?.address || '—'}{property?.city ? `, ${property.city}` : ''}</strong></div>
+        {lease ? (
+          <>
+            <div><span>Monthly rent</span><strong>{money(lease.monthly_rent)}</strong></div>
+            {lease.rent_due_day != null && <div><span>Rent due day</span><strong>{lease.rent_due_day}</strong></div>}
+            <div><span>Lease start</span><strong>{new Date(`${lease.start_date}T12:00:00`).toLocaleDateString()}</strong></div>
+            <div><span>Lease end</span><strong>{new Date(`${lease.end_date}T12:00:00`).toLocaleDateString()}</strong></div>
+          </>
+        ) : (
+          <div><span>Lease</span><strong>No lease on file yet.</strong></div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+// Lease file access (PR #60 polish): a signed URL for THIS tenancy's
+// own lease file, resolved server-side via
+// app/api/tenant-connect/lease-document-url — see that route's own
+// header for the full authorization trace. Fetched once per lease on
+// mount (same "fetch, then render a button or a safe empty state"
+// shape TenantDocumentsView already uses), never assumed present —
+// leaseFileUrl stays null (no action shown) until the route confirms a
+// signed lease file actually exists for this lease.
+function TenantLeaseView({ supabase, lease }: { supabase: SupabaseClient; lease: LeaseRef | null }) {
+  const [leaseFileUrl, setLeaseFileUrl] = useState<string | null>(null)
+  const [leaseFileChecked, setLeaseFileChecked] = useState(false)
+
+  useEffect(() => {
+    setLeaseFileUrl(null)
+    setLeaseFileChecked(false)
+    if (!lease) return
+    let cancelled = false
+    supabase.auth.getSession().then(({ data: sessionData }) => {
+      const token = sessionData.session?.access_token
+      if (!token) { if (!cancelled) setLeaseFileChecked(true); return }
+      return fetch('/api/tenant-connect/lease-document-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ leaseId: lease.id }),
+      })
+        .then((res) => res.json().catch(() => ({ url: null })))
+        .then((data) => { if (!cancelled) { setLeaseFileUrl(data.url || null); setLeaseFileChecked(true) } })
+    })
+    return () => { cancelled = true }
+  }, [lease?.id])
+
   if (!lease) return <section className="tenantPortalSection"><p className="muted">No lease on file yet.</p></section>
   return (
     <section className="tenantPortalSection">
@@ -198,6 +339,115 @@ function TenantLeaseView({ lease }: { lease: LeaseRef | null }) {
         <div><span>Lease end</span><strong>{new Date(`${lease.end_date}T12:00:00`).toLocaleDateString()}</strong></div>
         {lease.rent_due_day != null && <div><span>Rent due day</span><strong>{lease.rent_due_day}</strong></div>}
       </div>
+      {leaseFileChecked && (
+        leaseFileUrl
+          ? <button className="secondary tenantPortalLeaseFileButton" onClick={() => window.open(leaseFileUrl, '_blank', 'noopener,noreferrer')}>View signed lease</button>
+          : <p className="muted tenantPortalLeaseFileEmpty">Your landlord hasn&rsquo;t shared a signed lease file yet.</p>
+      )}
+    </section>
+  )
+}
+
+// "Rent" (Section: monthly rent, due date, payment status/history the
+// LANDLORD has documented — "do NOT imply PropRoster collects rent").
+// Reads tenant_rent_payments_view — never public.rent_payments
+// directly, same narrow-view convention tenant_property_view/
+// tenant_lease_view already established (Migration 29).
+function TenantRentView({ supabase, lease }: { supabase: SupabaseClient; lease: LeaseRef | null }) {
+  const [payments, setPayments] = useState<RentPaymentRef[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!lease) { setPayments([]); setLoading(false); return }
+    setLoading(true)
+    supabase.from('tenant_rent_payments_view').select('*').eq('lease_id', lease.id).order('rent_period', { ascending: false }).then(({ data }) => {
+      setPayments((data as RentPaymentRef[]) || [])
+      setLoading(false)
+    })
+  }, [lease?.id])
+
+  return (
+    <section className="tenantPortalSection">
+      <div className="detailRows">
+        <div><span>Monthly rent</span><strong>{money(lease?.monthly_rent)}</strong></div>
+        {lease?.rent_due_day != null && <div><span>Rent due day</span><strong>{lease.rent_due_day}</strong></div>}
+      </div>
+      <h3 className="tenantPortalSubheading">Payment history</h3>
+      <p className="muted tenantPortalRentNote">PropRoster does not collect rent — this reflects what your landlord has recorded.</p>
+      {loading ? (
+        <p className="muted">Loading…</p>
+      ) : payments.length ? (
+        <div className="tenantPortalRentList">
+          {payments.map((p) => (
+            <div className="tenantPortalRentRow" key={p.id}>
+              <span>{new Date(`${p.rent_period}T12:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span>
+              <span className="muted">{new Date(`${p.date_received}T12:00:00`).toLocaleDateString()}</span>
+              <span className="muted">{p.payment_method}</span>
+              <strong>{money(p.amount)}</strong>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="muted">No payments recorded yet.</p>
+      )}
+    </section>
+  )
+}
+
+// "Documents" (Section: ONLY documents explicitly appropriate/shared
+// for the tenant). Reads tenant_documents_view (tenant_visible = true
+// rows only, Migration 29) — a document with an actual file gets its
+// signed URL via app/api/tenant-connect/document-url, never a
+// client-side createSignedUrl call (the storage bucket's own RLS stays
+// owner-only, unchanged — see that route's own header).
+function TenantDocumentsView({ supabase, propertyId }: { supabase: SupabaseClient; propertyId: string }) {
+  const [docs, setDocs] = useState<TenantDocumentRef[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [openingId, setOpeningId] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLoading(true)
+    supabase.from('tenant_documents_view').select('*').eq('property_id', propertyId).order('created_at', { ascending: false }).then(({ data }) => {
+      setDocs((data as TenantDocumentRef[]) || [])
+      setLoading(false)
+    })
+  }, [propertyId])
+
+  async function openDoc(doc: TenantDocumentRef) {
+    setOpeningId(doc.id)
+    setError('')
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    if (!token) { setOpeningId(null); return }
+    const res = await fetch('/api/tenant-connect/document-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ documentId: doc.id }),
+    })
+    const body = await res.json().catch(() => ({ url: null }))
+    setOpeningId(null)
+    if (!body.url) { setError('Could not open that document. Please try again in a moment.'); return }
+    window.open(body.url, '_blank', 'noopener,noreferrer')
+  }
+
+  return (
+    <section className="tenantPortalSection">
+      {error && <p className="statusMessage errorMessage">{error}</p>}
+      {loading ? (
+        <p className="muted">Loading…</p>
+      ) : docs.length ? (
+        <div className="tenantPortalRequestList">
+          {docs.map((doc) => (
+            <button key={doc.id} className="tenantPortalRequestRow" disabled={openingId === doc.id} onClick={() => void openDoc(doc)}>
+              <span className="tenantPortalRequestRowTitle">{doc.name}</span>
+              <span className="muted">{doc.category}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="muted">No documents have been shared with you yet.</p>
+      )}
     </section>
   )
 }

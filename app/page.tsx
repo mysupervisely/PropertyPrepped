@@ -9,6 +9,7 @@ import { useSubscription } from '../lib/useSubscription'
 import { canCreateProperty, entitlementsFor } from '../lib/billing/entitlements'
 import { UpgradePrompt } from '../components/UpgradePrompt'
 import LandingPage from '../components/LandingPage'
+import { postSignupRedirectPath, INTENDED_ROLE_STORAGE_KEY, type IntendedRole } from '../lib/tenant-connect/onboarding'
 import { AuthHeader } from '../components/AuthHeader'
 import DocumentIntelligencePanel, { type ApplyAction } from '../components/DocumentIntelligencePanel'
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
@@ -55,6 +56,9 @@ import { friendlyPortfolioLoadMessage } from '../lib/dashboard/portfolio-load-st
 import { enrichMaintenanceCases, relevantContactsForProperty, showsDedicatedUrgentBadge, type IntakeSessionOutcome, type PropCrewLinkRef, type MaintenanceCaseStatus } from '../lib/maintenance/command-center'
 import { latestOutreachForContact, type ProviderOutreachRow } from '../lib/maintenance/provider-outreach'
 import { sendProviderOutreach as postProviderOutreach, providerOutreachErrorMessage } from '../lib/maintenance/provider-outreach-client'
+import { windowsForMaintenanceRequest, entryPreferenceForMaintenanceRequest, type AvailabilityWindow } from '../lib/maintenance/availability'
+import { latestAppointmentForOutreach, type AppointmentRow } from '../lib/maintenance/appointments'
+import { confirmAppointment as postConfirmAppointment, appointmentErrorMessage } from '../lib/maintenance/appointments-client'
 import { MaintenanceCaseDetail } from '../components/maintenance/MaintenanceCaseDetail'
 import { NewMaintenanceRequestModal } from '../components/maintenance/NewMaintenanceRequestModal'
 import type { NewMaintenanceRequestPayload } from '../lib/maintenance/new-request'
@@ -137,6 +141,10 @@ type PropertyDocument = {
   classification_source: string | null
   analysis_status: string
   analysis_error: string | null
+  // Tenant-Facing Experience V1 — explicit landlord opt-in only; a
+  // tenant's Documents tab shows exactly the rows where this is true
+  // (via tenant_documents_view), never anything else on this table.
+  tenant_visible: boolean
 }
 
 type PropertyPhoto = {
@@ -308,7 +316,25 @@ const formatSize = (bytes: number) => {
 // and in lib/dashboard/date-classification.ts — a bare `new
 // Date(dateOnlyString)` parses as UTC midnight, which displays one
 // calendar day early in every negative-UTC-offset timezone.
-const dateOnly = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateString()
+//
+// Bug fix (real-device testing, PR #60): DashboardDateItem.date is a
+// bare `YYYY-MM-DD` DATE value for every source except TenantRequest,
+// which passes tenant_requests.created_at — a full timestamptz —
+// straight through (lib/tenant-connect/requests.ts's
+// buildTenantRequestDateItems()). Appending T12:00:00 to an
+// already-complete ISO timestamp produced an unparseable string (e.g.
+// "2026-09-10T14:23:00+00:00T12:00:00"), which rendered as "Invalid
+// Date" in Needs Your Attention. This is the dashboard's own due-date
+// formatter only — it never touches appointment proposed_local_start_at
+// wall-clock values or any Scheduling Coordination V1 timezone logic.
+// A value already carrying a time component (longer than a bare
+// YYYY-MM-DD) is parsed as-is; a bare date keeps the noon-anchor fix
+// above. Either way, an unparseable value falls back to '—' rather than
+// ever showing "Invalid Date" again.
+const dateOnly = (value: string) => {
+  const parsed = value.length > 10 ? new Date(value) : new Date(`${value}T12:00:00`)
+  return Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleDateString()
+}
 
 // Relative timestamp for Recent Activity — "Today," "Yesterday," "3 days
 // ago," falling back to a plain calendar date beyond a week so the feed
@@ -447,6 +473,29 @@ function LeaseHistoryRow({ lease, doc, onEdit, onDelete, onOpenDocument }: {
   </article>
 }
 
+// Tenant-Facing Experience V1 — the one place an "I'm a tenant" signup
+// choice ever has an effect: a self-clearing, one-shot redirect fired
+// on the first real sign-in after a signup that required email
+// confirmation (an already-confirmed signup redirects immediately from
+// LandingPage.tsx itself and never sets this flag at all — see
+// onboarding.ts's own header for why this is a routing hint only,
+// never a persisted account "role"). Safe to call on every auth-state
+// change/page load: it's a no-op whenever the flag isn't present,
+// and it removes the flag the one time it fires, so an ordinary
+// landlord visiting "/" on every later sign-in is completely
+// unaffected.
+function redirectIfIntendedTenant() {
+  try {
+    if (window.localStorage.getItem(INTENDED_ROLE_STORAGE_KEY) === ('tenant' satisfies IntendedRole)) {
+      window.localStorage.removeItem(INTENDED_ROLE_STORAGE_KEY)
+      window.location.href = postSignupRedirectPath('tenant')
+    }
+  } catch {
+    // Storage unavailable — the landlord dashboard is still the correct
+    // fallback (same default this app already had before this feature).
+  }
+}
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
   const [authReady, setAuthReady] = useState(false)
@@ -465,6 +514,11 @@ export default function Home() {
   const [hasLoadedPortfolio, setHasLoadedPortfolio] = useState(false)
   const [portfolioLoadFailed, setPortfolioLoadFailed] = useState(false)
   const autoRetriedRef = useRef(false)
+  // Tenant-first routing (PR #60 mobile/routing polish) — bounded to
+  // once per sign-in, exactly like autoRetriedRef above, so it can
+  // never re-fire mid-session (e.g. right after the landlord deletes
+  // their last property while this dashboard stays open).
+  const tenantFirstRoutingCheckedRef = useRef(false)
   // Bug fix (real-device iPhone testing, M3.1 follow-up): a brief,
   // auto-dismissing confirmation for fast row-level mutations (currently
   // just the maintenance status <select>) that update local state
@@ -567,6 +621,13 @@ export default function Home() {
   const [providerOutreach, setProviderOutreach] = useState<ProviderOutreachRow[]>([])
   const [outreachBusy, setOutreachBusy] = useState(false)
   const [outreachError, setOutreachError] = useState('')
+  // Scheduling Coordination V1 — same portfolio-wide, defensively-empty
+  // pattern; appointmentBusy/appointmentError are local to the
+  // currently-open case's Confirm/Decline action.
+  const [availabilityWindows, setAvailabilityWindows] = useState<AvailabilityWindow[]>([])
+  const [appointments, setAppointments] = useState<AppointmentRow[]>([])
+  const [appointmentBusy, setAppointmentBusy] = useState(false)
+  const [appointmentError, setAppointmentError] = useState('')
   // Tenant Connect M3.1 — the landlord's own "+ New Maintenance Request"
   // entry point (property-level; the portfolio-level one lives in
   // app/maintenance/page.tsx). Replaces the old showRequestForm modal's
@@ -680,6 +741,7 @@ export default function Home() {
       if (data.user) {
         setUser(data.user)
         setAuthReady(true)
+        redirectIfIntendedTenant()
         return
       }
       if (getUserError && !isAuthSessionMissingError(getUserError)) {
@@ -687,6 +749,7 @@ export default function Home() {
         if (cancelled) return
         setUser(refreshed.user ?? null)
         setAuthReady(true)
+        if (refreshed.user) redirectIfIntendedTenant()
         return
       }
       setUser(null)
@@ -696,6 +759,7 @@ export default function Home() {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
       setSelectedId(null)
+      if (session?.user) redirectIfIntendedTenant()
     })
     return () => { cancelled = true; listener.subscription.unsubscribe() }
   }, [])
@@ -709,6 +773,7 @@ export default function Home() {
     setHasLoadedPortfolio(false)
     setPortfolioLoadFailed(false)
     autoRetriedRef.current = false
+    tenantFirstRoutingCheckedRef.current = false
     if (user) void loadPortfolio()
     else {
       setProperties([])
@@ -728,6 +793,34 @@ export default function Home() {
       setPropertyOwnership([])
     }
   }, [user?.id])
+
+  // Tenant-first routing (PR #60 mobile/routing polish). Owner and
+  // Tenant are still NOT mutually exclusive account types (see
+  // lib/tenant-connect/onboarding.ts's own header) — this is a routing
+  // decision only, never a role/access change, and it reuses the exact
+  // data this dashboard already has (properties) plus one small
+  // RLS-scoped existence check (tenant_property_access), the same
+  // pattern AuthNavMenu's own hasTenantAccess check already uses.
+  //
+  // Fires at most once per sign-in, and only once loadPortfolio() has
+  // genuinely finished (hasLoadedPortfolio — never while properties is
+  // still its initial empty array during loading, which would have
+  // misread "not loaded yet" as "owns nothing"). A landlord with zero
+  // properties and no tenant access still lands on the normal empty
+  // "+ Add your first property" dashboard, unchanged. A dual-role
+  // account (owns >=1 property) never redirects, regardless of tenant
+  // access, so it keeps landing on the landlord dashboard exactly as
+  // before — the "Tenant Portal" nav link (AuthNavMenu) remains its way
+  // into the tenant context.
+  useEffect(() => {
+    if (!supabase || !user || !hasLoadedPortfolio) return
+    if (properties.length > 0) return
+    if (tenantFirstRoutingCheckedRef.current) return
+    tenantFirstRoutingCheckedRef.current = true
+    supabase.from('tenant_property_access').select('id').eq('status', 'Active').limit(1).then(({ data }) => {
+      if (data && data.length) window.location.href = '/tenant'
+    })
+  }, [user?.id, hasLoadedPortfolio, properties.length])
 
   // Post-selection-failure investigation (V2) — PHOTO_RENDER_RESULT:
   // confirms the render layer actually received whatever `photos` state
@@ -909,6 +1002,16 @@ export default function Home() {
   const openMaintenanceOutreach = openMaintenanceCase?.assigned_contact_id
     ? latestOutreachForContact(providerOutreach.filter((o) => o.maintenance_request_id === openMaintenanceCase.id), openMaintenanceCase.assigned_contact_id)
     : null
+  // Scheduling Coordination V1 (Section 4/6) — availability/entry
+  // preference resolve via the same tenant_requests one-hop join
+  // category already uses; a landlord-created case (no linked
+  // tenant_requests row) naturally resolves to "not provided", never an
+  // error. The appointment is scoped to the CURRENT outreach specifically
+  // (not just the request), so reassigning the provider never carries
+  // over a stale appointment from a previous outreach.
+  const openMaintenanceAvailability = openMaintenanceCase ? windowsForMaintenanceRequest(availabilityWindows, tenantRequests, openMaintenanceCase.id) : []
+  const openMaintenanceEntryPreference = openMaintenanceCase ? entryPreferenceForMaintenanceRequest(tenantRequests, openMaintenanceCase.id) : null
+  const openMaintenanceAppointment = openMaintenanceOutreach ? latestAppointmentForOutreach(appointments, openMaintenanceOutreach.id) : null
   const relevantMaintenanceContacts = selectedId ? relevantContactsForProperty(contacts, contactLinks, selectedId) : []
   const selectedSystems = propertySystems.filter((row) => row.property_id === selectedId)
   const selectedNotes = propertyNotes.filter((row) => row.property_id === selectedId)
@@ -958,6 +1061,8 @@ export default function Home() {
       { data: intakeSessionRows },
       { data: contactLinkRows },
       { data: providerOutreachRows },
+      { data: availabilityWindowRows },
+      { data: appointmentRows },
     ] = await Promise.all([
       client.from('properties').select('*').order('created_at', { ascending: true }),
       client.from('property_documents').select('*').order('created_at', { ascending: false }),
@@ -989,6 +1094,10 @@ export default function Home() {
       // above: legitimately empty/errored until this milestone's own
       // migration is reviewed and applied.
       client.from('maintenance_provider_outreach').select('id, maintenance_request_id, contact_id, status, provider_message, sent_at, responded_at').order('sent_at', { ascending: false }),
+      // Scheduling Coordination V1 — same defensive "may legitimately
+      // not exist yet" exclusion from firstError as the above two.
+      client.from('maintenance_availability_windows').select('id, request_id, window_date, window_label'),
+      client.from('maintenance_appointments').select('id, maintenance_request_id, outreach_id, proposed_local_start_at, proposed_by, matched_availability, status, confirmed_at, created_at').order('created_at', { ascending: false }),
     ])
     const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError || contactError || requestError || systemError || noteError || ownershipError || rentPaymentError || taxRecordError || taxCustomItemError
     if (firstError) {
@@ -1074,6 +1183,8 @@ export default function Home() {
     setIntakeSessions((intakeSessionRows || []) as IntakeSessionOutcome[])
     setContactLinks((contactLinkRows || []) as PropCrewLinkRef[])
     setProviderOutreach((providerOutreachRows || []) as ProviderOutreachRow[])
+    setAvailabilityWindows((availabilityWindowRows || []) as AvailabilityWindow[])
+    setAppointments((appointmentRows || []) as AppointmentRow[])
     setRentPayments((rentPaymentRows || []) as RentPaymentRecord[])
     setHasLoadedPortfolio(true)
     setPortfolioLoadFailed(false)
@@ -1644,6 +1755,17 @@ export default function Home() {
     }
   }
 
+  // Tenant-Facing Experience V1 — explicit, one-document-at-a-time
+  // opt-in/out. Writes go through the SAME pre-existing owner-only
+  // documents_update_own policy every other document edit here already
+  // uses; no new write path, no new policy.
+  async function toggleDocumentTenantVisible(doc: PropertyDocument) {
+    if (!supabase) return
+    const { error: err } = await supabase.from('property_documents').update({ tenant_visible: !doc.tenant_visible }).eq('id', doc.id)
+    if (err) setError(err.message)
+    await loadPortfolio()
+  }
+
   async function removeDocument(doc: PropertyDocument) {
     if (!supabase) return
     setBusy(true)
@@ -1957,6 +2079,20 @@ export default function Home() {
     await loadPortfolio()
   }
 
+  // Scheduling Coordination V1 (Section 7) — the landlord's explicit
+  // confirm/decline action; a provider's proposal never becomes a
+  // confirmed appointment on its own. Confirming also moves
+  // maintenance_requests.status to 'Scheduled' server-side (the route's
+  // own job, not this handler's).
+  async function respondToAppointment(appointmentId: string, action: 'confirm' | 'decline') {
+    if (!supabase) return
+    setAppointmentBusy(true); setAppointmentError('')
+    const result = await postConfirmAppointment(supabase, appointmentId, action)
+    setAppointmentBusy(false)
+    if (!result.ok) { setAppointmentError(appointmentErrorMessage(result.reason)); return }
+    await loadPortfolio()
+  }
+
   async function removeRequest(id: string) {
     if (!supabase) return
     setBusy(true); setError('')
@@ -2266,7 +2402,7 @@ export default function Home() {
               <div className="fileName"><strong>{doc.name}</strong><span>{doc.category}{doc.document_type ? ` · ${doc.document_type}` : ''} · {new Date(doc.created_at).toLocaleDateString()}</span></div>
             </div>
             {doc.analysis_status && doc.analysis_status !== 'Not Analyzed' && <span className={`aiStatusPill ${doc.analysis_status === 'Completed' ? 'pillGood' : doc.analysis_status === 'Failed' ? 'pillBad' : 'pillWarn'}`}>{doc.analysis_status === 'Completed' ? 'AI Analyzed' : doc.analysis_status === 'Failed' ? 'Needs attention' : doc.analysis_status}</span>}
-            <div className="rowActions documentCardActions"><button onClick={() => void openDocument(doc)}>Open</button><button className="aiButton" onClick={() => setShowDocIntelId(doc.id)}>{doc.analysis_status === 'Completed' ? 'View AI Analysis' : 'Analyze with PropRoster AI'}</button><button onClick={() => openMoveDocument(doc)}>Move</button><button onClick={() => void removeDocument(doc)}>Remove</button></div>
+            <div className="rowActions documentCardActions"><button onClick={() => void openDocument(doc)}>Open</button><button className="aiButton" onClick={() => setShowDocIntelId(doc.id)}>{doc.analysis_status === 'Completed' ? 'View AI Analysis' : 'Analyze with PropRoster AI'}</button><button onClick={() => openMoveDocument(doc)}>Move</button><button className={doc.tenant_visible ? 'active' : ''} onClick={() => void toggleDocumentTenantVisible(doc)}>{doc.tenant_visible ? 'Shared with tenant ✓' : 'Share with tenant'}</button><button onClick={() => void removeDocument(doc)}>Remove</button></div>
           </div>) : <div className="emptyState"><strong>{docCategory === 'All' ? 'No documents here yet' : `No ${docCategory} documents yet`}</strong><span>Use + Add Document above to upload a file or run Smart Upload.</span></div>}</div>
           </>}
 
@@ -2570,11 +2706,18 @@ export default function Home() {
             statusUpdateMessage={statusUpdateMessage}
             onAssign={(contactId) => void assignMaintenanceContact(openMaintenanceCase.id, contactId)}
             onStatusChange={(status: MaintenanceCaseStatus) => void updateRequestStatus(openMaintenanceCase.id, status)}
-            onClose={() => { setOpenMaintenanceCaseId(null); setOutreachError('') }}
+            onClose={() => { setOpenMaintenanceCaseId(null); setOutreachError(''); setAppointmentError('') }}
             outreach={openMaintenanceOutreach}
             outreachBusy={outreachBusy}
             outreachError={outreachError}
             onSendOutreach={() => void sendMaintenanceOutreach(openMaintenanceCase.id)}
+            availabilityWindows={openMaintenanceAvailability}
+            entryPreference={openMaintenanceEntryPreference}
+            appointment={openMaintenanceAppointment}
+            appointmentBusy={appointmentBusy}
+            appointmentError={appointmentError}
+            onConfirmAppointment={openMaintenanceAppointment ? () => void respondToAppointment(openMaintenanceAppointment.id, 'confirm') : undefined}
+            onDeclineAppointment={openMaintenanceAppointment ? () => void respondToAppointment(openMaintenanceAppointment.id, 'decline') : undefined}
           />
         )}
         {showNewMaintenanceRequest && (

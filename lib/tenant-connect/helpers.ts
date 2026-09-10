@@ -80,3 +80,34 @@ export function findAccessForLease<T extends AccessRowForLeaseMatch>(rows: T[], 
     || [...forLease].sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
   )
 }
+
+export function normalizeTenantEmail(email: string): string {
+  return email.trim().toLowerCase()
+}
+
+/**
+ * Bug fix (real-invite testing, "Resend Invitation" silently re-sending
+ * to a stale email): tenant_property_access.tenant_email is captured
+ * once, at invite-insert time, and never automatically updated again —
+ * it's also the exact value accept_tenant_invite() matches against the
+ * tenant's own signed-in email (supabase/schema.sql), so it doubles as
+ * this invite's security credential, not just the send destination. If
+ * the landlord later corrects the tenant's email on the lease (e.g. it
+ * was originally entered as a placeholder like "NA"), the existing
+ * access row never picks that up on its own.
+ *
+ * Returns the normalized email the access row should be synced to
+ * before resending, or null when no sync is needed. Deliberately
+ * returns null for anything other than an 'Invited' row — an Active
+ * row's tenant_email is the tenant's already-accepted identity and must
+ * never be silently rewritten (Section: "preserve tenant invitation
+ * security and token behavior").
+ */
+export function staleInvitedEmail(
+  access: { status: 'Invited' | 'Active' | 'Revoked'; tenant_email: string } | null,
+  currentLeaseEmail: string | null | undefined,
+): string | null {
+  if (!access || access.status !== 'Invited' || !currentLeaseEmail) return null
+  const normalized = normalizeTenantEmail(currentLeaseEmail)
+  return normalized !== access.tenant_email ? normalized : null
+}

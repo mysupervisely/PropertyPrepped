@@ -83,6 +83,24 @@ export function AuthNavMenu({ onDashboardNavigate }: { onDashboardNavigate?: () 
   const containerRef = useRef<HTMLDivElement | null>(null)
   const { user } = useAuthUser()
 
+  // Tenant-Facing Experience V1 (dual-role) — Owner and Tenant are not
+  // mutually exclusive account types, so a landlord account that ALSO
+  // has tenant access somewhere (active, or a pending invite waiting to
+  // be accepted) gets a lightweight way to reach that other context —
+  // the "smallest clear navigation behavior necessary," not a role-
+  // management system. RLS alone decides what this query actually
+  // returns (tenant_access_select — see supabase/schema.sql); this is
+  // purely "should the link render," never an access decision itself.
+  const [hasTenantAccess, setHasTenantAccess] = useState(false)
+  useEffect(() => {
+    if (!supabase || !user) { setHasTenantAccess(false); return }
+    let cancelled = false
+    supabase.from('tenant_property_access').select('id').limit(1).then(({ data }) => {
+      if (!cancelled) setHasTenantAccess(Boolean(data && data.length))
+    })
+    return () => { cancelled = true }
+  }, [user?.id])
+
   // Final Launch Fixes: the same canonical private profile photo the
   // Profile page shows (Launch Polish's profile-photos bucket), reused —
   // not re-uploaded — here as a small circular avatar in place of the
@@ -163,6 +181,9 @@ export function AuthNavMenu({ onDashboardNavigate }: { onDashboardNavigate?: () 
           {ACCOUNT_LINKS.map((link) => (
             <Link key={link.href} href={link.href} className="authNavMenuSecondary" onClick={() => setOpen(false)}>{link.label}</Link>
           ))}
+          {hasTenantAccess && (
+            <Link href="/tenant" className="authNavMenuSecondary" onClick={() => setOpen(false)}>Tenant Portal</Link>
+          )}
           <Link href="/?add=property" className="authNavMenuAction" onClick={() => setOpen(false)}>+ Add Property</Link>
           <div className="authNavMenuDivider" role="separator" />
           <button type="button" className="authNavMenuLogout" onClick={() => { setOpen(false); void supabase?.auth.signOut() }}>Log out</button>

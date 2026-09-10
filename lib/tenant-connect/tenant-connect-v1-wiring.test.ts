@@ -103,9 +103,11 @@ describe('Tenant Portal (app/tenant/page.tsx) is isolated from the landlord appl
     expect(source).toContain("from('property_messages')")
   })
 
-  it('NEVER queries the owner-facing properties/leases base tables directly (Round 6, Concern 2 — those carry landlord-only financial/valuation/private columns with no tenant-facing RLS policy any more; the restricted views above are the only tenant read path)', () => {
-    expect(source).not.toMatch(/\.from\(['"]properties['"]\)/)
+  it('NEVER queries the owner-facing properties/leases base tables directly for THIS ACCOUNT\'S TENANT DATA (Round 6, Concern 2 — those carry landlord-only financial/valuation/private columns with no tenant-facing RLS policy any more; the restricted views above are the only tenant read path). The one narrow exception: Tenant-Facing Experience V1\'s dual-role check queries properties as an OWNERSHIP EXISTENCE check only (never reads/renders any property\'s actual columns) to decide whether to show a "Landlord Dashboard" link — a fundamentally different operation from reading tenant/lease data.', () => {
     expect(source).not.toMatch(/\.from\(['"]leases['"]\)/)
+    const propertiesQueries = source.match(/\.from\('properties'\)[^\n]*/g) || []
+    expect(propertiesQueries.length).toBe(1)
+    expect(propertiesQueries[0]).toBe(".from('properties').select('id').limit(1).then(({ data }) => setHasOwnedProperties(Boolean(data && data.length)))")
   })
 
   it('accepts an invite via the SECURITY DEFINER RPC, never a direct client UPDATE of tenant_property_access', () => {
@@ -113,8 +115,17 @@ describe('Tenant Portal (app/tenant/page.tsx) is isolated from the landlord appl
     expect(source).not.toMatch(/tenant_property_access['"]\)\s*\.update\(/)
   })
 
-  it('has a sign-in gate consistent with every other standalone route', () => {
-    expect(source).toContain('Sign in required')
+  // Tenant-Facing Experience V1: a signed-out visitor now gets a REAL,
+  // working tenant-context sign-in/signup form right here — no longer
+  // just a "Sign in required" message linking back to "/" (the landlord
+  // dashboard), per that milestone's own explicit "do not make them
+  // navigate through the landlord dashboard" instruction.
+  it('has its OWN tenant-context sign-in/signup form for a signed-out visitor — not a link back to the landlord dashboard', () => {
+    expect(source).toContain('function TenantSignIn()')
+    expect(source).toContain('supabase.auth.signInWithPassword')
+    expect(source).toContain('supabase.auth.signUp')
+    expect(source).not.toContain('Sign in required')
+    expect(source).not.toMatch(/<Link[^>]*href="\/"[^>]*>Go to sign in/)
   })
 })
 
@@ -189,5 +200,46 @@ describe('Tenant Connect V1 migration (supabase/milestone-24-tenant-connect-v1.s
     expect(sql).toContain('conversation_id uuid not null references public.property_conversations(id) on delete restrict')
     expect(sql).toContain('property_id uuid not null references public.properties(id) on delete cascade')
     expect(sql).toContain('owner_id uuid not null references auth.users(id) on delete cascade')
+  })
+})
+
+// Bug fix: "Resend Invitation" was silently re-sending to a stale
+// stored email (and swallowing send failures) — see
+// lib/tenant-connect/helpers.test.ts for the root-cause pure-logic
+// coverage (staleInvitedEmail). These are source-read wiring guards
+// that the fix is actually connected where it needs to be.
+describe('Resend Invitation bug fix — stale-email sync + surfaced send failures', () => {
+  const cardSource = readFile('components/tenant-connect/TenantConnectStatusCard.tsx')
+  const notifyClientSource = readFile('lib/tenant-connect/notify-client.ts')
+
+  it('resend() re-syncs the access row\'s tenant_email via staleInvitedEmail before sending, never trusting the row\'s original stored email as-is', () => {
+    expect(cardSource).toContain('staleInvitedEmail(access, currentLease?.tenant_email)')
+    const resendFnBody = cardSource.slice(cardSource.indexOf('async function resend()'), cardSource.indexOf('async function revoke()'))
+    expect(resendFnBody).toContain(".from('tenant_property_access').update({ tenant_email: syncTo })")
+  })
+
+  it('resend() surfaces a failed send to the landlord instead of silently swallowing it', () => {
+    const resendFnBody = cardSource.slice(cardSource.indexOf('async function resend()'), cardSource.indexOf('async function revoke()'))
+    expect(resendFnBody).toContain('if (!result?.sent) setError(')
+    // The old bug: fire-and-forget with no result ever inspected.
+    expect(resendFnBody).not.toMatch(/void notifyTenantConnect/)
+  })
+
+  it('invite() also surfaces a failed send, without implying the access row itself failed to write', () => {
+    const inviteFnBody = cardSource.slice(cardSource.indexOf('async function invite()'), cardSource.indexOf('async function resend()'))
+    expect(inviteFnBody).toContain('if (!result?.sent) setError(')
+    expect(inviteFnBody).toContain('Invitation created, but the email could not be sent')
+  })
+
+  it('notifyTenantConnect returns the actual send result instead of discarding it', () => {
+    expect(notifyClientSource).not.toMatch(/Promise<void>/)
+    expect(notifyClientSource).toContain('return await res.json()')
+  })
+
+  it('every OTHER existing call site is untouched (still fire-and-forget, unaffected by the widened return type)', () => {
+    const tenantPageSource = readFile('app/tenant/page.tsx')
+    const requestsPanelSource = readFile('components/tenant-connect/TenantRequestsPanel.tsx')
+    expect(tenantPageSource).toContain("void notifyTenantConnect(supabase, 'new_request', { requestId: tenantRequestId })")
+    expect((requestsPanelSource.match(/void notifyTenantConnect\(supabase, 'landlord_update'/g) || []).length).toBe(2)
   })
 })

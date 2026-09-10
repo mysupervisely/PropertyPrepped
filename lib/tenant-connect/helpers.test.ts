@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isConversationUnread, messagePreview, tenantDisplayName, tenantConnectStatusLabel, findAccessForLease } from './helpers'
+import { isConversationUnread, messagePreview, tenantDisplayName, tenantConnectStatusLabel, findAccessForLease, staleInvitedEmail, normalizeTenantEmail } from './helpers'
 
 describe('isConversationUnread', () => {
   it('is false when there is no message yet', () => {
@@ -111,5 +111,52 @@ describe('findAccessForLease (Tenant Connect V1)', () => {
       { id: 'second-revoked', lease_id: 'lease-y', status: 'Revoked' as const, created_at: '2025-05-01T00:00:00Z' },
     ]
     expect(findAccessForLease(revokedTwice, 'lease-y')?.id).toBe('second-revoked')
+  })
+})
+
+describe('normalizeTenantEmail', () => {
+  it('trims and lowercases', () => {
+    expect(normalizeTenantEmail('  Ben@Example.com  ')).toBe('ben@example.com')
+  })
+})
+
+// Bug fix regression: "Resend Invitation" silently re-sent to a stale
+// stored email whenever the landlord corrected the tenant's email
+// after the initial invite (e.g. it was originally entered as "NA").
+describe('staleInvitedEmail — root cause of the "Resend Invitation" bug', () => {
+  it('returns the corrected email when the current lease email differs from the stored Invited row', () => {
+    const access = { status: 'Invited' as const, tenant_email: 'na' }
+    expect(staleInvitedEmail(access, 'ben.and.crystal@example.com')).toBe('ben.and.crystal@example.com')
+  })
+
+  it('normalizes (trim + lowercase) the returned email', () => {
+    const access = { status: 'Invited' as const, tenant_email: 'na' }
+    expect(staleInvitedEmail(access, '  Ben.And.Crystal@Example.com  ')).toBe('ben.and.crystal@example.com')
+  })
+
+  it('returns null when the stored email already matches the current lease email — no unnecessary write', () => {
+    const access = { status: 'Invited' as const, tenant_email: 'ben@example.com' }
+    expect(staleInvitedEmail(access, 'Ben@Example.com')).toBeNull()
+  })
+
+  it('returns null when there is no access row at all', () => {
+    expect(staleInvitedEmail(null, 'ben@example.com')).toBeNull()
+  })
+
+  it('returns null when the current lease has no email to sync to', () => {
+    const access = { status: 'Invited' as const, tenant_email: 'na' }
+    expect(staleInvitedEmail(access, null)).toBeNull()
+    expect(staleInvitedEmail(access, undefined)).toBeNull()
+    expect(staleInvitedEmail(access, '')).toBeNull()
+  })
+
+  it('SECURITY: never syncs an Active row, even if the lease email differs — an already-accepted tenant\'s identity must never be silently rewritten', () => {
+    const access = { status: 'Active' as const, tenant_email: 'original@example.com' }
+    expect(staleInvitedEmail(access, 'different@example.com')).toBeNull()
+  })
+
+  it('never syncs a Revoked row', () => {
+    const access = { status: 'Revoked' as const, tenant_email: 'na' }
+    expect(staleInvitedEmail(access, 'ben@example.com')).toBeNull()
   })
 })

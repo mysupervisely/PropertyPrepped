@@ -99,4 +99,11 @@ export type TenantRequest = {
   // migration's own header for why. See lib/maintenance/source.ts for
   // the origin/source vocabulary stored on the linked case itself.
   maintenance_request_id: string | null
+  // Scheduling Coordination V1 (Milestone 28) — set only via the Guided
+  // Intake review screen (Section 3); null for every landlord-created
+  // case and any tenant-sourced case where the tenant skipped it. See
+  // lib/maintenance/availability.ts's own header for the product
+  // principle this column must never be read as: it is NOT permission
+  // to enter the property.
+  entry_preference: 'someone_home' | 'contact_before_entering' | 'other' | null
 }

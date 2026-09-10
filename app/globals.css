@@ -1038,6 +1038,13 @@ h2, h3, p { margin-top: 0; }
 .landingPasswordToggle { border: 0; background: transparent; color: var(--muted); padding: 6px; border-radius: 8px; display: grid; place-items: center; cursor: pointer; flex-shrink: 0; }
 .landingPasswordToggle:hover { color: var(--text); }
 .landingSubmit { width: 100%; margin-top: 18px; }
+
+/* Tenant-Facing Experience V1 — signup-only role choice. */
+.landingRoleChoice { margin-top: 4px; }
+.landingRoleChoiceLabel { display: block; font-size: 13px; font-weight: 650; margin-bottom: 8px; }
+.landingRoleChoiceOptions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.landingRoleChoiceOptions button { border: 1px solid var(--line); background: white; border-radius: 10px; padding: 11px 8px; font-weight: 650; font-size: 13.5px; color: var(--text); }
+.landingRoleChoiceOptions button.active { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
 .landingSignInCard .authSwitch { width: 100%; border: 0; background: transparent; color: var(--brand); font-weight: 650; padding: 14px 6px 0; cursor: pointer; }
 .landingDivider { display: flex; align-items: center; gap: 12px; margin: 20px 0 16px; color: var(--muted); font-size: 12px; }
 .landingDivider::before, .landingDivider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
@@ -1948,8 +1955,14 @@ h2, h3, p { margin-top: 0; }
    .shell/.topbar/.authHeader (those carry the landlord's navigation) —
    a narrower max-width, big tap targets, no horizontal scrolling.
    ========================================================================== */
-.tenantPortalShell { max-width: 620px; margin: 0 auto; padding: 0 20px 60px; min-height: 100vh; background: var(--bg); }
-.tenantPortalHeader { display: flex; align-items: center; gap: 12px; min-height: 72px; border-bottom: 1px solid var(--line); }
+.tenantPortalShell { max-width: 620px; margin: 0 auto; padding: 0 20px 60px; min-height: 100vh; background: var(--bg); overflow-x: hidden; }
+/* flex-wrap here (not just the 430px breakpoint below) is the actual
+   overflow fix: on a narrow phone, Wordmark + "Tenant Portal" +
+   the conditional "Landlord Dashboard" link + "Log out" no longer fit
+   on one row. Wrapping to a second row is the smallest correction that
+   keeps every existing action reachable without collapsing them behind
+   a new menu control. */
+.tenantPortalHeader { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; min-height: 72px; border-bottom: 1px solid var(--line); }
 .tenantPortalHeaderLabel { color: var(--muted); font-size: 13px; font-weight: 650; padding-left: 10px; border-left: 1px solid var(--line); flex: 1; }
 .tenantPortalLogout { flex-shrink: 0; }
 
@@ -1966,13 +1979,29 @@ h2, h3, p { margin-top: 0; }
 .tenantPortalPropertyHead { padding: 22px 0 6px; }
 .tenantPortalPropertyHead h1 { font-size: clamp(24px, 6vw, 32px); }
 
-.tenantPortalTabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin: 10px 0 4px; }
-.tenantPortalTabs button { flex: 1; border: 0; background: transparent; padding: 14px 8px; font-weight: 650; color: var(--muted); border-bottom: 2px solid transparent; font-size: 15px; }
+/* Mobile tab overflow fix (real iPhone testing, PR #60): Documents (the
+   5th tab) was clipped off the right edge with no reliable way to reach
+   it. overflow-x: auto alone was already present but wasn't dependably
+   draggable/contained on iOS Safari without -webkit-overflow-scrolling
+   and overscroll-behavior-x — this bar sits inside .tenantPortalShell,
+   not its own dedicated scroll region, so without those a drag could
+   scroll-chain to the page instead of the tab strip. max-width: 100%
+   plus the shell's own overflow-x: hidden (above) is the "no page-level
+   horizontal overflow" backstop the task calls for. Trailing padding
+   keeps the last tab from sitting flush against the edge, so there's a
+   visible cue that more content follows. Desktop is unaffected — flex:
+   1 0 auto still spreads all 5 tabs full-width whenever they fit. */
+.tenantPortalTabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin: 10px 0 4px; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; padding-right: 4px; }
+.tenantPortalTabs button { flex: 1 0 auto; border: 0; background: transparent; padding: 14px 10px; font-weight: 650; color: var(--muted); border-bottom: 2px solid transparent; font-size: 15px; white-space: nowrap; }
 .tenantPortalTabs button.active { color: var(--brand); border-bottom-color: var(--brand); }
 
 .tenantPortalSection { padding: 20px 0 40px; }
 .tenantPortalSectionHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .tenantPortalSectionHead h2 { font-size: 18px; margin: 0; }
+.tenantPortalSubheading { font-size: 15px; margin: 24px 0 4px; }
+.tenantPortalRentNote { font-size: 12.5px; margin: 0 0 14px; }
+.tenantPortalLeaseFileButton { margin-top: 18px; }
+.tenantPortalLeaseFileEmpty { margin-top: 18px; font-size: 13.5px; }
 
 .tenantPortalRequestList { display: grid; gap: 10px; }
 .tenantPortalRequestRow { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: center; text-align: left; border: 1px solid var(--line); background: white; border-radius: 12px; padding: 16px; min-height: 44px; cursor: pointer; }
@@ -1980,9 +2009,27 @@ h2, h3, p { margin-top: 0; }
 .tenantPortalRequestRowTitle { font-weight: 650; grid-column: 2; }
 .tenantPortalRequestRow .muted { grid-column: 2; font-size: 13px; }
 
+.tenantPortalRentList { display: grid; gap: 8px; }
+.tenantPortalRentRow { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; border: 1px solid var(--line); background: white; border-radius: 12px; padding: 14px 16px; font-size: 14px; }
+.tenantPortalRentRow strong { grid-row: span 2; align-self: center; justify-self: end; }
+
+.tenantPortalSwitchContext { flex-shrink: 0; }
+
 @media (max-width: 430px) {
   .tenantPortalShell { padding: 0 14px 50px; }
   .tenantPortalSectionHead button { width: 100%; }
+  .tenantPortalTabs button { font-size: 13.5px; padding: 12px 8px; }
+
+  /* Tenant header, phone width: shrink the wordmark and drop the
+     redundant "Tenant Portal" text label (the page itself already says
+     that) so the remaining actions — Landlord Dashboard / Log out —
+     have room to sit on their own row without any of it running past
+     the viewport edge. Every action still renders; nothing moves
+     behind a new menu. */
+  .tenantPortalHeader { min-height: auto; padding-block: 12px; row-gap: 8px; }
+  .tenantPortalHeader .brand { font-size: 19px; }
+  .tenantPortalHeaderLabel { display: none; }
+  .tenantPortalSwitchContext, .tenantPortalLogout { flex: 1 1 auto; text-align: center; }
 }
 
 /* Guided Maintenance Intake M2 V1 (Milestone 27) — mobile-first,
@@ -2039,8 +2086,28 @@ h2, h3, p { margin-top: 0; }
 
 .guidedIntakeDone { margin-top: 16px; display: grid; gap: 14px; text-align: center; }
 
+/* Tenant Connect: Scheduling Coordination V1 — availability + entry
+   preference, mobile-first (Section 13: no dense calendar, native date
+   input, large tap targets, no horizontal overflow). */
+.guidedIntakeAvailability { display: grid; gap: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.guidedIntakeAvailability h3 { margin: 0; font-size: 15px; }
+.guidedIntakeAvailabilityDay { display: grid; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.guidedIntakeAvailabilityDay:first-of-type { border-top: none; padding-top: 0; }
+.guidedIntakeAvailabilityDayRow { display: flex; align-items: center; gap: 8px; }
+.guidedIntakeAvailabilityDayRow input[type="date"] { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; font-family: inherit; font-size: 15px; }
+.guidedIntakeAvailabilityBlocks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.guidedIntakeAvailabilityBlock { border: 1px solid var(--line); background: white; border-radius: 10px; padding: 10px 6px; min-height: 52px; font-weight: 650; font-size: 13px; display: grid; gap: 2px; justify-items: center; text-align: center; }
+.guidedIntakeAvailabilityBlock .muted { font-weight: 400; font-size: 11px; }
+.guidedIntakeAvailabilityBlockActive { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
+.guidedIntakeAddDay { width: 100%; }
+.guidedIntakeEntryNote { margin: 4px 0 0; font-size: 12.5px; color: var(--muted); }
+.guidedIntakeEntryPreference { border: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.guidedIntakeEntryPreference legend { font-size: 13px; font-weight: 650; padding: 0; margin-bottom: 2px; }
+.guidedIntakeEntryOption { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 400; }
+
 @media (max-width: 460px) {
   .guidedIntakeCategoryGrid { grid-template-columns: 1fr; }
+  .guidedIntakeAvailabilityBlocks { grid-template-columns: 1fr; }
 }
 
 /* Upload Reliability Audit — temporary on-screen debug panel (Section
@@ -2124,6 +2191,16 @@ h2, h3, p { margin-top: 0; }
 .maintenanceAssignFieldLabel { font-weight: 650; }
 .maintenanceOutreachStatus { font-size: 13px; line-height: 1.5; margin: 0; }
 
+/* Tenant Connect: Scheduling Coordination V1 — landlord-side tenant
+   availability display and appointment proposal/confirmation, styled
+   to match the surrounding maintenanceCaseActionArea fields. */
+.maintenanceAvailabilitySection { display: grid; gap: 8px; font-size: 13px; border-top: 1px solid var(--line); padding-top: 14px; margin-top: 4px; }
+.maintenanceAvailabilityList { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.maintenanceAvailabilityList li { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.maintenanceEntryPreference { margin: 0; }
+.maintenanceAppointmentProposal { display: grid; gap: 8px; }
+.maintenanceAppointmentConfirmed { color: var(--brand); }
+
 @media (max-width: 560px) {
   .maintenanceCaseDetailModal { max-width: 100%; }
 }
@@ -2155,3 +2232,14 @@ h2, h3, p { margin-top: 0; }
 .providerQuestionActions { display: flex; gap: 10px; justify-content: flex-end; }
 .providerConfirmation { margin-top: 20px; padding: 14px 16px; background: var(--brand-soft); border: 1px solid #cadfd4; border-radius: 12px; color: var(--brand); }
 .providerQuestionEcho { margin-top: 8px; font-style: italic; }
+
+/* Tenant Connect: Scheduling Coordination V1 — provider-side "Choose a
+   visit time" (Section 5), mobile-first, no calendar widget. */
+.providerScheduling { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 16px; display: grid; gap: 12px; }
+.providerScheduling h3 { margin: 0; font-size: 15px; }
+.providerAvailabilityList { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.providerAvailabilityList li { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+.providerAppointmentStatus { margin: 0; font-size: 14px; font-weight: 650; color: var(--brand); }
+.providerProposeField { display: grid; gap: 10px; }
+.providerProposeField label { display: block; font-size: 13px; font-weight: 650; }
+.providerProposeField input[type="datetime-local"] { width: 100%; margin-top: 6px; border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; font-family: inherit; font-size: 15px; }

@@ -49,12 +49,15 @@ import type { EnrichedMaintenanceCase, MaintenanceCaseStatus, PropCrewContactRef
 import { maintenanceCategoryLabel } from '../../lib/maintenance/categories'
 import { NEXT_ACTION_LABEL } from '../../lib/maintenance/command-center'
 import { PROVIDER_OUTREACH_STATUS_LABEL, type ProviderOutreachRow } from '../../lib/maintenance/provider-outreach'
+import { groupWindowsByDate, WINDOW_LABEL_RANGE, ENTRY_PREFERENCE_LABEL, formatAppointmentDateTime, type AvailabilityWindow, type EntryPreference } from '../../lib/maintenance/availability'
+import type { AppointmentRow } from '../../lib/maintenance/appointments'
 
 const STATUSES: MaintenanceCaseStatus[] = ['Submitted', 'Scheduled', 'In Progress', 'Completed']
 
 export function MaintenanceCaseDetail({
   caseRow, propertyLabel, contacts, busy, statusUpdateMessage, onAssign, onStatusChange, onClose,
   outreach, outreachBusy, outreachError, onSendOutreach,
+  availabilityWindows, entryPreference, appointment, appointmentBusy, appointmentError, onConfirmAppointment, onDeclineAppointment,
 }: {
   caseRow: EnrichedMaintenanceCase
   propertyLabel: string
@@ -82,6 +85,20 @@ export function MaintenanceCaseDetail({
   outreachBusy?: boolean
   outreachError?: string
   onSendOutreach?: () => void
+  // Scheduling Coordination V1 — availability/entry preference are
+  // read-only here (Section 4: the tenant supplied them; nothing in
+  // this component ever edits or invents them). `appointment` is the
+  // latest proposal for the CURRENTLY relevant outreach (null until a
+  // provider proposes one) — confirm/decline still go through
+  // caller-supplied callbacks, same "dumb component" contract as
+  // onAssign/onSendOutreach.
+  availabilityWindows?: AvailabilityWindow[]
+  entryPreference?: EntryPreference | null
+  appointment?: AppointmentRow | null
+  appointmentBusy?: boolean
+  appointmentError?: string
+  onConfirmAppointment?: () => void
+  onDeclineAppointment?: () => void
 }) {
   const assignedContact = contacts.find((c) => c.id === caseRow.assigned_contact_id) || null
   const [showContactConfirm, setShowContactConfirm] = useState(false)
@@ -114,6 +131,31 @@ export function MaintenanceCaseDetail({
         <div className="maintenanceCaseOverview">
           <p><strong>{caseRow.tenant_name}</strong>{caseRow.tenant_email ? ` · ${caseRow.tenant_email}` : ''}</p>
           {caseRow.description && <pre className="maintenanceCaseDescription">{caseRow.description}</pre>}
+        </div>
+
+        {/* Scheduling Coordination V1 (Section 4) — shown before the
+            PropCrew section below, so the landlord sees this BEFORE
+            deciding to contact a provider, per this milestone's own
+            ordering. A landlord-created case (no linked tenant_requests
+            row) or a tenant who skipped this shows the same neutral
+            "not provided" state — outreach is never blocked on it
+            either way (Section 4: "do not block provider outreach
+            solely because availability is missing"). */}
+        <div className="maintenanceAvailabilitySection">
+          <span className="maintenanceAssignFieldLabel">Tenant Availability</span>
+          {availabilityWindows && availabilityWindows.length > 0 ? (
+            <ul className="maintenanceAvailabilityList">
+              {groupWindowsByDate(availabilityWindows).map((g) => (
+                <li key={g.date}>
+                  <strong>{new Date(`${g.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</strong>
+                  <span className="muted">{g.labels.map((l) => WINDOW_LABEL_RANGE[l].display).join(', ')}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted">Tenant availability not provided.</p>
+          )}
+          {entryPreference && <p className="muted maintenanceEntryPreference">Entry preference: {ENTRY_PREFERENCE_LABEL[entryPreference]}</p>}
         </div>
 
         <div className="maintenanceCaseActionArea">
@@ -154,6 +196,48 @@ export function MaintenanceCaseDetail({
                 </p>
               ) : null}
               {outreachError && <p className="errorMessage">{outreachError}</p>}
+
+              {/* Scheduling Coordination V1 (Section 7) — a proposal is
+                  never auto-confirmed; landlord must explicitly confirm
+                  or decline. Once confirmed, this becomes the read-only
+                  "Scheduled" display and the Confirm/Decline buttons
+                  disappear (there is nothing left to decide). */}
+              {appointment && appointment.status === 'proposed' && (
+                <div className="maintenanceAppointmentProposal">
+                  <p className="muted maintenanceOutreachStatus">
+                    <strong>Proposed appointment</strong><br />
+                    {formatAppointmentDateTime(appointment.proposed_local_start_at)}
+                    {/* Bug fix (real-device testing, PR #60): matched_availability is
+                        stored false both when a proposal is genuinely outside the
+                        tenant's windows AND when the tenant never provided any
+                        availability at all (matchProposedTime() returns false for an
+                        empty window list — see its own doc comment). Showing "Outside
+                        the tenant's provided availability" in the second case is
+                        logically backwards — there was nothing to be outside of. Only
+                        render either badge when real availability windows exist; when
+                        none were provided, the "Tenant availability not provided."
+                        line already shown above is sufficient — omit rather than
+                        repeat it here. */}
+                    {availabilityWindows && availabilityWindows.length > 0 && (
+                      appointment.matched_availability
+                        ? <><br /><span className="statusPill pillGood">Matches tenant availability</span></>
+                        : <><br /><span className="statusPill pillBad">Outside the tenant&apos;s provided availability</span></>
+                    )}
+                  </p>
+                  {appointmentError && <p className="errorMessage">{appointmentError}</p>}
+                  <div className="modalActions">
+                    <button type="button" className="secondary" disabled={appointmentBusy} onClick={onDeclineAppointment}>Decline / Request Another Time</button>
+                    <button type="button" className="primary" disabled={appointmentBusy} onClick={onConfirmAppointment}>{appointmentBusy ? 'Confirming…' : 'Confirm Appointment'}</button>
+                  </div>
+                </div>
+              )}
+              {appointment && appointment.status === 'confirmed' && (
+                <p className="muted maintenanceOutreachStatus maintenanceAppointmentConfirmed">
+                  <strong>Scheduled</strong><br />
+                  {formatAppointmentDateTime(appointment.proposed_local_start_at)}
+                  <br />{assignedContact.name}{assignedContact.business_name ? ` – ${assignedContact.business_name}` : ''}
+                </p>
+              )}
               {assignedContact.email ? (
                 (!outreach || outreach.status !== 'sent') && (
                   <button type="button" className="secondary" disabled={busy || outreachBusy} onClick={() => setShowContactConfirm(true)}>Contact PropCrew</button>
