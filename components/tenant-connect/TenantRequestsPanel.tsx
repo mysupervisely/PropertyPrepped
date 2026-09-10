@@ -20,6 +20,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { notifyTenantConnect } from '../../lib/tenant-connect/notify-client'
 import { TENANT_REQUEST_STATUSES, type TenantRequest, type TenantRequestStatus } from '../../lib/tenant-connect/types'
 import type { PropertyMessage } from '../../lib/tenant-connect/types'
+import { MaintenanceCategoryIcon } from '../icons/MaintenanceCategoryIcon'
 import { maintenanceCategoryLabel } from '../../lib/maintenance/categories'
 
 type AccessRef = { id: string; tenant_email: string }
@@ -163,9 +164,10 @@ export function TenantRequestsPanel({
           {requests.map((r) => (
             <div className="maintenanceRequestRow" key={r.id}>
               <button className="maintenanceRequestRowMain" onClick={() => void openRequest(r)}>
+                <MaintenanceCategoryIcon category={r.category} className="maintenanceRequestRowIcon" />
                 <span className="maintenanceRequestRowMainBody">
-                  <span className="maintenanceRequestRowTop"><span className="maintenanceRequestRowTitle">{r.title}</span></span>
-                  <span className="muted maintenanceRequestRowMeta">{maintenanceCategoryLabel(r.category)} &middot; {new Date(r.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                  <span className="maintenanceRequestRowTitle">{r.title}</span>
+                  <span className="muted maintenanceRequestRowMeta">{new Date(r.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                 </span>
                 <span className={`statusPill maintenanceRequestRowStatus ${r.status === 'New' ? 'pillWarn' : r.status === 'Resolved' ? 'pillGood' : ''}`}>{r.status}</span>
               </button>

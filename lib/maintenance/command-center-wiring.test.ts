@@ -42,14 +42,30 @@ describe('Portfolio-level Command Center — reachable, real, and reads the cano
     expect(commandCenterPageSource).not.toMatch(/\.delete\(\)/)
   })
 
-  it('shows current maintenance status and a next-action hint on every card, without overloading the card with every field', () => {
-    expect(commandCenterPageSource).toContain('NEXT_ACTION_LABEL[caseRow.nextAction]')
+  // Simplification + Maintenance Workspace V2, Phase D.1: the card's
+  // trailing badge is now the plain 4-value canonical status (a
+  // compact pill, matching the property-level row's identical
+  // treatment — one visual language) rather than the longer
+  // NEXT_ACTION_LABEL text, which could run long enough to wrap
+  // awkwardly in a fixed trailing column ("Confirm the proposed
+  // appointment"). The richer next-action detail still lives one tap
+  // away, in MaintenanceCaseDetail's own Next Step card — its
+  // authoritative home since Phase C.
+  it('shows current maintenance status on every card (a compact trailing pill, or "Urgent" when applicable), without overloading the card with every field', () => {
+    expect(commandCenterPageSource).toContain('<span className="statusPill maintenanceCommandCenterCardStatus">{caseRow.status}</span>')
   })
 })
 
 describe('Property-level view — enhanced, not replaced', () => {
+  // Phase D.1: the row's trailing slot is now a ternary (Urgent badge
+  // OR the compact status pill), not an "&&"-rendered badge beside a
+  // separate status element — see the Bug 2 dedup guard in
+  // status-update-ux-wiring.test.ts for the full invariant this
+  // protects (gated on showsDedicatedUrgentBadge(), never req.urgent
+  // alone).
   it('the existing per-request row now shows a deterministic urgency badge (from the enriched case, not a client-side guess) — see the Bug 2 dedup guard below for why the render condition also checks priority', () => {
-    expect(pageSource).toContain('{showsDedicatedUrgentBadge(req, req.urgent) && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}')
+    expect(pageSource).toContain('const urgent = showsDedicatedUrgentBadge(req, req.urgent)')
+    expect(pageSource).toContain('{urgent ? <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span> : <span className="statusPill maintenanceRequestRowStatus">{req.status}</span>}')
   })
 
   // Simplification + Maintenance Workspace V2, Phase D.2: the row's own

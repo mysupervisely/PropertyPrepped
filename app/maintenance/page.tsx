@@ -46,11 +46,10 @@ import type { NewMaintenanceRequestPayload } from '../../lib/maintenance/new-req
 import {
   enrichMaintenanceCases, sortCasesForCommandCenter, summarizeCommandCenter, relevantContactsForProperty,
   showsDedicatedUrgentBadge,
-  NEXT_ACTION_LABEL,
   type MaintenanceCaseRow, type TenantRequestLink, type IntakeSessionOutcome,
   type PropCrewContactRef, type PropCrewLinkRef, type EnrichedMaintenanceCase, type MaintenanceCaseStatus,
 } from '../../lib/maintenance/command-center'
-import { maintenanceCategoryLabel } from '../../lib/maintenance/categories'
+import { MaintenanceCategoryIcon } from '../../components/icons/MaintenanceCategoryIcon'
 import { latestOutreachForContact, type ProviderOutreachRow } from '../../lib/maintenance/provider-outreach'
 import { sendProviderOutreach as postProviderOutreach, providerOutreachErrorMessage } from '../../lib/maintenance/provider-outreach-client'
 import { windowsForMaintenanceRequest, entryPreferenceForMaintenanceRequest, type AvailabilityWindow } from '../../lib/maintenance/availability'
@@ -110,7 +109,17 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [showHistory, setShowHistory] = useState(false)
+  // Simplification + Maintenance Workspace V2, Phase D.1: replaces the
+  // old separate "Needs attention" heading + "Show completed (N)"
+  // toggle with a compact filter row over the exact same already-
+  // computed active/sorted arrays below — no new query, no new
+  // derivation. 'My properties' (from the visual concept this phase is
+  // adapting) is meaningless here: RLS already scopes every case to
+  // the caller's own portfolio, so there is no OTHER set of properties
+  // to filter against — 'Urgent' is the genuinely useful third filter
+  // instead ("make it easy to see the maintenance cases the landlord
+  // needs to act on").
+  const [filter, setFilter] = useState<'attention' | 'all' | 'urgent'>('attention')
   const [openCaseId, setOpenCaseId] = useState<string | null>(null)
   const [showNewRequest, setShowNewRequest] = useState(false)
   const [newRequestError, setNewRequestError] = useState('')
@@ -318,31 +327,30 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
         <div className="emptyState"><strong>No maintenance requests yet.</strong><span>Requests your tenants submit through Tenant Connect, and any you log yourself, will show up here.</span></div>
       ) : (
         <>
-          <h3 className="maintenanceHubSectionTitle">Needs attention</h3>
-          {active.length === 0 ? (
-            <div className="emptyState"><strong>Nothing needs attention right now.</strong></div>
-          ) : (
-            <div className="maintenanceCommandCenterList">
-              {active.map((c) => (
-                <MaintenanceCaseCard key={c.id} caseRow={c} propertyLabel={propertyLabel(c.property_id)} onOpen={() => setOpenCaseId(c.id)} />
-              ))}
-            </div>
-          )}
-
-          {history.length > 0 && (
-            <>
-              <button className="secondary maintenanceHistoryToggle" onClick={() => setShowHistory((s) => !s)}>
-                {showHistory ? 'Hide' : 'Show'} completed ({history.length})
-              </button>
-              {showHistory && (
-                <div className="maintenanceCommandCenterList maintenanceCommandCenterHistory">
-                  {history.map((c) => (
-                    <MaintenanceCaseCard key={c.id} caseRow={c} propertyLabel={propertyLabel(c.property_id)} onOpen={() => setOpenCaseId(c.id)} />
-                  ))}
+          <div className="maintenanceFilterRow" role="tablist" aria-label="Filter maintenance requests">
+            <button type="button" role="tab" aria-selected={filter === 'attention'} className={`maintenanceFilterChip${filter === 'attention' ? ' active' : ''}`} onClick={() => setFilter('attention')}>Needs attention</button>
+            <button type="button" role="tab" aria-selected={filter === 'all'} className={`maintenanceFilterChip${filter === 'all' ? ' active' : ''}`} onClick={() => setFilter('all')}>All requests</button>
+            {summary.urgentCount > 0 && (
+              <button type="button" role="tab" aria-selected={filter === 'urgent'} className={`maintenanceFilterChip${filter === 'urgent' ? ' active' : ''}`} onClick={() => setFilter('urgent')}>Urgent</button>
+            )}
+          </div>
+          {(() => {
+            const filtered = filter === 'attention' ? active : filter === 'urgent' ? active.filter((c) => c.urgent) : sorted
+            if (filtered.length === 0) {
+              return (
+                <div className="emptyState">
+                  <strong>{filter === 'urgent' ? 'No urgent requests right now.' : 'Nothing needs attention right now.'}</strong>
                 </div>
-              )}
-            </>
-          )}
+              )
+            }
+            return (
+              <div className="maintenanceCommandCenterList">
+                {filtered.map((c) => (
+                  <MaintenanceCaseCard key={c.id} caseRow={c} propertyLabel={propertyLabel(c.property_id)} onOpen={() => setOpenCaseId(c.id)} />
+                ))}
+              </div>
+            )
+          })()}
         </>
       )}
 
@@ -395,13 +403,19 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
 function MaintenanceCaseCard({ caseRow, propertyLabel, onOpen }: { caseRow: EnrichedMaintenanceCase; propertyLabel: string; onOpen: () => void }) {
   return (
     <button className={`maintenanceCommandCenterCard${caseRow.urgent ? ' maintenanceCommandCenterCardUrgent' : ''}`} onClick={onOpen}>
-      {showsDedicatedUrgentBadge(caseRow, caseRow.urgent) && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}
-      <strong className="maintenanceCommandCenterCardProperty">{propertyLabel}</strong>
-      <span className="maintenanceCommandCenterCardTitle">{caseRow.title}</span>
-      <span className="muted maintenanceCommandCenterCardMeta">
-        {caseRow.category ? `${maintenanceCategoryLabel(caseRow.category)} · ` : ''}{caseRow.source === 'tenant' ? 'Tenant' : 'Landlord'} &middot; {new Date(caseRow.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+      <MaintenanceCategoryIcon category={caseRow.category} className="maintenanceCommandCenterCardIcon" />
+      <span className="maintenanceCommandCenterCardBody">
+        <span className="maintenanceCommandCenterCardTitle">{caseRow.title}</span>
+        <strong className="maintenanceCommandCenterCardProperty">{propertyLabel}</strong>
+        <span className="muted maintenanceCommandCenterCardMeta">
+          Opened {new Date(caseRow.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} &middot; {caseRow.source === 'tenant' ? 'Tenant' : 'Landlord'}
+        </span>
       </span>
-      <span className="muted maintenanceCommandCenterCardNext">{NEXT_ACTION_LABEL[caseRow.nextAction]}</span>
+      {showsDedicatedUrgentBadge(caseRow, caseRow.urgent) ? (
+        <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>
+      ) : (
+        <span className="statusPill maintenanceCommandCenterCardStatus">{caseRow.status}</span>
+      )}
     </button>
   )
 }

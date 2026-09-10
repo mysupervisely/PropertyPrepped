@@ -49,8 +49,13 @@ describe('Dashboard Navigation Bug fix — AuthNavMenu', () => {
 describe('Dashboard Navigation Bug fix — AuthHeader threads the same reset it already uses for the wordmark', () => {
   const source = readFile('components/AuthHeader.tsx')
 
+  // Simplification + Maintenance Workspace V2, Phase D.1: AuthNavMenu's
+  // open/close state moved from internal to a controlled prop pair
+  // (open/onOpenChange), so the mobile bottom nav's "More" button can
+  // open the exact same panel — the onDashboardNavigate wiring this
+  // test protects is otherwise unchanged.
   it('passes onBrandClick to AuthNavMenu as onDashboardNavigate', () => {
-    expect(source).toContain('<AuthNavMenu onDashboardNavigate={onBrandClick} />')
+    expect(source).toContain('<AuthNavMenu onDashboardNavigate={onBrandClick} open={navMenuOpen} onOpenChange={setNavMenuOpen} />')
   })
 })
 

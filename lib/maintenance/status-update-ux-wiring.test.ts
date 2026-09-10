@@ -113,13 +113,23 @@ describe('Bug 1 — a brief, visible "Status updated." confirmation, auto-dismis
 })
 
 describe('Bug 2 — exactly one "Urgent" badge per card, dedup is display-only, isUrgentCase() untouched', () => {
+  // Simplification + Maintenance Workspace V2, Phase D.1: both rows now
+  // render a single trailing slot that is EITHER the dedicated "Urgent"
+  // badge OR the compact status pill, never both — a ternary on the
+  // same showsDedicatedUrgentBadge() gate, not the old "&&"-rendered
+  // badge alongside a separately-rendered status pill. The invariant
+  // this describe block protects (gated on the shared helper, never on
+  // caseRow.urgent/req.urgent alone) still holds; only the JSX shape
+  // changed.
   it('the portfolio Command Center card (app/maintenance/page.tsx) gates the dedicated badge on showsDedicatedUrgentBadge(), not caseRow.urgent alone', () => {
-    expect(commandCenterPageSource).toContain('{showsDedicatedUrgentBadge(caseRow, caseRow.urgent) && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}')
+    expect(commandCenterPageSource).toContain('{showsDedicatedUrgentBadge(caseRow, caseRow.urgent) ? (')
+    expect(commandCenterPageSource).not.toContain('{caseRow.urgent ? (')
     expect(commandCenterPageSource).not.toContain('{caseRow.urgent && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}')
   })
 
   it('the property-level Active Requests row (app/page.tsx) gates the dedicated badge the same way', () => {
-    expect(pageSource).toContain('{showsDedicatedUrgentBadge(req, req.urgent) && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}')
+    expect(pageSource).toContain('const urgent = showsDedicatedUrgentBadge(req, req.urgent)')
+    expect(pageSource).toContain('{urgent ? <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span> : <span className="statusPill maintenanceRequestRowStatus">{req.status}</span>}')
     expect(pageSource).not.toContain('{req.urgent && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}')
   })
 

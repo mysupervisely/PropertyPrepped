@@ -76,9 +76,16 @@ describe('Maintenance Coordination M2.1 review pass (Part 4) — minimum landlor
     expect(source).toContain("req.source === 'tenant' ? 'Tenant' : 'Landlord'")
   })
 
+  // Phase D.1: the category is now shown as a leading icon
+  // (MaintenanceCategoryIcon), not a text label — matching the same
+  // icon-leading row redesign applied to the portfolio Command Center
+  // card. The underlying derivation (category looked up from the
+  // already-fetched portfolio-wide tenant_requests, since
+  // maintenance_requests itself has no category column) is unchanged.
   it('shows the category for a tenant-originated row, derived from the already-fetched portfolio-wide tenant_requests (maintenance_requests itself has no category column)', () => {
     expect(source).toContain('categoryByMaintenanceRequestId')
-    expect(source).toContain('maintenanceCategoryLabel(categoryByMaintenanceRequestId.get(req.id)!)')
+    expect(source).toContain("import { MaintenanceCategoryIcon } from '../components/icons/MaintenanceCategoryIcon'")
+    expect(source).toContain('<MaintenanceCategoryIcon category={category} className="maintenanceRequestRowIcon" />')
   })
 })
 

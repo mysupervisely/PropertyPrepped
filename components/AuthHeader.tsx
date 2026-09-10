@@ -29,6 +29,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Wordmark } from './Wordmark'
 import { AuthNavMenu } from './AuthNavMenu'
+import { MobileBottomNav } from './MobileBottomNav'
 import { SmartUploadButton } from './SmartUploadButton'
 import { SmartUploadModal } from './SmartUpload/SmartUploadModal'
 import { UpgradePrompt } from './UpgradePrompt'
@@ -37,8 +38,34 @@ import { useAuthUser } from '../lib/useAuthUser'
 import { useSubscription } from '../lib/useSubscription'
 import { entitlementsFor } from '../lib/billing/entitlements'
 
-export function AuthHeader({ onBrandClick, onSmartUploadCompleted, registerSmartUploadTrigger }: { onBrandClick?: () => void; onSmartUploadCompleted?: () => void; registerSmartUploadTrigger?: (fn: () => void) => void }) {
+export function AuthHeader({
+  onBrandClick, onSmartUploadCompleted, registerSmartUploadTrigger, hasSelectedProperty, hideMobileNav,
+}: {
+  onBrandClick?: () => void
+  onSmartUploadCompleted?: () => void
+  registerSmartUploadTrigger?: (fn: () => void) => void
+  // Simplification + Maintenance Workspace V2, Phase D.1: threaded from
+  // app/page.tsx exactly the way onBrandClick already is — this is the
+  // only page where "a property is currently open" is even a concept
+  // (every other AuthHeader caller is its own separate route, never a
+  // property workspace), so it's undefined/false everywhere else,
+  // which is exactly correct there (see MobileBottomNav's own header
+  // comment for why this decides Dashboard vs. Properties active state).
+  hasSelectedProperty?: boolean
+  // Pricing (a public/marketing surface even when the visitor happens
+  // to be signed in) and the internal admin tool are not primary
+  // landlord destinations this bottom nav's five items describe — see
+  // each call site for the explicit opt-out.
+  hideMobileNav?: boolean
+}) {
   const [smartUploadOpen, setSmartUploadOpen] = useState(false)
+  // Phase D.1: lifted out of AuthNavMenu itself so the new mobile
+  // bottom nav's "More" button can open the exact same panel — one
+  // menu, two triggers (the header's own hamburger, kept for desktop
+  // where the bottom nav doesn't exist; see globals.css for how the
+  // header trigger is hidden on mobile specifically when this bottom
+  // nav is present, never on pages that opt out of it).
+  const [navMenuOpen, setNavMenuOpen] = useState(false)
   // Launch Pricing: Smart Upload's entry point is global (this header
   // renders on every authenticated page), so the gate lives here rather
   // than being threaded through every page that renders AuthHeader.
@@ -71,13 +98,13 @@ export function AuthHeader({ onBrandClick, onSmartUploadCompleted, registerSmart
 
   return (
     <>
-      <header className="topbar authHeader">
+      <header className={`topbar authHeader${hideMobileNav ? '' : ' authHeaderWithBottomNav'}`}>
         <div className="topbarBrandGroup">
           {/* Dashboard Navigation Bug fix: reuse the exact same
               onBrandClick this header already threads to the wordmark
               below for the identical single-page-app reason — see
               AuthNavMenu's own comment on onDashboardNavigate. */}
-          <AuthNavMenu onDashboardNavigate={onBrandClick} />
+          <AuthNavMenu onDashboardNavigate={onBrandClick} open={navMenuOpen} onOpenChange={setNavMenuOpen} />
           {onBrandClick ? (
             <button className="brandButton" onClick={onBrandClick}>{brandContent}</button>
           ) : (
@@ -93,6 +120,19 @@ export function AuthHeader({ onBrandClick, onSmartUploadCompleted, registerSmart
           <SmartUploadButton onClick={() => (canUseSmartUpload ? setSmartUploadOpen(true) : setShowUpgrade(true))} />
         </div>
       </header>
+      {/* Simplification + Maintenance Workspace V2, Phase D.1: GLOBAL
+          mobile navigation — hidden on desktop entirely via CSS, and
+          not rendered at all on pricing/the admin tool (hideMobileNav).
+          "More" opens the exact same AuthNavMenu panel above, via the
+          same lifted open state. */}
+      {!hideMobileNav && (
+        <MobileBottomNav
+          onDashboardNavigate={onBrandClick}
+          hasSelectedProperty={hasSelectedProperty}
+          moreOpen={navMenuOpen}
+          onMoreClick={() => setNavMenuOpen((o) => !o)}
+        />
+      )}
       <SmartUploadModal open={smartUploadOpen} onClose={() => setSmartUploadOpen(false)} onCompleted={onSmartUploadCompleted} />
       {showUpgrade && supabase && (
         <UpgradePrompt

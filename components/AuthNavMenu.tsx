@@ -78,8 +78,14 @@ const ACCOUNT_LINKS: { href: string; label: string }[] = [
   { href: '/pricing', label: 'Pricing' },
 ]
 
-export function AuthNavMenu({ onDashboardNavigate }: { onDashboardNavigate?: () => void } = {}) {
-  const [open, setOpen] = useState(false)
+// Simplification + Maintenance Workspace V2, Phase D.1: open/close is
+// now a CONTROLLED prop pair rather than this component's own internal
+// state — components/AuthHeader.tsx (this component's one real call
+// site) needs to open the exact same panel from a second trigger, the
+// new mobile bottom nav's "More" button, not a duplicate menu. See
+// components/MobileBottomNav.tsx's own header comment for why "More"
+// reuses this panel wholesale instead of building a second one.
+export function AuthNavMenu({ onDashboardNavigate, open, onOpenChange }: { onDashboardNavigate?: () => void; open: boolean; onOpenChange: (open: boolean) => void }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const { user } = useAuthUser()
 
@@ -127,7 +133,7 @@ export function AuthNavMenu({ onDashboardNavigate }: { onDashboardNavigate?: () 
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) onOpenChange(false)
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -141,9 +147,14 @@ export function AuthNavMenu({ onDashboardNavigate }: { onDashboardNavigate?: () 
           authNavMenuButtonHasAvatar strips background/border/padding so
           nothing shows behind the circular photo. Same button, same
           click handler, same fallback ☰ glyph with no photo. */}
-      <button type="button" className={`authNavMenuButton${avatarUrl ? ' authNavMenuButtonHasAvatar' : ''}`} aria-label="Open navigation menu" aria-haspopup="true" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className={`authNavMenuButton${avatarUrl ? ' authNavMenuButtonHasAvatar' : ''}`} aria-label="Open navigation menu" aria-haspopup="true" aria-expanded={open} onClick={() => onOpenChange(!open)}>
         {avatarUrl ? <img src={avatarUrl} alt="" className="authNavAvatar" /> : <span aria-hidden="true">☰</span>}
       </button>
+      {/* Phase D.1: a backdrop behind the panel — only visually present
+          at mobile widths (see globals.css), where the panel becomes a
+          bottom sheet the "More" bottom-nav button can also open. Tap
+          it to dismiss, same as the existing outside-click handler. */}
+      {open && <div className="authNavMenuBackdrop" onClick={() => onOpenChange(false)} />}
       {open && (
         <nav className="authNavMenuPanel" aria-label="Main navigation">
           {NAV_LINKS.map((link) => (
@@ -151,7 +162,7 @@ export function AuthNavMenu({ onDashboardNavigate }: { onDashboardNavigate?: () 
               key={link.href}
               href={link.href}
               onClick={(e) => {
-                setOpen(false)
+                onOpenChange(false)
                 // Dashboard Navigation Bug fix: the property workspace
                 // (app/page.tsx) is a single-page app living entirely at
                 // "/" — a normal Link to "/" while ALREADY on "/" is a
@@ -179,14 +190,14 @@ export function AuthNavMenu({ onDashboardNavigate }: { onDashboardNavigate?: () 
           ))}
           <div className="authNavMenuDivider" role="separator" />
           {ACCOUNT_LINKS.map((link) => (
-            <Link key={link.href} href={link.href} className="authNavMenuSecondary" onClick={() => setOpen(false)}>{link.label}</Link>
+            <Link key={link.href} href={link.href} className="authNavMenuSecondary" onClick={() => onOpenChange(false)}>{link.label}</Link>
           ))}
           {hasTenantAccess && (
-            <Link href="/tenant" className="authNavMenuSecondary" onClick={() => setOpen(false)}>Tenant Portal</Link>
+            <Link href="/tenant" className="authNavMenuSecondary" onClick={() => onOpenChange(false)}>Tenant Portal</Link>
           )}
-          <Link href="/?add=property" className="authNavMenuAction" onClick={() => setOpen(false)}>+ Add Property</Link>
+          <Link href="/?add=property" className="authNavMenuAction" onClick={() => onOpenChange(false)}>+ Add Property</Link>
           <div className="authNavMenuDivider" role="separator" />
-          <button type="button" className="authNavMenuLogout" onClick={() => { setOpen(false); void supabase?.auth.signOut() }}>Log out</button>
+          <button type="button" className="authNavMenuLogout" onClick={() => { onOpenChange(false); void supabase?.auth.signOut() }}>Log out</button>
         </nav>
       )}
     </div>

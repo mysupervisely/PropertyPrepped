@@ -45,7 +45,7 @@ import {
 } from '../lib/rent-ledger/ledger'
 import { buildTenantRequestDateItems } from '../lib/tenant-connect/requests'
 import type { TenantRequest } from '../lib/tenant-connect/types'
-import { maintenanceCategoryLabel } from '../lib/maintenance/categories'
+import { MaintenanceCategoryIcon } from '../components/icons/MaintenanceCategoryIcon'
 import { validatePropertyPhotoFile, toUploadableFile, classifyPhotoSelection, isFirstCoverPhoto } from '../lib/property-photos/validate'
 import { resolveImageContentType, toUploadableImageFile } from '../lib/uploads/image-file'
 import { beginReadingFileBytes, toDurableUploadableFile } from '../lib/uploads/durable-file'
@@ -410,20 +410,19 @@ function MaintenanceRequestRow({ req, categoryByMaintenanceRequestId, onOpen, on
   onOpen: () => void
   onRemove: () => void
 }) {
+  const category = categoryByMaintenanceRequestId.get(req.id) || null
+  const urgent = showsDedicatedUrgentBadge(req, req.urgent)
   return (
     <div className="maintenanceRequestRow">
-      <button className="maintenanceRequestRowMain" onClick={onOpen}>
+      <button className={`maintenanceRequestRowMain${urgent ? ' maintenanceRequestRowUrgent' : ''}`} onClick={onOpen}>
+        <MaintenanceCategoryIcon category={category} className="maintenanceRequestRowIcon" />
         <span className="maintenanceRequestRowMainBody">
-          <span className="maintenanceRequestRowTop">
-            {showsDedicatedUrgentBadge(req, req.urgent) && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}
-            <span className="maintenanceRequestRowTitle">{req.title}</span>
-          </span>
+          <span className="maintenanceRequestRowTitle">{req.title}</span>
           <span className="muted maintenanceRequestRowMeta">
-            {req.source === 'tenant' && categoryByMaintenanceRequestId.has(req.id) ? `${maintenanceCategoryLabel(categoryByMaintenanceRequestId.get(req.id)!)} · ` : ''}
-            {req.source === 'tenant' ? 'Tenant' : 'Landlord'} &middot; {new Date(req.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            Opened {new Date(req.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} &middot; {req.source === 'tenant' ? 'Tenant' : 'Landlord'}
           </span>
         </span>
-        <span className="statusPill maintenanceRequestRowStatus">{req.status}</span>
+        {urgent ? <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span> : <span className="statusPill maintenanceRequestRowStatus">{req.status}</span>}
       </button>
       <button className="dangerLink maintenanceRequestRowRemove" onClick={onRemove}>Remove</button>
     </div>
@@ -2362,7 +2361,7 @@ export default function Home() {
 
     return (
       <main className="shell workspaceShell">
-        <AuthHeader onBrandClick={() => setSelectedId(null)} onSmartUploadCompleted={() => void loadPortfolio()} registerSmartUploadTrigger={(fn) => { smartUploadTriggerRef.current = fn }} />
+        <AuthHeader onBrandClick={() => setSelectedId(null)} onSmartUploadCompleted={() => void loadPortfolio()} registerSmartUploadTrigger={(fn) => { smartUploadTriggerRef.current = fn }} hasSelectedProperty />
         {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
 
         {/* Contextual, property-scoped controls live here now, not in the

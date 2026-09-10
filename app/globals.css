@@ -507,7 +507,13 @@ h2, h3, p { margin-top: 0; }
      tab the same size/weight and makes "more tabs exist" immediately
      obvious (the next one peeking in from the edge) rather than an
      uneven trailing row. */
-  .tabs { display: flex; grid-template-columns: none; gap: 6px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding: 8px 2px; margin: 0 -2px; }
+  /* Phase D.1: now that a persistent global bottom nav exists, this
+     row's own full top+bottom border (the desktop default) reads as an
+     unnecessary second "boxed toolbar" directly below the header on
+     mobile — a single top rule still separates it from the header
+     above, so the bottom rule is dropped here without touching the
+     tab structure itself (still the same 7-tab horizontal strip). */
+  .tabs { display: flex; grid-template-columns: none; gap: 6px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding: 8px 2px; margin: 0 -2px; border-bottom: 0; }
   .tabs::-webkit-scrollbar { display: none; }
   .tabs button { flex: 0 0 auto; padding: 10px 14px; font-size: 13px; }
   .quickActions { align-items: flex-start; flex-direction: column; }
@@ -1556,6 +1562,77 @@ h2, h3, p { margin-top: 0; }
 .authNavMenuPanel a { display: block; padding: 10px 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 14px; font-weight: var(--weight-medium); white-space: nowrap; }
 .authNavMenuPanel a:hover { background: var(--brand-soft); color: var(--brand); }
 
+/* Simplification + Maintenance Workspace V2, Phase D.1: at mobile
+   widths the SAME panel (no forked content — desktop and mobile share
+   one implementation) becomes a bottom sheet instead of a top-left
+   dropdown, since it's now also opened from the bottom nav's "More"
+   button (far from the header). A backdrop gives it the native
+   app-sheet feel and a second, obvious way to dismiss it besides the
+   existing outside-click handler. */
+.authNavMenuBackdrop { position: fixed; inset: 0; background: rgba(13, 24, 19, .32); z-index: 39; }
+@media (min-width: 761px) { .authNavMenuBackdrop { display: none; } }
+@media (max-width: 760px) {
+  .authNavMenuPanel {
+    position: fixed; z-index: 40; top: auto; left: 0; right: 0; bottom: 0; width: 100%; min-width: 0;
+    border-radius: 16px 16px 0 0; box-shadow: 0 -8px 28px rgba(15, 30, 24, .18);
+    max-height: 75vh; overflow-y: auto;
+    padding: 10px 10px calc(14px + env(safe-area-inset-bottom));
+  }
+  .authNavMenuPanel a, .authNavMenuLogout { padding: 13px 14px; font-size: 15px; }
+  /* The bottom nav's own "More" item already exposes this same panel
+     with a clear active/expanded state — the header's own hamburger
+     trigger would be a redundant second way to open it on the same
+     screen, so it's hidden here specifically (not globally: pages that
+     opt out of the bottom nav, e.g. Pricing/the admin tool, keep their
+     header trigger as the only way in, unaffected by this rule since
+     they never carry .authHeaderWithBottomNav).
+     Targets the trigger BUTTON only, not the whole .authNavMenu
+     container — the panel/backdrop this same component renders when
+     "More" opens it are children of that same container, so hiding the
+     container itself would make the sheet invisible even while open. */
+  .authHeaderWithBottomNav .authNavMenuButton { display: none; }
+}
+
+/* Simplification + Maintenance Workspace V2, Phase D.1 — persistent
+   mobile GLOBAL navigation (components/MobileBottomNav.tsx). Hidden
+   entirely at desktop widths (existing app breakpoint, matching .tabs'
+   own mobile/desktop split), light rather than a heavy toolbar (no
+   shadow beyond a hairline top border, generous but not oversized tap
+   targets), and always clears the iPhone home-indicator safe area. */
+.mobileBottomNav { display: none; }
+@media (max-width: 760px) {
+  .mobileBottomNav {
+    display: flex; align-items: stretch; justify-content: space-between;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 8;
+    background: rgba(255, 255, 255, .96); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border-top: 1px solid var(--line);
+    padding: 4px max(6px, env(safe-area-inset-left)) env(safe-area-inset-bottom) max(6px, env(safe-area-inset-right));
+  }
+  .mobileBottomNavItem {
+    flex: 1 1 0%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    border: 0; background: transparent; color: var(--muted); text-decoration: none;
+    padding: 6px 2px; min-height: 52px; border-radius: 10px; font-size: 10.5px; font-weight: var(--weight-medium);
+  }
+  .mobileBottomNavItem svg { width: 22px; height: 22px; }
+  .mobileBottomNavItem.active { color: var(--brand); }
+  .mobileBottomNavItem:active { background: var(--brand-soft); }
+}
+/* z-index 8 (above ordinary content, below .overlay's 10) — an open
+   modal's own dim backdrop covers this bar rather than the bar
+   floating on top of a dialog, per "must not overlap dialogs/modals." */
+
+/* Extra bottom clearance so a page's own last real content is never
+   hidden behind the fixed bar — scoped to body.hasBottomNav, the class
+   MobileBottomNav itself toggles only while mounted, so pages that
+   never render it (Pricing, the admin tool) are completely unaffected. */
+@media (max-width: 760px) {
+  body.hasBottomNav .shell { padding-bottom: calc(70px + env(safe-area-inset-bottom) + 70px); }
+  /* The PWA install hint is a separate, unrelated fixed bar (mounted
+     app-wide in app/layout.tsx) — raised clear of the bottom nav so
+     the two never visually collide. */
+  body.hasBottomNav .installHint { bottom: calc(64px + env(safe-area-inset-bottom) + 12px); }
+}
+
 /* Sub-tabs (Property / Documents / People second-level navigation) —
    a smaller pill-style nav distinct from .tabs so a five-top-level-tab
    page doesn't visually read as ten again. */
@@ -2301,21 +2378,48 @@ h2, h3, p { margin-top: 0; }
 
 .statusPill.maintenanceUrgentBadge { margin-right: 6px; }
 
-/* Portfolio Command Center (app/maintenance/page.tsx) — a card grid, not
-   a desktop table, so it works well on iPhone without horizontal scroll. */
-.maintenanceCommandCenterList { display: grid; gap: 12px; margin-top: 14px; }
+/* Simplification + Maintenance Workspace V2, Phase D.1 — Portfolio
+   Command Center (app/maintenance/page.tsx): a card grid, not a
+   desktop table, so it works well on iPhone without horizontal
+   scroll. Recomposed to the same compact-row visual language as the
+   property-level Maintenance list (.maintenanceRequestRow): a leading
+   category icon, title strongest, property second, date/source quiet,
+   one trailing compact badge, a chevron — restrained, rounded, a
+   single subtle border, no card-on-card clutter. */
+.maintenanceCommandCenterList { display: grid; gap: 8px; margin-top: 14px; }
 .maintenanceCommandCenterCard {
-  display: grid; gap: 5px; text-align: left; width: 100%;
-  background: white; border: 1px solid var(--line); border-radius: 15px; padding: 16px 18px;
+  display: flex; align-items: center; gap: 12px; text-align: left; width: 100%;
+  background: white; border: 1px solid var(--line); border-radius: var(--radius-card); padding: 13px 14px;
   cursor: pointer; transition: border-color .15s ease;
 }
+.maintenanceCommandCenterCard::after { content: '›'; color: var(--muted); font-size: 18px; flex-shrink: 0; }
 .maintenanceCommandCenterCard:hover { border-color: var(--brand); }
 .maintenanceCommandCenterCardUrgent { border-color: #e2a49d; background: #fefaf9; }
-.maintenanceCommandCenterCardProperty { font-size: 13px; color: var(--muted); }
-.maintenanceCommandCenterCardTitle { font-size: 16px; font-weight: 650; }
-.maintenanceCommandCenterCardMeta, .maintenanceCommandCenterCardNext { font-size: 12px; }
+.maintenanceCommandCenterCardIcon { flex-shrink: 0; width: 34px; height: 34px; padding: 8px; box-sizing: border-box; border-radius: 999px; background: var(--brand-soft); color: var(--brand); }
+.maintenanceCommandCenterCardUrgent .maintenanceCommandCenterCardIcon { background: #fdeceb; color: #8a3d35; }
+.maintenanceCommandCenterCardBody { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
+.maintenanceCommandCenterCardTitle { display: block; font-size: 15px; font-weight: var(--weight-semibold); line-height: 1.3; }
+.maintenanceCommandCenterCardProperty { display: block; font-size: 13px; font-weight: var(--weight-medium); }
+.maintenanceCommandCenterCardMeta { display: block; font-size: 12px; }
+.maintenanceCommandCenterCardStatus { flex-shrink: 0; }
+/* Still used by the property-level Maintenance tab's own "Show
+   completed" toggle (app/page.tsx) — the portfolio Command Center
+   above uses the filter row instead (see .maintenanceFilterRow below),
+   but the simpler property-scoped page (usually a handful of cases)
+   keeps its existing toggle, deliberately not given the same 3-way
+   filter to avoid over-building a small list. */
 .maintenanceHistoryToggle { margin-top: 18px; }
 .maintenanceCommandCenterHistory { opacity: .85; }
+
+/* Phase D.1 — the compact "Needs attention / All requests / Urgent"
+   filter row, replacing the old separate "Needs attention" heading
+   plus a "Show completed" toggle. Same statusPill-adjacent visual
+   language as the rest of the app's small pill/chip controls, not a
+   new UI pattern. */
+.maintenanceFilterRow { display: flex; gap: 6px; margin-top: 14px; overflow-x: auto; scrollbar-width: none; }
+.maintenanceFilterRow::-webkit-scrollbar { display: none; }
+.maintenanceFilterChip { flex-shrink: 0; white-space: nowrap; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; background: white; color: var(--muted); font-weight: var(--weight-medium); font-size: 12.5px; }
+.maintenanceFilterChip.active { background: var(--brand); color: white; border-color: var(--brand); }
 
 /* Shared case detail/actions modal (components/maintenance/
    MaintenanceCaseDetail.tsx) — mounted from both the Command Center and
@@ -2446,9 +2550,13 @@ h2, h3, p { margin-top: 0; }
 .maintenanceRequestRow:first-child { border-top: 0; }
 .maintenanceRequestRowMain { flex: 1 1 0%; display: flex; align-items: center; gap: 10px; text-align: left; border: 0; background: transparent; padding: 13px 2px; min-width: 0; }
 .maintenanceRequestRowMain::after { content: '›'; color: var(--muted); font-size: 18px; flex-shrink: 0; }
+/* Phase D.1: a leading category icon, matching the portfolio Command
+   Center card's own .maintenanceCommandCenterCardIcon treatment —
+   same shape, same urgent-tint behavior, one visual language across
+   both the property-level row and the portfolio card. */
+.maintenanceRequestRowIcon { flex-shrink: 0; width: 30px; height: 30px; padding: 7px; box-sizing: border-box; border-radius: 999px; background: var(--brand-soft); color: var(--brand); }
+.maintenanceRequestRowUrgent .maintenanceRequestRowIcon { background: #fdeceb; color: #8a3d35; }
 .maintenanceRequestRowMainBody { flex: 1 1 0%; min-width: 0; display: grid; gap: 3px; }
-.maintenanceRequestRowTop { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
-.maintenanceRequestRowTop .statusPill { margin-top: 2px; flex-shrink: 0; }
 /* Wraps naturally rather than truncating to an ellipsis — a real
    title ("Garage door won't close all the way and makes a grinding
    noise") loses exactly the specific, useful part to single-line
