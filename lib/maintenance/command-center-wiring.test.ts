@@ -52,20 +52,31 @@ describe('Property-level view — enhanced, not replaced', () => {
     expect(pageSource).toContain('{showsDedicatedUrgentBadge(req, req.urgent) && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}')
   })
 
-  it('the existing tenant-source badge and category lookup remain byte-for-byte intact (V1 regression guard)', () => {
-    expect(pageSource).toContain("req.source === 'tenant' && <span className=\"statusPill tenantSourceBadge\">Tenant</span>")
+  // Simplification + Maintenance Workspace V2, Phase D.2: the row's own
+  // three-pill header (Urgent + priority + a colored "Tenant" badge) is
+  // gone — source is now plain quiet meta text ("Tenant"/"Landlord"),
+  // matching the same "pill row removed, quiet text instead" direction
+  // Phase C.1 already applied to MaintenanceCaseDetail. The information
+  // itself (tenant vs. landlord origin, category) is still shown, in
+  // the new MaintenanceRequestRow component this list now renders —
+  // not byte-for-byte, but not lost either.
+  it('the tenant-vs-landlord source distinction and category lookup are still shown (now as quiet meta text in MaintenanceRequestRow, not a colored pill)', () => {
+    expect(pageSource).toContain("req.source === 'tenant' ? 'Tenant' : 'Landlord'")
     expect(pageSource).toContain('categoryByMaintenanceRequestId')
   })
 
-  it('a "Manage" action opens the SAME shared MaintenanceCaseDetail component the portfolio Command Center uses — one detail/actions implementation, not two', () => {
+  it('the whole row is the tap target that opens the SAME shared MaintenanceCaseDetail component the portfolio Command Center uses — one detail/actions implementation, not two (Phase D.2 replaced the separate "Manage" sub-button with a single tappable row, matching the Command Center\'s own card-is-the-button pattern)', () => {
     expect(pageSource).toContain("import { MaintenanceCaseDetail } from '../components/maintenance/MaintenanceCaseDetail'")
-    expect(pageSource).toContain('<button className="secondary" onClick={() => setOpenMaintenanceCaseId(req.id)}>Manage</button>')
+    expect(pageSource).toContain('function MaintenanceRequestRow(')
+    expect(pageSource).toContain('onOpen: () => void')
+    expect(pageSource).toContain('<MaintenanceRequestRow key={req.id} req={req} categoryByMaintenanceRequestId={categoryByMaintenanceRequestId} onOpen={() => setOpenMaintenanceCaseId(req.id)} onRemove={() => void removeRequest(req.id)} />')
     expect(pageSource).toContain('<MaintenanceCaseDetail')
   })
 
-  it('the existing status <select> and Remove button are untouched (both still present, unmodified)', () => {
-    expect(pageSource).toContain('{requestStatuses.map((s) => <option key={s}>{s}</option>)}')
-    expect(pageSource).toContain('<button className="dangerLink" onClick={() => void removeRequest(req.id)}>Remove</button>')
+  it('Remove is still present (a real hard delete, quiet but not removed); the old inline status <select> is intentionally gone from this list — Phase D.2 removed it as a duplicate status control (MaintenanceCaseDetail\'s own Advanced section already owns status changes; opening a row via onOpen reaches that same shared component)', () => {
+    expect(pageSource).not.toContain('{requestStatuses.map((s) => <option key={s}>{s}</option>)}')
+    expect(pageSource).toContain('onRemove: () => void')
+    expect(pageSource).toContain('<button className="dangerLink maintenanceRequestRowRemove" onClick={onRemove}>Remove</button>')
   })
 })
 

@@ -53,7 +53,7 @@ import { logUploadDiagnostic, initialUploadDebugState, type UploadDebugState } f
 import { UploadDebugPanel } from '../components/uploads/UploadDebugPanel'
 import { logPhotoUploadDiagnostic, safeFileSummary, safeFileListSummary, safeErrorSummary } from '../lib/property-photos/diagnostics'
 import { friendlyPortfolioLoadMessage } from '../lib/dashboard/portfolio-load-status'
-import { enrichMaintenanceCases, relevantContactsForProperty, showsDedicatedUrgentBadge, type IntakeSessionOutcome, type PropCrewLinkRef, type MaintenanceCaseStatus } from '../lib/maintenance/command-center'
+import { enrichMaintenanceCases, relevantContactsForProperty, showsDedicatedUrgentBadge, type IntakeSessionOutcome, type PropCrewLinkRef, type MaintenanceCaseStatus, type EnrichedMaintenanceCase } from '../lib/maintenance/command-center'
 import { latestOutreachForContact, type ProviderOutreachRow } from '../lib/maintenance/provider-outreach'
 import { sendProviderOutreach as postProviderOutreach, providerOutreachErrorMessage } from '../lib/maintenance/provider-outreach-client'
 import { windowsForMaintenanceRequest, entryPreferenceForMaintenanceRequest, type AvailabilityWindow } from '../lib/maintenance/availability'
@@ -257,17 +257,28 @@ type MaintenanceRequest = {
 // is renamed to "Details" — inside a screen the user already opened BY
 // selecting a property, a tab literally called "Property" read as an
 // odd echo ("Property > Property?"); "Details" says plainly what's
-// inside (Mortgage/Insurance/Maintenance/Systems, plus Ownership/Entity
-// moved here from Overview below) without restating the container.
+// inside (Mortgage/Insurance/Systems, plus Ownership/Entity moved here
+// from Overview below) without restating the container.
 // Purely a renamed Tab value — the internal PropertySubTab/propSubTab/
 // openPropSubTab identifiers are unchanged (implementation detail, never
 // user-facing) and every existing sub-tab/record is untouched.
-type Tab = 'Overview' | 'Rent' | 'Details' | 'PropCrew' | 'Documents' | 'Tax'
+//
+// Simplification + Maintenance Workspace V2, Phase D: 'Maintenance' is
+// promoted from a Details sub-tab to its own primary Tab — real-device
+// testing found "Property > Details > Maintenance" too many taps for a
+// primary landlord workflow. The canonical maintenance_requests data,
+// the shared MaintenanceCaseDetail workspace, and every write path
+// (assign/status/outreach/scheduling) are completely unchanged — this
+// is a navigation/presentation move only. See the activeTab ===
+// 'Maintenance' section below (was propertySubTab === 'Maintenance'
+// inside Details).
+type Tab = 'Overview' | 'Rent' | 'Maintenance' | 'Details' | 'PropCrew' | 'Documents' | 'Tax'
 // 'Ownership' added here (moved from Overview — see the Overview JSX's
 // own comment) — Ownership/Entity recordkeeping is exactly the kind of
 // "actual property information that doesn't naturally belong in
-// Overview" this tab already exists for.
-type PropertySubTab = 'Mortgage' | 'Insurance' | 'Maintenance' | 'Systems' | 'Ownership'
+// Overview" this tab already exists for. 'Maintenance' removed (Phase
+// D — promoted to a primary Tab, see above).
+type PropertySubTab = 'Mortgage' | 'Insurance' | 'Systems' | 'Ownership'
 // Lease & tenant terms / the full income+expense ledger / tenant
 // requests+Tenant Connect — three genuinely different workflows that all
 // belong under "Rent," so they get their own lightweight sub-tabs rather
@@ -276,11 +287,10 @@ type PropertySubTab = 'Mortgage' | 'Insurance' | 'Maintenance' | 'Systems' | 'Ow
 type RentSubTab = 'Lease' | 'Ledger' | 'Tenant'
 type DocumentsSubTab = 'Documents' | 'Photos'
 
-const tabs: Tab[] = ['Overview', 'Rent', 'Details', 'PropCrew', 'Documents', 'Tax']
-const propertySubTabs: PropertySubTab[] = ['Mortgage', 'Insurance', 'Maintenance', 'Systems', 'Ownership']
+const tabs: Tab[] = ['Overview', 'Rent', 'Maintenance', 'Details', 'PropCrew', 'Documents', 'Tax']
+const propertySubTabs: PropertySubTab[] = ['Mortgage', 'Insurance', 'Systems', 'Ownership']
 const rentSubTabs: RentSubTab[] = ['Lease', 'Ledger', 'Tenant']
 const docCategories = ['All', ...DOCUMENT_CATEGORIES]
-const requestStatuses = ['Submitted', 'Scheduled', 'In Progress', 'Completed']
 
 const money = (n: number) => new Intl.NumberFormat('en-US', {
   style: 'currency', currency: 'USD', maximumFractionDigits: 0,
@@ -382,6 +392,42 @@ const PROPWATCH_EXPANDED_STORAGE_KEY = 'proproster:propWatchExpanded'
 
 function EmptyModule({ title, text, action, onClick }: { title: string; text: string; action: string; onClick: () => void }) {
   return <div className="emptyModule"><strong>{title}</strong><span>{text}</span><button className="primary" onClick={onClick}>+ {action}</button></div>
+}
+
+// Simplification + Maintenance Workspace V2, Phase D.2: the compact
+// property-level Maintenance row — one tappable surface (title, quiet
+// category/source/date metadata, a compact status pill, a trailing
+// chevron), plus a small, separate "Remove" action outside the button
+// (removeRequest() is a real hard delete this list has always offered
+// and MaintenanceCaseDetail has no equivalent for — kept, just quiet,
+// not nested inside the main button since a button can't contain
+// another interactive control). No new data/logic: opening still calls
+// the caller's existing setOpenMaintenanceCaseId, which mounts the
+// exact same shared MaintenanceCaseDetail this page already uses.
+function MaintenanceRequestRow({ req, categoryByMaintenanceRequestId, onOpen, onRemove }: {
+  req: EnrichedMaintenanceCase
+  categoryByMaintenanceRequestId: Map<string, string>
+  onOpen: () => void
+  onRemove: () => void
+}) {
+  return (
+    <div className="maintenanceRequestRow">
+      <button className="maintenanceRequestRowMain" onClick={onOpen}>
+        <span className="maintenanceRequestRowMainBody">
+          <span className="maintenanceRequestRowTop">
+            {showsDedicatedUrgentBadge(req, req.urgent) && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}
+            <span className="maintenanceRequestRowTitle">{req.title}</span>
+          </span>
+          <span className="muted maintenanceRequestRowMeta">
+            {req.source === 'tenant' && categoryByMaintenanceRequestId.has(req.id) ? `${maintenanceCategoryLabel(categoryByMaintenanceRequestId.get(req.id)!)} · ` : ''}
+            {req.source === 'tenant' ? 'Tenant' : 'Landlord'} &middot; {new Date(req.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+          </span>
+        </span>
+        <span className="statusPill maintenanceRequestRowStatus">{req.status}</span>
+      </button>
+      <button className="dangerLink maintenanceRequestRowRemove" onClick={onRemove}>Remove</button>
+    </div>
+  )
 }
 
 // Milestone 17: Tenant & Lease Management V2 ---------------------------
@@ -635,6 +681,10 @@ export default function Home() {
   // unchanged, only the form/fields improved (see saveNewMaintenanceRequest below).
   const [showNewMaintenanceRequest, setShowNewMaintenanceRequest] = useState(false)
   const [newMaintenanceRequestError, setNewMaintenanceRequestError] = useState('')
+  // Simplification + Maintenance Workspace V2, Phase D: completed
+  // requests are collapsed behind a toggle by default, same pattern
+  // app/maintenance/page.tsx's own showHistory already uses.
+  const [showCompletedRequests, setShowCompletedRequests] = useState(false)
   // Property Profile 2.0
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   // QA: the greeting briefly showed the email-prefix fallback (e.g.
@@ -1527,10 +1577,19 @@ export default function Home() {
     const params = new URLSearchParams(window.location.search)
     const id = params.get('openProperty')
     if (!id) return
-    const tab = (params.get('openTab') as Tab | null) || 'Documents'
+    let tab = (params.get('openTab') as Tab | null) || 'Documents'
     const docsSubTab = (params.get('openDocsSubTab') as DocumentsSubTab | null) || (tab === 'Documents' ? 'Documents' : undefined)
-    const propSubTab = (params.get('openPropSubTab') as PropertySubTab | null) || undefined
+    let propSubTab = (params.get('openPropSubTab') as PropertySubTab | null) || undefined
     const rentSubTab = (params.get('openRentSubTab') as RentSubTab | null) || undefined
+    // Phase D compatibility shim: Maintenance was promoted out of
+    // Details into its own top-level tab, so an older/stale
+    // ?openTab=Details&openPropSubTab=Maintenance link (still possible
+    // from a cached page, a bookmarked search result, etc.) resolves to
+    // the new destination instead of landing on an empty Details panel.
+    if (tab === 'Details' && (propSubTab as string) === 'Maintenance') {
+      tab = 'Maintenance'
+      propSubTab = undefined
+    }
     window.history.replaceState(null, '', window.location.pathname)
     openProperty(id, tab, docsSubTab, propSubTab, rentSubTab)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1876,7 +1935,7 @@ export default function Home() {
     if (action === 'Insurance') { setInsuranceDraft((d) => ({ ...d, ...values })); setShowModuleForm('Insurance'); setActiveTab('Details'); setPropertySubTab('Insurance') }
     else if (action === 'Mortgage') { setMortgageDraft((d) => ({ ...d, ...values })); setShowModuleForm('Mortgage'); setActiveTab('Details'); setPropertySubTab('Mortgage') }
     else if (action === 'Lease') { setEditingLeaseId(null); setLeaseDraft((d) => ({ ...d, ...values })); setShowModuleForm('Lease'); setActiveTab('Rent'); setRentSubTab('Lease') }
-    else if (action === 'Maintenance') { setMaintenanceDraft((d) => ({ ...d, ...values })); setShowModuleForm('Maintenance'); setActiveTab('Details'); setPropertySubTab('Maintenance') }
+    else if (action === 'Maintenance') { setMaintenanceDraft((d) => ({ ...d, ...values })); setShowModuleForm('Maintenance'); setActiveTab('Maintenance') }
     else if (action === 'FinancialExpense') { setTransactionDraft((d) => ({ ...d, ...values })); setShowTransaction(true); setActiveTab('Rent'); setRentSubTab('Ledger') }
     else if (action === 'Contact') { setPropCrewPrefill({ name: values.name || values.businessName || 'New contact', businessName: values.businessName, phone: values.phone, email: values.email, website: values.website }); setActiveTab('PropCrew') }
     else if (action === 'EstimatedValue' && selected) { openEditProperty(selected); setEditDraft((d) => ({ ...d, value: values.value || d.value })) }
@@ -2404,7 +2463,7 @@ export default function Home() {
             <div className="overviewPanel"><h3>Timeline</h3><PropertyTimelinePanel events={selectedTimeline} limit={6} /></div>
           </div>
 
-          <div className="quickActions"><div><p className="eyebrow">QUICK ACTIONS</p></div><div className="quickActionButtons"><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Documents') }}>Documents <span className="quickActionCount">{selectedDocs.length}</span></button><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Photos') }}>Photos <span className="quickActionCount">{selectedPhotos.length}</span></button><button onClick={() => { setActiveTab('Details'); setPropertySubTab('Maintenance') }}>Maintenance <span className="quickActionCount">{selectedMaintenance.length}</span></button><button onClick={() => { setActiveTab('Rent'); setRentSubTab('Ledger') }}>Add transaction</button></div></div>
+          <div className="quickActions"><div><p className="eyebrow">QUICK ACTIONS</p></div><div className="quickActionButtons"><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Documents') }}>Documents <span className="quickActionCount">{selectedDocs.length}</span></button><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Photos') }}>Photos <span className="quickActionCount">{selectedPhotos.length}</span></button><button onClick={() => setActiveTab('Maintenance')}>Maintenance <span className="quickActionCount">{selectedMaintenance.length}</span></button><button onClick={() => { setActiveTab('Rent'); setRentSubTab('Ledger') }}>Add transaction</button></div></div>
         </section>}
 
         {activeTab === 'Documents' && <section className="workspaceContent">
@@ -2483,7 +2542,12 @@ export default function Home() {
         )}
 
         {activeTab === 'Rent' && <section className="workspaceContent moduleWorkspace">
-          <div className="subTabs" role="tablist" aria-label="Rent sections">{rentSubTabs.map((sub) => <button key={sub} role="tab" aria-selected={rentSubTab === sub} className={rentSubTab === sub ? 'active' : ''} onClick={() => setRentSubTab(sub)}>{sub === 'Tenant' ? 'Tenant Requests' : sub === 'Ledger' ? 'Ledger' : 'Lease & Rent'}</button>)}</div>
+          {/* Simplification + Maintenance Workspace V2, Phase D.3: the
+              'Tenant' sub-tab's display label is shortened from "Tenant
+              Requests" to "Tenant" — the internal RentSubTab value was
+              already 'Tenant', so this is a label-only change, no
+              route/state rename. */}
+          <div className="subTabs" role="tablist" aria-label="Rent sections">{rentSubTabs.map((sub) => <button key={sub} role="tab" aria-selected={rentSubTab === sub} className={rentSubTab === sub ? 'active' : ''} onClick={() => setRentSubTab(sub)}>{sub === 'Tenant' ? 'Tenant' : sub === 'Ledger' ? 'Ledger' : 'Lease & Rent'}</button>)}</div>
 
           {rentSubTab === 'Lease' && (() => {
             // Ungated by property_type (unlike the hero/Overview occupancy
@@ -2586,17 +2650,22 @@ export default function Home() {
           {rentSubTab === 'Tenant' && (selected.property_type === 'Rental Property' ? <>
             {/* Tenant Connect M3.1 (Property Maintenance Workflow
                 Unification): the Active Requests list + "Manage"/
-                PropCrew-assignment UI that M3 first added here has moved
-                to Details > Maintenance — the property's one, obvious
-                Maintenance hub (Active Requests above Service History),
-                so a landlord isn't expected to know maintenance requests
-                live under a "Tenant" sub-tab. This tab keeps exactly
-                what's genuinely tenant-relationship-specific: the
-                Tenant Connect invite/status card and the tenant's own
+                PropCrew-assignment UI that M3 first added here moved to
+                what was Details > Maintenance and, as of Simplification
+                + Maintenance Workspace V2 Phase D, is now the promoted,
+                primary Maintenance tab — this tab keeps exactly what's
+                genuinely tenant-relationship-specific: the Tenant
+                Connect invite/status card and the tenant's own
                 conversation thread. Nothing here was removed from the
-                app — see Details > Maintenance. */}
-            <div className="sectionHead workspaceHeading"><div><p className="eyebrow">TENANT REQUESTS</p><h2>Tenant Connect</h2><p>Invite status and the tenant&apos;s own conversation thread.</p></div></div>
-            {selectedRequests.length > 0 && <p className="muted">Maintenance requests for this property — including ones your tenant has submitted — are managed from <strong>Details → Maintenance</strong>.</p>}
+                app — see the Maintenance tab.
+                Phase D.3: one heading, not "TENANT REQUESTS" plus
+                "Tenant Connect" plus an explanatory paragraph — and no
+                "requests are managed from Details → Maintenance"
+                reminder, since Maintenance is now a primary tab, not a
+                fact the landlord needs told. TenantRequestsPanel's own
+                rows link straight into that canonical workspace via
+                onOpenInMaintenance below instead. */}
+            <div className="sectionHead workspaceHeading"><div><h2>Tenant Connect</h2></div></div>
             {/* Tenant Connect V1: replaces the old TenantConnectPanel
                 call site here (that component's own general multi-
                 conversation UI is broader than this milestone's "one
@@ -2607,7 +2676,7 @@ export default function Home() {
                 to THIS property's current lease, and the tenant-
                 submitted Requests list/conversation view. */}
             {supabase && <TenantConnectStatusCard supabase={supabase} propertyId={selected.id} ownerId={user.id} currentLease={currentLease} tenantConnectEnabled={entitlements.tenantConnect} onChanged={() => void loadPortfolio()} />}
-            {supabase && <TenantRequestsPanel supabase={supabase} propertyId={selected.id} ownerId={user.id} tenantConnectEnabled={entitlements.tenantConnect} />}
+            {supabase && <TenantRequestsPanel supabase={supabase} propertyId={selected.id} ownerId={user.id} tenantConnectEnabled={entitlements.tenantConnect} onOpenInMaintenance={(maintenanceRequestId) => { setActiveTab('Maintenance'); setOpenMaintenanceCaseId(maintenanceRequestId) }} />}
           </> : <div className="emptyState"><strong>Tenant requests apply to Rental Property only.</strong><span>Change this property's type from Edit property facts if that's not correct.</span></div>)}
         </section>}
 
@@ -2664,37 +2733,78 @@ export default function Home() {
           <p className="ledgerNote">Tax Center (the portfolio-wide view across every property) aggregates these same manual entries alongside your Rent ledger — see the <Link href="/tax-center">Tax Center</Link> page.</p>
         </section>}
 
+        {/* Simplification + Maintenance Workspace V2, Phase D: promoted
+            from Details > Maintenance to its own primary Tab — real-
+            device testing found "Property > Details > Maintenance" too
+            many taps for a primary landlord workflow. Same canonical
+            maintenance_requests data, same enrichedSelectedRequests /
+            MaintenanceCaseDetail / assignMaintenanceContact wiring M3
+            already built (still mounted unconditionally below, alongside
+            the PropCrew tab) — this section only decides what triggers
+            opening it and how the list looks. Phase D.2: a compact
+            header + quiet "N open · M completed" line + a small,
+            refined "+ New Request" action, replacing the old eyebrow/
+            heading/paragraph/large-button stack real-device testing
+            found too heavy — and rows that are a single tappable
+            surface (title, quiet category/source/date metadata, a
+            compact status pill, a trailing chevron) instead of a
+            three-pill header plus an inline status <select>, which
+            duplicated the status control MaintenanceCaseDetail's own
+            Advanced section already owns. */}
+        {activeTab === 'Maintenance' && <section className="workspaceContent maintenanceHubSection">
+          <div className="maintenanceHubHead">
+            <div>
+              <h2>Maintenance</h2>
+              <p className="muted">{openRequests.length} open &middot; {completedRequests.length} completed</p>
+            </div>
+            <button className="secondary" onClick={() => setShowNewMaintenanceRequest(true)}>+ New Request</button>
+          </div>
+
+          {statusUpdateMessage && <div className="globalNotice">{statusUpdateMessage}</div>}
+
+          {selectedRequests.length === 0 ? (
+            <EmptyModule title="No maintenance requests yet" text="Requests your tenant submits, and any you log yourself, show up here." action="New Request" onClick={() => setShowNewMaintenanceRequest(true)} />
+          ) : (
+            <>
+              <h3 className="maintenanceHubSectionTitle">Needs attention</h3>
+              {openRequests.length === 0 ? (
+                <p className="muted">Nothing open right now.</p>
+              ) : (
+                <div className="maintenanceRequestList">
+                  {enrichedSelectedRequests.filter((req) => req.status !== 'Completed').map((req) => (
+                    <MaintenanceRequestRow key={req.id} req={req} categoryByMaintenanceRequestId={categoryByMaintenanceRequestId} onOpen={() => setOpenMaintenanceCaseId(req.id)} onRemove={() => void removeRequest(req.id)} />
+                  ))}
+                </div>
+              )}
+
+              {completedRequests.length > 0 && (
+                <>
+                  <button className="secondary maintenanceHistoryToggle" onClick={() => setShowCompletedRequests((s) => !s)}>{showCompletedRequests ? 'Hide' : 'Show'} completed ({completedRequests.length})</button>
+                  {showCompletedRequests && (
+                    <div className="maintenanceRequestList maintenanceCommandCenterHistory">
+                      {enrichedSelectedRequests.filter((req) => req.status === 'Completed').map((req) => (
+                        <MaintenanceRequestRow key={req.id} req={req} categoryByMaintenanceRequestId={categoryByMaintenanceRequestId} onOpen={() => setOpenMaintenanceCaseId(req.id)} onRemove={() => void removeRequest(req.id)} />
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+
+          <div className="maintenanceHubHead maintenanceServiceHistoryHead">
+            <h3 className="maintenanceHubSectionTitle">Service history</h3>
+            <button className="secondary" onClick={() => setShowModuleForm('Maintenance')}>+ Log service record</button>
+          </div>
+          {selectedMaintenance.length ? <div className="maintenanceList">{selectedMaintenance.map((item) => { const doc=selectedDocs.find(d=>d.id===item.document_id); return <article className="maintenanceRow" key={item.id}><div className="maintenanceDate"><strong>{new Date(`${item.service_date}T12:00:00`).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(`${item.service_date}T12:00:00`).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div><span className="statusPill">{item.status}</span><h3>{item.description}</h3><p>{item.category}{item.vendor ? ` · ${item.vendor}` : ''}</p></div><strong>{money(item.cost)}</strong></div><div className="maintenanceActions">{doc && <button onClick={() => void openDocument(doc)}>Open {doc.name}</button>}{item.financial_transaction_id && <span>Linked to Ledger</span>}<button className="dangerLink" onClick={() => void removeModuleRecord('maintenance_records', item.id, item.financial_transaction_id)}>Remove</button></div></div></article>})}</div> : <EmptyModule title="No maintenance records yet" text="Add repairs, service calls, vendors, costs and receipts as they happen." action="Add maintenance" onClick={() => setShowModuleForm('Maintenance')} />}
+        </section>}
+
         {activeTab === 'Details' && <section className="workspaceContent moduleWorkspace">
           <div className="subTabs" role="tablist" aria-label="Details sections">{propertySubTabs.map((sub) => <button key={sub} role="tab" aria-selected={propertySubTab === sub} className={propertySubTab === sub ? 'active' : ''} onClick={() => setPropertySubTab(sub)}>{sub}</button>)}</div>
 
           {propertySubTab === 'Mortgage' && <><div className="sectionHead workspaceHeading"><div><p className="eyebrow">MORTGAGE</p><h2>Loan details</h2><p>Track your lender, balance, rate, payment and loan documents.</p></div><button className="primary" onClick={() => setShowModuleForm('Mortgage')}>+ Add mortgage</button></div>{selectedMortgages.length ? <div className="moduleGrid">{selectedMortgages.map((loan) => { const doc=selectedDocs.find(d=>d.id===loan.document_id); return <article className="recordCard" key={loan.id}><div className="recordTop"><div><span className="statusPill">Mortgage</span><h3>{loan.lender}</h3><p>{loan.loan_number ? `Loan ••••${loan.loan_number.slice(-4)}` : 'Loan number not added'}</p></div><button className="recordDelete" onClick={() => void removeModuleRecord('mortgages', loan.id)}>×</button></div><div className="recordMetrics"><div><span>Current balance</span><strong>{money(loan.current_balance)}</strong></div><div><span>Monthly payment</span><strong>{money(loan.monthly_payment)}</strong></div><div><span>Rate</span><strong>{Number(loan.interest_rate).toFixed(3)}%</strong></div></div><div className="recordRows"><div><span>Original balance</span><strong>{money(loan.original_balance)}</strong></div><div><span>Escrow / month</span><strong>{money(loan.escrow_amount)}</strong></div>{loan.maturity_date && <div><span>Maturity</span><strong>{new Date(`${loan.maturity_date}T12:00:00`).toLocaleDateString()}</strong></div>}{doc && <div><span>Loan document</span><button onClick={() => void openDocument(doc)}>{doc.name}</button></div>}</div></article>})}</div> : <EmptyModule title="No mortgage details yet" text="Add the lender, balance, rate, monthly payment and loan document." action="Add mortgage" onClick={() => setShowModuleForm('Mortgage')} />}</>}
 
           {propertySubTab === 'Insurance' && <><div className="sectionHead workspaceHeading"><div><p className="eyebrow">INSURANCE</p><h2>Coverage records</h2><p>Keep policy details, premiums, deductibles and expiration dates visible.</p></div><button className="primary" onClick={() => setShowModuleForm('Insurance')}>+ Add policy</button></div>{selectedInsurance.length ? <div className="moduleGrid">{selectedInsurance.map((policy) => { const doc=selectedDocs.find(d=>d.id===policy.document_id); const days=policy.expiration_date ? Math.ceil((new Date(`${policy.expiration_date}T12:00:00`).getTime()-Date.now())/86400000) : null; return <article className="recordCard" key={policy.id}><div className="recordTop"><div><span className={`statusPill ${days !== null && days < 45 ? 'warning' : ''}`}>{days !== null && days < 0 ? 'Expired' : days !== null && days < 45 ? 'Renew soon' : 'Active'}</span><h3>{policy.carrier}</h3><p>{policy.policy_number || 'Policy number not added'}</p></div><button className="recordDelete" onClick={() => void removeModuleRecord('insurance_policies', policy.id)}>×</button></div><div className="recordMetrics"><div><span>Annual premium</span><strong>{money(policy.annual_premium)}</strong></div><div><span>Deductible</span><strong>{money(policy.deductible)}</strong></div></div><div className="recordRows">{policy.effective_date && <div><span>Effective</span><strong>{new Date(`${policy.effective_date}T12:00:00`).toLocaleDateString()}</strong></div>}{policy.expiration_date && <div><span>Expires</span><strong>{new Date(`${policy.expiration_date}T12:00:00`).toLocaleDateString()}</strong></div>}{doc && <div><span>Policy document</span><button onClick={() => void openDocument(doc)}>{doc.name}</button></div>}</div></article>})}</div> : <EmptyModule title="No insurance policies yet" text="Add your carrier, policy, premium, deductible and declaration page." action="Add policy" onClick={() => setShowModuleForm('Insurance')} />}</>}
-
-          {propertySubTab === 'Maintenance' && <>
-            {/* Tenant Connect M3.1 (Property Maintenance Workflow
-                Unification) — THE property-level Maintenance hub: Active
-                Requests (canonical maintenance_requests — the SAME
-                table/rows the portfolio Command Center reads, tenant-
-                and landlord-originated alike) above, durable Service
-                History (maintenance_records — repairs/vendors/costs/
-                receipts) below, clearly separated but both reachable
-                from this one destination. No parallel data model: this
-                section reuses the exact same enrichedSelectedRequests /
-                MaintenanceCaseDetail / assignMaintenanceContact wiring
-                M3 already built (previously mounted under Rent > Tenant —
-                real-device testing found that location insufficiently
-                discoverable). */}
-            <div className="sectionHead workspaceHeading"><div><p className="eyebrow">MAINTENANCE</p><h2>Maintenance</h2><p>Active requests needing action, and your durable service history below.</p></div><button className="primary" onClick={() => setShowNewMaintenanceRequest(true)}>+ New Maintenance Request</button></div>
-
-            <h3 className="maintenanceHubSectionTitle">Active Requests</h3>
-            <div className="financialStats landlordStats"><div className="financialStat"><span>Open requests</span><strong>{openRequests.length}</strong></div><div className="financialStat"><span>Completed requests</span><strong>{completedRequests.length}</strong></div></div>
-            {statusUpdateMessage && <div className="globalNotice">{statusUpdateMessage}</div>}
-            {selectedRequests.length ? <div className="maintenanceList">{enrichedSelectedRequests.map((req) => <article className="maintenanceRow requestRow" key={req.id}><div className="maintenanceDate"><strong>{new Date(req.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(req.created_at).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div>{showsDedicatedUrgentBadge(req, req.urgent) && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}<span className={`statusPill priority${req.priority}`}>{req.priority}</span>{req.source === 'tenant' && <span className="statusPill tenantSourceBadge">Tenant</span>}<h3>{req.title}</h3><p>{req.source === 'tenant' && categoryByMaintenanceRequestId.has(req.id) ? `${maintenanceCategoryLabel(categoryByMaintenanceRequestId.get(req.id)!)} · ` : ''}{req.tenant_name}{req.tenant_email ? ` · ${req.tenant_email}` : ''}</p></div></div>{req.description && <p className="requestDescription">{req.description}</p>}<div className="maintenanceActions"><button className="secondary" onClick={() => setOpenMaintenanceCaseId(req.id)}>Manage</button><select aria-label={`Status for ${req.title}`} value={req.status} disabled={busy} onChange={(e) => void updateRequestStatus(req.id, e.target.value)}>{requestStatuses.map((s) => <option key={s}>{s}</option>)}</select><button className="dangerLink" onClick={() => void removeRequest(req.id)}>Remove</button></div></div></article>)}</div> : <EmptyModule title="No maintenance requests yet" text="Requests your tenant submits, and any you log yourself, show up here." action="New Maintenance Request" onClick={() => setShowNewMaintenanceRequest(true)} />}
-
-            <div className="sectionHead workspaceHeading maintenanceServiceHistoryHead"><div><p className="eyebrow">SERVICE HISTORY</p><h2>Property service history</h2><p>Repairs, preventative work, vendors, costs and receipts in one timeline.</p></div><button className="secondary" onClick={() => setShowModuleForm('Maintenance')}>+ Log service record</button></div>
-            {selectedMaintenance.length ? <div className="maintenanceList">{selectedMaintenance.map((item) => { const doc=selectedDocs.find(d=>d.id===item.document_id); return <article className="maintenanceRow" key={item.id}><div className="maintenanceDate"><strong>{new Date(`${item.service_date}T12:00:00`).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{new Date(`${item.service_date}T12:00:00`).getFullYear()}</span></div><div className="maintenanceBody"><div className="maintenanceTitle"><div><span className="statusPill">{item.status}</span><h3>{item.description}</h3><p>{item.category}{item.vendor ? ` · ${item.vendor}` : ''}</p></div><strong>{money(item.cost)}</strong></div><div className="maintenanceActions">{doc && <button onClick={() => void openDocument(doc)}>Open {doc.name}</button>}{item.financial_transaction_id && <span>Linked to Ledger</span>}<button className="dangerLink" onClick={() => void removeModuleRecord('maintenance_records', item.id, item.financial_transaction_id)}>Remove</button></div></div></article>})}</div> : <EmptyModule title="No maintenance records yet" text="Add repairs, service calls, vendors, costs and receipts as they happen." action="Add maintenance" onClick={() => setShowModuleForm('Maintenance')} />}
-          </>}
 
           {propertySubTab === 'Systems' && <PropertySystemsPanel propertyId={selected.id} ownerId={user.id} systems={selectedSystems} contacts={selectedContacts} documents={selectedDocs} onRefresh={() => void loadPortfolio()} />}
 

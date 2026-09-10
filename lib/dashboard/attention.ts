@@ -29,8 +29,13 @@ import { classifyDate, daysUntil, type Urgency } from './date-classification'
 // value is renamed to 'Details' (see app/page.tsx's Tab type comment) —
 // NavPropertySubTab/NavTarget's propSubTab field are unchanged, only the
 // tab string itself moves.
-export type NavTab = 'Overview' | 'Rent' | 'Details' | 'PropCrew' | 'Documents' | 'Tax'
-export type NavPropertySubTab = 'Mortgage' | 'Insurance' | 'Maintenance' | 'Systems'
+// Simplification + Maintenance Workspace V2, Phase D: Maintenance is
+// promoted from a Details sub-tab to its own top-level NavTab — every
+// nav target that used to read { tab: 'Details', propSubTab:
+// 'Maintenance' } now reads { tab: 'Maintenance' } instead (see each
+// builder below). NavPropertySubTab loses 'Maintenance' accordingly.
+export type NavTab = 'Overview' | 'Rent' | 'Maintenance' | 'Details' | 'PropCrew' | 'Documents' | 'Tax'
+export type NavPropertySubTab = 'Mortgage' | 'Insurance' | 'Systems'
 export type NavRentSubTab = 'Lease' | 'Ledger' | 'Tenant'
 export type NavDocsSubTab = 'Documents' | 'Photos'
 
@@ -155,7 +160,7 @@ export function buildMaintenanceDateItems(records: MaintenanceInput[], propertyL
       label: urgency === 'Expired' ? 'Maintenance overdue' : urgency === 'Urgent' ? 'Maintenance due soon' : 'Maintenance scheduled',
       description: record.description, propertyId: record.property_id, propertyLabel: labelFor(record.property_id, propertyLabelById),
       date: record.service_date, daysUntil: daysUntil(record.service_date, now) as number, urgency,
-      nav: { tab: 'Details', propSubTab: 'Maintenance' },
+      nav: { tab: 'Maintenance' },
     })
   }
   return items
@@ -190,7 +195,7 @@ export function buildOpenMaintenanceItems(records: MaintenanceInput[], propertyL
       id: r.id, description: r.description, category: r.category, vendor: r.vendor,
       propertyId: r.property_id, propertyLabel: labelFor(r.property_id, propertyLabelById),
       date: r.service_date, status: r.status,
-      nav: { tab: 'Details', propSubTab: 'Maintenance' } as NavTarget,
+      nav: { tab: 'Maintenance' } as NavTarget,
     }))
     .sort((a, b) => b.date.localeCompare(a.date))
 }
@@ -228,7 +233,7 @@ export function buildOpenMaintenanceRequestItems(cases: OpenMaintenanceRequestIn
       id: c.id, description: c.title, category: c.urgent ? 'Urgent' : 'Maintenance', vendor: null,
       propertyId: c.property_id, propertyLabel: labelFor(c.property_id, propertyLabelById),
       date: c.created_at, status: c.status,
-      nav: { tab: 'Details', propSubTab: 'Maintenance' } as NavTarget,
+      nav: { tab: 'Maintenance' } as NavTarget,
     }))
     .sort((a, b) => b.date.localeCompare(a.date))
 }

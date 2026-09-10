@@ -316,7 +316,7 @@ h2, h3, p { margin-top: 0; }
    row (the previous `display: flex; overflow-x: auto` let Documents/
    Tax scroll out of view, which this redesign specifically removes).
    One row of 6 by default; 3x2 under the @media rule below. */
-.tabs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 8px 0; }
+.tabs { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 8px 0; }
 .tabs button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 0; border-radius: 9px; padding: 10px 8px; background: transparent; color: var(--muted); font-weight: var(--weight-medium); font-size: 13px; text-align: center; }
 .tabs button.active { background: var(--brand-soft); color: var(--brand); }
 .workspaceContent { padding-top: 32px; }
@@ -497,10 +497,19 @@ h2, h3, p { margin-top: 0; }
   .photo { height: 205px; }
   .heroPhoto { height: 245px; }
   .heroMetrics { gap: 12px; }
-  /* All six property sections at once, 3 per row, never a horizontal
-     swipe — the hard requirement this redesign exists for. */
-  .tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
-  .tabs button { padding: 10px 6px; font-size: 12.5px; }
+  /* Simplification + Maintenance Workspace V2, Phase D.1: seven primary
+     sections (Maintenance promoted alongside Overview/Rent/Details/
+     PropCrew/Documents/Tax) no longer fit as an even, non-wrapping
+     grid at this width — the prior "3 per row, never a horizontal
+     swipe" rule this replaces would leave a lone, oddly stretched 7th
+     tab on its own mostly-empty row, which reads as MORE broken than a
+     deliberate horizontal strip. A single scrollable row keeps every
+     tab the same size/weight and makes "more tabs exist" immediately
+     obvious (the next one peeking in from the edge) rather than an
+     uneven trailing row. */
+  .tabs { display: flex; grid-template-columns: none; gap: 6px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding: 8px 2px; margin: 0 -2px; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { flex: 0 0 auto; padding: 10px 14px; font-size: 13px; }
   .quickActions { align-items: flex-start; flex-direction: column; }
   .quickActionButtons { justify-content: flex-start; }
   .uploadControls { grid-template-columns: 1fr; }
@@ -520,7 +529,7 @@ h2, h3, p { margin-top: 0; }
   .heroMetrics strong { font-size: 15px; }
   .topbar .secondary { padding: 9px 11px; font-size: 12px; }
   .photoUploader { grid-template-columns: 36px minmax(0, 1fr); justify-content: start; }
-  .tabs button { font-size: 11.5px; padding: 9px 4px; }
+  .tabs button { font-size: 12px; padding: 9px 11px; }
 }
 
 /* Shared "Pricing" nav item (components/PricingNavLink.tsx) — same
@@ -1029,16 +1038,12 @@ h2, h3, p { margin-top: 0; }
 .contactLinks { display: flex; flex-direction: column; gap: 8px; padding: 16px 0; }
 .contactLinks a { color: var(--brand); font-size: 13px; text-decoration: underline; text-underline-offset: 2px; word-break: break-word; }
 .contactCard .recordRows { border-top: 1px solid var(--line); padding-top: 14px; }
-.landlordStats { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 22px; }
-.requestRow .maintenanceActions select { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: white; color: var(--text); font-size: 12px; }
 .requestDescription { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 6px 0 0; }
 .statusPill.priorityLow { background: #eef2ef; color: var(--muted); }
 .statusPill.priorityNormal { background: var(--brand-soft); color: var(--brand); }
 .statusPill.priorityHigh { background: #fff5dc; color: #805f12; }
 .statusPill.priorityUrgent { background: #fdeceb; color: #8a3d35; }
-.statusPill.tenantSourceBadge { background: #eef2ef; color: var(--muted); margin-left: 6px; }
 @media (max-width: 800px) { .contactGrid { grid-template-columns: 1fr; } }
-@media (max-width: 560px) { .landlordStats { grid-template-columns: 1fr 1fr; } }
 
 /* Milestone 9: SaaS plans, Stripe billing, entitlements */
 .pricingGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 8px 0 28px; align-items: stretch; }
@@ -1408,6 +1413,10 @@ h2, h3, p { margin-top: 0; }
 
 .tenantConnectThreadModal { width: min(640px, calc(100% - 24px)); max-height: 90vh; display: flex; flex-direction: column; }
 .tenantConnectThreadMeta { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+/* Simplification + Maintenance Workspace V2, Phase D.3 — a quiet, one-
+   tap path from a tenant's request into the canonical Maintenance
+   workspace, not a second maintenance-management surface. */
+.tenantRequestViewInMaintenance { align-self: flex-start; border: 0; background: transparent; color: var(--brand); font-weight: var(--weight-medium); font-size: 13px; padding: 0; margin-bottom: 14px; text-decoration: underline; text-underline-offset: 2px; }
 .tenantConnectThread { flex: 1; overflow-y: auto; display: grid; gap: 12px; padding-right: 4px; min-height: 120px; max-height: 45vh; }
 .tenantConnectBubble { max-width: 80%; border-radius: 14px; padding: 10px 13px; }
 /* Distinguished by more than color alone (Section E) — alignment side AND
@@ -2067,14 +2076,25 @@ h2, h3, p { margin-top: 0; }
 
 /* Status card — Section 2: "Do not make this area visually large... a
    natural part of the property's Rent workspace." One compact bordered
-   card, not a full section with its own hero. */
+   card, not a full section with its own hero.
+   Phase D.3: dropped the card's own "Tenant Connect" heading (the page
+   above it already says that once) — the card now leads straight with
+   the tenant's name/status/email. */
 .tenantConnectCard { background: white; border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; margin-top: 20px; display: grid; gap: 10px; }
 .tenantConnectCardLocked { color: var(--muted); }
 .tenantConnectCardHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.tenantConnectCardHead h3 { margin: 0; font-size: 15px; }
-.tenantConnectCardBody { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; font-weight: 650; }
+.tenantConnectCardBody { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
 .tenantConnectCardActions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .tenantConnectRevokeConfirm { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* Phase D.3: "Manage access" and its revealed "Revoke access" are quiet
+   text actions, not boxed buttons — a rare, destructive, administrative
+   action should never look like the primary action on this card (the
+   old unscoped .dangerLink fell back to native button chrome here and
+   stretched full-width on mobile, which is the exact "visually
+   inappropriate" real-device finding this replaces). */
+.tenantConnectQuietAction { border: 0; background: transparent; color: var(--muted); font-weight: var(--weight-medium); font-size: 13px; padding: 8px 0; text-decoration: underline; text-underline-offset: 2px; }
+.tenantConnectQuietAction.tenantConnectDestructive { color: #8a3d35; }
+.tenantConnectManagePanel { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 
 /* Requests panel (landlord side) — reuses .maintenanceList/.maintenanceRow
    wholesale (same list styling as the manual-log section above it); only
@@ -2279,13 +2299,10 @@ h2, h3, p { margin-top: 0; }
    .overlay/.sectionHead wholesale; only what's genuinely new is below.
    ========================================================================== */
 
-.statusPill.landlordSourceBadge { background: #eef2ef; color: var(--muted); margin-left: 6px; }
-.statusPill.maintenanceCategoryBadge { background: var(--brand-soft); color: var(--brand); margin-left: 6px; }
 .statusPill.maintenanceUrgentBadge { margin-right: 6px; }
 
 /* Portfolio Command Center (app/maintenance/page.tsx) — a card grid, not
    a desktop table, so it works well on iPhone without horizontal scroll. */
-.maintenanceSummaryStats { margin-top: 18px; }
 .maintenanceCommandCenterList { display: grid; gap: 12px; margin-top: 14px; }
 .maintenanceCommandCenterCard {
   display: grid; gap: 5px; text-align: left; width: 100%;
@@ -2294,7 +2311,6 @@ h2, h3, p { margin-top: 0; }
 }
 .maintenanceCommandCenterCard:hover { border-color: var(--brand); }
 .maintenanceCommandCenterCardUrgent { border-color: #e2a49d; background: #fefaf9; }
-.maintenanceCommandCenterCardTop { display: flex; flex-wrap: wrap; gap: 6px; }
 .maintenanceCommandCenterCardProperty { font-size: 13px; color: var(--muted); }
 .maintenanceCommandCenterCardTitle { font-size: 16px; font-weight: 650; }
 .maintenanceCommandCenterCardMeta, .maintenanceCommandCenterCardNext { font-size: 12px; }
@@ -2412,6 +2428,37 @@ h2, h3, p { margin-top: 0; }
    visually distinct without a heavy divider or a second full sectionHead. */
 .maintenanceHubSectionTitle { font-size: 13px; font-weight: 750; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 4px 0 10px; }
 .maintenanceServiceHistoryHead { margin-top: 30px; }
+
+/* Simplification + Maintenance Workspace V2, Phase D.2 — the promoted,
+   primary-tab property Maintenance screen (app/page.tsx). Compact
+   header (heading + quiet "N open · M completed" line + a small
+   secondary "+ New Request", not the old large primary button) and
+   rows that are one tappable surface instead of a three-pill header
+   plus a separate inline status control. */
+.maintenanceHubSection { display: grid; gap: 4px; }
+.maintenanceHubHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
+.maintenanceHubHead h2 { margin: 0 0 2px; }
+.maintenanceHubHead .maintenanceHubSectionTitle { margin: 6px 0 0; }
+.maintenanceHubHead > .muted { margin: 0; font-size: 13.5px; }
+
+.maintenanceRequestList { display: grid; margin-bottom: 6px; }
+.maintenanceRequestRow { display: flex; align-items: center; gap: 4px; border-top: 1px solid var(--line); min-width: 0; }
+.maintenanceRequestRow:first-child { border-top: 0; }
+.maintenanceRequestRowMain { flex: 1 1 0%; display: flex; align-items: center; gap: 10px; text-align: left; border: 0; background: transparent; padding: 13px 2px; min-width: 0; }
+.maintenanceRequestRowMain::after { content: '›'; color: var(--muted); font-size: 18px; flex-shrink: 0; }
+.maintenanceRequestRowMainBody { flex: 1 1 0%; min-width: 0; display: grid; gap: 3px; }
+.maintenanceRequestRowTop { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
+.maintenanceRequestRowTop .statusPill { margin-top: 2px; flex-shrink: 0; }
+/* Wraps naturally rather than truncating to an ellipsis — a real
+   title ("Garage door won't close all the way and makes a grinding
+   noise") loses exactly the specific, useful part to single-line
+   truncation on a narrow row that also carries a status pill and a
+   trailing chevron. Matches .maintenanceCommandCenterCardTitle's own
+   (pre-existing) wrapping behavior, not a new pattern. */
+.maintenanceRequestRowTitle { flex: 1 1 auto; min-width: 0; font-weight: var(--weight-semibold); font-size: 14.5px; line-height: 1.3; }
+.maintenanceRequestRowMeta { font-size: 12.5px; }
+.maintenanceRequestRowStatus { flex-shrink: 0; }
+.maintenanceRequestRowRemove { flex-shrink: 0; font-size: 11px; color: #8a3d35; border: 0; background: transparent; padding: 8px; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
 
 /* Tenant Connect: Provider Outreach V1 — the account-less, mobile-first
    provider page (app/provider/[token]/page.tsx). Deliberately its own

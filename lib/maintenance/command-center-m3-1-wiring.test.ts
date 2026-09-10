@@ -18,20 +18,25 @@ const newRequestModalSource = readFile('components/maintenance/NewMaintenanceReq
 const caseDetailSource = readFile('components/maintenance/MaintenanceCaseDetail.tsx')
 const attentionSource = readFile('lib/dashboard/attention.ts')
 
-describe('Property Maintenance hub — one destination, Active Requests above Service History', () => {
-  it('Details > Maintenance renders Active Requests, then Service History, both reachable from one sub-tab', () => {
-    const start = pageSource.indexOf("propertySubTab === 'Maintenance' &&")
+// Simplification + Maintenance Workspace V2, Phase D.1/D.2: this
+// destination is no longer Details > Maintenance — Maintenance is now
+// its own primary property tab (activeTab === 'Maintenance'), and its
+// heavy header/oversized button/three-pill rows were simplified. See
+// that phase's own report for the full before/after.
+describe('Property Maintenance hub — one destination, "Needs attention" above Service history', () => {
+  it('the promoted Maintenance tab renders open requests ("Needs attention"), then Service history, both reachable from one primary tab', () => {
+    const start = pageSource.indexOf("activeTab === 'Maintenance' &&")
     expect(start).toBeGreaterThan(-1)
-    const end = pageSource.indexOf("propertySubTab === 'Systems'")
+    const end = pageSource.indexOf("activeTab === 'Details' &&")
     const hubBody = pageSource.slice(start, end)
-    const activeIdx = hubBody.indexOf('Active Requests')
-    const historyIdx = hubBody.indexOf('SERVICE HISTORY')
+    const activeIdx = hubBody.indexOf('Needs attention')
+    const historyIdx = hubBody.indexOf('Service history')
     expect(activeIdx).toBeGreaterThan(-1)
     expect(historyIdx).toBeGreaterThan(activeIdx)
   })
 
-  it('the property-level "+ New Maintenance Request" button opens the shared modal with this property pre-selected and hidden', () => {
-    expect(pageSource).toContain('<button className="primary" onClick={() => setShowNewMaintenanceRequest(true)}>+ New Maintenance Request</button>')
+  it('the property-level "+ New Request" action opens the shared modal with this property pre-selected and hidden — a small, secondary-styled action now, not a large primary button (real-device finding: "too in your face")', () => {
+    expect(pageSource).toContain('<button className="secondary" onClick={() => setShowNewMaintenanceRequest(true)}>+ New Request</button>')
     expect(pageSource).toContain('<NewMaintenanceRequestModal')
     expect(pageSource).toContain('fixedPropertyId={selected.id}')
   })

@@ -140,9 +140,9 @@ describe('buildOpenMaintenanceRequestItems — canonical source, agrees with the
     expect(items.map((i) => i.id)).toEqual(['r2', 'r1'])
   })
 
-  it('deep-links to the same Details > Maintenance destination as the legacy function, so a click always lands the landlord in the property Maintenance hub', () => {
+  it('deep-links to the same top-level Maintenance destination as the legacy function, so a click always lands the landlord in the property Maintenance hub (Phase D: promoted out of Details, so no propSubTab)', () => {
     const items = buildOpenMaintenanceRequestItems([{ id: 'r1', property_id: 'p1', title: 'x', status: 'Submitted', urgent: false, created_at: '2026-06-01T00:00:00Z' }], propertyLabelById)
-    expect(items[0].nav).toEqual({ tab: 'Details', propSubTab: 'Maintenance' })
+    expect(items[0].nav).toEqual({ tab: 'Maintenance' })
   })
 })
 

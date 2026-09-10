@@ -289,21 +289,28 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
     <main className="shell">
       <AuthHeader />
 
-      <section className="intro">
-        <p className="eyebrow">MAINTENANCE</p>
-        <h1>Maintenance Command Center</h1>
-        <p>Every active maintenance case across your portfolio, tenant- and landlord-reported alike, in one place.</p>
+      {/* Simplification + Maintenance Workspace V2, Phase D.2: "Maintenance,"
+          not "Maintenance Command Center" — product language a landlord
+          never needs. The explanatory paragraph is gone (the page is
+          understandable without it); a compact "N need attention · M
+          urgent" line replaces the old three-box stat grid, and "+ New
+          Request" is a small, secondary-styled action beside the
+          heading instead of a large primary button. Same
+          .maintenanceHubHead treatment as the promoted property-level
+          Maintenance tab — one visual language, not two. */}
+      <section className="intro maintenanceHubIntro">
+        <div className="maintenanceHubHead">
+          <h1>Maintenance</h1>
+          <button className="secondary" onClick={() => setShowNewRequest(true)}>+ New Request</button>
+        </div>
+        <p className="muted">
+          {summary.activeCount} need{summary.activeCount === 1 ? 's' : ''} attention
+          {summary.urgentCount > 0 ? ` · ${summary.urgentCount} urgent` : ''}
+          {summary.completedCount > 0 ? ` · ${summary.completedCount} completed` : ''}
+        </p>
       </section>
 
-      <div className="sectionHead workspaceHeading"><div /><button className="primary" onClick={() => setShowNewRequest(true)}>+ New Maintenance Request</button></div>
-
       {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
-
-      <div className="financialStats maintenanceSummaryStats">
-        <div className="financialStat"><span>Needs attention</span><strong>{summary.activeCount}</strong></div>
-        <div className="financialStat"><span>Urgent</span><strong>{summary.urgentCount}</strong></div>
-        <div className="financialStat"><span>Completed</span><strong>{summary.completedCount}</strong></div>
-      </div>
 
       {loading ? (
         <div className="emptyState"><strong>Loading…</strong></div>
@@ -311,7 +318,7 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
         <div className="emptyState"><strong>No maintenance requests yet.</strong><span>Requests your tenants submit through Tenant Connect, and any you log yourself, will show up here.</span></div>
       ) : (
         <>
-          <div className="sectionHead workspaceHeading"><div><h2>Needs attention</h2><p>{active.length} active case{active.length === 1 ? '' : 's'}.</p></div></div>
+          <h3 className="maintenanceHubSectionTitle">Needs attention</h3>
           {active.length === 0 ? (
             <div className="emptyState"><strong>Nothing needs attention right now.</strong></div>
           ) : (
@@ -377,21 +384,22 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
   )
 }
 
-// Mobile-first card: readable, obvious urgency, obvious property
-// identity, large tap target (the whole card is the button), minimal
-// horizontal scroll (no wide table anywhere in this file).
+// Simplification + Maintenance Workspace V2, Phase D.2: dropped the
+// priority + source pill row (matching Phase C.1's same direction for
+// MaintenanceCaseDetail, and Phase D.2's identical change to the
+// property-level row) — Urgent is the only pill now, so it actually
+// stands out. Source folds into the quiet meta line as plain text
+// instead. Mobile-first card: readable, obvious urgency, obvious
+// property identity, large tap target (the whole card is the button),
+// minimal horizontal scroll (no wide table anywhere in this file).
 function MaintenanceCaseCard({ caseRow, propertyLabel, onOpen }: { caseRow: EnrichedMaintenanceCase; propertyLabel: string; onOpen: () => void }) {
   return (
     <button className={`maintenanceCommandCenterCard${caseRow.urgent ? ' maintenanceCommandCenterCardUrgent' : ''}`} onClick={onOpen}>
-      <div className="maintenanceCommandCenterCardTop">
-        {showsDedicatedUrgentBadge(caseRow, caseRow.urgent) && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}
-        <span className={`statusPill priority${caseRow.priority}`}>{caseRow.priority}</span>
-        <span className={`statusPill ${caseRow.source === 'tenant' ? 'tenantSourceBadge' : 'landlordSourceBadge'}`}>{caseRow.source === 'tenant' ? 'Tenant' : 'Landlord'}</span>
-      </div>
+      {showsDedicatedUrgentBadge(caseRow, caseRow.urgent) && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}
       <strong className="maintenanceCommandCenterCardProperty">{propertyLabel}</strong>
       <span className="maintenanceCommandCenterCardTitle">{caseRow.title}</span>
       <span className="muted maintenanceCommandCenterCardMeta">
-        {caseRow.category ? `${maintenanceCategoryLabel(caseRow.category)} · ` : ''}{new Date(caseRow.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+        {caseRow.category ? `${maintenanceCategoryLabel(caseRow.category)} · ` : ''}{caseRow.source === 'tenant' ? 'Tenant' : 'Landlord'} &middot; {new Date(caseRow.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
       </span>
       <span className="muted maintenanceCommandCenterCardNext">{NEXT_ACTION_LABEL[caseRow.nextAction]}</span>
     </button>

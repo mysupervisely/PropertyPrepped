@@ -21,8 +21,8 @@ function readFile(relativePath: string): string {
 describe('Property-First UX Cleanup — app/page.tsx tab structure', () => {
   const source = readFile('app/page.tsx')
 
-  it('the property workspace tabs are Overview / Rent / Details / PropCrew / Documents / Tax', () => {
-    expect(source).toContain("const tabs: Tab[] = ['Overview', 'Rent', 'Details', 'PropCrew', 'Documents', 'Tax']")
+  it('the property workspace tabs are Overview / Rent / Maintenance / Details / PropCrew / Documents / Tax (Phase D: Maintenance promoted to a primary tab, right after Rent)', () => {
+    expect(source).toContain("const tabs: Tab[] = ['Overview', 'Rent', 'Maintenance', 'Details', 'PropCrew', 'Documents', 'Tax']")
   })
 
   it('Financials and People no longer exist as top-level tabs', () => {
@@ -31,8 +31,13 @@ describe('Property-First UX Cleanup — app/page.tsx tab structure', () => {
     expect(source).not.toMatch(/activeTab === 'People'/)
   })
 
-  it('Property sub-tabs no longer include Lease (moved to Rent), and now include Ownership (moved from Overview)', () => {
-    expect(source).toContain("const propertySubTabs: PropertySubTab[] = ['Mortgage', 'Insurance', 'Maintenance', 'Systems', 'Ownership']")
+  it('Property sub-tabs no longer include Lease (moved to Rent) or Maintenance (Phase D: promoted to its own top-level tab), and include Ownership (moved from Overview)', () => {
+    expect(source).toContain("const propertySubTabs: PropertySubTab[] = ['Mortgage', 'Insurance', 'Systems', 'Ownership']")
+  })
+
+  it('Maintenance is a primary property destination, not a Details sub-tab', () => {
+    expect(source).toMatch(/activeTab === 'Maintenance'/)
+    expect(source).not.toContain("type PropertySubTab = 'Mortgage' | 'Insurance' | 'Maintenance'")
   })
 
   it('Rent has its own Lease / Ledger / Tenant sub-tabs', () => {
@@ -111,26 +116,27 @@ describe('Property-First Simplification and Visual Cleanup — Property tab rena
     expect(source).toContain("propertySubTab === 'Ownership' && <PropertyOwnershipPanel")
   })
 
-  it('lib/dashboard/attention.ts routes Insurance/Mortgage/Maintenance date items to Details, not Property', () => {
+  it('lib/dashboard/attention.ts routes Insurance/Mortgage date items to Details, not Property; Maintenance routes to its own promoted top-level tab (Phase D)', () => {
     const source = readFile('lib/dashboard/attention.ts')
     expect(source).not.toContain("tab: 'Property'")
     expect(source).toContain("nav: { tab: 'Details', propSubTab: 'Insurance' }")
     expect(source).toContain("nav: { tab: 'Details', propSubTab: 'Mortgage' }")
-    expect(source).toContain("nav: { tab: 'Details', propSubTab: 'Maintenance' }")
+    expect(source).not.toContain("propSubTab: 'Maintenance'")
   })
 
-  it('lib/dashboard/activity.ts routes Insurance/Mortgage/Maintenance activity to Details — its unrelated ActivityType "Property" union member (meaning "a property was added") is untouched', () => {
+  it('lib/dashboard/activity.ts routes Insurance/Mortgage activity to Details, Maintenance activity to its own promoted top-level tab (Phase D) — its unrelated ActivityType "Property" union member (meaning "a property was added") is untouched', () => {
     const source = readFile('lib/dashboard/activity.ts')
     expect(source).toContain("nav: { tab: 'Details', propSubTab: 'Insurance' }")
     expect(source).toContain("nav: { tab: 'Details', propSubTab: 'Mortgage' }")
-    expect(source).toContain("nav: { tab: 'Details', propSubTab: 'Maintenance' }")
+    expect(source).not.toContain("propSubTab: 'Maintenance'")
     // The ActivityType union's own 'Property' member (a "property added" event, not a tab) must remain.
     expect(source).toContain("export type ActivityType = 'Document' | 'Maintenance' | 'Financial' | 'Note' | 'Lease' | 'Insurance' | 'Mortgage' | 'Property' | 'PropCrew'")
   })
 
-  it('lib/search/build-results.ts routes Systems/Maintenance/Mortgage/Insurance search results to Details — its unrelated SearchResultType "Property" union member is untouched', () => {
+  it('lib/search/build-results.ts routes Systems/Mortgage/Insurance search results to Details, Maintenance to its own promoted top-level tab (Phase D) — its unrelated SearchResultType "Property" union member is untouched', () => {
     const source = readFile('lib/search/build-results.ts')
     expect(source).not.toContain("tab: 'Property'")
+    expect(source).not.toContain("propSubTab: 'Maintenance'")
     expect(source).toContain("export type SearchResultType = 'Property' | 'Document' | 'PropCrew' | 'System' | 'Maintenance' | 'Financial' | 'Note' | 'Lease' | 'Mortgage' | 'Insurance' | 'Payment'")
   })
 

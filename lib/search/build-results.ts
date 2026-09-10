@@ -132,7 +132,9 @@ export function searchMaintenance(rows: MaintenanceRow[], words: string[], prope
       return {
         id: m.id, type: 'Maintenance', title: m.description,
         subtitle: property?.address || '', detail: [m.category, m.vendor].filter(Boolean).join(' · '),
-        href: propertyHref(m.property_id, { tab: 'Details', propSubTab: 'Maintenance' }),
+        // Simplification + Maintenance Workspace V2, Phase D: Maintenance
+        // promoted to its own top-level tab — no propSubTab anymore.
+        href: propertyHref(m.property_id, { tab: 'Maintenance' }),
       }
     })
 }

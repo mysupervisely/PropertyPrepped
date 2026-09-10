@@ -38,6 +38,14 @@ export function TenantConnectStatusCard({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [showRevokeConfirm, setShowRevokeConfirm] = useState(false)
+  // Simplification + Maintenance Workspace V2, Phase D.3: revoking
+  // access is a rare, destructive, administrative action — it now sits
+  // behind a quiet "Manage access" reveal instead of a permanently
+  // visible full-width button, so it can never be mistaken for the
+  // primary action on this card. Revoke itself still requires the
+  // existing confirmation step below (showRevokeConfirm) — this adds a
+  // step before that, it doesn't remove one.
+  const [showManageAccess, setShowManageAccess] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -56,7 +64,6 @@ export function TenantConnectStatusCard({
   if (!tenantConnectEnabled) {
     return (
       <div className="tenantConnectCard tenantConnectCardLocked">
-        <h3>Tenant Connect</h3>
         <p className="muted">Invite your tenant to message you and submit requests inside PropRoster.</p>
       </div>
     )
@@ -65,7 +72,6 @@ export function TenantConnectStatusCard({
   if (!currentLease) {
     return (
       <div className="tenantConnectCard">
-        <h3>Tenant Connect</h3>
         <p className="muted">Add a lease first — Tenant Connect invites the tenant on this property's current lease.</p>
       </div>
     )
@@ -132,24 +138,35 @@ export function TenantConnectStatusCard({
 
   return (
     <div className="tenantConnectCard">
-      <div className="tenantConnectCardHead">
-        <h3>Tenant Connect</h3>
-        <span className={`statusPill ${access?.status === 'Active' ? 'pillGood' : access?.status === 'Revoked' ? 'pillMuted' : access?.status === 'Invited' ? 'pillWarn' : ''}`}>{statusLabel}</span>
-      </div>
       {loading ? (
         <p className="muted">Loading…</p>
       ) : (
         <>
-          <div className="tenantConnectCardBody">
-            <span>{currentLease.tenant_name}</span>
-            {currentLease.tenant_email && <span className="muted">{currentLease.tenant_email}</span>}
+          <div className="tenantConnectCardHead">
+            <div className="tenantConnectCardBody">
+              <strong>{currentLease.tenant_name}</strong>
+              {currentLease.tenant_email && <span className="muted">{currentLease.tenant_email}</span>}
+            </div>
+            <span className={`statusPill ${access?.status === 'Active' ? 'pillGood' : access?.status === 'Invited' ? 'pillWarn' : 'pillMuted'}`}>{statusLabel}</span>
           </div>
           {error && <p className="errorMessage">{error}</p>}
           <div className="tenantConnectCardActions">
             {!access && currentLease.tenant_email && <button className="primary" disabled={busy} onClick={() => void invite()}>{busy ? 'Sending…' : 'Invite Tenant'}</button>}
             {!access && !currentLease.tenant_email && <p className="muted">Add a tenant email on the lease to invite them.</p>}
             {access?.status === 'Invited' && <button className="secondary" disabled={busy} onClick={() => void resend()}>{busy ? 'Sending…' : 'Resend Invitation'}</button>}
-            {access?.status === 'Active' && !showRevokeConfirm && <button className="dangerLink" onClick={() => setShowRevokeConfirm(true)}>Revoke access</button>}
+            {/* Phase D.3: "Manage access" replaces a permanently visible
+                "Revoke access" — a rare, destructive, administrative
+                action shouldn't compete for attention with Invite/
+                Resend. Revoking itself still needs the same confirm
+                step as before; this only adds a quiet reveal in front
+                of it, never removes the confirmation. */}
+            {access?.status === 'Active' && !showManageAccess && <button className="tenantConnectQuietAction" onClick={() => setShowManageAccess(true)}>Manage access</button>}
+            {access?.status === 'Active' && showManageAccess && !showRevokeConfirm && (
+              <span className="tenantConnectManagePanel">
+                <button className="tenantConnectQuietAction tenantConnectDestructive" onClick={() => setShowRevokeConfirm(true)}>Revoke access</button>
+                <button className="tenantConnectQuietAction" onClick={() => setShowManageAccess(false)}>Done</button>
+              </span>
+            )}
             {access?.status === 'Active' && showRevokeConfirm && (
               <span className="tenantConnectRevokeConfirm">
                 <span className="muted">Revoke this tenant&rsquo;s access?</span>
