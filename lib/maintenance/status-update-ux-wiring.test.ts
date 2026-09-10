@@ -125,8 +125,8 @@ describe('Bug 2 — exactly one "Urgent" badge per card, dedup is display-only, 
     expect(source).toContain("export function isUrgentCase(row: Pick<MaintenanceCaseRow, 'priority'>, linkedSessionOutcomes: (string | null)[]): boolean {\n  if (row.priority === 'Urgent') return true\n  return linkedSessionOutcomes.some((o) => o === 'escalated_urgent')\n}")
   })
 
-  it('the urgent safety banner inside MaintenanceCaseDetail (a separate concern from the list-card badge, out of this bug\'s scope) is untouched', () => {
-    expect(caseDetailSource).toContain('<strong>Urgent — safety concern reported.</strong>')
+  it('the urgent safety banner inside MaintenanceCaseDetail (a separate concern from the list-card badge, out of this bug\'s scope) still reads "Urgent: safety concern reported." — Phase C.1 changed only the punctuation (em dash to colon, the new site-wide no-em-dash copy rule) and the visual weight, never the meaning', () => {
+    expect(caseDetailSource).toContain('<strong>Urgent: safety concern reported.</strong>')
   })
 })
 

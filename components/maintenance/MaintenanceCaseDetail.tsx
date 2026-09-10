@@ -33,6 +33,23 @@
 // Scheduling Coordination V1 already placed them, still before the
 // provider section, unchanged in content.
 //
+// PHASE C.1 — VISUAL SIMPLIFICATION: real-device testing after Phase C
+// found the workflow logic correct but visually indistinguishable from
+// the pre-Phase-C layout. This pass recomposes the screen rather than
+// tuning font sizes: a short static "Maintenance" eyebrow (not the
+// property name) leads, the issue title is the loudest text on the
+// screen, property/reporter/date collapse into one quiet two-line
+// block, the priority/source/category pill row is gone entirely (the
+// same information now lives as plain text or is simply not shown at
+// this depth), the Next Step card gets a second, quieter visual state
+// for "nothing is actually being asked of the landlord right now"
+// (awaiting_provider/awaiting_proposal/scheduled/completed), the
+// coordination info (tenant availability/entry preference) is one
+// compact two-row block instead of a bulleted list, and the three
+// progressive-disclosure sections read as plain rows with a
+// trailing chevron rather than bordered sub-cards. No workflow/state
+// logic changed here — see command-center.ts's own history for that.
+//
 // SCOPE UNCHANGED FROM EARLIER MILESTONES (see their own history for
 // the full reasoning, none of it revisited here):
 // - Assigning a provider never contacts them — Contact PropCrew stays
@@ -57,6 +74,11 @@
 // as its own row) — not a targeted reply to the provider's specific
 // question. A real two-way reply thread is out of scope for this
 // phase (the brief's own "do not build Service Thread").
+//
+// COPY: no em dashes in any user-facing string in this file (a new
+// site-wide requirement introduced in Phase C.1 — see this phase's own
+// report for the full site-wide-audit follow-up this implies for the
+// rest of the app, not performed here).
 
 import { useState } from 'react'
 import type { EnrichedMaintenanceCase, MaintenanceCaseStatus, PropCrewContactRef } from '../../lib/maintenance/command-center'
@@ -66,6 +88,14 @@ import { groupWindowsByDate, WINDOW_LABEL_RANGE, ENTRY_PREFERENCE_LABEL, formatA
 import type { AppointmentRow } from '../../lib/maintenance/appointments'
 
 const STATUSES: MaintenanceCaseStatus[] = ['Submitted', 'Scheduled', 'In Progress', 'Completed']
+
+// Next Step states where nothing is actually being asked of the
+// landlord right now — these render the card in its quieter visual
+// state (see .maintenanceNextStepQuiet) instead of the brand-tinted
+// "this needs you" treatment. Kept as a plain string list (not the
+// NextAction type) so this file doesn't need to import it just for
+// this one comparison.
+const CALM_NEXT_ACTIONS = ['awaiting_provider', 'awaiting_proposal', 'scheduled', 'completed']
 
 export function MaintenanceCaseDetail({
   caseRow, propertyLabel, contacts, busy, statusUpdateMessage, onAssign, onStatusChange, onClose,
@@ -95,7 +125,9 @@ export function MaintenanceCaseDetail({
   const assignedContact = contacts.find((c) => c.id === caseRow.assigned_contact_id) || null
   const [showContactConfirm, setShowContactConfirm] = useState(false)
   const hasAvailability = Boolean(availabilityWindows && availabilityWindows.length > 0)
-  const providerName = assignedContact ? `${assignedContact.name}${assignedContact.business_name ? ` – ${assignedContact.business_name}` : ''}` : ''
+  const providerName = assignedContact ? `${assignedContact.name}${assignedContact.business_name ? ` · ${assignedContact.business_name}` : ''}` : ''
+  const shortDate = new Date(caseRow.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  const nextStepNeedsAttention = !CALM_NEXT_ACTIONS.includes(caseRow.nextAction)
 
   // The one assignment control, rendered in exactly one place per
   // render: prominently in the Next Step card when picking/re-picking
@@ -141,32 +173,32 @@ export function MaintenanceCaseDetail({
       case 'assign_provider':
         return (
           <>
-            <p className="maintenanceNextStepHeading">Assign someone from PropCrew</p>
+            <p className="maintenanceNextStepHeading">Assign a provider</p>
             {assignField}
             {noContactsNote}
           </>
         )
       case 'contact_provider':
-        if (!assignedContact) return <p className="maintenanceNextStepHeading">Assign someone from PropCrew</p>
+        if (!assignedContact) return <p className="maintenanceNextStepHeading">Assign a provider</p>
         return (
           <>
             <p className="maintenanceNextStepHeading">{providerName}</p>
-            <p className="muted maintenanceAssignedNote">Recorded as your decision only — {assignedContact.name} has not been notified or contacted.</p>
+            <p className="muted">{assignedContact.name} has not been notified or contacted.</p>
             {contactAction}
           </>
         )
       case 'awaiting_provider':
         return (
           <>
-            <p className="maintenanceNextStepHeading">Waiting on {assignedContact?.name || 'the provider'}</p>
-            <p className="muted">{providerName} was contacted{outreach ? ` — sent ${new Date(outreach.sent_at).toLocaleString()}` : ''}.</p>
+            <p className="maintenanceNextStepHeading">Waiting for {assignedContact?.name || 'the provider'}</p>
+            {outreach && <p className="muted">Contacted {new Date(outreach.sent_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</p>}
           </>
         )
       case 'provider_declined':
         return (
           <>
             <p className="maintenanceNextStepHeading">Choose another provider</p>
-            <p className="muted">{providerName} said they&rsquo;re unable to help.</p>
+            <p className="muted">{providerName} can&rsquo;t help with this.</p>
             {assignField}
           </>
         )
@@ -178,14 +210,14 @@ export function MaintenanceCaseDetail({
             {/* Known limitation — see this file's own header. No reply
                 thread exists; the safest existing action is a fresh,
                 explicit re-send, not a targeted answer. */}
-            <p className="muted">PropRoster doesn&rsquo;t support replying directly yet — contacting them again sends a fresh request.</p>
+            <p className="muted">Can&rsquo;t reply directly here. Contact again to resend.</p>
             {contactAction}
           </>
         )
       case 'awaiting_proposal':
         return (
           <>
-            <p className="maintenanceNextStepHeading">{assignedContact?.name || 'The provider'} accepted</p>
+            <p className="maintenanceNextStepHeading">{assignedContact?.name || 'Provider'} accepted</p>
             <p className="muted">Waiting for a proposed time.</p>
           </>
         )
@@ -193,11 +225,8 @@ export function MaintenanceCaseDetail({
         if (!appointment) return null
         return (
           <>
-            <p className="maintenanceNextStepHeading">Appointment proposed</p>
-            <p className="maintenanceNextStepAppointment">
-              {formatAppointmentDateTime(appointment.proposed_local_start_at)}
-              <br />{providerName}
-            </p>
+            <p className="maintenanceNextStepHeading">{providerName} can come</p>
+            <p className="maintenanceNextStepAppointment">{formatAppointmentDateTime(appointment.proposed_local_start_at)}</p>
             {hasAvailability && (
               appointment.matched_availability
                 ? <span className="statusPill pillGood">Matches tenant availability</span>
@@ -241,30 +270,30 @@ export function MaintenanceCaseDetail({
       <div className="modal maintenanceCaseDetailModal">
         <div className="modalTop">
           <div>
-            <p className="eyebrow">{propertyLabel}</p>
+            <p className="eyebrow">Maintenance</p>
             <h2>{caseRow.title}</h2>
           </div>
           <button className="iconButton" onClick={onClose} aria-label="Close">×</button>
         </div>
 
+        <div className="maintenanceCaseMeta">
+          <p>{propertyLabel}</p>
+          <p>{caseRow.category ? `${maintenanceCategoryLabel(caseRow.category)} · ` : ''}{caseRow.tenant_name} · {shortDate}</p>
+        </div>
+
         {caseRow.urgent && (
           <div className="maintenanceUrgentBanner" role="alert">
-            <strong>Urgent — safety concern reported.</strong>
-            <span>This classification is set automatically by deterministic Guided Intake safety rules and cannot be changed here.</span>
+            <strong>Urgent: safety concern reported.</strong>
+            <span>Set automatically by Guided Intake safety rules and cannot be changed here.</span>
           </div>
         )}
 
-        <div className="maintenanceCaseMeta">
-          <span className={`statusPill priority${caseRow.priority}`}>{caseRow.priority}</span>
-          <span className={`statusPill ${caseRow.source === 'tenant' ? 'tenantSourceBadge' : 'landlordSourceBadge'}`}>{caseRow.source === 'tenant' ? 'Tenant' : 'Landlord'}</span>
-          {caseRow.category && <span className="statusPill maintenanceCategoryBadge">{maintenanceCategoryLabel(caseRow.category)}</span>}
-          <span className="muted">{new Date(caseRow.created_at).toLocaleString()}</span>
-        </div>
-
         {/* B. NEXT STEP — the single strongest visual area, driven
             entirely by caseRow.nextAction. Never more than one
-            primary/dominant action at a time. */}
-        <div className="maintenanceNextStepCard">
+            primary/dominant action at a time. A quieter visual variant
+            (.maintenanceNextStepQuiet) applies for the states where
+            nothing is actually being asked of the landlord. */}
+        <div className={`maintenanceNextStepCard${nextStepNeedsAttention ? '' : ' maintenanceNextStepQuiet'}`}>
           <p className="maintenanceNextStepLabel">Next step</p>
           {renderNextStep()}
         </div>
@@ -274,22 +303,31 @@ export function MaintenanceCaseDetail({
             preference. Never collapsed: Scheduling Coordination V1's
             own requirement is that this is visible BEFORE deciding to
             contact a provider, and it never authorizes entry by
-            itself. Same position/content as before this phase. */}
+            itself. Same position/content as before this phase, now a
+            compact label/value block instead of a bulleted list. */}
         <div className="maintenanceAvailabilitySection">
-          <span className="maintenanceAssignFieldLabel">Tenant Availability</span>
-          {availabilityWindows && availabilityWindows.length > 0 ? (
-            <ul className="maintenanceAvailabilityList">
-              {groupWindowsByDate(availabilityWindows).map((g) => (
-                <li key={g.date}>
-                  <strong>{new Date(`${g.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</strong>
-                  <span className="muted">{g.labels.map((l) => WINDOW_LABEL_RANGE[l].display).join(', ')}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="muted">Tenant availability not provided.</p>
+          <div className="maintenanceCoordinationRow">
+            <span className="maintenanceCoordinationLabel">Tenant availability</span>
+            {availabilityWindows && availabilityWindows.length > 0 ? (
+              <span className="maintenanceCoordinationValue">
+                {groupWindowsByDate(availabilityWindows).map((g, i) => (
+                  <span key={g.date}>
+                    {i > 0 ? ', ' : ''}
+                    {new Date(`${g.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short' })} {g.labels.map((l) => WINDOW_LABEL_RANGE[l].display).join('/')}
+                  </span>
+                ))}
+              </span>
+            ) : (
+              <span className="muted maintenanceCoordinationValue">Tenant availability not provided.</span>
+            )}
+          </div>
+          {entryPreference && (
+            <div className="maintenanceCoordinationRow">
+              <span className="maintenanceCoordinationLabel">Entry preference</span>
+              <span className="maintenanceCoordinationValue">{ENTRY_PREFERENCE_LABEL[entryPreference]}</span>
+            </div>
           )}
-          {entryPreference && <p className="muted maintenanceEntryPreference">Entry preference: {ENTRY_PREFERENCE_LABEL[entryPreference]}</p>}
+          <p className="maintenanceCoordinationNote">Availability doesn&rsquo;t authorize entry.</p>
         </div>
 
         {/* D. Progressive disclosure — lower-priority information the
@@ -309,10 +347,15 @@ export function MaintenanceCaseDetail({
           <div className="providerOutreachSection">
             {assignedContact ? (
               <>
-                <p className="maintenanceOutreachStatus"><strong>{providerName}</strong></p>
+                <div>
+                  <p className="maintenanceProviderRowName">{assignedContact.name}</p>
+                  {(assignedContact.business_name || assignedContact.role) && (
+                    <p className="muted maintenanceProviderRowSub">{assignedContact.business_name}{assignedContact.business_name && assignedContact.role ? ' · ' : ''}{assignedContact.role}</p>
+                  )}
+                </div>
                 {outreach && (
                   <p className="muted maintenanceOutreachStatus">
-                    {outreach.status === 'sent' ? <>Request sent<br />{new Date(outreach.sent_at).toLocaleString()}</> : <strong>{PROVIDER_OUTREACH_STATUS_LABEL[outreach.status]}</strong>}
+                    {outreach.status === 'sent' ? <>Request sent {new Date(outreach.sent_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</> : <strong>{PROVIDER_OUTREACH_STATUS_LABEL[outreach.status]}</strong>}
                     {outreach.status === 'needs_information' && outreach.provider_message && <><br /><em>&quot;{outreach.provider_message}&quot;</em></>}
                   </p>
                 )}
@@ -357,7 +400,7 @@ export function MaintenanceCaseDetail({
           <div className="modal">
             <div className="modalTop"><h2>Contact {assignedContact.name}{assignedContact.business_name ? ` at ${assignedContact.business_name}` : ''}?</h2><button className="iconButton" onClick={() => setShowContactConfirm(false)}>×</button></div>
             <p>PropRoster will send the maintenance request to {assignedContact.name} so they can review and respond.</p>
-            <div className="maintenanceCaseMeta">
+            <div className="maintenanceContactConfirmMeta">
               <span className="muted">{propertyLabel}</span>
               <span className="muted">{caseRow.title}</span>
               <span className="muted">{assignedContact.email}</span>

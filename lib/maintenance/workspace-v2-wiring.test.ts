@@ -206,3 +206,19 @@ describe('Shared component requirement — still exactly one workspace, reused b
     expect(pageSource).toContain('<MaintenanceCaseDetail')
   })
 })
+
+describe('Phase C.1 — visual simplification', () => {
+  it('the Next Step card renders a quieter, plain-bordered variant for the states that ask nothing of the landlord (awaiting_provider/awaiting_proposal/scheduled/completed); every other state keeps the brand-tinted "this needs you" treatment — two quiet states, not a color-coded spectrum', () => {
+    expect(caseDetailSource).toContain("const CALM_NEXT_ACTIONS = ['awaiting_provider', 'awaiting_proposal', 'scheduled', 'completed']")
+    expect(caseDetailSource).toContain('maintenanceNextStepQuiet')
+  })
+
+  it('the header no longer renders a priority/source/category pill row — property, category, reporter and date collapse into one quiet text block instead ("status/urgent pill only when useful")', () => {
+    expect(caseDetailSource).not.toMatch(/statusPill priority\$\{caseRow\.priority\}/)
+    expect(caseDetailSource).not.toContain('tenantSourceBadge')
+  })
+
+  it('no user-facing em dash was introduced — the new site-wide copy rule, enforced here for the file this phase touched (code comments, stripped below, may still narrate history with one)', () => {
+    expect(stripComments(caseDetailSource)).not.toMatch(/—/)
+  })
+})

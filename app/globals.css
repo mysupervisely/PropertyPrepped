@@ -2304,14 +2304,26 @@ h2, h3, p { margin-top: 0; }
 /* Shared case detail/actions modal (components/maintenance/
    MaintenanceCaseDetail.tsx) — mounted from both the Command Center and
    the property-level Rent > Tenant tab, so this is the ONE place this
-   layout is styled. */
-.maintenanceCaseDetailModal { display: grid; gap: 14px; max-width: 520px; }
+   layout is styled. Phase C.1: slightly more vertical rhythm between
+   the header/next-step/coordination/disclosure groups (16px, was
+   14px) — each group now reads as a clean, separated row rather than
+   several bordered boxes stacked tightly together. */
+.maintenanceCaseDetailModal { display: grid; gap: 16px; max-width: 520px; }
 .maintenanceUrgentBanner {
   display: grid; gap: 3px; background: #fdeceb; color: #8a3d35;
-  border: 1px solid #e2a49d; border-radius: 12px; padding: 12px 14px; font-size: 13px;
+  border: 1px solid #e2a49d; border-radius: 12px; padding: 10px 14px; font-size: 13px;
 }
-.maintenanceUrgentBanner strong { font-size: 14px; }
-.maintenanceCaseMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.maintenanceUrgentBanner strong { font-size: 13.5px; }
+/* The quiet, always-visible property/category/reporter/date line under
+   the issue title — plain text, not pills, per Phase C.1's "status/
+   urgent pill only when useful" direction. */
+.maintenanceCaseMeta { display: grid; gap: 2px; }
+.maintenanceCaseMeta p { margin: 0; font-size: 13.5px; color: var(--muted); }
+/* The contact-confirm dialog's own small property/title/email summary
+   row keeps the original flex-pill layout — a distinct, smaller use
+   from the header meta block above, so it gets its own class instead
+   of overloading .maintenanceCaseMeta's new (very different) styling. */
+.maintenanceContactConfirmMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .maintenanceCaseOverview { display: grid; gap: 8px; }
 .maintenanceCaseDescription {
   white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 13px;
@@ -2325,46 +2337,70 @@ h2, h3, p { margin-top: 0; }
 
 /* Simplification + Maintenance Workspace V2, Phase C — the one
    dominant visual area: whatever caseRow.nextAction says the landlord
-   should look at right now. Brand-soft background (same token every
-   other "this needs your attention" surface in the app already uses —
-   PropWatch, the invite card) is what gives it visual weight without a
-   heavy border or shadow, matching the "quieter, not more stylized"
-   direction. */
-.maintenanceNextStepCard { display: grid; gap: 10px; background: var(--brand-soft); border-radius: var(--radius-card); padding: 16px 18px; }
+   should look at right now.
+   Phase C.1: two quiet visual states, not a color spectrum. Brand-soft
+   (below) is reserved for the states that actually ask something of
+   the landlord; .maintenanceNextStepQuiet swaps in a plain bordered
+   surface for the states where the request is simply waiting,
+   scheduled, or completed — "do not manufacture a landlord action if
+   none is actually required" carried into the visual weight itself,
+   without adding more colors to tell states apart. */
+.maintenanceNextStepCard { display: grid; gap: 8px; background: var(--brand-soft); border-radius: var(--radius-card); padding: 18px 20px; }
+.maintenanceNextStepQuiet { background: #fff; border: 1px solid var(--line); }
 .maintenanceNextStepLabel { margin: 0; font-size: var(--text-caption); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-wide); color: var(--brand); text-transform: uppercase; }
+.maintenanceNextStepQuiet .maintenanceNextStepLabel { color: var(--muted); }
 .maintenanceNextStepHeading { margin: 0; font-size: var(--text-card-title); font-weight: var(--weight-semibold); }
 .maintenanceNextStepAppointment { margin: 0; font-size: 14px; line-height: 1.5; }
-.maintenanceNextStepCard .primary, .maintenanceNextStepCard .secondary { width: 100%; text-align: center; }
-.maintenanceNextStepCard .modalActions { flex-direction: column-reverse; }
+.maintenanceNextStepCard .primary { width: 100%; text-align: center; }
+/* Phase C.1: inside the Next Step card, the secondary action (e.g.
+   "Decline / Request Another Time") becomes a quiet text link, not a
+   second boxed button — "only Confirm should visually dominate." */
+.maintenanceNextStepCard .secondary {
+  width: 100%; text-align: center; border: 0; background: transparent; padding: 8px;
+  color: var(--muted); font-weight: var(--weight-medium); text-decoration: underline; text-underline-offset: 2px;
+}
+.maintenanceNextStepCard .modalActions { flex-direction: column-reverse; padding-top: 4px; gap: 4px; }
 .maintenanceProviderQuestion { margin: 0; font-size: 14px; font-style: italic; line-height: 1.5; }
 
 /* Tenant Connect: Provider Outreach V1 (Section 6) — the landlord-side
    "PropCrew" status block inside MaintenanceCaseDetail, styled to match
    the assign/status fields immediately above it rather than introducing
-   a second visual language. */
+   a second visual language. Phase C.1: name/business/role render as a
+   compact two-line row (see .maintenanceProviderRow*) instead of one
+   long joined string — "a compact provider row," not a large
+   assignment interface, once someone is already assigned. */
 .providerOutreachSection { display: grid; gap: 8px; font-size: 13px; }
 .maintenanceAssignFieldLabel { font-weight: var(--weight-medium); }
 .maintenanceOutreachStatus { font-size: 13px; line-height: 1.5; margin: 0; }
+.maintenanceProviderRowName { margin: 0; font-weight: var(--weight-semibold); font-size: 14px; }
+.maintenanceProviderRowSub { margin: 2px 0 0; }
 
 /* Tenant Connect: Scheduling Coordination V1 — landlord-side tenant
-   availability display, styled to match the surrounding fields. */
-.maintenanceAvailabilitySection { display: grid; gap: 8px; font-size: 13px; }
-.maintenanceAvailabilityList { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.maintenanceAvailabilityList li { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
-.maintenanceEntryPreference { margin: 0; }
+   availability/entry-preference display. Phase C.1: a compact
+   label/value row pair on a quiet tinted surface, replacing the
+   bulleted per-date list — same information, visually lighter. */
+.maintenanceAvailabilitySection { display: grid; gap: 10px; font-size: 13px; background: #f9fbfa; border-radius: var(--radius-control); padding: 12px 14px; }
+/* Label above value, not a left/right split — a real multi-day
+   availability value (or the "not provided" fallback) is often longer
+   than the label, and a space-between row wraps both sides into an
+   awkward ragged-right block on a narrow screen. Stacking avoids that
+   entirely and matches the target concept's own "Tenant availability /
+   Thursday morning" layout. */
+.maintenanceCoordinationRow { display: grid; gap: 2px; }
+.maintenanceCoordinationLabel { color: var(--muted); font-size: 12px; }
+.maintenanceCoordinationValue { font-weight: var(--weight-medium); }
+.maintenanceCoordinationNote { margin: 0; font-size: 11.5px; color: var(--muted); }
 .maintenanceAppointmentConfirmed { color: var(--brand); }
 
 /* Phase C progressive disclosure — plain <details>/<summary>, no new
-   interaction pattern. A visible chevron plus a clear label is what
-   makes a collapsed section "easy to discover" rather than hidden;
-   list-style: none + the ::marker-equivalent below keeps this
-   consistent across browsers instead of relying on each one's own
-   default triangle glyph. */
-.maintenanceDetailsSection { border-top: 1px solid var(--line); padding-top: 10px; }
-.maintenanceDetailsSection summary { cursor: pointer; font-size: 13px; font-weight: var(--weight-semibold); color: var(--muted); list-style: none; display: flex; align-items: center; gap: 6px; }
+   interaction pattern. Phase C.1: these read as plain, tappable rows
+   (a label plus a trailing chevron) rather than bordered sub-cards —
+   only a hairline divider separates one from the next. */
+.maintenanceDetailsSection { border-top: 1px solid var(--line); padding: 12px 0; }
+.maintenanceDetailsSection summary { cursor: pointer; font-size: 13.5px; font-weight: var(--weight-semibold); color: var(--text); list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .maintenanceDetailsSection summary::-webkit-details-marker { display: none; }
-.maintenanceDetailsSection summary::before { content: '›'; display: inline-block; transition: transform .15s ease; font-size: 15px; }
-.maintenanceDetailsSection[open] summary::before { transform: rotate(90deg); }
+.maintenanceDetailsSection summary::after { content: '›'; display: inline-block; color: var(--muted); transition: transform .15s ease; font-size: 16px; }
+.maintenanceDetailsSection[open] summary::after { transform: rotate(90deg); }
 .maintenanceDetailsSection > *:not(summary) { margin-top: 10px; }
 
 @media (max-width: 560px) {
