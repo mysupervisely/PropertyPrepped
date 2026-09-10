@@ -61,7 +61,15 @@ describe('Landlord view — availability shown before contacting PropCrew, never
   })
 
   it('the Contact PropCrew button is never gated on availability being present', () => {
-    const contactButtonSource = caseDetailSource.slice(caseDetailSource.indexOf('providerOutreachSection'))
+    // Bounded to the PropCrew/outreach block itself — the appointment
+    // proposal block further down the file legitimately checks
+    // availabilityWindows.length for its own, unrelated availability-
+    // match badge (see the PR #60 bug-fix describe block below); that
+    // is not the Contact PropCrew button and must not trip this guard.
+    const contactButtonSource = caseDetailSource.slice(
+      caseDetailSource.indexOf('providerOutreachSection'),
+      caseDetailSource.indexOf('maintenanceAppointmentProposal'),
+    )
     expect(contactButtonSource).not.toMatch(/availabilityWindows\.length|!availabilityWindows/)
   })
 
@@ -187,5 +195,43 @@ describe('Migration — additive only, scheduling state kept separate from both 
 
   it('never alters maintenance_provider_outreach or weakens its existing policy', () => {
     expect(migrationSource).not.toMatch(/alter table public\.maintenance_provider_outreach/i)
+  })
+})
+
+describe('Bug fix (real-device testing, PR #60): the availability-match badge no longer misreads "no availability provided" as "outside availability"', () => {
+  // matched_availability is stored false both when a proposal is
+  // genuinely outside the tenant's windows AND when the tenant provided
+  // no availability at all (matchProposedTime() returns false for an
+  // empty window list by construction — see its own doc comment in
+  // lib/maintenance/availability.ts). The landlord UI must not collapse
+  // those into the same "Outside the tenant's provided availability"
+  // message.
+  const proposalBlock = caseDetailSource.slice(
+    caseDetailSource.indexOf('<p className="muted maintenanceOutreachStatus">'),
+    caseDetailSource.indexOf('{appointmentError &&'),
+  )
+
+  it('never shows either availability badge when the tenant provided no availability windows at all', () => {
+    expect(proposalBlock).toContain('availabilityWindows && availabilityWindows.length > 0 && (')
+  })
+
+  it('shows a positive "Matches tenant availability" pill when windows exist and the proposal matched', () => {
+    expect(proposalBlock).toContain('appointment.matched_availability')
+    expect(proposalBlock).toContain('Matches tenant availability')
+    expect(proposalBlock).toContain('pillGood')
+  })
+
+  it('still shows "Outside the tenant\'s provided availability" when windows exist and the proposal did not match', () => {
+    expect(proposalBlock).toContain("Outside the tenant&apos;s provided availability")
+    expect(proposalBlock).toContain('pillBad')
+  })
+
+  it('does not repeat "not provided" copy next to the appointment — the existing Tenant Availability section above already says that', () => {
+    expect(stripComments(proposalBlock)).not.toMatch(/wasn.?t provided|not provided/i)
+  })
+
+  it('does not touch provider acceptance, proposal creation, confirmation/decline routes, or the underlying matched_availability computation', () => {
+    expect(proposeRouteSource).toContain('matchProposedTime(windows, parsed)')
+    expect(confirmRouteSource).not.toMatch(/matched_availability/)
   })
 })

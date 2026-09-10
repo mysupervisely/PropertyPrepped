@@ -207,8 +207,21 @@ export function MaintenanceCaseDetail({
                   <p className="muted maintenanceOutreachStatus">
                     <strong>Proposed appointment</strong><br />
                     {formatAppointmentDateTime(appointment.proposed_local_start_at)}
-                    {!appointment.matched_availability && (
-                      <><br /><span className="statusPill pillBad">Outside the tenant&apos;s provided availability</span></>
+                    {/* Bug fix (real-device testing, PR #60): matched_availability is
+                        stored false both when a proposal is genuinely outside the
+                        tenant's windows AND when the tenant never provided any
+                        availability at all (matchProposedTime() returns false for an
+                        empty window list — see its own doc comment). Showing "Outside
+                        the tenant's provided availability" in the second case is
+                        logically backwards — there was nothing to be outside of. Only
+                        render either badge when real availability windows exist; when
+                        none were provided, the "Tenant availability not provided."
+                        line already shown above is sufficient — omit rather than
+                        repeat it here. */}
+                    {availabilityWindows && availabilityWindows.length > 0 && (
+                      appointment.matched_availability
+                        ? <><br /><span className="statusPill pillGood">Matches tenant availability</span></>
+                        : <><br /><span className="statusPill pillBad">Outside the tenant&apos;s provided availability</span></>
                     )}
                   </p>
                   {appointmentError && <p className="errorMessage">{appointmentError}</p>}
