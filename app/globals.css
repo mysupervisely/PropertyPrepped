@@ -659,8 +659,12 @@ h2, h3, p { margin-top: 0; }
 .portfolioSnapshot { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 20px 16px; margin: 18px 0 30px; }
 .portfolioSnapshotHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .portfolioSnapshotHead h2 { margin: 0; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
-.snapshotToggle { flex-shrink: 0; border: 1px solid var(--line); background: white; color: var(--text); font-size: 12px; font-weight: 650; padding: 6px 14px; border-radius: 999px; }
-.snapshotToggle:hover { border-color: var(--brand); color: var(--brand); }
+/* Phase E1 (Section 4): "make the control visually quiet" — dropped
+   the bordered white pill for plain, low-key text, matching this
+   phase's broader "fewer boxes, quieter chrome" direction. Same
+   element/behavior, just less visually loud. */
+.snapshotToggle { flex-shrink: 0; border: 0; background: transparent; color: var(--muted); font-size: 12px; font-weight: 650; padding: 4px 2px; }
+.snapshotToggle:hover { color: var(--brand); }
 .snapshotCollapsedSummary { margin: 4px 0 0; color: var(--text); font-size: 14px; font-weight: 650; }
 .snapshotMetrics { display: flex; flex-wrap: wrap; margin-top: 12px; }
 .snapshotMetric { flex: 1 1 auto; min-width: 120px; padding: 0 18px; border-left: 1px solid var(--line); }
@@ -710,54 +714,32 @@ h2, h3, p { margin-top: 0; }
   .dashboardItemRow .statusPill { width: fit-content; }
 }
 
-/* Final Launch Fixes: PropWatch dashboard reorder — compact, two
-   side-by-side panels (desktop) instead of three stacked full-width
-   sections. Reuses .commandCenterSection/.sectionHead/.dashboardItemList/
-   .dashboardItemRow as-is; only the panel wrapper below is new.
+/* Simplification + Maintenance Workspace V2, Phase E1: Recent Activity
+   as a native <details>/<summary> disclosure — collapsed by default on
+   every width (Section 6's hard requirement is mobile; collapsing by
+   default everywhere is the simplest safe reading of "desktop MAY stay
+   expanded if simple," since a real per-viewport default would need
+   either fragile UA-sniffing/JS or a hydration-mismatch-prone guess).
+   list-style/marker removal + the ::after content swap give a plain
+   "Show"/"Hide" text affordance with zero JS — the browser's own native
+   toggle already flips the [open] attribute on click/tap. */
+.recentActivityDetails summary { list-style: none; cursor: pointer; }
+.recentActivityDetails summary::-webkit-details-marker { display: none; }
+.recentActivitySummary { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.recentActivitySummary h2 { margin: 0; }
+.recentActivitySummary::after { content: 'Show'; flex-shrink: 0; color: var(--muted); font-size: 12px; font-weight: 650; }
+.recentActivityDetails[open] .recentActivitySummary::after { content: 'Hide'; }
+.recentActivityBody { margin-top: 14px; }
 
-   Small Launch Follow-up (Unified PropWatch Card): real mobile testing
-   showed two separate bordered cards read as too much vertical weight,
-   especially with Upcoming empty. propWatchCard is now the ONE outer
-   card (border/radius/background live here only); propWatchGrid is
-   purely an internal layout — side by side on desktop with a vertical
-   divider, stacked with a horizontal divider on mobile. align-items:
-   start (kept) means the shorter panel never gets stretched/padded to
-   match the taller one, so an empty Upcoming panel stays exactly as
-   tall as its own compact content. */
-.propWatchCard { border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: white; }
-.propWatchGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; align-items: start; }
-/* PropWatch Mobile Compaction: when Upcoming is empty its panel isn't
-   rendered at all (see app/page.tsx) — this single-column variant lets
-   Needs Your Attention use the full card width/height instead of
-   leaving an empty second column reserved for nothing. */
-.propWatchGrid.propWatchGridSingle { grid-template-columns: 1fr; }
-.propWatchPanel { min-width: 0; padding-left: 16px; }
-.propWatchPanel:first-child { padding-left: 0; }
-/* PropWatch Mobile Compaction: was `.propWatchPanel:last-child`, which
-   — now that Upcoming can be entirely absent — incorrectly gave a
-   divider/border to Needs Your Attention whenever it was the ONLY (and
-   therefore also last) panel. The adjacent-sibling form only matches a
-   second panel that actually follows a first one. */
-.propWatchPanel + .propWatchPanel { padding-right: 0; border-left: 1px solid var(--line); }
-.propWatchPanel .dashboardItemList { gap: 6px; }
-.propWatchPanel .dashboardItemRow { padding: 10px 12px; }
-/* Compact empty state inside a PropWatch panel — .emptyState's shared
-   170px min-height (used elsewhere for large centered placeholders) is
-   exactly the "large empty Upcoming space" this follow-up fixes; scoped
-   here only, .emptyState itself is untouched for every other caller. */
-.propWatchPanel .emptyState { min-height: 0; padding: 6px 0 0; text-align: left; place-items: start; }
-.propWatchPanelHead { margin-bottom: 10px; }
-.propWatchPanelHead h3 { font-size: 15px; margin-bottom: 2px; }
-.propWatchPanelHead p { color: var(--muted); font-size: 12.5px; margin-bottom: 0; }
-.propWatchPanelSubhead { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
-@media (max-width: 720px) {
-  .propWatchGrid { grid-template-columns: 1fr; }
-  .propWatchPanel { padding-left: 0; }
-  /* Same fix as the desktop rule above: only a genuine SECOND panel
-     (Upcoming, when it has items) gets the divider — a lone Needs Your
-     Attention panel (Upcoming empty/absent) never does. */
-  .propWatchPanel + .propWatchPanel { border-left: none; border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
-}
+/* Simplification + Maintenance Workspace V2, Phase E1: replaces the old
+   two-panel, bordered-card PropWatch section (propWatchCard/propWatchGrid/
+   propWatchPanel*) with ONE clean, unboxed section — no card border, no
+   internal grid/dividers, just a heading, a quiet count, and the same
+   .dashboardItemList/.dashboardItemRow rows every other dashboard list
+   already uses. "Fewer boxes," per this phase's own design principle. */
+.needsAttentionSection .sectionHead { margin-bottom: 4px; }
+.needsAttentionCount { margin: 0 0 10px; font-size: 13px; }
+.needsAttentionEmpty { margin: 0; font-size: 14px; }
 
 /* Milestone 5: leases, mortgage, insurance & maintenance */
 .moduleWorkspace { padding-bottom: 44px; }
@@ -1580,19 +1562,17 @@ h2, h3, p { margin-top: 0; }
     padding: 10px 10px calc(14px + env(safe-area-inset-bottom));
   }
   .authNavMenuPanel a, .authNavMenuLogout { padding: 13px 14px; font-size: 15px; }
-  /* The bottom nav's own "More" item already exposes this same panel
-     with a clear active/expanded state — the header's own hamburger
-     trigger would be a redundant second way to open it on the same
-     screen, so it's hidden here specifically (not globally: pages that
-     opt out of the bottom nav, e.g. Pricing/the admin tool, keep their
-     header trigger as the only way in, unaffected by this rule since
-     they never carry .authHeaderWithBottomNav).
-     Targets the trigger BUTTON only, not the whole .authNavMenu
-     container — the panel/backdrop this same component renders when
-     "More" opens it are children of that same container, so hiding the
-     container itself would make the sheet invisible even while open. */
-  .authHeaderWithBottomNav .authNavMenuButton { display: none; }
 }
+/* Phase E1: the bottom nav's own "More" item is gone (see
+   MobileBottomNav.tsx's own header comment — Dashboard/Maintenance/
+   PropCrew/Tax Center only now), so the header's hamburger trigger is
+   the ONLY way to reach this panel again on every width, mobile
+   included — Documents, Investment Tools, Pricing, +Add Property and
+   Log out would otherwise be unreachable on a phone. It is no longer
+   hidden on mobile (the old .authHeaderWithBottomNav rule from D.1/D.2
+   that did so is removed, not just overridden) and gets the same
+   compact mobile sizing as the avatar/search buttons next to it — see
+   the mobile-header one-row rules below. */
 
 /* Simplification + Maintenance Workspace V2, Phase D.1 — persistent
    mobile GLOBAL navigation (components/MobileBottomNav.tsx). Hidden
@@ -1784,9 +1764,32 @@ h2, h3, p { margin-top: 0; }
    label text itself is untouched. */
 .smartUploadButton { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
 @media (max-width: 430px) {
-  .smartUploadButton { padding: 10px 12px; font-size: 12.5px; gap: 5px; }
-  .topbarActions { gap: 7px; }
-  .headerSearchButton { width: 36px; height: 36px; font-size: 14px; }
+  .smartUploadButton { padding: 7px 9px; font-size: 11.5px; gap: 4px; }
+  .topbarActions { gap: 5px; }
+  .headerSearchButton { width: 32px; height: 32px; font-size: 13px; }
+}
+
+/* Phase E1: restoring the profile avatar (Phase D.2) pushed the mobile
+   header's combined content past one row's available width at ordinary
+   iPhone widths (390-393px) — the ~480px .topbar wrap rule above then
+   kicked in as its designed fallback, but a fallback firing on the MOST
+   common phone width is the actual bug being fixed here, not the
+   fallback's own existence (it stays, as a safety net for genuinely
+   narrower devices). Measured with a real headless-Chromium render
+   (not guessed) at 390/393px and tightened until the unwrapped row
+   comfortably fits with margin to spare for real-device font metrics:
+   a smaller avatar/hamburger/search, a smaller wordmark (matching the
+   existing, already-shipped .tenantPortalHeader .brand precedent for a
+   compact header wordmark), and a tighter .topbarBrandGroup/.topbar
+   gap. Every element this touches stays a real, comfortable tap target
+   (32px+ minimums) — this measured comfortably even with the hamburger
+   trigger back in the row (see its own comment above, Phase E1). */
+@media (max-width: 430px) {
+  .topbar { gap: 8px; }
+  .topbarBrandGroup { gap: 6px; }
+  .profileEntryButton { width: 32px; height: 32px; }
+  .authNavMenuButton { width: 32px; height: 32px; font-size: 15px; }
+  .brand { font-size: 19px; }
 }
 
 /* Hamburger menu additions: "+ Add Property" reads as an action (brand
@@ -1947,7 +1950,6 @@ h2, h3, p { margin-top: 0; }
 .rentThisMonthHead h3 { margin: 5px 0 0; font-size: 18px; }
 .rentThisMonthActions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
 .rentThisMonthActions .primary, .rentThisMonthActions .secondary { padding: 10px 14px; font-size: 13px; }
-.vacancyList { margin-top: 8px; }
 
 .rentLedgerMonthNav { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 6px 0 22px; }
 .rentLedgerMonthNav button { border: 1px solid var(--line); background: white; border-radius: 10px; padding: 9px 14px; font-size: 15px; cursor: pointer; }

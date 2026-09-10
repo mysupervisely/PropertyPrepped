@@ -213,8 +213,18 @@ describe('Mobile layout — header horizontal-overflow fix (measured, not guesse
     expect(cssSource).not.toContain('@media (max-width: 380px) {\n  /* The new hamburger button')
   })
 
-  it('the existing 430px shrink treatment for the Smart Upload/search buttons is untouched — this fix is additive (wrap the row when it still does not fit), not a replacement for the existing shrink behavior', () => {
-    expect(cssSource).toContain('@media (max-width: 430px) {\n  .smartUploadButton { padding: 10px 12px; font-size: 12.5px; gap: 5px; }\n  .topbarActions { gap: 7px; }\n  .headerSearchButton { width: 36px; height: 36px; font-size: 14px; }\n}')
+  // Simplification + Maintenance Workspace V2, Phase E1: restoring the
+  // profile avatar (Phase D.2) reintroduced the exact overflow this
+  // block fixed, at the exact widths (390-393px) it was fixed for — the
+  // .topbar wrap fallback above is the safety net either way, but E1's
+  // own fix was to shrink this same 430px treatment further (plus the
+  // avatar/hamburger/wordmark/gaps) so the row no longer NEEDS to fall
+  // back to wrapping at ordinary iPhone widths — see globals.css's own
+  // "Phase E1: restoring the profile avatar..." comment for the
+  // measured-with-real-Chromium reasoning. The values changed; the
+  // shrink treatment's existence (not removed) is still the invariant.
+  it('the 430px shrink treatment for the Smart Upload/search buttons still exists (tightened further in Phase E1, not removed)', () => {
+    expect(cssSource).toContain('@media (max-width: 430px) {\n  .smartUploadButton { padding: 7px 9px; font-size: 11.5px; gap: 4px; }\n  .topbarActions { gap: 5px; }\n  .headerSearchButton { width: 32px; height: 32px; font-size: 13px; }\n}')
   })
 
   it('no global overflow-x:hidden was added anywhere as a substitute fix — the milestone\'s own "do not globally hide overflow" instruction', () => {

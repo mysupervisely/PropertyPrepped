@@ -119,3 +119,31 @@ export function PersonIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+// Simplification + Maintenance Workspace V2, Phase E1: the bottom nav's
+// PropCrew destination — two overlapping silhouettes (a small crew/
+// team), distinct from PersonIcon's single figure (the profile entry
+// point's own icon, a different concept: "me" vs. "my contacts").
+export function PeopleIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3.5 20c.8-3.2 3-5 5.5-5s4.7 1.8 5.5 5" />
+      <circle cx="17" cy="9" r="2.3" />
+      <path d="M14.7 13.3c2 .4 3.5 1.8 4.2 4.3" />
+    </svg>
+  )
+}
+
+// Simplification + Maintenance Workspace V2, Phase E1: the bottom nav's
+// Tax Center destination — a plain receipt silhouette (zigzag bottom
+// edge, a few line items), distinct from DocumentIcon's plain folded-
+// corner page.
+export function ReceiptIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <path d="M6 3.5h12v17l-2-1.3-2 1.3-2-1.3-2 1.3-2-1.3-2 1.3v-17Z" />
+      <path d="M8.5 8h7M8.5 11.5h7M8.5 15h4" />
+    </svg>
+  )
+}

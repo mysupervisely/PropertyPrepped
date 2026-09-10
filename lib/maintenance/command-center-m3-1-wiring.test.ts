@@ -138,12 +138,27 @@ describe('PropWatch maintenance normalization — the M3.1 core fix', () => {
     expect(pageSource).not.toContain('buildOpenMaintenanceItems(maintenanceRecords, propertyLabelById)')
   })
 
-  it('the property-card "open maintenance" count uses the same canonical, active-case definition', () => {
-    const idx = pageSource.indexOf('const openMaintenanceCount = useMemo(')
-    const body = pageSource.slice(idx, idx + 400)
-    expect(body).toContain('enrichMaintenanceCases(maintenanceRequests, tenantRequests, intakeSessions)')
-    expect(body).toContain('.filter((c) => c.active)')
-    expect(body).not.toContain('maintenanceRecords.filter')
+  // Simplification + Maintenance Workspace V2, Phase E1: the dashboard's
+  // old standalone "Open Maintenance N items" subhead (and the
+  // openMaintenanceCount useMemo that only ever fed that one piece of
+  // text) is gone — the dashboard's Needs Your Attention section now
+  // folds open-maintenance rows straight into one flat list (see
+  // attentionRows in app/page.tsx). The canonical, active-case
+  // definition this test protects is exactly the same one; it just
+  // lives at enrichedRequestsForPropWatch (feeding
+  // buildOpenMaintenanceRequestItems, asserted in the sibling test
+  // above) instead of a second, now-removed derivation.
+  it('the dashboard\'s open-maintenance source is built from the same canonical, active-case definition (enrichMaintenanceCases), not a second derivation', () => {
+    const idx = pageSource.indexOf('const enrichedRequestsForPropWatch = ')
+    expect(idx).toBeGreaterThan(-1)
+    const line = pageSource.slice(idx, pageSource.indexOf('\n', idx))
+    expect(line).toContain('enrichMaintenanceCases(maintenanceRequests, tenantRequests, intakeSessions)')
+    // Scoped to this declaration's own line, not the whole file — the
+    // property-level Maintenance tab's unrelated Service History list
+    // (selectedMaintenance) legitimately filters maintenanceRecords
+    // elsewhere in this same large file; that's a different feature,
+    // not a reintroduction of the free-text-status bug this guards.
+    expect(line).not.toContain('maintenanceRecords.filter')
   })
 
   it('the legacy maintenance_records-based function still exists (not deleted) but is no longer the PropWatch data source — no destructive removal of working code', () => {

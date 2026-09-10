@@ -383,12 +383,6 @@ const compactMoney = (n: number) => {
 // existing user-preferences table to hang it on), just localStorage.
 const SNAPSHOT_EXPANDED_STORAGE_KEY = 'proproster:portfolioSnapshotExpanded'
 
-// PropWatch Mobile Compaction: the exact same lightweight localStorage
-// preference pattern as Portfolio Snapshot above, applied to PropWatch —
-// no new settings/preferences system, presentation-only, never sent to
-// the server, never affects which items are computed.
-const PROPWATCH_EXPANDED_STORAGE_KEY = 'proproster:propWatchExpanded'
-
 
 function EmptyModule({ title, text, action, onClick }: { title: string; text: string; action: string; onClick: () => void }) {
   return <div className="emptyModule"><strong>{title}</strong><span>{text}</span><button className="primary" onClick={onClick}>+ {action}</button></div>
@@ -607,31 +601,15 @@ export default function Home() {
       return next
     })
   }
-  // PropWatch Mobile Compaction — identical expand/collapse preference
-  // pattern to Portfolio Snapshot directly above. Presentation only:
-  // toggling this never touches attentionItems/vacancyItems/
-  // openMaintenanceItems/upcomingItems or how any of them are derived,
-  // only whether the already-computed PropWatch card is shown.
-  const [propWatchExpanded, setPropWatchExpanded] = useState(true)
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(PROPWATCH_EXPANDED_STORAGE_KEY)
-      if (stored !== null) setPropWatchExpanded(stored !== 'false')
-    } catch {
-      // Storage unavailable — fall back to the default expanded state, never throw.
-    }
-  }, [])
-  function togglePropWatchExpanded() {
-    setPropWatchExpanded((prev) => {
-      const next = !prev
-      try {
-        window.localStorage.setItem(PROPWATCH_EXPANDED_STORAGE_KEY, String(next))
-      } catch {
-        // Best-effort persistence only — the toggle still works this session either way.
-      }
-      return next
-    })
-  }
+  // Simplification + Maintenance Workspace V2, Phase E1: the old
+  // whole-card PropWatch Hide/Show preference (propWatchExpanded) is
+  // gone — replaced by the Needs Your Attention section's own "View
+  // all" subset toggle below, a different interaction (show more of
+  // the SAME list, not hide the whole section) that doesn't need a
+  // persisted preference. attentionItems/vacancyItems/
+  // openMaintenanceItems/upcomingItems and how they're derived are
+  // completely unchanged — only this section's presentation is.
+  const [showAllAttention, setShowAllAttention] = useState(false)
   const [properties, setProperties] = useState<Property[]>([])
   const [documents, setDocuments] = useState<PropertyDocument[]>([])
   const [photos, setPhotos] = useState<PropertyPhoto[]>([])
@@ -1016,13 +994,6 @@ export default function Home() {
       rentStatusByProperty: rentByProperty,
     }
   }, [leases, insurancePolicies, mortgages, maintenanceRecords, maintenanceRequests, intakeSessions, documents, transactions, propertyNotes, properties, contacts, propertyLabelById, rentPayments, propertySystems, entitlements, tenantRequests])
-
-  // Tenant Connect M3.1 — same canonical-source fix as openMaintenanceItems
-  // above, for the property-card "open maintenance" count.
-  const openMaintenanceCount = useMemo(
-    () => enrichMaintenanceCases(maintenanceRequests, tenantRequests, intakeSessions).filter((c) => c.active).length,
-    [maintenanceRequests, tenantRequests, intakeSessions],
-  )
 
   function goToNav(propertyId: string, nav: NavTarget) {
     openProperty(propertyId, nav.tab, nav.docsSubTab, nav.propSubTab, nav.rentSubTab)
@@ -2361,7 +2332,7 @@ export default function Home() {
 
     return (
       <main className="shell workspaceShell">
-        <AuthHeader onBrandClick={() => setSelectedId(null)} onSmartUploadCompleted={() => void loadPortfolio()} registerSmartUploadTrigger={(fn) => { smartUploadTriggerRef.current = fn }} hasSelectedProperty />
+        <AuthHeader onBrandClick={() => setSelectedId(null)} onSmartUploadCompleted={() => void loadPortfolio()} registerSmartUploadTrigger={(fn) => { smartUploadTriggerRef.current = fn }} />
         {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
 
         {/* Contextual, property-scoped controls live here now, not in the
@@ -2952,6 +2923,55 @@ export default function Home() {
     )
   }
 
+  // Simplification + Maintenance Workspace V2, Phase E1: the dashboard's
+  // former two-panel PropWatch card (Needs Your Attention + Upcoming,
+  // each with its own subsections) collapses into ONE flat, compact
+  // list — attentionItems/vacancyItems/openMaintenanceItems, exactly
+  // the same computed arrays and the exact same dashboardItemRow markup
+  // each already rendered, just concatenated instead of split across
+  // two headed subsections inside a two-column grid. upcomingItems is
+  // intentionally not part of this list (Section 3: "surface actionable
+  // PropWatch information through ONE clean section") — it is still
+  // fully computed above, untouched, simply not rendered on the
+  // dashboard for now.
+  const attentionRows = [
+    ...attentionItems.map((item) => (
+      <button key={`attn-${item.type}-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
+        <span className={`statusPill ${item.urgency === 'Expired' ? 'pillBad' : 'pillWarn'}`}>{item.urgency === 'Expired' ? 'Expired' : 'Due soon'}</span>
+        <span className="dashboardItemBody">
+          <strong>{item.label}</strong>
+          <span>{item.description}</span>
+          <span className="muted">{item.propertyLabel} &middot; {dateOnly(item.date)}</span>
+        </span>
+      </button>
+    )),
+    ...vacancyItems.map((item: VacancyItem) => (
+      <button key={`vac-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
+        <span className="statusPill pillNeutral">Vacant</span>
+        <span className="dashboardItemBody">
+          <strong>{item.propertyLabel}</strong>
+          <span>No current lease</span>
+        </span>
+      </button>
+    )),
+    ...openMaintenanceItems.map((item) => (
+      <button key={`maint-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
+        <span className="statusPill pillWarn">{item.status}</span>
+        <span className="dashboardItemBody">
+          <strong>{item.description}</strong>
+          <span>{[item.category, item.vendor].filter(Boolean).join(' · ')}</span>
+          <span className="muted">{item.propertyLabel} &middot; {dateOnly(item.date)}</span>
+        </span>
+      </button>
+    )),
+  ]
+  // A "small useful subset," not a second giant feed — View all reveals
+  // the rest of this SAME already-computed list in place (no new page,
+  // matching "let View all expose... the appropriate existing fuller
+  // experience"); only shown when there is actually more to reveal.
+  const NEEDS_ATTENTION_PREVIEW_LIMIT = 3
+  const visibleAttentionRows = showAllAttention ? attentionRows : attentionRows.slice(0, NEEDS_ATTENTION_PREVIEW_LIMIT)
+
   return (
     <main className="shell">
       <AuthHeader onSmartUploadCompleted={() => void loadPortfolio()} />
@@ -2975,136 +2995,35 @@ export default function Home() {
         )}
       </section>
 
-      {/* Milestone 16: Landlord Command Center — occupies the space
-          reserved above ("future compact 'Needs Your Attention' section"),
-          between the snapshot and My Properties, using the same
-          .intro/.portfolioSnapshot/.sectionHead spacing already
-          established. Every item's onClick reuses openProperty() (via
-          goToNav()) directly — no second navigation system, no URL
-          round-trip needed for a same-page dashboard.
-
-          Milestone 18: PropWatch is this SAME section, not a second
-          dashboard — rent (Overdue/Due/Partial) and system-warranty
-          signals were folded into attentionItems/dateItems above,
-          alongside the lease/insurance/mortgage/maintenance items
-          Milestone 16 already built. Only the heading changed.
-
-          Final Launch Fixes, dashboard reorder: PropWatch is now compact
-          — two side-by-side panels (Needs Your Attention, combining the
-          existing attention items + open maintenance items requiring
-          action, and Upcoming) instead of three stacked full-width
-          sections — and moves ahead of My Properties, with Recent
-          Activity moved below My Properties. This is a composition
-          change only: attentionItems/vacancyItems/openMaintenanceItems/
-          upcomingItems/recentActivity are the exact same values from the
-          useMemo above, just re-laid-out; no derivation logic changed.
-          Recent Activity's own section now renders after My Properties,
-          further down this file. */}
-
-      <section className="commandCenterSection propWatchSection">
-        {/* Launch Polish: PropWatch keeps its approved mixed-case brand
-            casing here even though every other eyebrow on this page is
-            plain uppercase — an explicit, deliberate exception for this
-            one branded product name, not a change to the eyebrow style
-            itself. */}
+      {/* Simplification + Maintenance Workspace V2, Phase E1: the old
+          two-panel PropWatch card (Needs Your Attention + Upcoming, each
+          with its own subsections, inside a branded "PropWatch" section)
+          is gone in favor of ONE clean, compact section — "fewer boxes,
+          fewer competing actions." attentionItems/vacancyItems/
+          openMaintenanceItems are the exact same computed arrays
+          (see attentionRows above); this is a presentation change only.
+          upcomingItems is intentionally not shown here anymore — it is
+          still fully computed, just not part of the dashboard's
+          simplified surface (see attentionRows' own comment). */}
+      <section className="commandCenterSection needsAttentionSection">
         <div className="sectionHead">
-          <div><p className="eyebrow">PropWatch</p><h2>Stay ahead of what needs attention.</h2></div>
-          {/* PropWatch Mobile Compaction: same Hide/Show control/behavior
-              as Portfolio Snapshot above (.snapshotToggle, aria-expanded)
-              — the heading stays visible either way; only the card body
-              below is hidden when collapsed. */}
-          <button className="snapshotToggle" onClick={togglePropWatchExpanded} aria-expanded={propWatchExpanded}>{propWatchExpanded ? 'Hide' : 'Show'}</button>
+          <div><h2>Needs Your Attention</h2></div>
+          {/* "View all" only appears when there is actually more to
+              reveal — an action that does nothing is worse than no
+              action. Expands in place (the exact same already-computed
+              list), never a second page/route. */}
+          {attentionRows.length > NEEDS_ATTENTION_PREVIEW_LIMIT && (
+            <button className="secondary" onClick={() => setShowAllAttention((v) => !v)}>{showAllAttention ? 'Show less' : 'View all'}</button>
+          )}
         </div>
-        {propWatchExpanded ? (
-          <div className="propWatchCard">
-            {/* PropWatch Mobile Compaction: when Upcoming has nothing,
-                its whole panel (heading, divider, empty message) is
-                skipped entirely rather than rendering an empty-state
-                placeholder — propWatchGridSingle drops the grid to one
-                column so Needs Your Attention naturally uses the full
-                card width/height instead of leaving a reserved blank
-                second column. Same on mobile and desktop, per Issues
-                2/4 — this was never a mobile-only special case. */}
-            <div className={`propWatchGrid${upcomingItems.length === 0 ? ' propWatchGridSingle' : ''}`}>
-              <div className="propWatchPanel">
-                <div className="propWatchPanelHead"><h3>Needs Your Attention</h3><p>{attentionItems.length ? `${attentionItems.length} item${attentionItems.length === 1 ? '' : 's'} need a look` : 'Rent, leases, insurance, mortgages and scheduled maintenance across your portfolio.'}</p></div>
-                {attentionItems.length === 0 ? (
-                  <div className="emptyState"><strong>You&apos;re all caught up.</strong></div>
-                ) : (
-                  <div className="dashboardItemList">
-                    {attentionItems.map((item) => (
-                      <button key={`${item.type}-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
-                        <span className={`statusPill ${item.urgency === 'Expired' ? 'pillBad' : 'pillWarn'}`}>{item.urgency === 'Expired' ? 'Expired' : 'Due soon'}</span>
-                        <span className="dashboardItemBody">
-                          <strong>{item.label}</strong>
-                          <span>{item.description}</span>
-                          <span className="muted">{item.propertyLabel} · {dateOnly(item.date)}</span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {vacancyItems.length > 0 && (
-                  <div className="dashboardItemList vacancyList">
-                    {vacancyItems.map((item: VacancyItem) => (
-                      <button key={item.id} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
-                        <span className="statusPill pillNeutral">Vacant</span>
-                        <span className="dashboardItemBody">
-                          <strong>{item.propertyLabel}</strong>
-                          <span>No current lease</span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {openMaintenanceItems.length > 0 && (
-                  <>
-                    <div className="propWatchPanelHead propWatchPanelSubhead"><h3>Open Maintenance</h3><p>{openMaintenanceCount} open item{openMaintenanceCount === 1 ? '' : 's'} across your portfolio</p></div>
-                    <div className="dashboardItemList">
-                      {openMaintenanceItems.map((item) => (
-                        <button key={item.id} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
-                          <span className="statusPill pillWarn">{item.status}</span>
-                          <span className="dashboardItemBody">
-                            <strong>{item.description}</strong>
-                            <span>{[item.category, item.vendor].filter(Boolean).join(' · ')}</span>
-                            <span className="muted">{item.propertyLabel} · {dateOnly(item.date)}</span>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {upcomingItems.length > 0 && (
-                <div className="propWatchPanel">
-                  <div className="propWatchPanelHead"><h3>Upcoming</h3><p>Important dates coming up across your portfolio.</p></div>
-                  <div className="dashboardItemList">
-                    {upcomingItems.map((item) => (
-                      <button key={`${item.type}-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
-                        <span className="statusPill pillNeutral">{item.daysUntil === 0 ? 'Today' : `${item.daysUntil}d`}</span>
-                        <span className="dashboardItemBody">
-                          <strong>{item.label}</strong>
-                          <span>{item.description}</span>
-                          <span className="muted">{item.propertyLabel} · {dateOnly(item.date)}</span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+        {attentionRows.length === 0 ? (
+          // Calm compact empty state, not a large empty card.
+          <p className="muted needsAttentionEmpty">You&apos;re all caught up.</p>
         ) : (
-          // Collapsed: a compact one-line summary, same treatment as
-          // Portfolio Snapshot's own collapsed state — built only from
-          // already-computed array lengths, no new derivation.
-          <p className="snapshotCollapsedSummary">
-            {(() => {
-              const count = attentionItems.length + openMaintenanceItems.length
-              return count > 0 ? `${count} item${count === 1 ? '' : 's'} need${count === 1 ? 's' : ''} a look` : "You're all caught up."
-            })()}
-          </p>
+          <>
+            <p className="muted needsAttentionCount">{attentionRows.length} item{attentionRows.length === 1 ? '' : 's'}</p>
+            <div className="dashboardItemList">{visibleAttentionRows}</div>
+          </>
         )}
       </section>
 
@@ -3150,40 +3069,52 @@ export default function Home() {
           styling-only hook (My Properties above has no bottom margin and
           neither did .commandCenterSection have a top margin, so on
           mobile this heading began right at the bottom edge of the last
-          property card) — scoped to Recent Activity alone so PropWatch's
-          own commandCenterSection spacing above Portfolio Snapshot is
-          untouched. */}
+          property card) — scoped to Recent Activity alone so the
+          section above it keeps its own spacing untouched.
+
+          Simplification + Maintenance Workspace V2, Phase E1: Recent
+          Activity is now a native <details>/<summary> disclosure —
+          collapsed by default (no JS, no viewport detection, so there
+          is no hydration-mismatch risk and no "fragile viewport JS"
+          deciding the default state; a real per-viewport default would
+          need exactly that). recentActivity itself is the same
+          already-computed array from the useMemo above — reused
+          verbatim, not redesigned or re-derived. */}
       <section className="commandCenterSection recentActivitySection">
-        <div className="sectionHead"><div><h2>Recent Activity</h2><p>What&apos;s changed across your portfolio lately.</p></div></div>
-        {recentActivity.length === 0 ? (
-          <div className="emptyState"><strong>Activity will appear here as you add information to your properties.</strong></div>
-        ) : (
-          <div className="dashboardItemList">
-            {recentActivity.map((item) => (
-              item.nav && item.propertyId ? (
-                <button key={item.id} className="dashboardItemRow" onClick={() => goToNav(item.propertyId as string, item.nav as NavTarget)}>
-                  <span className="dashboardItemBody"><strong>{item.description}</strong><span className="muted">{relativeTime(item.timestamp)}</span></span>
-                </button>
-              ) : item.type === 'Document' && !item.propertyId && item.documentId ? (
-                // Recent Activity → Documents linkage (Documents +
-                // Navigation + Realtor Connect Polish, Section 5): an
-                // unassigned document has no property workspace to open
-                // (the `nav` mechanism above has no destination for it),
-                // but its own id IS a safe identifier already on the
-                // activity item — link straight to the Documents library
-                // with that document highlighted, rather than leaving
-                // this row permanently dead.
-                <Link key={item.id} href={`/documents?highlight=${item.documentId}`} className="dashboardItemRow">
-                  <span className="dashboardItemBody"><strong>{item.description}</strong><span className="muted">{relativeTime(item.timestamp)}</span></span>
-                </Link>
-              ) : (
-                <div key={item.id} className="dashboardItemRow dashboardItemRowStatic">
-                  <span className="dashboardItemBody"><strong>{item.description}</strong><span className="muted">{relativeTime(item.timestamp)}</span></span>
-                </div>
-              )
-            ))}
+        <details className="recentActivityDetails">
+          <summary className="recentActivitySummary"><h2>Recent Activity</h2></summary>
+          <div className="recentActivityBody">
+            {recentActivity.length === 0 ? (
+              <div className="emptyState"><strong>Activity will appear here as you add information to your properties.</strong></div>
+            ) : (
+              <div className="dashboardItemList">
+                {recentActivity.map((item) => (
+                  item.nav && item.propertyId ? (
+                    <button key={item.id} className="dashboardItemRow" onClick={() => goToNav(item.propertyId as string, item.nav as NavTarget)}>
+                      <span className="dashboardItemBody"><strong>{item.description}</strong><span className="muted">{relativeTime(item.timestamp)}</span></span>
+                    </button>
+                  ) : item.type === 'Document' && !item.propertyId && item.documentId ? (
+                    // Recent Activity → Documents linkage (Documents +
+                    // Navigation + Realtor Connect Polish, Section 5): an
+                    // unassigned document has no property workspace to open
+                    // (the `nav` mechanism above has no destination for it),
+                    // but its own id IS a safe identifier already on the
+                    // activity item — link straight to the Documents library
+                    // with that document highlighted, rather than leaving
+                    // this row permanently dead.
+                    <Link key={item.id} href={`/documents?highlight=${item.documentId}`} className="dashboardItemRow">
+                      <span className="dashboardItemBody"><strong>{item.description}</strong><span className="muted">{relativeTime(item.timestamp)}</span></span>
+                    </Link>
+                  ) : (
+                    <div key={item.id} className="dashboardItemRow dashboardItemRowStatic">
+                      <span className="dashboardItemBody"><strong>{item.description}</strong><span className="muted">{relativeTime(item.timestamp)}</span></span>
+                    </div>
+                  )
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        </details>
       </section>
 
       {showAdd && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowAdd(false)}><div className="modal"><div className="modalTop"><h2>Add a property</h2><button className="iconButton" onClick={() => setShowAdd(false)}>×</button></div>
