@@ -7,6 +7,73 @@
   --brand: #204b3b;
   --brand-soft: #e9f1ed;
   --warm: #f3efe7;
+
+  /* Simplification + Maintenance Workspace V2, Phase B — foundational
+     tokens only. These are the target for anything NEW or touched from
+     here on; the existing ~400 one-off font-size/weight/letter-spacing
+     declarations elsewhere in this file are left as-is and migrate
+     opportunistically as each surface is redesigned in a later phase —
+     see docs/simplification-maintenance-workspace-v2-phase-a-audit.md.
+     Semantic aliases (--text-primary/--text-secondary/--surface-muted)
+     exist so new/touched code can express INTENT ("primary text") ---
+     they resolve to the same existing --text/--muted/--bg values, not a
+     new palette. */
+  --text-primary: var(--text);
+  --text-secondary: var(--muted);
+  --surface-muted: var(--bg);
+
+  /* Type scale — six semantic levels, not a literal pixel scale.
+     --text-display keeps the exact clamp() this codebase already
+     tuned for h1 (see that rule's own history below) rather than
+     inventing a new responsive curve. */
+  --text-display: clamp(34px, 5vw, 55px);       /* page title (h1) — unchanged from the existing, already-tuned h1 size; Phase B only normalizes weight/tracking, not size */
+  --text-section: 22px;                          /* section heading (sectionHead h2) */
+  --text-card-title: 16px;                       /* card/row title */
+  --text-body: 15px;                              /* body copy */
+  --text-body-sm: 13.5px;                         /* secondary/body-small */
+  --text-caption: 12px;                           /* caption/metadata/eyebrow */
+
+  --line-tight: 1.15;
+  --line-normal: 1.5;
+  --line-relaxed: 1.6;
+
+  /* Three weights only — Regular/Medium/Semibold. A brand/logo element
+     (the .brand wordmark) may still use a stronger weight than this on
+     its own terms; this scale is for everything else. */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  /* Relative tracking only — no fixed-px letter-spacing in new/touched
+     rules. --tracking-tight is for large display text; --tracking-wide
+     is for short uppercase caption/eyebrow labels only, never body
+     text. */
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.04em;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --radius-control: 10px;
+  --radius-card: 16px;
+  --radius-pill: 999px;
+
+  /* Restrained destructive color — a token only. No shared/global
+     ".danger" button class exists yet (destructive actions today are
+     ad hoc: .recordDelete, .authNavMenuLogout:hover, various inline
+     "x" buttons) and this phase deliberately does not invent and roll
+     one out across the app. This token exists so a future, deliberate
+     destructive-button component (Phase C, when MaintenanceCaseDetail
+     is touched) has a single color to reference instead of picking a
+     new red ad hoc. */
+  --color-danger: #8a3d35;
+  --color-danger-soft: #fdeceb;
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -18,7 +85,17 @@ html { scroll-behavior: smooth; }
    safe area (i.e. everywhere today, browser tab or standalone), so this
    is a no-op everywhere except an actual notched/home-indicator device
    running standalone. */
-body { margin: 0; background: var(--bg); color: var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+/* Simplification V2, Phase B: the native system UI font stack, no
+   web-font dependency. "Inter" used to lead this list but was never
+   actually loaded anywhere (no next/font, no font link, no local
+   file) — every visitor already rendered in their OS's own UI font via
+   this same fallback chain in practice. This makes that the explicit,
+   intentional choice instead of an accidental one: San Francisco on
+   Apple devices, Segoe UI on Windows, Roboto on Android/Chrome OS —
+   each platform's own native, highly-legible system font, zero
+   load cost, zero layout shift while a webfont downloads. */
+body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
 .shell { max-width: 1220px; margin: 0 auto; padding: 0 28px 70px; }
@@ -33,10 +110,25 @@ button { cursor: pointer; }
 .wordmarkRoster { color: var(--brand); }
 .tagline { color: var(--muted); font-size: 13px; margin-top: 2px; display: block; }
 .brandButton { border: 0; padding: 0; background: transparent; color: inherit; text-align: left; text-decoration: none; }
-.primary { border: 0; background: var(--brand); color: white; padding: 12px 17px; border-radius: 10px; font-weight: 650; text-decoration: none; }
-.secondary { border: 1px solid var(--line); background: white; color: var(--text); padding: 11px 16px; border-radius: 10px; font-weight: 650; text-decoration: none; }
+/* Phase B button foundation: .primary/.secondary are already the
+   app's one shared button abstraction (used everywhere, not ad hoc) —
+   safe, high-leverage surface to tokenize. Only weight/radius move to
+   the shared tokens here (650->Semibold is a small, calming change;
+   radius was already 10px, just centralized); padding/sizing is left
+   exactly as-is this phase to avoid any layout shift across the
+   hundreds of existing call sites — comfortable tap-target sizing is
+   deferred to whichever later phase actually touches each surface. */
+.primary { border: 0; background: var(--brand); color: white; padding: 12px 17px; border-radius: var(--radius-control); font-weight: var(--weight-semibold); text-decoration: none; }
+.secondary { border: 1px solid var(--line); background: white; color: var(--text); padding: 11px 16px; border-radius: var(--radius-control); font-weight: var(--weight-semibold); text-decoration: none; }
 .intro { padding: 44px 0 28px; max-width: 760px; }
-.eyebrow { margin: 0 0 8px; color: var(--brand); font-size: 12px; font-weight: 800; letter-spacing: 1.4px; }
+/* Phase B: eyebrow labels (section captions like "TENANT REQUESTS",
+   "RENT LEDGER") were the single heaviest text in the app relative to
+   their importance — 800 weight plus 1.4px of fixed tracking on a
+   12px label reads louder than the heading it introduces. Semibold +
+   a subtler, relative wide-tracking token keeps the "small caps
+   label" convention (used everywhere, so worth getting right once)
+   without shouting. */
+.eyebrow { margin: 0 0 8px; color: var(--brand); font-size: var(--text-caption); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-wide); }
 /* Property-First Simplification V2 (mobile typography audit): this rule
    is the root cause of headings that read as visually cramped/running
    together on phones ("Bring an existing portfolio into PropRoster.",
@@ -49,7 +141,15 @@ button { cursor: pointer; }
    (~-2.5%), which never had this problem. Switching to an em-relative
    value fixes every affected heading at once, at every clamp() size,
    without touching any individual page's copy. */
-h1 { font-size: clamp(34px, 5vw, 55px); line-height: 1.15; margin: 0; letter-spacing: -0.02em; }
+/* Phase B: explicit Semibold (600) instead of the browser's implicit
+   bold (700) default for every <h1> — the dashboard greeting and every
+   property page's own address title both render through this one
+   rule, so this is a genuinely high-leverage, low-risk normalization:
+   size/line-height/margin are unchanged, only weight is calmer and
+   letter-spacing is now the shared token (same numeric value as
+   before, -0.02em, already the correct em-relative form this file's
+   own history fixed a real mobile bug over — just centralized). */
+h1 { font-size: var(--text-display); line-height: var(--line-tight); margin: 0; letter-spacing: var(--tracking-tight); font-weight: var(--weight-semibold); }
 h2, h3, p { margin-top: 0; }
 .intro > p:last-child { color: var(--muted); font-size: 17px; line-height: 1.6; max-width: 700px; }
 /* Homepage welcome area (Section 5) — a quieter greeting than the
@@ -106,7 +206,11 @@ h2, h3, p { margin-top: 0; }
    the row already fits (every desktop/tablet case, and most mobile
    ones) — this only changes behavior when content genuinely doesn't fit. */
 .sectionHead > div:first-child { min-width: 0; }
-.sectionHead h2 { margin-bottom: 4px; font-size: 22px; }
+/* Phase B: explicit Semibold instead of the browser's implicit bold
+   (700) default, tokenized size. This is the shared "section title"
+   level used across the whole app (My Properties, PropWatch panels,
+   every property-tab heading via .workspaceHeading below, etc). */
+.sectionHead h2 { margin-bottom: 4px; font-size: var(--text-section); font-weight: var(--weight-semibold); }
 .sectionHead p { color: var(--muted); margin-bottom: 0; font-size: 14px; }
 @media (max-width: 480px) {
   .sectionHead { flex-wrap: wrap; }
@@ -186,11 +290,20 @@ h2, h3, p { margin-top: 0; }
    Tax scroll out of view, which this redesign specifically removes).
    One row of 6 by default; 3x2 under the @media rule below. */
 .tabs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 8px 0; }
-.tabs button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 0; border-radius: 9px; padding: 10px 8px; background: transparent; color: var(--muted); font-weight: 650; font-size: 13px; text-align: center; }
+.tabs button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 0; border-radius: 9px; padding: 10px 8px; background: transparent; color: var(--muted); font-weight: var(--weight-medium); font-size: 13px; text-align: center; }
 .tabs button.active { background: var(--brand-soft); color: var(--brand); }
 .workspaceContent { padding-top: 32px; }
 .workspaceHeading { align-items: flex-start; margin-bottom: 22px; }
-.workspaceHeading h2 { font-size: 27px; letter-spacing: -.5px; }
+/* Phase B: this used to override .sectionHead h2's font-size (22px)
+   up to a fixed 27px with a fixed -.5px letter-spacing — the exact
+   "problematic shared/global fixed-pixel tracking" the typography
+   audit flagged, and it meant a property tab's own section heading
+   (Overview, Tax, Details, etc — always className="sectionHead
+   workspaceHeading", never workspaceHeading alone) rendered at a
+   different size than every other .sectionHead h2 in the app (My
+   Properties, PropWatch panels) for no reasoned reason. Removed in
+   favor of .sectionHead h2's own, now-tokenized rule — one section-
+   title size across the whole app instead of two. */
 /* Property Profile Mobile Polish V3 (Section 4): the Overview tab only —
    less setup between the tab nav and the first useful card, without
    losing the OVERVIEW / At a glance identity or cramping the page.
@@ -1390,7 +1503,7 @@ h2, h3, p { margin-top: 0; }
 .headerSearchButton { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 999px; border: 1px solid var(--line); background: white; font-size: 16px; text-decoration: none; flex-shrink: 0; }
 .headerSearchButton:hover { border-color: #c9d2cd; }
 .authNavMenu { position: relative; }
-.authNavMenuButton { border: 1px solid var(--line); background: white; color: var(--text); width: 40px; height: 40px; border-radius: 10px; font-size: 17px; display: grid; place-items: center; }
+.authNavMenuButton { border: 1px solid var(--line); background: white; color: var(--text); width: 40px; height: 40px; border-radius: var(--radius-control); font-size: 17px; display: grid; place-items: center; }
 .authNavMenuButton:hover { border-color: var(--brand); color: var(--brand); }
 /* Final Launch Fixes: header profile avatar — same button, ~34px
    circle, comfortably inside the existing 40px touch target.
@@ -1404,7 +1517,7 @@ h2, h3, p { margin-top: 0; }
 .authNavMenuButtonHasAvatar:hover { border-color: transparent; }
 .authNavAvatar { width: 34px; height: 34px; border-radius: 50%; overflow: hidden; object-fit: cover; object-position: center; display: block; }
 .authNavMenuPanel { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; min-width: 200px; background: white; border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 12px 28px rgba(15, 30, 24, .12); display: grid; }
-.authNavMenuPanel a { display: block; padding: 10px 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.authNavMenuPanel a { display: block; padding: 10px 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 14px; font-weight: var(--weight-medium); white-space: nowrap; }
 .authNavMenuPanel a:hover { background: var(--brand-soft); color: var(--brand); }
 
 /* Sub-tabs (Property / Documents / People second-level navigation) —
@@ -1566,15 +1679,15 @@ h2, h3, p { margin-top: 0; }
    color, bold) rather than a destination; a hairline divider then visually
    separates it and "Log out" (muted, reddish on hover — ending the
    session, not navigating) from the plain nav links above them. */
-.authNavMenuPanel a.authNavMenuAction { color: var(--brand); font-weight: 700; }
+.authNavMenuPanel a.authNavMenuAction { color: var(--brand); font-weight: var(--weight-semibold); }
 /* Property-First Simplification V2: Profile/Pricing are account-level
    destinations, not equal-weight product destinations — smaller and
    muted (own divider above, see .authNavMenuDivider) so they read as a
    lower-priority group without hiding them. */
-.authNavMenuPanel a.authNavMenuSecondary { color: var(--muted); font-size: 13px; font-weight: 600; }
+.authNavMenuPanel a.authNavMenuSecondary { color: var(--muted); font-size: 13px; font-weight: var(--weight-medium); }
 .authNavMenuPanel a.authNavMenuSecondary:hover { color: var(--brand); }
 .authNavMenuDivider { height: 1px; background: var(--line); margin: 6px 6px; border: 0; }
-.authNavMenuLogout { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 10px 12px; border-radius: 8px; color: var(--muted); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.authNavMenuLogout { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 10px 12px; border-radius: 8px; color: var(--muted); font-size: 14px; font-weight: var(--weight-medium); white-space: nowrap; }
 .authNavMenuLogout:hover { background: #fff2f1; color: #862d27; }
 
 /* Property workspace: contextual, property-scoped controls that used to

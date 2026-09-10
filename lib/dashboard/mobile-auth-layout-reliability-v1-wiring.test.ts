@@ -233,7 +233,11 @@ describe('Mobile layout — remaining left-edge clipping fix (real-iPhone follow
 
   it('.sectionHead gets a flex-wrap safety net at <=480px — the same proven pattern as .topbar — so a row that still does not fit wraps to two lines instead of overflowing', () => {
     const idx = cssSource.indexOf('.sectionHead > div:first-child { min-width: 0; }')
-    const body = cssSource.slice(idx, idx + 400)
+    // Widened from 400 (Simplification V2, Phase B added a doc comment
+    // on .sectionHead h2 in between, pushing this @media rule further
+    // down the file — still immediately after, just not within the old
+    // fixed window).
+    const body = cssSource.slice(idx, idx + 700)
     expect(body).toMatch(/@media \(max-width: 480px\) \{\s*\.sectionHead \{ flex-wrap: wrap; \}\s*\}/)
   })
 
@@ -246,8 +250,11 @@ describe('Mobile layout — remaining left-edge clipping fix (real-iPhone follow
     expect(cssSource).not.toMatch(/\.welcomeIntro h1 \{[^}]*letter-spacing/)
   })
 
-  it('the base h1 rule (the fallback .welcomeIntro h1 now uses) is untouched — this is a targeted removal of one override, not a change to shared typography', () => {
-    expect(cssSource).toContain('h1 { font-size: clamp(34px, 5vw, 55px); line-height: 1.15; margin: 0; letter-spacing: -0.02em; }')
+  it('the base h1 rule (the fallback .welcomeIntro h1 now uses) still has the exact same font-size/line-height/margin/letter-spacing this milestone tuned — Simplification V2 Phase B tokenized those values (var(--text-display) etc, same numbers) and added an explicit font-weight, but did not change this rule\'s sizing/spacing', () => {
+    expect(cssSource).toContain('h1 { font-size: var(--text-display); line-height: var(--line-tight); margin: 0; letter-spacing: var(--tracking-tight); font-weight: var(--weight-semibold); }')
+    expect(cssSource).toMatch(/--text-display:\s*clamp\(34px,\s*5vw,\s*55px\)/)
+    expect(cssSource).toMatch(/--line-tight:\s*1\.15/)
+    expect(cssSource).toMatch(/--tracking-tight:\s*-0\.02em/)
   })
 
   it('the welcome subtitle (<p>, the sibling real-device testing did NOT report as clipped) is untouched — this fix is scoped to the one element that was actually reported', () => {
