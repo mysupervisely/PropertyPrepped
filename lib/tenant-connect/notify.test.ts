@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
-import { buildInviteEmail, buildNewRequestEmail, buildLandlordUpdateEmail, isTenantConnectEmailConfigured, sendTenantConnectEmail, tenantInviteLink } from './notify'
+import { buildInviteEmail, buildNewRequestEmail, buildLandlordUpdateEmail, isTenantConnectEmailConfigured, sendTenantConnectEmail, tenantInviteLink, landlordRequestLink, tenantPortalLink } from './notify'
 
 const FULL_ENV = { RESEND_API_KEY: 're_test_key', TENANT_CONNECT_FROM_EMAIL: 'tenantconnect@proproster.com' }
 
@@ -39,23 +39,71 @@ describe('buildInviteEmail', () => {
     expect(email.body).not.toContain('5531 Turtle Crossing Loop')
     expect(email.body).not.toContain('abc-123')
   })
+
+  // Bug fix (real-device testing, PR #60): "not consistently presenting
+  // a usable clickable link" — plain-text-only email relies entirely on
+  // a mail client's own best-effort auto-linking of a bare URL. Every
+  // Tenant Connect email now also carries a real HTML variant with a
+  // clickable button.
+  it('the html variant includes the same link as a clickable button, not just plain text', () => {
+    const email = buildInviteEmail('5531 Turtle Crossing Loop', 'https://proproster.com/tenant?invite=abc-123')
+    expect(email.html).toBeTruthy()
+    expect(email.html).toContain('href="https://proproster.com/tenant?invite=abc-123"')
+    expect(email.html).toContain('Connect to your rental')
+  })
 })
 
 describe('buildNewRequestEmail', () => {
   it('includes the category\'s human-readable label (not its raw machine id), title, and property in the landlord notification', () => {
-    const email = buildNewRequestEmail('5531 Turtle Crossing Loop', 'plumbing', 'Kitchen sink leaking')
+    const email = buildNewRequestEmail('5531 Turtle Crossing Loop', 'plumbing', 'Kitchen sink leaking', 'https://proproster.com/?openProperty=p1&openTab=Rent&openRentSubTab=Tenant')
     expect(email.subject).toContain('5531 Turtle Crossing Loop')
     expect(email.body).toContain('Plumbing')
     expect(email.body).not.toContain('plumbing request') // the raw id must never leak into recipient-facing copy
     expect(email.body).toContain('Kitchen sink leaking')
   })
+
+  it('includes the specific property/request destination as a usable link in both the plain-text and html variants — never a bare homepage link', () => {
+    const url = 'https://proproster.com/?openProperty=p1&openTab=Rent&openRentSubTab=Tenant'
+    const email = buildNewRequestEmail('5531 Turtle Crossing Loop', 'plumbing', 'Kitchen sink leaking', url)
+    expect(email.body).toContain(url)
+    expect(email.body).toContain('openProperty=p1') // the specific property/request deep link, never a bare homepage URL
+    expect(email.html).toContain(`href="${url}"`)
+    expect(email.html).toContain('Open the request')
+  })
 })
 
 describe('buildLandlordUpdateEmail', () => {
   it('references the request title and property without echoing message content', () => {
-    const email = buildLandlordUpdateEmail('5531 Turtle Crossing Loop', 'Kitchen sink leaking')
+    const email = buildLandlordUpdateEmail('5531 Turtle Crossing Loop', 'Kitchen sink leaking', 'https://proproster.com/tenant')
     expect(email.subject).toContain('5531 Turtle Crossing Loop')
     expect(email.body).toContain('Kitchen sink leaking')
+  })
+
+  it('links to the Tenant Portal (not the landlord homepage) as a usable link in both variants', () => {
+    const email = buildLandlordUpdateEmail('5531 Turtle Crossing Loop', 'Kitchen sink leaking', 'https://proproster.com/tenant')
+    expect(email.body).toContain('https://proproster.com/tenant')
+    expect(email.html).toContain('href="https://proproster.com/tenant"')
+    expect(email.html).toContain('Open your Tenant Portal')
+  })
+})
+
+describe('landlordRequestLink', () => {
+  it('deep-links to the specific property\'s Rent > Tenant tab via the existing ?openProperty=/?openTab=/?openRentSubTab= mechanism (app/page.tsx), never the bare homepage', () => {
+    expect(landlordRequestLink('https://proproster.com', 'prop-1')).toBe('https://proproster.com/?openProperty=prop-1&openTab=Rent&openRentSubTab=Tenant')
+  })
+
+  it('strips a trailing slash on the origin (same convention as tenantInviteLink/providerOutreachLink)', () => {
+    expect(landlordRequestLink('https://proproster.com/', 'prop-1')).toBe('https://proproster.com/?openProperty=prop-1&openTab=Rent&openRentSubTab=Tenant')
+  })
+})
+
+describe('tenantPortalLink', () => {
+  it('links to /tenant — the same dedicated route the invite email itself uses', () => {
+    expect(tenantPortalLink('https://proproster.com')).toBe('https://proproster.com/tenant')
+  })
+
+  it('strips a trailing slash on the origin', () => {
+    expect(tenantPortalLink('https://proproster.com/')).toBe('https://proproster.com/tenant')
   })
 })
 
@@ -102,6 +150,28 @@ describe('sendTenantConnectEmail', () => {
     expect(body.to).toBe('tenant@example.com')
     expect(body.subject).toBe('You\'ve been invited')
     expect(body.text).toBe('Hello')
+  })
+
+  it('forwards the html variant to Resend when the email includes one, so the link renders as a real clickable button, not just plain text', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init: Record<string, unknown>) => ({ ok: true, status: 200, text: async () => '' }) as Response)
+    vi.stubGlobal('fetch', fetchMock)
+
+    await sendTenantConnectEmail('tenant@example.com', { subject: 'x', body: 'y', html: '<p>y</p>' }, FULL_ENV)
+
+    const [, init] = fetchMock.mock.calls[0] as [string, { body: string }]
+    const body = JSON.parse(init.body)
+    expect(body.html).toBe('<p>y</p>')
+  })
+
+  it('omits html from the Resend payload when the email has none (backward compatible — never sends an empty/undefined html field)', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init: Record<string, unknown>) => ({ ok: true, status: 200, text: async () => '' }) as Response)
+    vi.stubGlobal('fetch', fetchMock)
+
+    await sendTenantConnectEmail('tenant@example.com', { subject: 'x', body: 'y' }, FULL_ENV)
+
+    const [, init] = fetchMock.mock.calls[0] as [string, { body: string }]
+    const body = JSON.parse(init.body)
+    expect('html' in body).toBe(false)
   })
 
   it('returns { sent: false, reason: "provider_error" } and never throws on a non-2xx response', async () => {

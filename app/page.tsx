@@ -316,7 +316,25 @@ const formatSize = (bytes: number) => {
 // and in lib/dashboard/date-classification.ts — a bare `new
 // Date(dateOnlyString)` parses as UTC midnight, which displays one
 // calendar day early in every negative-UTC-offset timezone.
-const dateOnly = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateString()
+//
+// Bug fix (real-device testing, PR #60): DashboardDateItem.date is a
+// bare `YYYY-MM-DD` DATE value for every source except TenantRequest,
+// which passes tenant_requests.created_at — a full timestamptz —
+// straight through (lib/tenant-connect/requests.ts's
+// buildTenantRequestDateItems()). Appending T12:00:00 to an
+// already-complete ISO timestamp produced an unparseable string (e.g.
+// "2026-09-10T14:23:00+00:00T12:00:00"), which rendered as "Invalid
+// Date" in Needs Your Attention. This is the dashboard's own due-date
+// formatter only — it never touches appointment proposed_local_start_at
+// wall-clock values or any Scheduling Coordination V1 timezone logic.
+// A value already carrying a time component (longer than a bare
+// YYYY-MM-DD) is parsed as-is; a bare date keeps the noon-anchor fix
+// above. Either way, an unparseable value falls back to '—' rather than
+// ever showing "Invalid Date" again.
+const dateOnly = (value: string) => {
+  const parsed = value.length > 10 ? new Date(value) : new Date(`${value}T12:00:00`)
+  return Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleDateString()
+}
 
 // Relative timestamp for Recent Activity — "Today," "Yesterday," "3 days
 // ago," falling back to a plain calendar date beyond a week so the feed
@@ -496,6 +514,11 @@ export default function Home() {
   const [hasLoadedPortfolio, setHasLoadedPortfolio] = useState(false)
   const [portfolioLoadFailed, setPortfolioLoadFailed] = useState(false)
   const autoRetriedRef = useRef(false)
+  // Tenant-first routing (PR #60 mobile/routing polish) — bounded to
+  // once per sign-in, exactly like autoRetriedRef above, so it can
+  // never re-fire mid-session (e.g. right after the landlord deletes
+  // their last property while this dashboard stays open).
+  const tenantFirstRoutingCheckedRef = useRef(false)
   // Bug fix (real-device iPhone testing, M3.1 follow-up): a brief,
   // auto-dismissing confirmation for fast row-level mutations (currently
   // just the maintenance status <select>) that update local state
@@ -750,6 +773,7 @@ export default function Home() {
     setHasLoadedPortfolio(false)
     setPortfolioLoadFailed(false)
     autoRetriedRef.current = false
+    tenantFirstRoutingCheckedRef.current = false
     if (user) void loadPortfolio()
     else {
       setProperties([])
@@ -769,6 +793,34 @@ export default function Home() {
       setPropertyOwnership([])
     }
   }, [user?.id])
+
+  // Tenant-first routing (PR #60 mobile/routing polish). Owner and
+  // Tenant are still NOT mutually exclusive account types (see
+  // lib/tenant-connect/onboarding.ts's own header) — this is a routing
+  // decision only, never a role/access change, and it reuses the exact
+  // data this dashboard already has (properties) plus one small
+  // RLS-scoped existence check (tenant_property_access), the same
+  // pattern AuthNavMenu's own hasTenantAccess check already uses.
+  //
+  // Fires at most once per sign-in, and only once loadPortfolio() has
+  // genuinely finished (hasLoadedPortfolio — never while properties is
+  // still its initial empty array during loading, which would have
+  // misread "not loaded yet" as "owns nothing"). A landlord with zero
+  // properties and no tenant access still lands on the normal empty
+  // "+ Add your first property" dashboard, unchanged. A dual-role
+  // account (owns >=1 property) never redirects, regardless of tenant
+  // access, so it keeps landing on the landlord dashboard exactly as
+  // before — the "Tenant Portal" nav link (AuthNavMenu) remains its way
+  // into the tenant context.
+  useEffect(() => {
+    if (!supabase || !user || !hasLoadedPortfolio) return
+    if (properties.length > 0) return
+    if (tenantFirstRoutingCheckedRef.current) return
+    tenantFirstRoutingCheckedRef.current = true
+    supabase.from('tenant_property_access').select('id').eq('status', 'Active').limit(1).then(({ data }) => {
+      if (data && data.length) window.location.href = '/tenant'
+    })
+  }, [user?.id, hasLoadedPortfolio, properties.length])
 
   // Post-selection-failure investigation (V2) — PHOTO_RENDER_RESULT:
   // confirms the render layer actually received whatever `photos` state

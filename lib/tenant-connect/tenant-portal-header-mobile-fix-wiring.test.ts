@@ -45,32 +45,19 @@ describe('Tenant Portal header — mobile overflow fix (iPhone: Wordmark | Tenan
   })
 })
 
-describe('Accept Invitation — TEMPORARY diagnostic (PR #60 real-device "This invite is not available to accept." investigation)', () => {
+describe('Accept Invitation — TEMPORARY diagnostic (bc8527e) removed now that real-device testing confirms the flow works end-to-end', () => {
+  const fnBody = tenantPageSource.slice(
+    tenantPageSource.indexOf('async function acceptInvite'),
+    tenantPageSource.indexOf('if (loading) return'),
+  )
+
   it('the RPC arg key is exactly p_access_id, and accessId is passed unmodified — no transform between the rendered row id and the RPC call', () => {
-    const fnBody = tenantPageSource.slice(
-      tenantPageSource.indexOf('async function acceptInvite'),
-      tenantPageSource.indexOf('if (loading) return'),
-    )
     expect(fnBody).toContain("supabase.rpc('accept_tenant_invite', { p_access_id: accessId })")
   })
 
-  it('the diagnostic never logs a token, refresh token, JWT, or any other secret — only access id / auth user id / auth email / session-exists', () => {
-    const fnBody = tenantPageSource.slice(
-      tenantPageSource.indexOf('async function acceptInvite'),
-      tenantPageSource.indexOf('if (loading) return'),
-    )
-    expect(fnBody).not.toMatch(/access_token|refresh_token|\.session\.access_token/i)
-    expect(fnBody).toContain('supabase.auth.getUser()')
-    expect(fnBody).toContain('supabase.auth.getSession()')
-    expect(fnBody).toContain('Boolean(sessionData.session)')
-  })
-
-  it('the diagnostic only appends to the existing error banner on failure — the success path is unchanged', () => {
-    const fnBody = tenantPageSource.slice(
-      tenantPageSource.indexOf('async function acceptInvite'),
-      tenantPageSource.indexOf('if (loading) return'),
-    )
-    expect(fnBody).toContain("setError(err.message + diag)")
+  it('the diagnostic (getUser/getSession + the appended error text) is gone — normal error handling only', () => {
+    expect(fnBody).not.toMatch(/supabase\.auth\.getUser\(\)|supabase\.auth\.getSession\(\)|diag/)
+    expect(fnBody).toContain('setError(err.message)')
   })
 
   it('the button click passes the exact tenant_property_access.id of the rendered row, not the URL ?invite= param', () => {
@@ -80,5 +67,41 @@ describe('Accept Invitation — TEMPORARY diagnostic (PR #60 real-device "This i
     )
     expect(jsxBody).toContain('onClick={() => void acceptInvite(a.id)}')
     expect(jsxBody).not.toMatch(/inviteHint|URLSearchParams/)
+  })
+})
+
+describe('Tenant Portal tab bar — mobile overflow fix (real iPhone: "Documents", the 5th tab, was clipped off the right edge)', () => {
+  it('all five tabs still render, unchanged', () => {
+    expect(tenantPageSource).toContain("const TENANT_VIEWS: TenantView[] = ['My Rental', 'Lease', 'Rent', 'Requests', 'Documents']")
+  })
+
+  it('the tab bar stays horizontally scrollable and cannot itself grow past its container', () => {
+    const rule = globalsCssSource.slice(
+      globalsCssSource.indexOf('.tenantPortalTabs {'),
+      globalsCssSource.indexOf('.tenantPortalTabs button {'),
+    )
+    expect(rule).toContain('overflow-x: auto')
+    expect(rule).toContain('max-width: 100%')
+    expect(rule).toContain('-webkit-overflow-scrolling: touch')
+  })
+
+  it('the shell is a hard backstop against page-level horizontal overflow', () => {
+    const rule = globalsCssSource.slice(
+      globalsCssSource.indexOf('.tenantPortalShell {'),
+      globalsCssSource.indexOf('.tenantPortalShell {') + 200,
+    )
+    expect(rule).toContain('overflow-x: hidden')
+  })
+
+  it('desktop behavior is preserved — tabs still spread full-width via flex-grow when they fit', () => {
+    expect(globalsCssSource).toContain('.tenantPortalTabs button { flex: 1 0 auto;')
+  })
+
+  it('text size is not shrunk excessively at phone width (still a readable button label size)', () => {
+    const anchor = globalsCssSource.indexOf('.tenantPortalShell { padding: 0 14px 50px')
+    const mobileBlock = globalsCssSource.slice(anchor, anchor + 300)
+    const match = /\.tenantPortalTabs button \{ font-size: ([\d.]+)px/.exec(mobileBlock)
+    expect(match).toBeTruthy()
+    expect(Number(match![1])).toBeGreaterThanOrEqual(12)
   })
 })

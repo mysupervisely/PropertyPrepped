@@ -1955,7 +1955,7 @@ h2, h3, p { margin-top: 0; }
    .shell/.topbar/.authHeader (those carry the landlord's navigation) —
    a narrower max-width, big tap targets, no horizontal scrolling.
    ========================================================================== */
-.tenantPortalShell { max-width: 620px; margin: 0 auto; padding: 0 20px 60px; min-height: 100vh; background: var(--bg); }
+.tenantPortalShell { max-width: 620px; margin: 0 auto; padding: 0 20px 60px; min-height: 100vh; background: var(--bg); overflow-x: hidden; }
 /* flex-wrap here (not just the 430px breakpoint below) is the actual
    overflow fix: on a narrow phone, Wordmark + "Tenant Portal" +
    the conditional "Landlord Dashboard" link + "Log out" no longer fit
@@ -1979,7 +1979,19 @@ h2, h3, p { margin-top: 0; }
 .tenantPortalPropertyHead { padding: 22px 0 6px; }
 .tenantPortalPropertyHead h1 { font-size: clamp(24px, 6vw, 32px); }
 
-.tenantPortalTabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin: 10px 0 4px; overflow-x: auto; }
+/* Mobile tab overflow fix (real iPhone testing, PR #60): Documents (the
+   5th tab) was clipped off the right edge with no reliable way to reach
+   it. overflow-x: auto alone was already present but wasn't dependably
+   draggable/contained on iOS Safari without -webkit-overflow-scrolling
+   and overscroll-behavior-x — this bar sits inside .tenantPortalShell,
+   not its own dedicated scroll region, so without those a drag could
+   scroll-chain to the page instead of the tab strip. max-width: 100%
+   plus the shell's own overflow-x: hidden (above) is the "no page-level
+   horizontal overflow" backstop the task calls for. Trailing padding
+   keeps the last tab from sitting flush against the edge, so there's a
+   visible cue that more content follows. Desktop is unaffected — flex:
+   1 0 auto still spreads all 5 tabs full-width whenever they fit. */
+.tenantPortalTabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin: 10px 0 4px; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; padding-right: 4px; }
 .tenantPortalTabs button { flex: 1 0 auto; border: 0; background: transparent; padding: 14px 10px; font-weight: 650; color: var(--muted); border-bottom: 2px solid transparent; font-size: 15px; white-space: nowrap; }
 .tenantPortalTabs button.active { color: var(--brand); border-bottom-color: var(--brand); }
 

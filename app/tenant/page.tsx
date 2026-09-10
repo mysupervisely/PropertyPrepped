@@ -201,29 +201,9 @@ function TenantPortal({ userId }: { userId: string }) {
     if (!supabase) return
     setAcceptBusy(accessId)
     setError('')
-    // TEMPORARY diagnostic (real-device "This invite is not available to
-    // accept." investigation, PR #60). Static tracing of this file found
-    // no frontend bug — accessId is the exact tenant_property_access.id
-    // just rendered, the RPC arg key matches p_access_id, and the same
-    // singleton supabase client/session serves both the SELECT that
-    // showed the invite and this call. This only captures what the user
-    // themselves already asked to see confirmed on the failing device:
-    // the access id submitted, the authenticated user id/email
-    // getUser() itself reports at the moment of the click, and whether
-    // a session exists — never a token, refresh token, or JWT. Only
-    // surfaced on a failure, appended to the existing error banner (no
-    // separate log line the tester would need devtools to see). Remove
-    // once the real cause is found.
-    let diag = ''
-    try {
-      const [{ data: authData }, { data: sessionData }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()])
-      diag = ` [diag: accessId=${accessId} authUserId=${authData.user?.id ?? 'none'} authEmail=${authData.user?.email ?? 'none'} hasSession=${Boolean(sessionData.session)}]`
-    } catch {
-      diag = ' [diag: unavailable]'
-    }
     const { error: err } = await supabase.rpc('accept_tenant_invite', { p_access_id: accessId })
     setAcceptBusy(null)
-    if (err) { setError(err.message + diag); return }
+    if (err) { setError(err.message); return }
     // Section: "After accepting, route them directly to the tenant-
     // facing experience for the invited rental." load() re-fetches
     // access (the newly-Active row now becomes `selected` since it's
