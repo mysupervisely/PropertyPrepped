@@ -268,3 +268,45 @@ describe('Mobile layout — remaining left-edge clipping fix (real-iPhone follow
     expect(body).not.toMatch(/margin-left:\s*-|padding-left:\s*\d{2,}px/)
   })
 })
+
+describe('Phase B.1 (real-iPhone follow-up) — authenticated left-edge clipping recurred despite the .topbar fix above; the document itself could still be left horizontally scrolled', () => {
+  it('.shell (the authenticated page\'s own root container — header included, per AuthHeader rendering as its first child) contains its own children instead of html/body, the same pattern already proven for .tenantPortalShell', () => {
+    const shellRule = cssSource.match(/\.shell \{[^}]*\}/)
+    expect(shellRule).not.toBeNull()
+    expect(shellRule![0]).toMatch(/overflow-x:\s*hidden/)
+    // Still not html/body — this containment lives on the page's own
+    // shell, not masked at the document root (the existing guard above
+    // in this file already enforces the html/body prohibition
+    // generally; this asserts the fix actually landed somewhere real).
+    expect(cssSource).not.toMatch(/^(html|body)\s*\{[^}]*overflow-x:\s*hidden/m)
+  })
+
+  it('.workspaceShell (the property-detail variant of the same root container) does not reintroduce visible overflow', () => {
+    const rule = cssSource.match(/\.workspaceShell \{[^}]*\}/)
+    expect(rule).not.toBeNull()
+    expect(rule![0]).not.toMatch(/overflow-x:\s*visible/)
+  })
+
+  it('a real sign-in (user transitioning from signed-out to signed-in) resets BOTH scroll axes exactly once — not just vertical, which every pre-existing window.scrollTo() call in this file already handled on its own trigger', () => {
+    const idx = pageSource.indexOf('if (!user) return\n    if (typeof window === \'undefined\') return\n    window.scrollTo({ left: 0, top: 0 })')
+    expect(idx).toBeGreaterThan(-1)
+    // The effect this line belongs to must be keyed by user?.id (fires
+    // once per actual sign-in transition, not on every render) and must
+    // guard on `user` being truthy (never fires on sign-out/first mount
+    // with no session) — both real behavioral properties, not just "the
+    // string exists somewhere."
+    const effectStart = pageSource.lastIndexOf('useEffect(() => {', idx)
+    const effectBody = pageSource.slice(effectStart, idx + 200)
+    expect(effectBody).toMatch(/\}, \[user\?\.id\]\)/)
+    expect(effectBody).toContain('if (!user) return')
+  })
+
+  it('the two pre-existing "scroll to top" call sites (surfaceError, openProperty) now reset horizontal position too, not only vertical', () => {
+    expect(pageSource).not.toMatch(/window\.scrollTo\(\{ top: 0, behavior: 'smooth' \}\)/)
+    const scrollCalls = pageSource.match(/window\.scrollTo\(\{[^}]*\}\)/g) || []
+    expect(scrollCalls.length).toBeGreaterThanOrEqual(3) // sign-in reset + surfaceError + openProperty
+    for (const call of scrollCalls) {
+      expect(call).toMatch(/left:\s*0/)
+    }
+  })
+})

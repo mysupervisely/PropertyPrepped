@@ -98,7 +98,34 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
-.shell { max-width: 1220px; margin: 0 auto; padding: 0 28px 70px; }
+/* Phase B.1 (real-iPhone follow-up to Mobile Authentication & Layout
+   Reliability V1) — root-cause containment, not a mask. .topbar's own
+   fix above (see its detailed comment further down this file) already
+   diagnosed and fixed ONE specific instance of this bug class: a flex
+   row refusing to shrink below its own content's intrinsic width at
+   390-393px, which pushed the ENTIRE DOCUMENT wider than the viewport
+   — at which point iOS Safari's elastic/rubber-band scrolling can
+   leave the document scrolled a few pixels to the right, making every
+   OTHERWISE correctly-sized section (the welcome heading, PropWatch,
+   My Properties) appear clipped on the left, intermittently, until the
+   user scrolls back. That symptom can recur from ANY similar sizing
+   bug anywhere in this large page, not just .topbar's — this app has
+   60+ media queries across many ad hoc breakpoints, so a further
+   undiscovered instance is plausible. overflow-x: hidden here draws
+   the containment boundary at the correct semantic level (this
+   authenticated page's own root shell, exactly like
+   .tenantPortalShell already does for the Tenant Portal) instead of
+   html/body: a child that's still too wide gets clipped AT .shell's
+   own edge, visibly and debuggably, rather than silently pushing the
+   whole document (and every unrelated section) off-axis. Because
+   .shell wraps this page's entire authenticated content including its
+   own header (AuthHeader/.topbar renders as .shell's first child),
+   this also makes the underlying document itself structurally unable
+   to scroll horizontally while here — a browser cannot leave
+   scrollLeft at a nonzero value once scrollWidth <= clientWidth, so
+   this also self-corrects any horizontal drift inherited from another
+   route entirely, not just from this page's own content. */
+.shell { max-width: 1220px; margin: 0 auto; padding: 0 28px 70px; overflow-x: hidden; }
 .workspaceShell { max-width: 1280px; }
 .topbar { min-height: 86px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); }
 .brand { font-size: 25px; font-weight: 750; letter-spacing: -0.7px; display: block; }

@@ -794,6 +794,25 @@ export default function Home() {
     }
   }, [user?.id])
 
+  // Phase B.1 (real-iPhone follow-up, Simplification + Maintenance
+  // Workspace V2) — "signing in must not change the horizontal
+  // position of the authenticated page." landing (unauthenticated) and
+  // the dashboard (authenticated) are the SAME mounted route/document —
+  // sign-in swaps which JSX renders, it never navigates — so any
+  // horizontal scroll drift already on the page (see .shell's own
+  // overflow-x: hidden fix, globals.css, for why that drift can happen
+  // at all: iOS Safari's elastic scrolling after a transient layout
+  // overflow) would otherwise carry straight through into the
+  // dashboard's first paint. Every existing window.scrollTo() call in
+  // this file already resets vertical position on its own trigger;
+  // this is the one point that must reset BOTH axes exactly once, right
+  // when a real sign-in completes.
+  useEffect(() => {
+    if (!user) return
+    if (typeof window === 'undefined') return
+    window.scrollTo({ left: 0, top: 0 })
+  }, [user?.id])
+
   // Tenant-first routing (PR #60 mobile/routing polish). Owner and
   // Tenant are still NOT mutually exclusive account types (see
   // lib/tenant-connect/onboarding.ts's own header) — this is a routing
@@ -1040,7 +1059,9 @@ export default function Home() {
   function surfaceError(message: string) {
     setError(message)
     if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+      // Phase B.1: also resets horizontal position — see the sign-in
+      // scroll-reset effect above for why this axis matters here too.
+      window.scrollTo({ left: 0, top: 0, behavior: 'smooth' })
     }
   }
 
@@ -1470,7 +1491,9 @@ export default function Home() {
     if (propSubTab) setPropertySubTab(propSubTab)
     if (rentSubTab) setRentSubTab(rentSubTab)
     setDocCategory('All')
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    // Phase B.1: also resets horizontal position — same reasoning as
+    // surfaceError() above.
+    window.scrollTo({ left: 0, top: 0, behavior: 'smooth' })
   }
 
   // Smart Upload Foundation: a "PrepareOnly" item (lease/insurance/
