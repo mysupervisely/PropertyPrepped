@@ -106,3 +106,16 @@ export function BoxIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+// Simplification + Maintenance Workspace V2, Phase D.2: the profile
+// entry point's own safe fallback when the landlord has no saved photo
+// (components/ProfileEntryButton.tsx) — a plain, neutral silhouette,
+// never a broken image.
+export function PersonIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M4.5 20c1.4-4 4.2-6 7.5-6s6.1 2 7.5 6" />
+    </svg>
+  )
+}

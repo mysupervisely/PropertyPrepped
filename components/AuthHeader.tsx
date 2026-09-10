@@ -29,6 +29,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Wordmark } from './Wordmark'
 import { AuthNavMenu } from './AuthNavMenu'
+import { ProfileEntryButton } from './ProfileEntryButton'
 import { MobileBottomNav } from './MobileBottomNav'
 import { SmartUploadButton } from './SmartUploadButton'
 import { SmartUploadModal } from './SmartUpload/SmartUploadModal'
@@ -100,6 +101,11 @@ export function AuthHeader({
     <>
       <header className={`topbar authHeader${hideMobileNav ? '' : ' authHeaderWithBottomNav'}`}>
         <div className="topbarBrandGroup">
+          {/* Phase D.2: the landlord's own profile entry point ("me") —
+              always visible, distinct from the tools menu right next to
+              it. See ProfileEntryButton's own header comment for the
+              full reasoning. */}
+          <ProfileEntryButton />
           {/* Dashboard Navigation Bug fix: reuse the exact same
               onBrandClick this header already threads to the wordmark
               below for the identical single-page-app reason — see

@@ -419,7 +419,7 @@ function MaintenanceRequestRow({ req, categoryByMaintenanceRequestId, onOpen, on
         <span className="maintenanceRequestRowMainBody">
           <span className="maintenanceRequestRowTitle">{req.title}</span>
           <span className="muted maintenanceRequestRowMeta">
-            Opened {new Date(req.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} &middot; {req.source === 'tenant' ? 'Tenant' : 'Landlord'}
+            Opened {new Date(req.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} &middot; {req.source === 'tenant' ? 'Tenant' : 'Landlord'}
           </span>
         </span>
         {urgent ? <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span> : <span className="statusPill maintenanceRequestRowStatus">{req.status}</span>}

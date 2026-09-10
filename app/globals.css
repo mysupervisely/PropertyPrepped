@@ -1547,17 +1547,18 @@ h2, h3, p { margin-top: 0; }
 .authNavMenu { position: relative; }
 .authNavMenuButton { border: 1px solid var(--line); background: white; color: var(--text); width: 40px; height: 40px; border-radius: var(--radius-control); font-size: 17px; display: grid; place-items: center; }
 .authNavMenuButton:hover { border-color: var(--brand); color: var(--brand); }
-/* Final Launch Fixes: header profile avatar — same button, ~34px
-   circle, comfortably inside the existing 40px touch target.
-   Follow-up (avatar presentation): authNavMenuButtonHasAvatar strips
-   the button's own white background/border/padding (built for the ☰
-   glyph) so nothing square shows behind the circular photo — width =
-   height, border-radius: 50%, overflow: hidden as a defensive clip in
-   case the image ever briefly renders larger than its box. The ☰
-   fallback state (no photo) is completely untouched. */
-.authNavMenuButtonHasAvatar { background: transparent; border-color: transparent; padding: 0; border-radius: 50%; overflow: hidden; }
-.authNavMenuButtonHasAvatar:hover { border-color: transparent; }
-.authNavAvatar { width: 34px; height: 34px; border-radius: 50%; overflow: hidden; object-fit: cover; object-position: center; display: block; }
+/* Simplification + Maintenance Workspace V2, Phase D.2: the profile
+   avatar is now its own control (components/ProfileEntryButton.tsx),
+   not merged into the hamburger button above — see that component's
+   header comment. Same ~34px circle inside a 40px touch target the
+   avatar used to occupy; a soft brand-tinted circle with the neutral
+   PersonIcon fills the fallback (no-photo) state, never a bare glyph
+   or a broken image. */
+.profileEntry { position: relative; flex-shrink: 0; }
+.profileEntryButton { display: block; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; }
+.profileEntryAvatarImg { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
+.profileEntryFallback { width: 100%; height: 100%; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); border: 1px solid var(--line); box-sizing: border-box; }
+.profileEntryFallback svg { width: 20px; height: 20px; }
 .authNavMenuPanel { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; min-width: 200px; background: white; border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 12px 28px rgba(15, 30, 24, .12); display: grid; }
 .authNavMenuPanel a { display: block; padding: 10px 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 14px; font-weight: var(--weight-medium); white-space: nowrap; }
 .authNavMenuPanel a:hover { background: var(--brand-soft); color: var(--brand); }
@@ -2385,23 +2386,59 @@ h2, h3, p { margin-top: 0; }
    property-level Maintenance list (.maintenanceRequestRow): a leading
    category icon, title strongest, property second, date/source quiet,
    one trailing compact badge, a chevron — restrained, rounded, a
-   single subtle border, no card-on-card clutter. */
-.maintenanceCommandCenterList { display: grid; gap: 8px; margin-top: 14px; }
+   single subtle border, no card-on-card clutter.
+   Phase D.2 refined this further toward the approved visual concept —
+   see each rule's own comment for what changed and why. */
+.maintenanceCommandCenterList { display: grid; gap: 8px; margin-top: 10px; }
 .maintenanceCommandCenterCard {
   display: flex; align-items: center; gap: 12px; text-align: left; width: 100%;
-  background: white; border: 1px solid var(--line); border-radius: var(--radius-card); padding: 13px 14px;
+  background: white; border: 1px solid var(--line); border-radius: var(--radius-card); padding: 12px 14px;
   cursor: pointer; transition: border-color .15s ease;
+  /* Phase D.2 bug fix: this is a bare <button> with no explicit color
+     of its own, so without this it inherits the platform's default
+     button text color — on iOS Safari/Chrome that reads as a faint
+     blue "link" tint, exactly the "request text is blue/link-styled"
+     complaint. Every line inside (title/address/meta) still sets its
+     own color deliberately below; this is the safety-net default. */
+  color: var(--text);
 }
 .maintenanceCommandCenterCard::after { content: '›'; color: var(--muted); font-size: 18px; flex-shrink: 0; }
 .maintenanceCommandCenterCard:hover { border-color: var(--brand); }
-.maintenanceCommandCenterCardUrgent { border-color: #e2a49d; background: #fefaf9; }
+/* Phase D.2: "the current large pink/red outline...feels too visually
+   heavy" — reduced to a faint, warm-neutral border tint and no
+   background tint at all (the card stays white, like every other
+   card). The soft-pink icon background below plus the small Urgent
+   pill already carry the actual signal; the border is now "at most an
+   extremely restrained...cue," not the primary indicator. */
+.maintenanceCommandCenterCardUrgent { border-color: #f0d6d1; }
+/* Calm treatment for completed cases inside the "All requests" filter
+   (Section 9: "should not visually compete with active requests," but
+   never hides the information itself — title/address/status are all
+   still fully rendered, just visually receded). Active cases are
+   unaffected; sortCasesForCommandCenter() already orders every Active
+   case before History, so this only ever applies to the trailing
+   group. */
+.maintenanceCommandCenterCardCompleted { opacity: .7; }
 .maintenanceCommandCenterCardIcon { flex-shrink: 0; width: 34px; height: 34px; padding: 8px; box-sizing: border-box; border-radius: 999px; background: var(--brand-soft); color: var(--brand); }
 .maintenanceCommandCenterCardUrgent .maintenanceCommandCenterCardIcon { background: #fdeceb; color: #8a3d35; }
 .maintenanceCommandCenterCardBody { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
-.maintenanceCommandCenterCardTitle { display: block; font-size: 15px; font-weight: var(--weight-semibold); line-height: 1.3; }
-.maintenanceCommandCenterCardProperty { display: block; font-size: 13px; font-weight: var(--weight-medium); }
-.maintenanceCommandCenterCardMeta { display: block; font-size: 12px; }
-.maintenanceCommandCenterCardStatus { flex-shrink: 0; }
+.maintenanceCommandCenterCardTitle { display: block; font-size: 15px; font-weight: var(--weight-semibold); line-height: 1.3; color: var(--text); }
+/* Phase D.2: "muted property address" — was `strong`/near-full-strength
+   text; the title alone is now the strongest element in the row. Two
+   lines (street, then city/state/zip) instead of one long comma-joined
+   string that wraps unpredictably — presentation only, the underlying
+   address/city fields are unchanged. The second line only renders when
+   the property actually has one (see propertyAddressLines() below). */
+.maintenanceCommandCenterCardAddress { display: block; font-size: 13px; font-weight: var(--weight-medium); line-height: 1.3; color: var(--muted); }
+.maintenanceCommandCenterCardAddressCityState { display: block; font-size: 12px; font-weight: var(--weight-medium); line-height: 1.3; color: var(--muted); }
+.maintenanceCommandCenterCardMeta { display: block; font-size: 12px; color: var(--muted); }
+/* Phase D.2: "Submitted appears too prominently on every row" — the
+   plain status pill (everything except the dedicated red Urgent pill)
+   now uses a quiet neutral surface instead of the shared .statusPill
+   default (brand-green, the same treatment used for many other, more
+   important pills across the app) so it reads as low-key metadata,
+   not a competing call to action. */
+.maintenanceCommandCenterCardStatus { flex-shrink: 0; background: #eef1ee; color: var(--muted); font-weight: 650; }
 /* Still used by the property-level Maintenance tab's own "Show
    completed" toggle (app/page.tsx) — the portfolio Command Center
    above uses the filter row instead (see .maintenanceFilterRow below),
@@ -2415,8 +2452,10 @@ h2, h3, p { margin-top: 0; }
    filter row, replacing the old separate "Needs attention" heading
    plus a "Show completed" toggle. Same statusPill-adjacent visual
    language as the rest of the app's small pill/chip controls, not a
-   new UI pattern. */
-.maintenanceFilterRow { display: flex; gap: 6px; margin-top: 14px; overflow-x: auto; scrollbar-width: none; }
+   new UI pattern. Phase D.2 added a real count to each label's text
+   content (no CSS change needed for that — the pill already sizes to
+   its own text). */
+.maintenanceFilterRow { display: flex; gap: 6px; margin-top: 10px; overflow-x: auto; scrollbar-width: none; }
 .maintenanceFilterRow::-webkit-scrollbar { display: none; }
 .maintenanceFilterChip { flex-shrink: 0; white-space: nowrap; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; background: white; color: var(--muted); font-weight: var(--weight-medium); font-size: 12.5px; }
 .maintenanceFilterChip.active { background: var(--brand); color: white; border-color: var(--brand); }
@@ -2544,11 +2583,24 @@ h2, h3, p { margin-top: 0; }
 .maintenanceHubHead h2 { margin: 0 0 2px; }
 .maintenanceHubHead .maintenanceHubSectionTitle { margin: 6px 0 0; }
 .maintenanceHubHead > .muted { margin: 0; font-size: 13.5px; }
+/* Phase D.2 (Section 11 — mobile spacing): the portfolio Maintenance
+   page's own heading section reused .intro's generic hero padding
+   (44px/28px, built for a marketing-style page heading elsewhere in
+   the app) — far more vertical space than a compact "Maintenance" +
+   small "+ New Request" + one summary line actually needs. Scoped to
+   this one section only (.intro itself is unchanged everywhere else)
+   so more of the first mobile viewport is actual requests. */
+.maintenanceHubIntro { padding: 22px 0 12px; }
 
 .maintenanceRequestList { display: grid; margin-bottom: 6px; }
 .maintenanceRequestRow { display: flex; align-items: center; gap: 4px; border-top: 1px solid var(--line); min-width: 0; }
 .maintenanceRequestRow:first-child { border-top: 0; }
-.maintenanceRequestRowMain { flex: 1 1 0%; display: flex; align-items: center; gap: 10px; text-align: left; border: 0; background: transparent; padding: 13px 2px; min-width: 0; }
+.maintenanceRequestRowMain {
+  flex: 1 1 0%; display: flex; align-items: center; gap: 10px; text-align: left; border: 0; background: transparent; padding: 13px 2px; min-width: 0;
+  /* Same bare-<button>-has-no-color-by-default fix as
+     .maintenanceCommandCenterCard above — see that rule's comment. */
+  color: var(--text);
+}
 .maintenanceRequestRowMain::after { content: '›'; color: var(--muted); font-size: 18px; flex-shrink: 0; }
 /* Phase D.1: a leading category icon, matching the portfolio Command
    Center card's own .maintenanceCommandCenterCardIcon treatment —
@@ -2563,9 +2615,11 @@ h2, h3, p { margin-top: 0; }
    truncation on a narrow row that also carries a status pill and a
    trailing chevron. Matches .maintenanceCommandCenterCardTitle's own
    (pre-existing) wrapping behavior, not a new pattern. */
-.maintenanceRequestRowTitle { flex: 1 1 auto; min-width: 0; font-weight: var(--weight-semibold); font-size: 14.5px; line-height: 1.3; }
-.maintenanceRequestRowMeta { font-size: 12.5px; }
-.maintenanceRequestRowStatus { flex-shrink: 0; }
+.maintenanceRequestRowTitle { flex: 1 1 auto; min-width: 0; font-weight: var(--weight-semibold); font-size: 14.5px; line-height: 1.3; color: var(--text); }
+.maintenanceRequestRowMeta { font-size: 12.5px; color: var(--muted); }
+/* Phase D.2: same quiet-neutral treatment as
+   .maintenanceCommandCenterCardStatus — see that rule's comment. */
+.maintenanceRequestRowStatus { flex-shrink: 0; background: #eef1ee; color: var(--muted); font-weight: 650; }
 .maintenanceRequestRowRemove { flex-shrink: 0; font-size: 11px; color: #8a3d35; border: 0; background: transparent; padding: 8px; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
 
 /* Tenant Connect: Provider Outreach V1 — the account-less, mobile-first

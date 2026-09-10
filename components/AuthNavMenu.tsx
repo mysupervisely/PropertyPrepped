@@ -26,6 +26,11 @@ import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthUser } from '../lib/useAuthUser'
+// Simplification + Maintenance Workspace V2, Phase D.2: the profile
+// photo moved out to its own, separate ProfileEntryButton — see that
+// component's header comment for why "me" and "PropRoster tools" are
+// now two different buttons instead of one doing both jobs. This
+// menu's own trigger goes back to being a plain glyph.
 
 // Property-First Simplification V2: pared down further to the
 // hierarchy the milestone specifies — Dashboard/Documents/Tax
@@ -107,30 +112,6 @@ export function AuthNavMenu({ onDashboardNavigate, open, onOpenChange }: { onDas
     return () => { cancelled = true }
   }, [user?.id])
 
-  // Final Launch Fixes: the same canonical private profile photo the
-  // Profile page shows (Launch Polish's profile-photos bucket), reused —
-  // not re-uploaded — here as a small circular avatar in place of the
-  // hamburger glyph. This is still the exact same button/click handler
-  // that already opens this menu (which is where Profile already lives)
-  // — no new menu, no new interaction. Falls back to the generic ☰ icon
-  // whenever there's no photo, and never fetches anything until a user
-  // is present.
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!supabase || !user) { setAvatarUrl(null); return }
-    let cancelled = false
-    supabase.from('user_profiles').select('photo_path').eq('id', user.id).maybeSingle().then(({ data }) => {
-      if (cancelled) return
-      const path = (data as { photo_path?: string | null } | null)?.photo_path
-      if (!path) { setAvatarUrl(null); return }
-      supabase!.storage.from('profile-photos').createSignedUrl(path, 3600).then(({ data: signed }) => {
-        if (!cancelled) setAvatarUrl(signed?.signedUrl || null)
-      })
-    })
-    return () => { cancelled = true }
-  }, [user?.id])
-
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) onOpenChange(false)
@@ -141,14 +122,8 @@ export function AuthNavMenu({ onDashboardNavigate, open, onOpenChange }: { onDas
 
   return (
     <div className="authNavMenu" ref={containerRef}>
-      {/* Final Launch Fixes follow-up (avatar presentation): the button's
-          own white fill/border (built for the ☰ glyph state) only gets
-          dropped when an avatar photo is actually rendered inside it —
-          authNavMenuButtonHasAvatar strips background/border/padding so
-          nothing shows behind the circular photo. Same button, same
-          click handler, same fallback ☰ glyph with no photo. */}
-      <button type="button" className={`authNavMenuButton${avatarUrl ? ' authNavMenuButtonHasAvatar' : ''}`} aria-label="Open navigation menu" aria-haspopup="true" aria-expanded={open} onClick={() => onOpenChange(!open)}>
-        {avatarUrl ? <img src={avatarUrl} alt="" className="authNavAvatar" /> : <span aria-hidden="true">☰</span>}
+      <button type="button" className="authNavMenuButton" aria-label="Open navigation menu" aria-haspopup="true" aria-expanded={open} onClick={() => onOpenChange(!open)}>
+        <span aria-hidden="true">☰</span>
       </button>
       {/* Phase D.1: a backdrop behind the panel — only visually present
           at mobile widths (see globals.css), where the panel becomes a

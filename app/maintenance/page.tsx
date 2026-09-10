@@ -187,6 +187,20 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
     const p = propertyById.get(propertyId)
     return p ? `${p.address}${p.city ? `, ${p.city}` : ''}` : 'Property'
   }
+  // Simplification + Maintenance Workspace V2, Phase D.2: a two-line
+  // address for the card list ("5558 Pats Point Dr" / "Winter Park, FL
+  // 32792") instead of propertyLabel()'s single comma-joined string,
+  // which wraps unpredictably on a narrow card. Presentation only —
+  // properties.address/city are unchanged, and this reads the exact
+  // same stored fields propertyLabel() already does (city already
+  // stores "City, State ZIP" as one field — see the Add Property
+  // form's own "City, state & ZIP" label). Still used only here;
+  // MaintenanceCaseDetail keeps propertyLabel()'s single-string prop.
+  const propertyAddressLines = (propertyId: string): { street: string; cityState: string | null } => {
+    const p = propertyById.get(propertyId)
+    if (!p) return { street: 'Property', cityState: null }
+    return { street: p.address, cityState: p.city || null }
+  }
 
   // Simplification + Maintenance Workspace V2, Phase C: same reasoning
   // as app/page.tsx's identical call — providerOutreach/appointments are
@@ -327,11 +341,15 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
         <div className="emptyState"><strong>No maintenance requests yet.</strong><span>Requests your tenants submit through Tenant Connect, and any you log yourself, will show up here.</span></div>
       ) : (
         <>
+          {/* Phase D.2: each chip now shows a real count, read from the
+              same already-loaded/derived arrays the filter itself uses
+              (summary.activeCount/urgentCount, sorted.length) — no new
+              query. */}
           <div className="maintenanceFilterRow" role="tablist" aria-label="Filter maintenance requests">
-            <button type="button" role="tab" aria-selected={filter === 'attention'} className={`maintenanceFilterChip${filter === 'attention' ? ' active' : ''}`} onClick={() => setFilter('attention')}>Needs attention</button>
-            <button type="button" role="tab" aria-selected={filter === 'all'} className={`maintenanceFilterChip${filter === 'all' ? ' active' : ''}`} onClick={() => setFilter('all')}>All requests</button>
+            <button type="button" role="tab" aria-selected={filter === 'attention'} className={`maintenanceFilterChip${filter === 'attention' ? ' active' : ''}`} onClick={() => setFilter('attention')}>Needs attention ({summary.activeCount})</button>
+            <button type="button" role="tab" aria-selected={filter === 'all'} className={`maintenanceFilterChip${filter === 'all' ? ' active' : ''}`} onClick={() => setFilter('all')}>All requests ({sorted.length})</button>
             {summary.urgentCount > 0 && (
-              <button type="button" role="tab" aria-selected={filter === 'urgent'} className={`maintenanceFilterChip${filter === 'urgent' ? ' active' : ''}`} onClick={() => setFilter('urgent')}>Urgent</button>
+              <button type="button" role="tab" aria-selected={filter === 'urgent'} className={`maintenanceFilterChip${filter === 'urgent' ? ' active' : ''}`} onClick={() => setFilter('urgent')}>Urgent ({summary.urgentCount})</button>
             )}
           </div>
           {(() => {
@@ -346,7 +364,7 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
             return (
               <div className="maintenanceCommandCenterList">
                 {filtered.map((c) => (
-                  <MaintenanceCaseCard key={c.id} caseRow={c} propertyLabel={propertyLabel(c.property_id)} onOpen={() => setOpenCaseId(c.id)} />
+                  <MaintenanceCaseCard key={c.id} caseRow={c} address={propertyAddressLines(c.property_id)} onOpen={() => setOpenCaseId(c.id)} />
                 ))}
               </div>
             )
@@ -392,23 +410,41 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
   )
 }
 
-// Simplification + Maintenance Workspace V2, Phase D.2: dropped the
-// priority + source pill row (matching Phase C.1's same direction for
-// MaintenanceCaseDetail, and Phase D.2's identical change to the
-// property-level row) — Urgent is the only pill now, so it actually
-// stands out. Source folds into the quiet meta line as plain text
-// instead. Mobile-first card: readable, obvious urgency, obvious
-// property identity, large tap target (the whole card is the button),
-// minimal horizontal scroll (no wide table anywhere in this file).
-function MaintenanceCaseCard({ caseRow, propertyLabel, onOpen }: { caseRow: EnrichedMaintenanceCase; propertyLabel: string; onOpen: () => void }) {
+// Simplification + Maintenance Workspace V2, Phase D.2: refined further
+// toward the approved visual concept. Title is the only strong-weight
+// text now (dark, semibold) — the property address moved to a muted,
+// two-line presentation (street, then city/state/zip, when the
+// property has both — see propertyAddressLines() above) instead of a
+// single bold comma-joined string, and the status pill uses a quiet
+// neutral treatment unless the case is genuinely urgent (see
+// .maintenanceCommandCenterCardStatus in globals.css). A completed
+// case (caseRow.active === false, only reachable via the "All
+// requests" filter) gets a calm, reduced-opacity treatment — still
+// fully readable, never hidden. Mobile-first card: obvious urgency,
+// obvious property identity, large tap target (the whole card is the
+// button), minimal horizontal scroll (no wide table anywhere in this
+// file).
+function MaintenanceCaseCard({ caseRow, address, onOpen }: {
+  caseRow: EnrichedMaintenanceCase
+  address: { street: string; cityState: string | null }
+  onOpen: () => void
+}) {
+  const classNames = [
+    'maintenanceCommandCenterCard',
+    caseRow.urgent ? 'maintenanceCommandCenterCardUrgent' : '',
+    !caseRow.active ? 'maintenanceCommandCenterCardCompleted' : '',
+  ].filter(Boolean).join(' ')
   return (
-    <button className={`maintenanceCommandCenterCard${caseRow.urgent ? ' maintenanceCommandCenterCardUrgent' : ''}`} onClick={onOpen}>
+    <button className={classNames} onClick={onOpen}>
       <MaintenanceCategoryIcon category={caseRow.category} className="maintenanceCommandCenterCardIcon" />
       <span className="maintenanceCommandCenterCardBody">
         <span className="maintenanceCommandCenterCardTitle">{caseRow.title}</span>
-        <strong className="maintenanceCommandCenterCardProperty">{propertyLabel}</strong>
-        <span className="muted maintenanceCommandCenterCardMeta">
-          Opened {new Date(caseRow.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} &middot; {caseRow.source === 'tenant' ? 'Tenant' : 'Landlord'}
+        <span className="maintenanceCommandCenterCardAddress">
+          {address.street}
+          {address.cityState && <span className="maintenanceCommandCenterCardAddressCityState">{address.cityState}</span>}
+        </span>
+        <span className="maintenanceCommandCenterCardMeta">
+          Opened {new Date(caseRow.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} &middot; {caseRow.source === 'tenant' ? 'Tenant' : 'Landlord'}
         </span>
       </span>
       {showsDedicatedUrgentBadge(caseRow, caseRow.urgent) ? (

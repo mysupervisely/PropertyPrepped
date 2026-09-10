@@ -167,7 +167,7 @@ export function TenantRequestsPanel({
                 <MaintenanceCategoryIcon category={r.category} className="maintenanceRequestRowIcon" />
                 <span className="maintenanceRequestRowMainBody">
                   <span className="maintenanceRequestRowTitle">{r.title}</span>
-                  <span className="muted maintenanceRequestRowMeta">{new Date(r.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                  <span className="muted maintenanceRequestRowMeta">{new Date(r.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                 </span>
                 <span className={`statusPill maintenanceRequestRowStatus ${r.status === 'New' ? 'pillWarn' : r.status === 'Resolved' ? 'pillGood' : ''}`}>{r.status}</span>
               </button>
