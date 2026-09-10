@@ -383,6 +383,15 @@ const compactMoney = (n: number) => {
 // existing user-preferences table to hang it on), just localStorage.
 const SNAPSHOT_EXPANDED_STORAGE_KEY = 'proproster:portfolioSnapshotExpanded'
 
+// Simplification + Maintenance Workspace V2, Phase E1.2: Needs Your
+// Attention's own Hide/Show preference — same lightweight, non-
+// sensitive, localStorage-only pattern as Portfolio Snapshot above
+// (reused, not reinvented). Presentation only: hiding this section
+// never touches attentionItems/vacancyItems/openMaintenanceItems or
+// any other computed data, and never writes anything to the server —
+// it only decides whether the already-computed list is shown.
+const NEEDS_ATTENTION_VISIBLE_STORAGE_KEY = 'proproster:needsAttentionVisible'
+
 
 function EmptyModule({ title, text, action, onClick }: { title: string; text: string; action: string; onClick: () => void }) {
   return <div className="emptyModule"><strong>{title}</strong><span>{text}</span><button className="primary" onClick={onClick}>+ {action}</button></div>
@@ -602,14 +611,45 @@ export default function Home() {
     })
   }
   // Simplification + Maintenance Workspace V2, Phase E1: the old
-  // whole-card PropWatch Hide/Show preference (propWatchExpanded) is
-  // gone — replaced by the Needs Your Attention section's own "View
-  // all" subset toggle below, a different interaction (show more of
-  // the SAME list, not hide the whole section) that doesn't need a
-  // persisted preference. attentionItems/vacancyItems/
-  // openMaintenanceItems/upcomingItems and how they're derived are
-  // completely unchanged — only this section's presentation is.
+  // whole-card PropWatch Hide/Show preference (propWatchExpanded) was
+  // replaced by this section's own "View all" subset toggle — show
+  // more of the SAME list, never a persisted preference on its own.
+  // attentionItems/vacancyItems/openMaintenanceItems/upcomingItems and
+  // how they're derived are completely unchanged — only this section's
+  // presentation is.
   const [showAllAttention, setShowAllAttention] = useState(false)
+  // Phase E1.2: a THIRD presentation state — fully collapsing the
+  // section (distinct from showAllAttention's preview/expanded split).
+  // Same lightweight localStorage pattern as Portfolio Snapshot's own
+  // toggle above (see NEEDS_ATTENTION_VISIBLE_STORAGE_KEY's own
+  // comment). Presentation only — never touches the underlying
+  // attention data.
+  const [attentionVisible, setAttentionVisible] = useState(true)
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(NEEDS_ATTENTION_VISIBLE_STORAGE_KEY)
+      if (stored !== null) setAttentionVisible(stored !== 'false')
+    } catch {
+      // Storage unavailable (private browsing, disabled storage, etc.) —
+      // fall back to the default visible state, never throw.
+    }
+  }, [])
+  function toggleAttentionVisible() {
+    // Tapping Show always lands back in the PREVIEW state, never
+    // whatever expand state was active before Hide — reset
+    // showAllAttention here so hidden -> Show is always preview, per
+    // this phase's own spec.
+    setShowAllAttention(false)
+    setAttentionVisible((prev) => {
+      const next = !prev
+      try {
+        window.localStorage.setItem(NEEDS_ATTENTION_VISIBLE_STORAGE_KEY, String(next))
+      } catch {
+        // Best-effort persistence only — the toggle still works this session either way.
+      }
+      return next
+    })
+  }
   const [properties, setProperties] = useState<Property[]>([])
   const [documents, setDocuments] = useState<PropertyDocument[]>([])
   const [photos, setPhotos] = useState<PropertyPhoto[]>([])
@@ -3004,27 +3044,52 @@ export default function Home() {
           (see attentionRows above); this is a presentation change only.
           upcomingItems is intentionally not shown here anymore — it is
           still fully computed, just not part of the dashboard's
-          simplified surface (see attentionRows' own comment). */}
+          simplified surface (see attentionRows' own comment).
+
+          Phase E1.2: three presentation states — preview (the compact
+          subset + "View all"), expanded (the full list + "Show less"),
+          and hidden (just this compact row + "Show", no cards rendered
+          at all). "Hide" is presentation only: it never touches
+          attentionRows/attentionItems/vacancyItems/openMaintenanceItems
+          — the exact same data still computes every render, this only
+          decides whether it's shown. The empty state ("You're all
+          caught up") has no Hide/Show/View all controls at all — there
+          is nothing to hide or expand, matching this milestone's own
+          "no action that does nothing" rule. */}
       <section className="commandCenterSection needsAttentionSection">
         <div className="sectionHead">
           <div><h2>Needs Your Attention</h2></div>
-          {/* "View all" only appears when there is actually more to
-              reveal — an action that does nothing is worse than no
-              action. Expands in place (the exact same already-computed
-              list), never a second page/route. Phase E1.1: a quiet
-              text action (needsAttentionViewAll), not a bordered
-              .secondary button — it should look tappable, not compete
-              with the heading. */}
-          {attentionRows.length > NEEDS_ATTENTION_PREVIEW_LIMIT && (
-            <button className="needsAttentionViewAll" onClick={() => setShowAllAttention((v) => !v)}>{showAllAttention ? 'Show less' : 'View all'}</button>
+          {/* HIDDEN state only: "Show" sits beside the heading itself,
+              since there's no count/actions row to anchor it to once
+              the cards are gone — matches the collapsed mock's
+              "Needs Your Attention    Show" single row. */}
+          {!attentionVisible && attentionRows.length > 0 && (
+            <button className="needsAttentionHideToggle" onClick={toggleAttentionVisible}>Show</button>
           )}
         </div>
         {attentionRows.length === 0 ? (
           // Calm compact empty state, not a large empty card.
           <p className="muted needsAttentionEmpty">You&apos;re all caught up.</p>
+        ) : !attentionVisible ? (
+          // HIDDEN: the count stays visible (so collapsing never hides
+          // the fact that something needs a look) but no cards render.
+          <p className="muted needsAttentionCount">{attentionRows.length} item{attentionRows.length === 1 ? '' : 's'}</p>
         ) : (
           <>
-            <p className="muted needsAttentionCount">{attentionRows.length} item{attentionRows.length === 1 ? '' : 's'}</p>
+            <div className="needsAttentionMetaRow">
+              <p className="muted needsAttentionCount">{attentionRows.length} item{attentionRows.length === 1 ? '' : 's'}</p>
+              <div className="needsAttentionActions">
+                {/* "View all"/"Show less" only appears when there is
+                    actually more to reveal — an action that does
+                    nothing is worse than no action. Expands in place
+                    (the exact same already-computed list), never a
+                    second page/route. */}
+                {attentionRows.length > NEEDS_ATTENTION_PREVIEW_LIMIT && (
+                  <button className="needsAttentionViewAll" onClick={() => setShowAllAttention((v) => !v)}>{showAllAttention ? 'Show less' : 'View all'}</button>
+                )}
+                <button className="needsAttentionHideToggle" onClick={toggleAttentionVisible}>Hide</button>
+              </div>
+            </div>
             <div className="dashboardItemList">{visibleAttentionRows}</div>
           </>
         )}

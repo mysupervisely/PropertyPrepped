@@ -740,6 +740,13 @@ h2, h3, p { margin-top: 0; }
 .needsAttentionSection .sectionHead { margin-bottom: 4px; }
 .needsAttentionCount { margin: 0 0 10px; font-size: 13px; }
 .needsAttentionEmpty { margin: 0; font-size: 14px; }
+/* Phase E1.2: the count and the quiet text actions (View all/Show
+   less, Hide) share one row — count left, actions right — instead of
+   crowding the heading itself. Wraps on very narrow widths rather than
+   clipping/overlapping. */
+.needsAttentionMetaRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.needsAttentionMetaRow .needsAttentionCount { margin: 0; }
+.needsAttentionActions { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
 /* Phase E1.1: "View all" was a bordered .secondary button — competed
    too much with the heading for a secondary action. Plain brand-color
    text with a small trailing chevron instead, same pattern as
@@ -749,6 +756,12 @@ h2, h3, p { margin-top: 0; }
 .needsAttentionViewAll { flex-shrink: 0; border: 0; background: transparent; padding: 6px 2px; color: var(--brand); font-weight: 650; font-size: 13px; display: inline-flex; align-items: center; gap: 1px; }
 .needsAttentionViewAll::after { content: '›'; font-size: 15px; line-height: 1; }
 .needsAttentionViewAll:hover { text-decoration: underline; }
+/* Phase E1.2: Hide/Show — the third quiet action, same treatment as
+   View all (no border/box, brand-color text) so the two never compete
+   for attention as differently-styled controls. No chevron (it isn't
+   "reveal a nested list," it's collapsing the whole section). */
+.needsAttentionHideToggle { flex-shrink: 0; border: 0; background: transparent; padding: 6px 2px; color: var(--brand); font-weight: 650; font-size: 13px; }
+.needsAttentionHideToggle:hover { text-decoration: underline; }
 /* Phase E1.1 (Section 6 — a small density pass): the shared
    .dashboardItemRow padding (13px/14px) reads slightly tall stacked
    three-deep on the dashboard — scoped to THIS section only, so
