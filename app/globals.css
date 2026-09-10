@@ -740,6 +740,23 @@ h2, h3, p { margin-top: 0; }
 .needsAttentionSection .sectionHead { margin-bottom: 4px; }
 .needsAttentionCount { margin: 0 0 10px; font-size: 13px; }
 .needsAttentionEmpty { margin: 0; font-size: 14px; }
+/* Phase E1.1: "View all" was a bordered .secondary button — competed
+   too much with the heading for a secondary action. Plain brand-color
+   text with a small trailing chevron instead, same pattern as
+   .snapshotToggle's own quiet treatment, just brand-colored (not
+   muted) since this one IS meant to read as tappable/actionable.
+   Padding keeps a real tap target without looking like a box. */
+.needsAttentionViewAll { flex-shrink: 0; border: 0; background: transparent; padding: 6px 2px; color: var(--brand); font-weight: 650; font-size: 13px; display: inline-flex; align-items: center; gap: 1px; }
+.needsAttentionViewAll::after { content: '›'; font-size: 15px; line-height: 1; }
+.needsAttentionViewAll:hover { text-decoration: underline; }
+/* Phase E1.1 (Section 6 — a small density pass): the shared
+   .dashboardItemRow padding (13px/14px) reads slightly tall stacked
+   three-deep on the dashboard — scoped to THIS section only, so
+   Recent Activity's own rows (same shared class) are untouched.
+   Title/pill/property/date/tap-target all stay exactly as they are;
+   only the row's own breathing room shrinks a little. */
+.needsAttentionSection .dashboardItemRow { padding: 10px 14px; }
+.needsAttentionSection .dashboardItemList { gap: 6px; }
 
 /* Milestone 5: leases, mortgage, insurance & maintenance */
 .moduleWorkspace { padding-bottom: 44px; }
@@ -1541,6 +1558,15 @@ h2, h3, p { margin-top: 0; }
 .profileEntryAvatarImg { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
 .profileEntryFallback { width: 100%; height: 100%; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); border: 1px solid var(--line); box-sizing: border-box; }
 .profileEntryFallback svg { width: 20px; height: 20px; }
+/* Phase E1.1: two real elements (see ProfileEntryButton.tsx's own
+   header comment) — a plain Link to /profile for desktop, and a menu-
+   opening button for mobile, CSS-toggled by the same breakpoint the
+   bottom nav itself uses. Only one is ever in the layout/tab order. */
+.profileEntryButtonMobile { display: none; border: 0; padding: 0; cursor: pointer; }
+@media (max-width: 760px) {
+  .profileEntryButtonDesktop { display: none; }
+  .profileEntryButtonMobile { display: block; }
+}
 .authNavMenuPanel { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; min-width: 200px; background: white; border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 12px 28px rgba(15, 30, 24, .12); display: grid; }
 .authNavMenuPanel a { display: block; padding: 10px 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 14px; font-weight: var(--weight-medium); white-space: nowrap; }
 .authNavMenuPanel a:hover { background: var(--brand-soft); color: var(--brand); }
@@ -1563,16 +1589,19 @@ h2, h3, p { margin-top: 0; }
   }
   .authNavMenuPanel a, .authNavMenuLogout { padding: 13px 14px; font-size: 15px; }
 }
-/* Phase E1: the bottom nav's own "More" item is gone (see
-   MobileBottomNav.tsx's own header comment — Dashboard/Maintenance/
-   PropCrew/Tax Center only now), so the header's hamburger trigger is
-   the ONLY way to reach this panel again on every width, mobile
-   included — Documents, Investment Tools, Pricing, +Add Property and
-   Log out would otherwise be unreachable on a phone. It is no longer
-   hidden on mobile (the old .authHeaderWithBottomNav rule from D.1/D.2
-   that did so is removed, not just overridden) and gets the same
-   compact mobile sizing as the avatar/search buttons next to it — see
-   the mobile-header one-row rules below. */
+/* Phase E1 removed the bottom nav's own "More" item (Dashboard/
+   Maintenance/PropCrew/Tax Center only now — see MobileBottomNav.tsx's
+   own header comment), making the header's hamburger trigger the only
+   way to reach this panel on every width, mobile included.
+   Phase E1.1 went one step further: the mobile header itself no longer
+   has room (or need) for a separate hamburger — the profile avatar
+   (ProfileEntryButton) is the mobile opener now, so the hamburger
+   trigger below is hidden on mobile and desktop-only again. Documents/
+   Investment Tools/Pricing/+Add Property/Log out are still reachable
+   on mobile, just via the avatar instead. */
+@media (max-width: 760px) {
+  .authHeaderWithBottomNav .authNavMenuButton { display: none; }
+}
 
 /* Simplification + Maintenance Workspace V2, Phase D.1 — persistent
    mobile GLOBAL navigation (components/MobileBottomNav.tsx). Hidden
@@ -1757,39 +1786,44 @@ h2, h3, p { margin-top: 0; }
 
 /* The single top-right primary action (components/SmartUploadButton.tsx)
    — opens the real Smart Upload workflow (components/SmartUpload/
-   SmartUploadModal.tsx). Always reads "+ Smart Upload", every width —
-   never shortened to just "Upload". At the narrowest supported widths
-   (320-430px) only the button's own font-size/padding shrink, so it
-   stays a comfortable tap target without crowding the wordmark; the
-   label text itself is untouched. */
+   SmartUploadModal.tsx). Phase E1.1: reads "+ Upload" at mobile widths,
+   "+ Smart Upload" on desktop (see .smartUploadLabelFull/Short below) —
+   at the narrowest supported widths the button's own font-size/padding
+   still shrink a little further, so it stays a comfortable tap target
+   without crowding the wordmark. */
 .smartUploadButton { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+/* Phase E1.1: two real text nodes, CSS-toggled by the same mobile
+   breakpoint the bottom nav uses — no JS viewport detection. The
+   button's own aria-label ("Smart Upload") is constant either way. */
+.smartUploadLabelShort { display: none; }
+@media (max-width: 760px) {
+  .smartUploadLabelFull { display: none; }
+  .smartUploadLabelShort { display: inline; }
+}
 @media (max-width: 430px) {
-  .smartUploadButton { padding: 7px 9px; font-size: 11.5px; gap: 4px; }
-  .topbarActions { gap: 5px; }
-  .headerSearchButton { width: 32px; height: 32px; font-size: 13px; }
+  .smartUploadButton { padding: 8px 11px; font-size: 12.5px; gap: 5px; }
+  .topbarActions { gap: 6px; }
+  .headerSearchButton { width: 34px; height: 34px; font-size: 13.5px; }
 }
 
-/* Phase E1: restoring the profile avatar (Phase D.2) pushed the mobile
-   header's combined content past one row's available width at ordinary
-   iPhone widths (390-393px) — the ~480px .topbar wrap rule above then
-   kicked in as its designed fallback, but a fallback firing on the MOST
-   common phone width is the actual bug being fixed here, not the
-   fallback's own existence (it stays, as a safety net for genuinely
-   narrower devices). Measured with a real headless-Chromium render
-   (not guessed) at 390/393px and tightened until the unwrapped row
-   comfortably fits with margin to spare for real-device font metrics:
-   a smaller avatar/hamburger/search, a smaller wordmark (matching the
-   existing, already-shipped .tenantPortalHeader .brand precedent for a
-   compact header wordmark), and a tighter .topbarBrandGroup/.topbar
-   gap. Every element this touches stays a real, comfortable tap target
-   (32px+ minimums) — this measured comfortably even with the hamburger
-   trigger back in the row (see its own comment above, Phase E1). */
+/* Phase E1 fix (superseded by Phase E1.1 below): restoring the profile
+   avatar (Phase D.2) pushed the mobile header past one row at ordinary
+   iPhone widths (390-393px), tripping the .topbar wrap fallback above
+   at the MOST common phone width. E1 fit everything (avatar + the
+   header's own hamburger + wordmark + search + "+ Smart Upload") into
+   one row by shrinking all five elements fairly aggressively.
+   Phase E1.1 removed the mobile hamburger entirely (see its own CSS
+   rule above) and shortened Smart Upload's mobile label — between the
+   two, the row has real room again, so these values are relaxed back
+   toward comfortable, "intentionally designed, not squeezed" sizing
+   rather than the tightest fit that still worked. Still measured with
+   a real headless-Chromium render, not guessed — see the Phase E1.1
+   testing notes for the actual slack at each validated width. */
 @media (max-width: 430px) {
-  .topbar { gap: 8px; }
-  .topbarBrandGroup { gap: 6px; }
-  .profileEntryButton { width: 32px; height: 32px; }
-  .authNavMenuButton { width: 32px; height: 32px; font-size: 15px; }
-  .brand { font-size: 19px; }
+  .topbar { gap: 10px; }
+  .topbarBrandGroup { gap: 8px; }
+  .profileEntryButton { width: 34px; height: 34px; }
+  .brand { font-size: 21px; }
 }
 
 /* Hamburger menu additions: "+ Add Property" reads as an action (brand

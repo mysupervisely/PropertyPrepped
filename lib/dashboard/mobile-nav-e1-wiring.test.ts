@@ -69,13 +69,23 @@ describe('Mobile bottom nav is exactly four destinations', () => {
   })
 })
 
-describe('The header hamburger ("PropRoster tools") is reachable again on mobile now that "More" is gone', () => {
-  it('AuthHeader no longer threads hasSelectedProperty/moreOpen/onMoreClick into MobileBottomNav', () => {
+describe('AuthHeader no longer threads bottom-nav-specific props into MobileBottomNav (Phase E1, unchanged by E1.1)', () => {
+  it('MobileBottomNav is called with just onDashboardNavigate', () => {
     expect(headerSource).toContain('<MobileBottomNav onDashboardNavigate={onBrandClick} />')
   })
+})
 
-  it('the CSS no longer hides the hamburger trigger on mobile — Documents/Investment Tools/Pricing/+Add Property/Log out need it there since "More" is gone from the bottom bar', () => {
-    expect(globalsCss).not.toContain('.authHeaderWithBottomNav .authNavMenuButton { display: none; }')
+// Phase E1.1 superseded Phase E1's own header decision here: E1 made
+// the hamburger reachable on mobile again (since "More" left the
+// bottom bar); E1.1 then removed the mobile hamburger a second time,
+// this time for real, in favor of the profile avatar as the mobile
+// menu opener (see lib/user-profile/profile-entry-point-wiring.test.ts
+// for that side of the invariant). Documents/Investment Tools/Pricing/
+// +Add Property/Log out are still reachable on mobile — just via the
+// avatar now, not a hamburger.
+describe('Phase E1.1: the mobile hamburger is hidden again, this time in favor of the avatar', () => {
+  it('the CSS hides the hamburger trigger on mobile (desktop-only again)', () => {
+    expect(globalsCss).toMatch(/@media \(max-width: 760px\) \{\s*\.authHeaderWithBottomNav \.authNavMenuButton \{ display: none; \}\s*\}/)
   })
 })
 
@@ -98,23 +108,28 @@ describe('Removed destinations are mobile-primary-nav-only — the routes/featur
   })
 })
 
-describe('Profile avatar remains a distinct, always-present entry point (Phase D.2, unchanged by E1)', () => {
+describe('Profile avatar remains a distinct, always-present entry point (Phase D.2; Phase E1.1 gave its mobile element a second job — see profile-entry-point-wiring.test.ts)', () => {
   it('AuthHeader still renders ProfileEntryButton unconditionally', () => {
-    expect(headerSource).toContain('<ProfileEntryButton />')
+    expect(headerSource).toContain('<ProfileEntryButton menuOpen={navMenuOpen} onOpenMenu={() => setNavMenuOpen((o) => !o)} />')
   })
 
-  it('it still links straight to the existing Profile page, not the tools menu', () => {
+  it('the desktop element still links straight to the existing Profile page, not the tools menu', () => {
     expect(profileButtonSource).toContain('href="/profile"')
   })
 })
 
-describe('Mobile header one-row fix (Section 1)', () => {
-  it('a dedicated Phase E1 mobile rule tightens the avatar/hamburger/wordmark/gaps so the row fits without needing the .topbar wrap fallback', () => {
-    const rule = globalsCss.match(/@media \(max-width: 430px\) \{\s*\.topbar \{ gap: 8px; \}[\s\S]*?\n\}/)?.[0] || ''
-    expect(rule).toContain('.topbarBrandGroup { gap: 6px; }')
-    expect(rule).toContain('.profileEntryButton { width: 32px; height: 32px; }')
-    expect(rule).toContain('.authNavMenuButton { width: 32px; height: 32px;')
-    expect(rule).toContain('.brand { font-size: 19px; }')
+describe('Mobile header one-row fix (Phase E1.1, Section 1)', () => {
+  // Phase E1.1 removed the mobile hamburger (freeing real row width)
+  // and shortened Smart Upload's mobile label, then relaxed the
+  // remaining shrink values back toward comfortable sizing rather than
+  // the tightest fit Phase E1 needed — "intentionally designed, not
+  // squeezed." Still a real, measured-with-Chromium fix, just updated
+  // numbers and one fewer element to fit.
+  it('a Phase E1.1 mobile rule sizes the avatar/wordmark/gaps for a comfortable one-row header (no hamburger sizing here anymore — it is hidden on mobile, not shrunk)', () => {
+    const rule = globalsCss.match(/@media \(max-width: 430px\) \{\s*\.topbar \{ gap: 10px; \}[\s\S]*?\n\}/)?.[0] || ''
+    expect(rule).toContain('.topbarBrandGroup { gap: 8px; }')
+    expect(rule).toContain('.profileEntryButton { width: 34px; height: 34px; }')
+    expect(rule).toContain('.brand { font-size: 21px; }')
   })
 
   it('every shrunk control stays a real tap target (32px+, never smaller)', () => {
@@ -127,9 +142,14 @@ describe('Mobile header one-row fix (Section 1)', () => {
     expect(globalsCss).toContain('.topbarBrandGroup { flex: 1 1 auto; min-width: 0; }')
   })
 
-  it('Smart Upload keeps its full, un-shortened label — never truncated to just "Upload"', () => {
+  // Phase E1.1 deliberately reverses the old "never shortened" rule —
+  // see lib/dashboard/mobile-auth-layout-reliability-v1-wiring.test.ts
+  // for the full label-swap invariant (both text nodes present, aria-
+  // label constant).
+  it('Smart Upload\'s mobile label is now "Upload", CSS-toggled with a full "Smart Upload" label for desktop', () => {
     const smartUploadSource = readFile('components/SmartUploadButton.tsx')
-    expect(smartUploadSource).toContain('<span>Smart Upload</span>')
+    expect(smartUploadSource).toContain('<span className="smartUploadLabelShort">Upload</span>')
+    expect(smartUploadSource).toContain('<span className="smartUploadLabelFull">Smart Upload</span>')
   })
 })
 

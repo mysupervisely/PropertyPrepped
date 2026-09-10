@@ -10,14 +10,15 @@ import { join } from 'node:path'
 //
 // What this protects: the landlord's profile avatar is restored to the
 // authenticated header as its OWN entry point ("me"), separate from the
-// "PropRoster tools" hamburger menu ("More") it used to be merged into
-// — see components/ProfileEntryButton.tsx's own header comment for the
-// full reasoning. The regression this guards against is the exact one
-// Phase D.1 introduced: hiding the combined avatar+hamburger button on
-// mobile (correct for the hamburger's own job, since the bottom nav's
-// "More" replaces it) also hid the avatar (wrong — a landlord's own
-// identity entry point should never disappear just because a menu
-// trigger it used to double as became redundant).
+// "PropRoster tools" hamburger menu it used to be merged into — see
+// components/ProfileEntryButton.tsx's own header comment for the full
+// reasoning. The regression this originally guarded against was the
+// one Phase D.1 introduced: hiding the combined avatar+hamburger button
+// on mobile also hid the avatar. Phase E1.1 deliberately gave the
+// avatar a SECOND, mobile-only job (opening the shared AuthNavMenu
+// panel, since the mobile hamburger is gone) — the tests below reflect
+// that: the desktop element still just navigates to /profile, and the
+// mobile element opens the existing panel rather than a duplicated one.
 
 const ROOT = join(__dirname, '..', '..')
 function readFile(relativePath: string): string {
@@ -30,19 +31,28 @@ const authNavMenuSource = readFile('components/AuthNavMenu.tsx')
 const useProfileAvatarSource = readFile('lib/user-profile/use-profile-avatar.ts')
 const globalsCss = readFile('app/globals.css')
 
-describe('Profile avatar is its own entry point, not merged into the tools menu', () => {
-  it('AuthHeader renders ProfileEntryButton unconditionally (every authenticated page, not gated behind hideMobileNav)', () => {
+describe('Profile avatar is its own entry point (desktop: navigate; mobile: open the shared tools menu, Phase E1.1)', () => {
+  it('AuthHeader renders ProfileEntryButton unconditionally (every authenticated page, not gated behind hideMobileNav), wired to the same lifted menu state the hamburger uses', () => {
     expect(authHeaderSource).toContain("import { ProfileEntryButton } from './ProfileEntryButton'")
-    expect(authHeaderSource).toContain('<ProfileEntryButton />')
+    expect(authHeaderSource).toContain('<ProfileEntryButton menuOpen={navMenuOpen} onOpenMenu={() => setNavMenuOpen((o) => !o)} />')
   })
 
-  it('ProfileEntryButton links straight to the existing Profile page — no new profile experience built', () => {
-    expect(profileEntryButtonSource).toContain('href="/profile"')
+  it('the desktop element links straight to the existing Profile page — no new profile experience built', () => {
+    expect(profileEntryButtonSource).toContain('<Link href="/profile" className="profileEntryButton profileEntryButtonDesktop"')
   })
 
-  it('ProfileEntryButton does NOT open the full nav menu — it is a real navigation Link, not a menu-toggle button', () => {
-    expect(profileEntryButtonSource).toContain('<Link href="/profile"')
-    expect(profileEntryButtonSource).not.toMatch(/onOpenChange|NAV_LINKS|aria-haspopup/)
+  // Phase E1.1: the mobile hamburger is gone (see the describe block
+  // below), so the avatar's mobile element takes over that job —
+  // opening the SAME AuthNavMenu panel via the onOpenMenu prop AuthHeader
+  // already threads in, never a second/duplicated menu definition. Two
+  // real elements, CSS-toggled by viewport (ProfileEntryButton.tsx's own
+  // header comment) — only one is ever in the layout/tab order.
+  it('the mobile element opens the existing shared menu, not a new one — same onOpenMenu callback AuthHeader wires to setNavMenuOpen', () => {
+    expect(profileEntryButtonSource).toContain('className="profileEntryButton profileEntryButtonMobile"')
+    expect(profileEntryButtonSource).toContain('aria-haspopup="true"')
+    expect(profileEntryButtonSource).toContain('aria-expanded={menuOpen}')
+    expect(profileEntryButtonSource).toContain('onClick={onOpenMenu}')
+    expect(profileEntryButtonSource).not.toContain('NAV_LINKS')
   })
 
   it('falls back to a neutral person icon (never a broken image, never emoji) when no profile photo is saved', () => {

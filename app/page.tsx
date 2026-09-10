@@ -3011,9 +3011,12 @@ export default function Home() {
           {/* "View all" only appears when there is actually more to
               reveal — an action that does nothing is worse than no
               action. Expands in place (the exact same already-computed
-              list), never a second page/route. */}
+              list), never a second page/route. Phase E1.1: a quiet
+              text action (needsAttentionViewAll), not a bordered
+              .secondary button — it should look tappable, not compete
+              with the heading. */}
           {attentionRows.length > NEEDS_ATTENTION_PREVIEW_LIMIT && (
-            <button className="secondary" onClick={() => setShowAllAttention((v) => !v)}>{showAllAttention ? 'Show less' : 'View all'}</button>
+            <button className="needsAttentionViewAll" onClick={() => setShowAllAttention((v) => !v)}>{showAllAttention ? 'Show less' : 'View all'}</button>
           )}
         </div>
         {attentionRows.length === 0 ? (

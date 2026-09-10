@@ -54,11 +54,12 @@ export function AuthHeader({
   const [smartUploadOpen, setSmartUploadOpen] = useState(false)
   // Phase D.1 lifted this out of AuthNavMenu itself so the mobile
   // bottom nav's old "More" button could open the exact same panel;
-  // Phase E1 removed that bottom-nav item (see MobileBottomNav's own
-  // header comment), so the header's hamburger trigger below is once
-  // again the only opener, on every width — the lifted state itself
-  // stays, since AuthNavMenu's own open/close is still controlled from
-  // here rather than owning it internally.
+  // Phase E1 removed that bottom-nav item, making the header's own
+  // hamburger the only opener again. Phase E1.1 removed the mobile
+  // hamburger too (see globals.css's own header-row comment) — the
+  // avatar (ProfileEntryButton) is now the mobile opener, the
+  // hamburger stays the desktop opener, both driving this SAME lifted
+  // state, never two separate menu instances.
   const [navMenuOpen, setNavMenuOpen] = useState(false)
   // Launch Pricing: Smart Upload's entry point is global (this header
   // renders on every authenticated page), so the gate lives here rather
@@ -96,9 +97,11 @@ export function AuthHeader({
         <div className="topbarBrandGroup">
           {/* Phase D.2: the landlord's own profile entry point ("me") —
               always visible, distinct from the tools menu right next to
-              it. See ProfileEntryButton's own header comment for the
-              full reasoning. */}
-          <ProfileEntryButton />
+              it. Phase E1.1: on mobile it also opens that SAME tools
+              menu (the hamburger trigger is desktop-only now) — see
+              ProfileEntryButton's own header comment for the full
+              reasoning. */}
+          <ProfileEntryButton menuOpen={navMenuOpen} onOpenMenu={() => setNavMenuOpen((o) => !o)} />
           {/* Dashboard Navigation Bug fix: reuse the exact same
               onBrandClick this header already threads to the wordmark
               below for the identical single-page-app reason — see

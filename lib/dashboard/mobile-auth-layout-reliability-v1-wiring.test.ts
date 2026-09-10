@@ -223,16 +223,30 @@ describe('Mobile layout — header horizontal-overflow fix (measured, not guesse
   // "Phase E1: restoring the profile avatar..." comment for the
   // measured-with-real-Chromium reasoning. The values changed; the
   // shrink treatment's existence (not removed) is still the invariant.
-  it('the 430px shrink treatment for the Smart Upload/search buttons still exists (tightened further in Phase E1, not removed)', () => {
-    expect(cssSource).toContain('@media (max-width: 430px) {\n  .smartUploadButton { padding: 7px 9px; font-size: 11.5px; gap: 4px; }\n  .topbarActions { gap: 5px; }\n  .headerSearchButton { width: 32px; height: 32px; font-size: 13px; }\n}')
+  // Phase E1.1: removing the mobile hamburger and shortening Smart
+  // Upload's mobile label freed real row width, so these values were
+  // relaxed back toward more comfortable sizing (still measured with
+  // real Chromium, not guessed) — the shrink treatment's continued
+  // existence is the invariant, not these exact numbers.
+  it('the 430px shrink treatment for the Smart Upload/search buttons still exists (relaxed in Phase E1.1 now that the mobile hamburger is gone, not removed)', () => {
+    expect(cssSource).toContain('@media (max-width: 430px) {\n  .smartUploadButton { padding: 8px 11px; font-size: 12.5px; gap: 5px; }\n  .topbarActions { gap: 6px; }\n  .headerSearchButton { width: 34px; height: 34px; font-size: 13.5px; }\n}')
   })
 
   it('no global overflow-x:hidden was added anywhere as a substitute fix — the milestone\'s own "do not globally hide overflow" instruction', () => {
     expect(cssSource).not.toMatch(/^(html|body)\s*\{[^}]*overflow-x:\s*hidden/m)
   })
 
-  it('the Smart Upload button label text itself is unchanged ("+ Smart Upload," never shortened, per its own existing comment) — the fix is layout (wrap), not a copy change', () => {
-    expect(readFile('components/SmartUploadButton.tsx')).toContain('<span>Smart Upload</span>')
+  // Phase E1.1 deliberately reversed this: the label now IS width-aware
+  // ("+ Upload" on mobile, "+ Smart Upload" on desktop) as part of
+  // winning back a one-row mobile header — see SmartUploadButton.tsx's
+  // own header comment. The invariant this guards is narrower now: the
+  // desktop-facing full label still says "Smart Upload," not something
+  // else, and it's a real CSS-toggled text node, not lost copy.
+  it('the full "Smart Upload" label is preserved for desktop (CSS-toggled, not deleted) alongside the new mobile-only "Upload" label', () => {
+    const source = readFile('components/SmartUploadButton.tsx')
+    expect(source).toContain('<span className="smartUploadLabelFull">Smart Upload</span>')
+    expect(source).toContain('<span className="smartUploadLabelShort">Upload</span>')
+    expect(source).toContain('aria-label="Smart Upload"')
   })
 })
 
