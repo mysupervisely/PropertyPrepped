@@ -94,6 +94,21 @@ function PeopleIcon() {
   )
 }
 
+// Automate pillar icon (Public Homepage V3, real-iPhone follow-up: the new
+// four-pillar section's only genuinely new icon — the other three reuse
+// FolderIcon/PeopleIcon/DollarIcon already defined above). A simple
+// looping-arrows/cycle glyph for "routine work moving forward on its
+// own," matching every other landing icon's stroke weight/color exactly
+// rather than introducing a new visual style.
+function AutomateIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
+      <path d="M4 8.2a6 6 0 0110.5-3.9M4 8.2V4.6M4 8.2h3.6" stroke="#204b3b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M16 11.8a6 6 0 01-10.5 3.9M16 11.8v3.6M16 11.8h-3.6" stroke="#204b3b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 function ShieldIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
@@ -147,40 +162,23 @@ function EyeIcon({ off }: { off: boolean }) {
   )
 }
 
-// Public Homepage V2 follow-up (Organization + Automation positioning):
-// the three current product pillars, reordered around ORGANIZE ->
-// AUTOMATE -> UNDERSTAND. Property Organization + Data is the
-// foundation pillar; Tenant Connect (now covering the maintenance/
-// coordination workflow that was previously its own separate pillar) is
-// where the automation/coordination value becomes concrete; Live Tax
-// Center closes the loop. Copy describes only what is actually live
-// today — no SMS outreach, no autonomous contractor hiring, no
-// automatic appointment confirmation, no tax preparation/filing/advice,
-// and no live Cap Rate/NOI/Net Cash Flow/equity (Property Intelligence
-// has not shipped past its Phase A architecture audit).
-const PILLARS: { icon: React.ReactNode; heading: string; subheading: string; body: string; closing: string; note?: string }[] = [
-  {
-    icon: <FolderIcon />,
-    heading: 'Your Property, Organized',
-    subheading: 'Everything about one of your biggest assets, in one place.',
-    body: 'Upload leases, insurance, mortgage information, receipts, expenses and important documents. PropRoster keeps it all organized around the property it belongs to, so your records and the numbers behind them stay together in one place.',
-    closing: 'Your property. Your documents. Your numbers. Organized.',
-  },
-  {
-    icon: <PeopleIcon />,
-    heading: 'Tenant Connect',
-    subheading: 'Keep control. Lose the coordination.',
-    body: 'A tenant reports a maintenance issue and shares their availability. You review the request and decide how to proceed, using someone from your own PropCrew, the providers and professionals you already know and trust. PropRoster helps move the request, availability and scheduling forward, so you are not personally coordinating every text, call and appointment.',
-    closing: 'Your tenant. Your PropCrew. Your approval. Less back-and-forth.',
-  },
-  {
-    icon: <DollarIcon />,
-    heading: 'Live Tax Center',
-    subheading: 'Stay organized all year, not just at tax time.',
-    body: 'Add expenses and upload receipts as they happen. PropRoster keeps your property financial records organized by property and by tax year, so you are not reconstructing an entire year the moment tax season arrives.',
-    closing: 'Add it as you go. PropRoster keeps it organized.',
-    note: 'PropRoster does not prepare or file taxes, and this is not tax advice.',
-  },
+// Public Homepage V3 (Marketing-First Hero), real-iPhone follow-up: since
+// the standalone hero photo is now gone (folded into the hero as a
+// background layer, see the hero section below), this section is what
+// carries the hero promise forward — ORGANIZE / COORDINATE / AUTOMATE /
+// UNDERSTAND, four short, calm, lightweight entries (icon + one line)
+// rather than the previous three elaborate heading/subheading/body/
+// closing cards. Copy is verbatim, as specified for this pass — still
+// describes only what is actually live today (Property Intelligence V1
+// shipped Cap Rate/NOI/Net Cash Flow/equity, so "the financial picture...
+// more clearly" is accurate; nothing here claims SMS outreach, autonomous
+// contractor hiring, or tax preparation/filing/advice, so no disclaimer
+// note is needed for these four short lines).
+const PILLARS: { icon: React.ReactNode; heading: string; body: string }[] = [
+  { icon: <FolderIcon />, heading: 'Organize', body: 'Property information, documents, leases and numbers in one place.' },
+  { icon: <PeopleIcon />, heading: 'Coordinate', body: 'Connect tenants with your trusted PropCrew without all the back-and-forth.' },
+  { icon: <AutomateIcon />, heading: 'Automate', body: 'Simplify routine follow-ups and coordination while you stay in control.' },
+  { icon: <DollarIcon />, heading: 'Understand', body: 'See the financial picture of each property and your portfolio more clearly.' },
 ]
 
 const WORKFLOW_STEPS = [
@@ -293,63 +291,56 @@ export default function LandingPage() {
         </nav>
       </header>
 
-      {/* Public Homepage V3 (Marketing-First Hero): reintroduces a real
-          property photo — deliberately reusing public/hero-property.jpg,
-          the exact image Public Homepage V2 kept in reserve "in case a
-          future pass wants to reintroduce photography deliberately"
-          (see public/README.md) rather than sourcing a new one. Copy is
-          untouched (same H1/tagline/sub/CTA/free-note V2 already
-          shipped) — only the layout changes, from a centered single
-          column to a two-column "copy left, home right" grid on desktop
-          that stacks (copy first, image below) on mobile so the message
-          still reads before any image weight loads. The image sits in
-          its own soft, offset backdrop card (.landingHeroVisual) rather
-          than a bare pasted-in rectangle, using only existing brand
-          tokens (--brand-soft, --radius-card), so it reads as one
-          integrated, premium composition instead of stock photography
-          dropped on top of a SaaS page. */}
+      {/* Public Homepage V3 (Marketing-First Hero), real-iPhone follow-up:
+          the first pass rendered public/hero-property.jpg as a separate,
+          full-strength photo card (two columns on desktop, a giant
+          standalone block below the copy on mobile) — real-device review
+          called that a property listing, not an atmosphere. This version
+          keeps the exact same image and copy but makes the photo a
+          single, soft BACKGROUND LAYER behind the hero text instead of a
+          second piece of content: .landingHeroBg is one absolutely
+          positioned layer (inset:0, behind everything, aria-hidden) that
+          holds the photo at reduced opacity plus a fade overlay on top of
+          it, so the product message (.landingHeroInner) is the only real
+          "content" in the hero, exactly like before Public Homepage V3's
+          first pass. No image card, no frame, no shadow, no offset
+          rectangle, no hard text/photo boundary — there is nothing left
+          to draw a boundary around. */}
       <section className="landingHero">
-        <div className="landingHeroGrid">
-          <div className="landingHeroContent">
-            <h1>Your properties. Organized.</h1>
-            <p className="landingHeroTagline">Keep control of your properties without managing every little detail.</p>
-            <p className="landingHeroSub">PropRoster helps organize the information and numbers behind your properties, simplify communication with tenants and your trusted PropCrew, and automate routine coordination.</p>
-            <div className="landingHeroCtas">
-              <button type="button" className="primary landingCtaPrimary" onClick={() => openAuth('signup')}>Start Free</button>
-            </div>
-            <p className="landingHeroFreeNote">Start with your first property free. No credit card required.</p>
+        <div className="landingHeroBg" aria-hidden="true">
+          <img
+            className="landingHeroBgImage"
+            src="/hero-property.jpg"
+            alt=""
+            width={1536}
+            height={1024}
+            loading="eager"
+            fetchPriority="high"
+          />
+          <div className="landingHeroBgFade" />
+        </div>
+        <div className="landingHeroInner">
+          <h1>Your properties. Organized.</h1>
+          <p className="landingHeroTagline">Keep control of your properties without managing every little detail.</p>
+          <p className="landingHeroSub">PropRoster helps organize the information and numbers behind your properties, simplify communication with tenants and your trusted PropCrew, and automate routine coordination.</p>
+          <div className="landingHeroCtas">
+            <button type="button" className="primary landingCtaPrimary" onClick={() => openAuth('signup')}>Start Free</button>
           </div>
-          <div className="landingHeroVisual">
-            <div className="landingHeroImageFrame">
-              <img
-                className="landingHeroImage"
-                src="/hero-property.jpg"
-                alt="A modern single-family home at dusk"
-                width={1536}
-                height={1024}
-                loading="eager"
-                fetchPriority="high"
-              />
-            </div>
-          </div>
+          <p className="landingHeroFreeNote">Start with your first property free. No credit card required.</p>
         </div>
       </section>
 
-      {/* Section 4: the three current product pillars, ORGANIZE -> AUTOMATE
-          -> UNDERSTAND. This also carries the "you stay in control"
-          philosophy the brief asked for (Tenant Connect's own subheading/
-          closing line) rather than a separate, largely-duplicative mission
-          section right after the hero. */}
+      {/* Public Homepage V3, real-iPhone follow-up: four calm, lightweight
+          entries — the natural explanation of the hero promise, not a
+          second feature pitch. No borders/shadows/heavy cards; just an
+          icon, a short label, and one line each. */}
       <section className="landingPillars">
         <div className="landingPillarsGrid">
           {PILLARS.map((item) => (
             <div className="landingPillarCard" key={item.heading}>
               <IconBadge>{item.icon}</IconBadge>
               <h2>{item.heading}</h2>
-              <p className="landingPillarSubhead">{item.subheading}</p>
               <p>{item.body}</p>
-              <p className="landingPillarClosing">{item.closing}</p>
-              {item.note && <p className="landingPillarNote">{item.note}</p>}
             </div>
           ))}
         </div>

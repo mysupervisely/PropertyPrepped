@@ -219,11 +219,12 @@ describe('CTA after the pricing section', () => {
   })
 })
 
-describe('Public Homepage V2: the three current product pillars are accurately scoped', () => {
-  it('features Property Organization, Tenant Connect (which now covers the maintenance/coordination workflow) and a Tax Center pillar, prominently, above the quiet secondary-features section', () => {
-    expect(landingSource).toContain("heading: 'Your Property, Organized',")
-    expect(landingSource).toContain("heading: 'Tenant Connect',")
-    expect(landingSource).toContain("heading: 'Live Tax Center',")
+describe('Public Homepage V2/V3: the product pillars are accurately scoped', () => {
+  it('Public Homepage V3 (real-iPhone follow-up) restructured the three elaborate pillars into four short ones — Organize/Coordinate/Automate/Understand — still prominently above the quiet secondary-features section', () => {
+    expect(landingSource).toContain("heading: 'Organize'")
+    expect(landingSource).toContain("heading: 'Coordinate'")
+    expect(landingSource).toContain("heading: 'Automate'")
+    expect(landingSource).toContain("heading: 'Understand'")
     const pillarsIdx = landingSource.indexOf('landingPillars')
     const secondaryIdx = landingSource.indexOf('landingSecondary')
     expect(pillarsIdx).toBeGreaterThan(-1)
@@ -264,13 +265,14 @@ describe('Public Homepage V2: the three current product pillars are accurately s
     expect(lower).not.toContain('provider network')
   })
 
-  it('never claims tax preparation, filing, or tax advice, other than the explicit disclaimer saying it does NOT', () => {
-    expect(landingSource).toContain('PropRoster does not prepare or file taxes, and this is not tax advice.')
-    // Every other occurrence of "prepare"/"file" near "tax" must be part
-    // of that one disclaimer sentence, never a standalone affirmative claim.
+  it('never claims tax preparation, filing, or tax advice — Public Homepage V3\'s short "Understand" pillar copy ("See the financial picture...") makes no tax-prep claim at all, so no disclaimer is needed on this page (the app\'s real tax-prep disclaimer still lives where an actual claim/tool exists — components/SmartUpload/ReceiptReview.tsx)', () => {
+    // No affirmative "PropRoster prepares/files your taxes" claim anywhere
+    // in the landing page, disclaimed or not.
     const affirmative = [...landingSource.matchAll(/(?:prepares?|files?) (?:your )?tax(?:es)?/gi)]
       .filter((m) => !landingSource.slice(Math.max(0, m.index! - 20), m.index! + 40).includes('does not'))
     expect(affirmative).toEqual([])
+    const smartUploadTaxNote = readFileSync(join(ROOT, 'components/SmartUpload/ReceiptReview.tsx'), 'utf8')
+    expect(smartUploadTaxNote).toContain('not tax advice')
   })
 
   it('never claims live Cap Rate, NOI, Net Cash Flow or automated equity tracking as currently available (Property Intelligence has not shipped)', () => {
