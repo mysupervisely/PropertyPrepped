@@ -158,11 +158,15 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   },
 }
 
-// The paid plans are marketed as "Early Access Pricing" — copy only, no
+// The paid plans were marketed as "Early Access Pricing" — copy only, no
 // automatic future price increases or grandfathering logic (Section:
 // Marketing Positioning). This flag is read by the pricing page to render
-// that label; it has no effect on billing.
-export const EARLY_ACCESS_PRICING = true
+// that label; it has no effect on billing. Public Homepage V2: turned off
+// — the badge no longer serves a clear purpose and only added visual
+// clutter to an already-simple pricing grid. Left as a flag (rather than
+// deleting the rendering code) so it can be turned back on for a future
+// promotion without a code change.
+export const EARLY_ACCESS_PRICING = false
 
 // 16+ properties is a "Let's Talk" contact flow, not a Stripe tier —
 // there is no PlanId, no price, and no Checkout Session for this.
@@ -181,24 +185,20 @@ export const CONTACT_TIER = {
 // Milestone 10 (production-hardening pass): Tenant Connect pricing-page
 // copy only — NOT the entitlement itself (see lib/billing/entitlements.ts's
 // `tenantConnect` boolean for what's actually enforced, at both the UI
-// and — as of this pass — the database layer).
+// and database layer).
 //
-// Every plan reads "Coming soon" here, even where
-// entitlementsFor(plan).tenantConnect is already `true` internally. That
-// internal flag exists so the owner-side foundation (invite a tenant,
-// create conversations, exchange messages) can be built and tested now
-// — but there is no tenant-facing UI yet (no way for a real tenant to
-// sign in and see/use a communication portal), so advertising it as a
-// live, included feature on the public pricing page would be false.
-// Flip these strings to "included"/omit only once a real tenant
-// experience ships — do not do it based on the internal flag alone.
-// Free/Organize have no entry here at all — they never mention Tenant
-// Connect (Launch Pricing: "Tenant Connect must remain accurately
-// labeled Coming Soon where appropriate" — Organize's own entitlement
-// list never mentions it either, so omitting it entirely there is more
-// accurate than a "coming soon" note for a plan that won't get it).
+// Public Homepage V2 audit: a real tenant-facing UI now exists
+// (app/tenant/page.tsx — tenant sign-in, portal, requests, documents) and
+// TENANT_CONNECT_ENABLED already resolves `manage` to `true`, so "Coming
+// soon" for Manage was stale and has been removed here — Manage's own
+// PLAN_FEATURE_HIGHLIGHTS entry below now lists it as an included
+// capability instead. `automate` stays "Coming soon" because the whole
+// plan is (see PLANS.automate.comingSoon); the legacy ids
+// (investor/portfolio/portfolio_pro) are not shown on the public
+// homepage or /pricing's purchasable cards at all (PUBLIC_PLAN_ORDER
+// excludes them) and are left untouched — a separate, pre-existing
+// legacy-plan quirk outside this milestone's scope.
 export const TENANT_CONNECT_PRICING_NOTE: Partial<Record<PlanId, string>> = {
-  manage: 'Tenant Connect — Coming soon',
   automate: 'Tenant Connect — Coming soon',
   investor: 'Tenant Connect — Coming soon',
   portfolio: 'Tenant Connect — Coming soon',
@@ -263,6 +263,7 @@ export const PLAN_FEATURE_HIGHLIGHTS: Partial<Record<PlanId, string[]>> = {
   manage: [
     'Everything in Organize',
     'Up to 15 properties',
+    'Tenant Connect',
     'Smart Upload & Portfolio Import (AI)',
     'Rent Ledger & PropWatch',
     '50 AI document analyses / month',

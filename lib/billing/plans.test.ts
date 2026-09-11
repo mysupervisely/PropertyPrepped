@@ -73,12 +73,14 @@ describe('Legacy Subscribers — CRITICAL: existing plan catalog entries are unt
   })
 })
 
-describe('Milestone 10 production-hardening pass — pricing truthfulness', () => {
-  it('labels Tenant Connect as "Coming soon" for every plan that shows it, even though the internal entitlement is already true for Manage and legacy Portfolio/Portfolio Pro', () => {
-    // There is no tenant-facing UI yet, so the public pricing page must
-    // never claim the feature is live/included, regardless of what
-    // entitlementsFor() resolves internally for owner-side testing.
-    expect(TENANT_CONNECT_PRICING_NOTE.manage).toBe('Tenant Connect — Coming soon')
+describe('Public Homepage V2 — pricing truthfulness (Tenant Connect is now real)', () => {
+  it('Manage no longer carries a "Coming soon" note — a real tenant-facing UI exists (app/tenant/page.tsx) and TENANT_CONNECT_ENABLED.manage is true', () => {
+    expect(TENANT_CONNECT_PRICING_NOTE.manage).toBeUndefined()
+    expect(PLAN_FEATURE_HIGHLIGHTS.manage).toContain('Tenant Connect')
+  })
+
+  it('legacy Portfolio/Portfolio Pro and the not-yet-purchasable Automate still say "Coming soon" — unchanged, outside this milestone\'s scope (not shown as purchasable public cards)', () => {
+    expect(TENANT_CONNECT_PRICING_NOTE.automate).toBe('Tenant Connect — Coming soon')
     expect(TENANT_CONNECT_PRICING_NOTE.investor).toBe('Tenant Connect — Coming soon')
     expect(TENANT_CONNECT_PRICING_NOTE.portfolio).toBe('Tenant Connect — Coming soon')
     expect(TENANT_CONNECT_PRICING_NOTE.portfolio_pro).toBe('Tenant Connect — Coming soon')
