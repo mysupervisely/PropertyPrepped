@@ -1,4 +1,5 @@
-// PropRoster — Property Intelligence V1, Phase B: source resolution.
+// PropRoster — Property Intelligence V1, Phase B (Phase B.1 note below):
+// source resolution.
 //
 // Bridges real (already RLS-fetched) row shapes into calculate.ts's
 // PropertyPerformanceInput. Like every other function in this module,
@@ -7,6 +8,11 @@
 // lib/tax-center/aggregate.ts's computePropertyTaxSummary() already uses.
 // This is the only file in lib/property-intelligence/ that knows about
 // "which table a number comes from"; calculate.ts never does.
+//
+// Phase B.1: calculate.ts now derives whether a tax year is "complete"
+// (isYearComplete) from `year` vs. `now` itself, so this file only needs
+// to pass the year and the resolved totals through — it does not decide
+// annual-vs-YTD periods itself.
 
 import { selectCurrentLease, type LeaseWithId } from '../leases/status'
 import { computePropertyTaxSummary } from '../tax-center/aggregate'
@@ -96,7 +102,6 @@ export function buildPropertyPerformanceInput(params: BuildPropertyPerformanceIn
       year,
       grossIncome: summary.grossIncome,
       operatingExpenses: summary.operatingExpenses,
-      otherIncome: summary.incomeByCategory.otherIncome ?? 0,
       transactionCount: summary.transactionCount,
       hasManualRecord: summary.hasManualRecord,
     },

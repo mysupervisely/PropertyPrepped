@@ -143,7 +143,7 @@ describe('buildPropertyPerformanceInput — source resolution', () => {
 })
 
 describe('buildPropertyPerformanceInput + computePropertyPerformance — end to end', () => {
-  it('a fully-populated property resolves from raw rows to a trustworthy, all-available snapshot with no crash', () => {
+  it('a fully-populated property, reviewed mid-year (the current, still-in-progress tax year), gets a trustworthy YTD snapshot with NO annual NOI/Cap Rate/Net Cash Flow (Phase B.1)', () => {
     const now = new Date('2026-06-15T00:00:00Z')
     const input = buildPropertyPerformanceInput({
       property: property({ estimated_value: 400000 }),
@@ -162,13 +162,45 @@ describe('buildPropertyPerformanceInput + computePropertyPerformance — end to 
 
     expect(result.estimatedValue.value).toBe(400000)
     expect(result.contractMonthlyRent.value).toBe(2200)
+    expect(result.contractAnnualRent.value).toBe(26400) // available independently, but never feeds NOI
     expect(result.actualIncomeYtd.value).toBe(4400)
     expect(result.operatingExpensesYtd.value).toBe(350)
+    expect(result.noiYtd.value).toBe(4050) // real, available, YTD-tagged
+    expect(result.noiYtd.period).toBe('ytd_actual')
     expect(result.mortgageBalance.value).toBe(250000)
     expect(result.monthlyDebtService.value).toBe(1800)
     expect(result.equity.value).toBe(150000)
+    // The Phase B.1 fix: none of these may appear for a partial year.
+    expect(result.noiAnnual.status).toBe('unavailable')
+    expect(result.capRatePercent.status).toBe('unavailable')
+    expect(result.netCashFlowMonthly.status).toBe('unavailable')
+  })
+
+  it('the SAME property, reviewed as a completed PRIOR tax year, gets a full annual snapshot including Cap Rate and Net Cash Flow', () => {
+    const now = new Date('2026-06-15T00:00:00Z')
+    const input = buildPropertyPerformanceInput({
+      property: property({ estimated_value: 400000 }),
+      leases: [lease({ start_date: '2025-01-01', end_date: '2025-12-31', monthly_rent: 2200 })],
+      currentMortgage: { current_balance: 250000, monthly_payment: 1800 },
+      yearTransactions: Array.from({ length: 12 }, (_, i) =>
+        tx({ id: `rent-${i}`, transaction_type: 'Income', category: 'Rent', amount: 2200, transaction_date: `2025-${String(i + 1).padStart(2, '0')}-01` }),
+      ).concat([tx({ id: 'repair-1', transaction_type: 'Expense', category: 'Repairs', amount: 4200, transaction_date: '2025-06-01' })]),
+      yearMaintenanceRecords: [],
+      taxRecord: null,
+      now,
+      year: '2025',
+    })
+    const result = computePropertyPerformance(input, now)
+
+    expect(result.period.taxYear).toBe('2025')
+    expect(result.period.isYearComplete).toBe(true)
+    expect(result.actualIncomeYtd.value).toBe(26400)
+    expect(result.actualIncomeYtd.period).toBe('annual_actual')
+    expect(result.operatingExpensesYtd.value).toBe(4200)
     expect(result.noiAnnual.status).toBe('available')
+    expect(result.noiAnnual.value).toBe(22200)
     expect(result.capRatePercent.status).toBe('available')
+    expect(result.capRatePercent.value).toBeCloseTo(5.55, 6) // 22200/400000*100
     expect(result.netCashFlowMonthly.status).toBe('available')
   })
 

@@ -1,4 +1,5 @@
-// PropRoster — Property Intelligence V1, Phase B: shared types.
+// PropRoster — Property Intelligence V1, Phase B (corrected in Phase B.1):
+// shared types.
 //
 // Phase A (docs/property-intelligence-v1-phase-a.md) audited PropRoster's
 // existing financial data and concluded that no new formulas are needed —
@@ -7,9 +8,13 @@
 // those formulas LIVE property data, and a way for the result to say "I
 // don't have enough information" instead of a misleading number.
 //
-// This file defines that result shape. It is intentionally small: one
-// generic `Metric<T>` wrapper (a value plus enough metadata for future UI
-// to decide whether/how to show it) rather than a bespoke type per field.
+// Phase B.1 correction: the original Phase B combined an ANNUALIZED
+// contract rent (a full-year figure) with YTD (partial-year) tracked
+// expenses and called the result "annual NOI." Those are two different
+// time periods — the result was neither a trustworthy YTD figure nor a
+// trustworthy annual one. This file now makes period an explicit part of
+// every metric (`MetricPeriod`) and calculate.ts computes two distinct
+// NOI figures instead of one blended one — see noiYtd/noiAnnual below.
 
 /**
  * Tri-state confidence a caller can act on directly:
@@ -43,35 +48,79 @@ export type DataSource =
   | 'derived'
   | 'none'
 
+/**
+ * Explicit time-basis tag — the Phase B.1 fix. Every metric says which of
+ * these it is; nothing downstream may combine two metrics whose periods
+ * are incompatible (that mistake — annualized contract rent minus YTD
+ * expenses — is exactly what Phase B.1 corrects).
+ *
+ *   point_in_time    — a balance/snapshot as of today, not a flow over a
+ *                       period (estimatedValue, mortgageBalance, equity).
+ *   monthly_contract — a monthly CONTRACTUAL rate (contractMonthlyRent) —
+ *                       not a transaction total.
+ *   annual_contract  — that same contractual rate, annualized
+ *                       (contractAnnualRent). Legitimate to annualize
+ *                       because it's a rate, not a transaction sum — but
+ *                       it must never be combined with a YTD/partial-year
+ *                       transactional total (that is the bug this phase
+ *                       fixes).
+ *   ytd_actual       — a real, resolved transactional total for the tax
+ *                       year currently being reviewed, covering January 1
+ *                       of that year through `period.asOf`. May cover a
+ *                       full year in substance once that year has fully
+ *                       elapsed (see `period.isYearComplete`), but is
+ *                       still tagged ytd_actual — annual_actual (below)
+ *                       is the one other metrics are allowed to treat as
+ *                       a genuine annual basis.
+ *   annual_actual    — a CONFIRMED, fully-elapsed tax year's real total
+ *                       (`period.isYearComplete === true`). The only
+ *                       actual-data basis this engine treats as "annual"
+ *                       — never a partial year, never annualized/prorated
+ *                       from one.
+ *   monthly_derived  — a monthly figure derived FROM an annual_actual
+ *                       basis (netCashFlowMonthly = annual NOI / 12 -
+ *                       monthly debt service).
+ *   n/a              — no period applies; the metric is unavailable.
+ */
+export type MetricPeriod =
+  | 'point_in_time'
+  | 'monthly_contract'
+  | 'annual_contract'
+  | 'ytd_actual'
+  | 'annual_actual'
+  | 'monthly_derived'
+  | 'n/a'
+
 export type MetricMeta = {
   /** True when the underlying figure is landlord-entered/manual rather than independently verified (e.g. properties.estimated_value, a manually-tracked mortgage balance). Never true for a figure computed purely from transactional data. */
   estimated?: boolean
   /** True when the source is known to go stale without an ongoing update mechanism in the app today (properties.mortgage_balance / mortgages — no edit path per Phase A Section 17). */
   potentiallyStale?: boolean
-  /** Short, factual notes: missing inputs, why a fallback was used, staleness caveats. Never advice, never a recommendation — matches the tone already established in lib/tax-center/readiness.ts. */
+  /** Short, factual notes: missing inputs, why a fallback was used, staleness caveats, period caveats. Never advice, never a recommendation — matches the tone already established in lib/tax-center/readiness.ts. */
   notes?: string[]
 }
 
-/** One metric: a value (or null) plus enough metadata to trust it. */
+/** One metric: a value (or null), a period tag, and enough metadata to trust it. */
 export type Metric<T = number> = MetricMeta & {
   value: T | null
   status: MetricStatus
   source: DataSource
+  period: MetricPeriod
 }
 
-/** Builds an 'unavailable' metric — value is always null here by construction. */
+/** Builds an 'unavailable' metric — value/period are always null/'n/a' by construction. */
 export function unavailable(source: DataSource, notes?: string[]): Metric {
-  return { value: null, status: 'unavailable', source, notes }
+  return { value: null, status: 'unavailable', source, period: 'n/a', notes }
 }
 
-/** Builds an 'available' metric. */
-export function available(value: number, source: DataSource, meta?: MetricMeta): Metric {
-  return { value, status: 'available', source, ...meta }
+/** Builds an 'available' metric with an explicit period. */
+export function available(value: number, source: DataSource, period: MetricPeriod, meta?: MetricMeta): Metric {
+  return { value, status: 'available', source, period, ...meta }
 }
 
 /** Builds an 'incomplete' metric — a real value that should be shown qualified, not as a clean number (Phase A Section 7). */
-export function incomplete(value: number, source: DataSource, notes: string[], meta?: Omit<MetricMeta, 'notes'>): Metric {
-  return { value, status: 'incomplete', source, notes, ...meta }
+export function incomplete(value: number, source: DataSource, period: MetricPeriod, notes: string[], meta?: Omit<MetricMeta, 'notes'>): Metric {
+  return { value, status: 'incomplete', source, period, notes, ...meta }
 }
 
 // ---------------------------------------------------------------------------
@@ -103,24 +152,21 @@ export type MortgageInput = {
 }
 
 /**
- * The current tax year's resolved totals for this ONE property, i.e.
- * exactly what lib/tax-center/aggregate.ts's computePropertyTaxSummary()
- * already returns for this property/year — reused, not re-derived, per
- * Phase A Section 10 ("Property Intelligence should treat
- * computePropertyTaxSummary's grossIncome/operatingExpenses for the
- * current tax year as its NOI inputs"). This is a deliberately small
- * projection of PropertyTaxSummary, not the whole type, so a caller can
- * build it from that function's real return value with no reshaping.
+ * One tax year's resolved totals for this ONE property, i.e. exactly what
+ * lib/tax-center/aggregate.ts's computePropertyTaxSummary() already
+ * returns for this property/year — reused, not re-derived, per Phase A
+ * Section 10. `grossIncome` includes EVERY income category Tax Center
+ * tracks (rental income AND any "other rental-related income" logged
+ * there) — it is not rent-only, and calculate.ts's own doc comments say
+ * so explicitly rather than mislabeling it "rent received."
  */
 export type TaxYearSummaryInput = {
   /** Four-digit tax year this summary covers, e.g. "2026". */
   year: string
-  /** PropertyTaxSummary.grossIncome — effective (tracked or manual-overridden) rental + other income for the year. */
+  /** PropertyTaxSummary.grossIncome — effective (tracked or manual-overridden) income for the year, ALL income categories combined (rental + other). */
   grossIncome: number
   /** PropertyTaxSummary.operatingExpenses — effective ordinary operating expenses for the year (mortgage/CapEx/financing excluded, exactly as Tax Center already excludes them). */
   operatingExpenses: number
-  /** PropertyTaxSummary.incomeByCategory['otherIncome'] — the non-rent slice of grossIncome, if any. Used only as the small additive term Phase A Section 6's NOI formula calls for; defaults to 0 when absent. */
-  otherIncome?: number
   /** PropertyTaxSummary.transactionCount — 0 alongside hasManualRecord=false is this module's ONLY signal that literally nothing has been logged for this property/year yet (see Phase A Section 7 — "no operating-expense data logged at all" must read as "Not enough data," never "$0 expenses"). */
   transactionCount: number
   /** PropertyTaxSummary.hasManualRecord — true if a property_tax_records row exists for this property/year at all. */
@@ -139,14 +185,34 @@ export type PropertyPerformanceInput = {
   activeLease: ActiveLeaseInput | null
   /** The mortgage row this app already treats as current, or null when no mortgage row exists for this property AT ALL (schema cannot distinguish "genuinely no mortgage" from "mortgage data never entered" — see Phase A Section 17 and this module's own header comment). */
   mortgage: MortgageInput | null
+  /**
+   * The tax year being reviewed — typically the current calendar year (a
+   * still-in-progress, YTD period), but may also be a completed prior
+   * year (e.g. a landlord reviewing "last year's" performance from Tax
+   * Center's own year selector). Whichever year is passed, calculate.ts
+   * derives `isYearComplete` from it (year < the calendar year `now`
+   * falls in) — it is never assumed complete just because a caller
+   * labeled it that way.
+   */
   taxYearSummary: TaxYearSummaryInput
 }
 
 export type PropertyPerformancePeriod = {
-  /** The tax year this snapshot's income/expense figures cover — always taxYearSummary.year, never independently recomputed (one source of truth for "what year is this"). */
+  /** The tax year taxYearSummary covers — always taxYearSummary.year, never independently recomputed (one source of truth for "what year is this"). */
   taxYear: string
-  /** ISO date (YYYY-MM-DD) this snapshot was computed as of. Income/expense figures cover taxYear's January 1 through this date — i.e. YEAR TO DATE, never silently annualized (Phase A: "If annualizing partial-year transactional data would create misleading numbers, do NOT silently annualize it"). Contract rent is the one exception — it is a contractual rate, not a transaction sum, so it is legitimately annualized regardless of how much of the year has elapsed. */
+  /** ISO date (YYYY-MM-DD) this snapshot was computed as of. */
   asOf: string
+  /**
+   * True only when `taxYear` has fully elapsed relative to `asOf` (i.e.
+   * `asOf` falls in a LATER calendar year than `taxYear`) — the current,
+   * in-progress calendar year is always `false`, even on December 31st,
+   * to avoid a fragile exact-date boundary check. This is the ONLY
+   * condition under which this engine treats actual income/expense
+   * totals as a genuine annual basis (annual_actual) rather than a
+   * partial-year one (ytd_actual) — see noiAnnual/capRatePercent/
+   * netCashFlowMonthly below.
+   */
+  isYearComplete: boolean
 }
 
 /**
@@ -164,27 +230,37 @@ export type PropertyPerformance = {
 
   /** The current lease's contracted monthly rent, or the stale property-level fallback when no lease exists. A CONTRACTUAL rate, distinct from actualIncomeYtd below. */
   contractMonthlyRent: Metric
-  /** contractMonthlyRent x 12 — legitimately annualized because it represents a contractual rate, not a transaction sum (Phase A "Time Periods"). Same source/status/notes as contractMonthlyRent. */
+  /** contractMonthlyRent x 12 — legitimately annualized because it represents a contractual rate, not a transaction sum. NOT the same thing as actual annual income, and never combined with YTD expenses to produce NOI (Phase B.1 fix). Same source/status/notes as contractMonthlyRent. */
   contractAnnualRent: Metric
 
-  /** Actual cash-basis income tracked/resolved by Tax Center for the current tax year to date — a genuinely different concept from contract rent (a vacant month, a rent concession, or simply "not yet collected" all make this differ from contractMonthlyRent x months-elapsed, and this module never blends the two). */
+  /** Actual, Tax-Center-resolved income for the tax year reviewed, to date — ALL income categories Tax Center tracks (rental + other), not rent-only. A genuinely different concept from contract rent. Tagged 'annual_actual' instead of 'ytd_actual' when period.isYearComplete is true. */
   actualIncomeYtd: Metric
-
-  /** Tax Center's resolved effective operating-expense total for the current tax year to date (mortgage/CapEx/financing excluded). YEAR TO DATE, not a full-year figure — see period.asOf. */
+  /** Tax Center's resolved effective operating-expense total for the tax year reviewed, to date (mortgage/CapEx/financing excluded). Tagged 'annual_actual' instead of 'ytd_actual' when period.isYearComplete is true. */
   operatingExpensesYtd: Metric
-
-  /** grossIncome (contractAnnualRent + taxYearSummary.otherIncome) - operatingExpensesYtd, via the existing calculateNOI(). Financing is never part of either side. Because the income side is annualized contract rent while the expense side is year-to-date, this is best read as "this tax year's NOI so far, at the current contract rent" — not a stable trailing-twelve-month figure early in the year; see this metric's own notes when that matters. */
-  noiAnnual: Metric
-  /** noiAnnual / estimatedValue x 100, via the existing capRate(). Mortgage payments are never included in operating expenses for this figure. */
-  capRatePercent: Metric
+  /** actualIncomeYtd - operatingExpensesYtd, from the SAME period — always safe to compute whenever both inputs are available, regardless of whether that period is a partial or complete year. Never annualized. */
+  noiYtd: Metric
 
   /** The mortgage this app currently treats as this property's balance — from the current mortgage row when one exists, else the flat properties.mortgage_balance fallback. Never independently verified against a lender. */
   mortgageBalance: Metric
   /** Monthly principal + interest, read directly from mortgages.monthly_payment (never recomputed via amortization) when a mortgage row exists. */
   monthlyDebtService: Metric
-  /** noiAnnual / 12 - monthlyDebtService. Only computed when BOTH noiAnnual and monthlyDebtService are usable — never assumes $0 debt service for a property with no mortgage row on file (that could mean "no mortgage" or "never entered," and this module cannot tell the difference — see mortgage's own doc comment). */
-  netCashFlowMonthly: Metric
 
   /** estimatedValue - mortgageBalance, via the existing equity(). Only computed when both inputs are present; never treated as lender-verified. */
   equity: Metric
+
+  /**
+   * NOI for a CONFIRMED, fully-elapsed tax year only (period.isYearComplete
+   * === true) — the same actualIncomeYtd/operatingExpensesYtd figures,
+   * just relabeled once their period is confirmed to be a genuine full
+   * year. Unavailable for the common case of a still-in-progress current
+   * year: PropRoster has no reliable annual expense basis for a partial
+   * year today (Phase B.1 — see docs/property-intelligence-v1-phase-b.md
+   * for why contract rent is not substituted in to force this metric to
+   * appear).
+   */
+  noiAnnual: Metric
+  /** noiAnnual / estimatedValue x 100, via the existing capRate(). Only when noiAnnual is itself available — never derived from noiYtd or from contract rent. */
+  capRatePercent: Metric
+  /** noiAnnual / 12 - monthlyDebtService. Only when BOTH noiAnnual (a confirmed annual figure) and monthlyDebtService are available — never derived by dividing noiYtd by 12. */
+  netCashFlowMonthly: Metric
 }

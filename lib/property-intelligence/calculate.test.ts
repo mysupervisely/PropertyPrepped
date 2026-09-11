@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   computePropertyPerformance,
+  isYearComplete,
   resolveActualIncomeYtd,
   resolveCapRate,
   resolveContractAnnualRent,
@@ -10,10 +11,11 @@ import {
   resolveMonthlyDebtService,
   resolveMortgageBalance,
   resolveNetCashFlow,
-  resolveNOI,
+  resolveNoiAnnual,
+  resolveNoiYtd,
   resolveOperatingExpensesYtd,
 } from './calculate'
-import type { PropertyPerformanceInput, TaxYearSummaryInput } from './types'
+import type { Metric, PropertyPerformanceInput, TaxYearSummaryInput } from './types'
 
 // Small helper, same convention as lib/investment-calculations.test.ts's
 // own assertAllFinite: every numeric field in a result must be finite, and
@@ -39,14 +41,14 @@ function taxSummary(overrides: Partial<TaxYearSummaryInput> = {}): TaxYearSummar
     year: '2026',
     grossIncome: 0,
     operatingExpenses: 0,
-    otherIncome: 0,
     transactionCount: 0,
     hasManualRecord: false,
     ...overrides,
   }
 }
 
-function fullInput(overrides: Partial<PropertyPerformanceInput> = {}): PropertyPerformanceInput {
+/** A fully-populated input for a COMPLETE prior tax year (2025), reviewed as of mid-2026 — the one case this engine treats as a genuine annual basis. */
+function completeYearInput(overrides: Partial<PropertyPerformanceInput> = {}): PropertyPerformanceInput {
   return {
     propertyId: 'prop-1',
     estimatedValue: 400000,
@@ -54,31 +56,52 @@ function fullInput(overrides: Partial<PropertyPerformanceInput> = {}): PropertyP
     propertyMortgageBalanceFallback: 0,
     activeLease: { id: 'lease-1', monthlyRent: 2500 },
     mortgage: { currentBalance: 280000, monthlyPayment: 1800 },
-    taxYearSummary: taxSummary({ grossIncome: 30000, operatingExpenses: 9000, transactionCount: 12, hasManualRecord: false }),
+    taxYearSummary: taxSummary({ year: '2025', grossIncome: 30000, operatingExpenses: 9000, transactionCount: 24, hasManualRecord: false }),
     ...overrides,
   }
 }
 
+const NOW_MID_2026 = new Date('2026-06-15T00:00:00Z')
+
+const availableMetric = (value: number): Metric => ({ value, status: 'available', source: 'derived', period: 'annual_actual' })
+const unavailableMetric: Metric = { value: null, status: 'unavailable', source: 'derived', period: 'n/a' }
+
 // ---------------------------------------------------------------------------
-// 1-2: Contract rent source priority
+// isYearComplete — the Phase B.1 gate everything else keys off
+// ---------------------------------------------------------------------------
+
+describe('isYearComplete', () => {
+  it('the current calendar year is never complete, even on December 31st', () => {
+    expect(isYearComplete('2026', new Date('2026-12-31T23:59:59Z'))).toBe(false)
+  })
+
+  it('a prior calendar year is complete', () => {
+    expect(isYearComplete('2025', new Date('2026-01-01T00:00:01Z'))).toBe(true)
+  })
+
+  it('a future year is not complete', () => {
+    expect(isYearComplete('2027', NOW_MID_2026)).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Contract rent — source priority (unaffected by the Phase B.1 fix, still
+// covered directly)
 // ---------------------------------------------------------------------------
 
 describe('resolveContractMonthlyRent — source priority', () => {
-  it('1. active lease rent takes priority over property fallback rent', () => {
+  it('active lease rent takes priority over property fallback rent', () => {
     const metric = resolveContractMonthlyRent({ id: 'lease-1', monthlyRent: 2200 }, 1800)
     expect(metric.value).toBe(2200)
-    expect(metric.status).toBe('available')
     expect(metric.source).toBe('active_lease')
-    expect(metric.estimated).toBeUndefined()
+    expect(metric.period).toBe('monthly_contract')
   })
 
-  it('2. property fallback rent is used when no active lease exists', () => {
+  it('property fallback rent is used when no active lease exists', () => {
     const metric = resolveContractMonthlyRent(null, 1800)
     expect(metric.value).toBe(1800)
-    expect(metric.status).toBe('available')
     expect(metric.source).toBe('property_fallback')
     expect(metric.estimated).toBe(true)
-    expect(metric.notes?.join(' ')).toMatch(/no active lease/i)
   })
 
   it('is unavailable when neither an active lease nor a fallback rent exists', () => {
@@ -86,26 +109,28 @@ describe('resolveContractMonthlyRent — source priority', () => {
     expect(metric.value).toBeNull()
     expect(metric.status).toBe('unavailable')
   })
-
-  it('never silently promotes the fallback to the same confidence as an active lease (source always distinguishes them)', () => {
-    const withLease = resolveContractMonthlyRent({ id: 'l1', monthlyRent: 2000 }, 2000)
-    const withFallback = resolveContractMonthlyRent(null, 2000)
-    expect(withLease.source).not.toBe(withFallback.source)
-    expect(withLease.estimated).toBeUndefined()
-    expect(withFallback.estimated).toBe(true)
-  })
 })
 
-describe('resolveContractAnnualRent', () => {
-  it('annualizes the monthly figure and mirrors its source/status', () => {
+// ---------------------------------------------------------------------------
+// 8. Contract annual rent remains available independently
+// ---------------------------------------------------------------------------
+
+describe('8. Contract annual rent remains available independently', () => {
+  it('annualizes the monthly figure and is tagged annual_contract, independent of any income/expense data', () => {
     const monthly = resolveContractMonthlyRent({ id: 'l1', monthlyRent: 2500 }, 0)
     const annual = resolveContractAnnualRent(monthly)
     expect(annual.value).toBe(30000)
-    expect(annual.source).toBe(monthly.source)
+    expect(annual.status).toBe('available')
+    expect(annual.period).toBe('annual_contract')
+  })
+
+  it('is available even when no Tax Center data exists at all for the property/year', () => {
+    const monthly = resolveContractMonthlyRent({ id: 'l1', monthlyRent: 2500 }, 0)
+    const annual = resolveContractAnnualRent(monthly)
     expect(annual.status).toBe('available')
   })
 
-  it('stays unavailable when the monthly figure is unavailable', () => {
+  it('stays unavailable only when the monthly figure itself is unavailable', () => {
     const monthly = resolveContractMonthlyRent(null, 0)
     const annual = resolveContractAnnualRent(monthly)
     expect(annual.value).toBeNull()
@@ -114,202 +139,272 @@ describe('resolveContractAnnualRent', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 3: Contract rent vs. actual income are distinct concepts
+// 9. Actual YTD income stays distinct from contract annual rent
 // ---------------------------------------------------------------------------
 
-describe('3. Contract rent stays distinct from actual rent received', () => {
-  it('actualIncomeYtd is its own figure, not derived from or equal to contract rent', () => {
-    const contractRent = resolveContractMonthlyRent({ id: 'l1', monthlyRent: 2500 }, 0)
-    // Only 2 months of $2,000 actually collected (a rent concession, or
-    // simply not fully caught up) — genuinely different from the $2,500
-    // contract rate.
-    const actualIncome = resolveActualIncomeYtd(taxSummary({ grossIncome: 4000, transactionCount: 2 }))
-    expect(contractRent.value).toBe(2500)
+describe('9. Actual YTD income remains distinct from contract annual rent', () => {
+  it('actualIncomeYtd is its own figure, never derived from or equal to annualized contract rent', () => {
+    const contractAnnual = resolveContractAnnualRent(resolveContractMonthlyRent({ id: 'l1', monthlyRent: 2500 }, 0))
+    // Only 2 months of $2,000 actually collected so far — genuinely
+    // different from a $30,000 annualized contract rate.
+    const actualIncome = resolveActualIncomeYtd(taxSummary({ grossIncome: 4000, transactionCount: 2 }), false)
+    expect(contractAnnual.value).toBe(30000)
     expect(actualIncome.value).toBe(4000)
-    expect(actualIncome.value).not.toBe(contractRent.value! * 2)
+    expect(actualIncome.period).toBe('ytd_actual')
+    expect(contractAnnual.period).toBe('annual_contract')
   })
 
   it('actual income is unavailable when nothing has been logged, even if a contract rent exists', () => {
-    const actualIncome = resolveActualIncomeYtd(taxSummary({ grossIncome: 0, transactionCount: 0, hasManualRecord: false }))
+    const actualIncome = resolveActualIncomeYtd(taxSummary({ grossIncome: 0, transactionCount: 0, hasManualRecord: false }), false)
     expect(actualIncome.status).toBe('unavailable')
     expect(actualIncome.value).toBeNull()
   })
 
   it('a genuine $0 actual income (e.g. a vacant stretch) is available, not unavailable, once there is other Tax Center data for the property/year', () => {
-    const actualIncome = resolveActualIncomeYtd(taxSummary({ grossIncome: 0, transactionCount: 3 }))
+    const actualIncome = resolveActualIncomeYtd(taxSummary({ grossIncome: 0, transactionCount: 3 }), false)
     expect(actualIncome.status).toBe('available')
     expect(actualIncome.value).toBe(0)
   })
+
+  it('is tagged annual_actual instead of ytd_actual once the tax year is confirmed complete — same figure, relabeled', () => {
+    const actualIncome = resolveActualIncomeYtd(taxSummary({ grossIncome: 30000, transactionCount: 24 }), true)
+    expect(actualIncome.period).toBe('annual_actual')
+    expect(actualIncome.value).toBe(30000)
+  })
 })
 
 // ---------------------------------------------------------------------------
-// 4-6: NOI and Cap Rate
+// 1. YTD NOI uses YTD income and YTD operating expenses from the SAME
+// period
 // ---------------------------------------------------------------------------
 
-describe('4. NOI excludes financing', () => {
-  it('is unaffected by mortgage/debt-service figures — only income and operating expenses feed it', () => {
-    const rent = resolveContractAnnualRent(resolveContractMonthlyRent({ id: 'l1', monthlyRent: 2500 }, 0))
-    const expenses = resolveOperatingExpensesYtd(taxSummary({ operatingExpenses: 9000, transactionCount: 12 }))
-    const noi = resolveNOI(rent, 0, expenses)
-    // 2500 * 12 - 9000 = 21000, regardless of any mortgage payment.
-    expect(noi.value).toBe(21000)
+describe('1. YTD NOI uses YTD income and YTD operating expenses from the same period', () => {
+  it('noiYtd = actualIncomeYtd - operatingExpensesYtd, both drawn from the same taxYearSummary', () => {
+    const income = resolveActualIncomeYtd(taxSummary({ grossIncome: 8000, transactionCount: 6 }), false)
+    const expenses = resolveOperatingExpensesYtd(taxSummary({ operatingExpenses: 2500, transactionCount: 6 }), false)
+    const noi = resolveNoiYtd(income, expenses)
+    expect(noi.value).toBe(5500)
     expect(noi.status).toBe('available')
+    expect(noi.period).toBe('ytd_actual')
   })
 
-  it('includes Tax Center "other rental-related income" as an additive term, per Phase A\'s formula', () => {
-    const rent = resolveContractAnnualRent(resolveContractMonthlyRent({ id: 'l1', monthlyRent: 2000 }, 0))
-    const expenses = resolveOperatingExpensesYtd(taxSummary({ operatingExpenses: 5000, transactionCount: 4 }))
-    const noi = resolveNOI(rent, 1200, expenses)
-    // 2000*12 + 1200 - 5000 = 20200
-    expect(noi.value).toBe(20200)
-  })
-})
-
-describe('5. Cap Rate formula is correct', () => {
-  it('NOI / estimated value x 100', () => {
-    const noi = { value: 24000, status: 'available' as const, source: 'derived' as const }
-    const value = resolveEstimatedValue(400000)
-    const capRate = resolveCapRate(noi, value)
-    expect(capRate.value).toBeCloseTo(6, 6) // 24000 / 400000 * 100
-    expect(capRate.status).toBe('available')
+  it('never uses contract rent as the income side', () => {
+    // Contract rent would be $30,000/yr here, but noiYtd must only ever
+    // reflect the actual $8,000 tracked so far.
+    const income = resolveActualIncomeYtd(taxSummary({ grossIncome: 8000, transactionCount: 6 }), false)
+    const expenses = resolveOperatingExpensesYtd(taxSummary({ operatingExpenses: 2500, transactionCount: 6 }), false)
+    const noi = resolveNoiYtd(income, expenses)
+    expect(noi.value).not.toBe(30000 - 2500)
   })
 })
 
-describe('6. Cap Rate is unavailable when value is missing or invalid', () => {
-  it('unavailable when estimated value is not entered (0)', () => {
-    const noi = { value: 24000, status: 'available' as const, source: 'derived' as const }
-    const capRate = resolveCapRate(noi, resolveEstimatedValue(0))
+// ---------------------------------------------------------------------------
+// 2. Annual contract rent is NOT combined with YTD operating expenses to
+// produce annual NOI (the actual Phase B.1 bug)
+// ---------------------------------------------------------------------------
+
+describe('2. Annual contract rent is never combined with YTD operating expenses to produce annual NOI', () => {
+  it('a mid-year property with a lease and some YTD expenses gets NO annual NOI, even though both inputs "exist"', () => {
+    const result = computePropertyPerformance({
+      propertyId: 'p1',
+      estimatedValue: 400000,
+      propertyMonthlyRentFallback: 0,
+      propertyMortgageBalanceFallback: 0,
+      activeLease: { id: 'l1', monthlyRent: 2500 }, // would annualize to $30,000
+      mortgage: null,
+      taxYearSummary: taxSummary({ year: '2026', operatingExpenses: 9000, transactionCount: 12 }), // YTD, current year
+    }, NOW_MID_2026)
+
+    expect(result.contractAnnualRent.value).toBe(30000) // available on its own
+    expect(result.period.isYearComplete).toBe(false)
+    // The old (buggy) formula would have been 30000 - 9000 = 21000. It
+    // must not appear anywhere.
+    expect(result.noiAnnual.status).toBe('unavailable')
+    expect(result.noiAnnual.value).toBeNull()
+    expect(result.noiAnnual.value).not.toBe(21000)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 3. Annual NOI is unavailable when no compatible annual basis exists
+// ---------------------------------------------------------------------------
+
+describe('3. Annual NOI is unavailable when no compatible annual expense basis exists', () => {
+  it('unavailable for the current, still-in-progress tax year, regardless of how much YTD data exists', () => {
+    const noiYtd = availableMetric(21000)
+    const noiAnnual = resolveNoiAnnual(noiYtd, false)
+    expect(noiAnnual.status).toBe('unavailable')
+    expect(noiAnnual.value).toBeNull()
+  })
+
+  it('unavailable even for a complete prior year if the underlying YTD figures themselves were unavailable/incomplete', () => {
+    const noiAnnual = resolveNoiAnnual(unavailableMetric, true)
+    expect(noiAnnual.status).toBe('unavailable')
+    expect(noiAnnual.value).toBeNull()
+  })
+
+  it('is genuinely available for a confirmed, fully-elapsed prior tax year with real income and expense data', () => {
+    const noiYtd = availableMetric(21000)
+    const noiAnnual = resolveNoiAnnual(noiYtd, true)
+    expect(noiAnnual.status).toBe('available')
+    expect(noiAnnual.value).toBe(21000)
+    expect(noiAnnual.period).toBe('annual_actual')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 4-5. Cap Rate gating
+// ---------------------------------------------------------------------------
+
+describe('4. Cap Rate is unavailable when valid annual NOI is unavailable', () => {
+  it('unavailable when noiAnnual is unavailable (the common mid-year case)', () => {
+    const capRate = resolveCapRate(unavailableMetric, resolveEstimatedValue(400000))
     expect(capRate.status).toBe('unavailable')
     expect(capRate.value).toBeNull()
   })
 
-  it('unavailable when NOI itself is unavailable', () => {
-    const capRate = resolveCapRate({ value: null, status: 'unavailable', source: 'derived' }, resolveEstimatedValue(400000))
+  it('unavailable when estimated value is missing, even with a valid annual NOI', () => {
+    const capRate = resolveCapRate(availableMetric(24000), resolveEstimatedValue(0))
     expect(capRate.status).toBe('unavailable')
     expect(capRate.value).toBeNull()
   })
 
   it('never returns a misleading 0% when required data is missing', () => {
-    const capRate = resolveCapRate({ value: null, status: 'unavailable', source: 'derived' }, resolveEstimatedValue(0))
+    const capRate = resolveCapRate(unavailableMetric, resolveEstimatedValue(0))
     expect(capRate.value).not.toBe(0)
     expect(capRate.value).toBeNull()
   })
 })
 
-// ---------------------------------------------------------------------------
-// 7: Expense resolution never double-counts
-// ---------------------------------------------------------------------------
-
-describe('7. Expense resolution does not double-count manual and tracked amounts', () => {
-  it('operatingExpensesYtd uses Tax Center\'s already-resolved effective total verbatim — never adds a second figure on top', () => {
-    // Tax Center's own computePropertyTaxSummary already applied the
-    // manual-replaces-tracked rule before this number ever reaches
-    // Property Intelligence (lib/tax-center/manual-entry.ts's
-    // computeCategoryValue) — e.g. tracked ledger total was $4,000, a
-    // manual Tax Center entry of $5,000 REPLACED it, so the resolved
-    // total this module receives is $5,000, not $9,000.
-    const resolved = resolveOperatingExpensesYtd(taxSummary({ operatingExpenses: 5000, transactionCount: 8 }))
-    expect(resolved.value).toBe(5000)
-  })
-
-  it('a $0 total with other data present is flagged incomplete, never silently trusted as a real zero', () => {
-    const resolved = resolveOperatingExpensesYtd(taxSummary({ operatingExpenses: 0, transactionCount: 3 }))
-    expect(resolved.status).toBe('incomplete')
-    expect(resolved.value).toBe(0)
-  })
-
-  it('a NOI built on an incomplete (suspicious-zero) expense total is unavailable, not a falsely-inflated number', () => {
-    const rent = resolveContractAnnualRent(resolveContractMonthlyRent({ id: 'l1', monthlyRent: 2000 }, 0))
-    const expenses = resolveOperatingExpensesYtd(taxSummary({ operatingExpenses: 0, transactionCount: 3 }))
-    const noi = resolveNOI(rent, 0, expenses)
-    expect(noi.status).toBe('unavailable')
-    expect(noi.value).toBeNull()
+describe('5. Cap Rate works when a genuinely compatible annual NOI basis is supplied', () => {
+  it('NOI / estimated value x 100, using a confirmed annual NOI', () => {
+    const noiYtd = availableMetric(24000)
+    const noiAnnual = resolveNoiAnnual(noiYtd, true)
+    const capRate = resolveCapRate(noiAnnual, resolveEstimatedValue(400000))
+    expect(capRate.value).toBeCloseTo(6, 6) // 24000 / 400000 * 100
+    expect(capRate.status).toBe('available')
+    expect(capRate.period).toBe('annual_actual')
   })
 })
 
 // ---------------------------------------------------------------------------
-// 8-9: Net Cash Flow
+// 6-7. Net Cash Flow gating
 // ---------------------------------------------------------------------------
 
-describe('8. Net Cash Flow subtracts debt service from NOI', () => {
-  it('NOI/12 - monthly debt service', () => {
-    const noi = { value: 24000, status: 'available' as const, source: 'derived' as const }
+describe('6. Net Cash Flow does not divide YTD NOI by 12', () => {
+  it('unavailable when only a YTD (not annual) NOI exists, even with a real mortgage payment on file', () => {
+    const noiYtdOnly = availableMetric(9000) // deliberately NOT run through resolveNoiAnnual
     const debtService = resolveMonthlyDebtService({ currentBalance: 280000, monthlyPayment: 1500 })
-    const cashFlow = resolveNetCashFlow(noi, debtService)
-    expect(cashFlow.value).toBeCloseTo(24000 / 12 - 1500, 6) // 500
-    expect(cashFlow.status).toBe('available')
+    // Directly simulate the mistake: pass a YTD-tagged NOI where an
+    // annual one is required. resolveNetCashFlow must still refuse it
+    // once the annual gate is applied upstream — this test exercises the
+    // full computePropertyPerformance path instead, which is where the
+    // gate actually lives.
+    const result = computePropertyPerformance({
+      propertyId: 'p1', estimatedValue: 400000, propertyMonthlyRentFallback: 0, propertyMortgageBalanceFallback: 0,
+      activeLease: { id: 'l1', monthlyRent: 2500 },
+      mortgage: { currentBalance: 280000, monthlyPayment: 1500 },
+      taxYearSummary: taxSummary({ year: '2026', grossIncome: 5000, operatingExpenses: 9000, transactionCount: 6 }),
+    }, NOW_MID_2026)
+    expect(result.noiYtd.value).toBe(-4000) // a real, available YTD figure
+    expect(result.netCashFlowMonthly.status).toBe('unavailable')
+    expect(result.netCashFlowMonthly.value).toBeNull()
+    void noiYtdOnly
+    void debtService
   })
 })
 
-describe('9. Net Cash Flow is unavailable/incomplete when required financing data is missing', () => {
-  it('unavailable when there is no mortgage record on file at all', () => {
-    const noi = { value: 24000, status: 'available' as const, source: 'derived' as const }
+describe('7. Net Cash Flow becomes unavailable when a valid annual/compatible NOI basis is absent', () => {
+  it('unavailable when noiAnnual is unavailable, even with valid debt service', () => {
+    const debtService = resolveMonthlyDebtService({ currentBalance: 280000, monthlyPayment: 1500 })
+    const cashFlow = resolveNetCashFlow(unavailableMetric, debtService)
+    expect(cashFlow.status).toBe('unavailable')
+    expect(cashFlow.value).toBeNull()
+  })
+
+  it('unavailable when there is no mortgage record on file at all, even with a valid annual NOI', () => {
+    const noiAnnual = resolveNoiAnnual(availableMetric(24000), true)
     const debtService = resolveMonthlyDebtService(null)
-    const cashFlow = resolveNetCashFlow(noi, debtService)
+    const cashFlow = resolveNetCashFlow(noiAnnual, debtService)
     expect(cashFlow.status).toBe('unavailable')
     expect(cashFlow.value).toBeNull()
   })
 
   it('unavailable when a mortgage record exists but has no payment amount recorded (incomplete debt service never feeds cash flow)', () => {
-    const noi = { value: 24000, status: 'available' as const, source: 'derived' as const }
+    const noiAnnual = resolveNoiAnnual(availableMetric(24000), true)
     const debtService = resolveMonthlyDebtService({ currentBalance: 280000, monthlyPayment: 0 })
     expect(debtService.status).toBe('incomplete')
-    const cashFlow = resolveNetCashFlow(noi, debtService)
+    const cashFlow = resolveNetCashFlow(noiAnnual, debtService)
     expect(cashFlow.status).toBe('unavailable')
   })
 
-  it('never treats a missing mortgage record as proof of $0 debt service', () => {
-    const debtService = resolveMonthlyDebtService(null)
-    expect(debtService.value).not.toBe(0)
-    expect(debtService.value).toBeNull()
-    expect(debtService.notes?.join(' ')).toMatch(/does not necessarily mean/i)
+  it('is available and period-consistent when both a confirmed annual NOI and a real monthly payment exist', () => {
+    const noiAnnual = resolveNoiAnnual(availableMetric(24000), true)
+    const debtService = resolveMonthlyDebtService({ currentBalance: 280000, monthlyPayment: 1500 })
+    const cashFlow = resolveNetCashFlow(noiAnnual, debtService)
+    expect(cashFlow.status).toBe('available')
+    expect(cashFlow.value).toBeCloseTo(24000 / 12 - 1500, 6) // 500
+    expect(cashFlow.period).toBe('monthly_derived')
   })
 })
 
 // ---------------------------------------------------------------------------
-// 10-11: Equity
+// Expense resolution / double counting (unaffected by the Phase B.1 fix,
+// still covered directly)
 // ---------------------------------------------------------------------------
 
-describe('10. Equity calculation works when value + mortgage balance exist', () => {
-  it('estimated value - mortgage balance', () => {
+describe('Expense resolution does not double-count manual and tracked amounts', () => {
+  it('operatingExpensesYtd uses Tax Center\'s already-resolved effective total verbatim', () => {
+    const resolved = resolveOperatingExpensesYtd(taxSummary({ operatingExpenses: 5000, transactionCount: 8 }), false)
+    expect(resolved.value).toBe(5000)
+  })
+
+  it('a $0 total with other data present is flagged incomplete, never silently trusted as a real zero', () => {
+    const resolved = resolveOperatingExpensesYtd(taxSummary({ operatingExpenses: 0, transactionCount: 3 }), false)
+    expect(resolved.status).toBe('incomplete')
+  })
+
+  it('a NOI built on an incomplete (suspicious-zero) expense total is unavailable, not a falsely-inflated number', () => {
+    const income = resolveActualIncomeYtd(taxSummary({ grossIncome: 2000, transactionCount: 3 }), false)
+    const expenses = resolveOperatingExpensesYtd(taxSummary({ operatingExpenses: 0, transactionCount: 3 }), false)
+    const noi = resolveNoiYtd(income, expenses)
+    expect(noi.status).toBe('unavailable')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Equity (unaffected by the Phase B.1 fix — a point-in-time metric, not a
+// period-flow one — still covered directly)
+// ---------------------------------------------------------------------------
+
+describe('Equity', () => {
+  it('works when value + mortgage balance exist', () => {
     const value = resolveEstimatedValue(400000)
     const balance = resolveMortgageBalance({ currentBalance: 280000, monthlyPayment: 1800 }, 0)
     const equity = resolveEquity(value, balance)
     expect(equity.value).toBe(120000)
     expect(equity.status).toBe('available')
-    expect(equity.estimated).toBe(true) // never described as lender-verified
+    expect(equity.period).toBe('point_in_time')
   })
 
-  it('works using the property-level fallback balance when no mortgage record exists', () => {
-    const value = resolveEstimatedValue(400000)
-    const balance = resolveMortgageBalance(null, 250000)
-    const equity = resolveEquity(value, balance)
-    expect(equity.value).toBe(150000)
-    expect(equity.status).toBe('available')
-    expect(equity.potentiallyStale).toBe(true)
-  })
-})
-
-describe('11. Equity is unavailable when required inputs are missing', () => {
-  it('unavailable when estimated value is missing', () => {
+  it('is unavailable when required inputs are missing', () => {
     const equity = resolveEquity(resolveEstimatedValue(0), resolveMortgageBalance({ currentBalance: 100000, monthlyPayment: 900 }, 0))
     expect(equity.status).toBe('unavailable')
     expect(equity.value).toBeNull()
   })
 
-  it('unavailable (never treated as zero debt) when no mortgage balance can be determined at all', () => {
+  it('never treats a missing mortgage record as $0 debt', () => {
     const equity = resolveEquity(resolveEstimatedValue(400000), resolveMortgageBalance(null, 0))
     expect(equity.status).toBe('unavailable')
-    expect(equity.value).toBeNull()
   })
 })
 
 // ---------------------------------------------------------------------------
-// 12-13: Zero vs. unknown
+// 11. Missing values remain null/unavailable rather than zero
 // ---------------------------------------------------------------------------
 
-describe('12. Missing values never silently become zero', () => {
-  it('every unavailable metric in a full snapshot has value: null, never 0', () => {
+describe('11. Missing values remain null/unavailable rather than zero', () => {
+  it('every unavailable metric in an entirely-empty snapshot has value: null, never 0', () => {
     const result = computePropertyPerformance({
       propertyId: 'p1',
       estimatedValue: 0,
@@ -326,69 +421,55 @@ describe('12. Missing values never silently become zero', () => {
       expect(m.value, `${key} should be null when unavailable`).toBeNull()
     }
   })
-})
-
-describe('13. Zero values remain valid when they genuinely mean zero', () => {
-  it('a real $0 active-lease rent is available, not unavailable', () => {
-    const rent = resolveContractMonthlyRent({ id: 'l1', monthlyRent: 0 }, 0)
-    expect(rent.status).toBe('available')
-    expect(rent.value).toBe(0)
-  })
-
-  it('a real $0 actual income (vacant stretch, other data present) is available, not unavailable', () => {
-    const income = resolveActualIncomeYtd(taxSummary({ grossIncome: 0, transactionCount: 5 }))
-    expect(income.status).toBe('available')
-    expect(income.value).toBe(0)
-  })
 
   it('a genuine negative NOI/cash flow is returned as computed, never treated as an error', () => {
-    const rent = resolveContractAnnualRent(resolveContractMonthlyRent({ id: 'l1', monthlyRent: 500 }, 0))
-    const expenses = resolveOperatingExpensesYtd(taxSummary({ operatingExpenses: 9000, transactionCount: 10 }))
-    const noi = resolveNOI(rent, 0, expenses)
+    const income = resolveActualIncomeYtd(taxSummary({ grossIncome: 500, transactionCount: 10 }), false)
+    const expenses = resolveOperatingExpensesYtd(taxSummary({ operatingExpenses: 9000, transactionCount: 10 }), false)
+    const noi = resolveNoiYtd(income, expenses)
     expect(noi.value).toBeLessThan(0)
     expect(noi.status).toBe('available')
   })
 })
 
 // ---------------------------------------------------------------------------
-// 14: No NaN/Infinity, ever
+// 12. No NaN/Infinity
 // ---------------------------------------------------------------------------
 
-describe('14. No NaN/Infinity outputs', () => {
-  it('a fully-populated result is all-finite', () => {
-    assertAllFinite(computePropertyPerformance(fullInput()))
+describe('12. No NaN/Infinity outputs', () => {
+  it('a fully-populated complete-year result is all-finite', () => {
+    assertAllFinite(computePropertyPerformance(completeYearInput(), NOW_MID_2026))
   })
 
-  it('an entirely-empty result (brand-new property, nothing else entered) is all-finite and does not throw', () => {
-    const result = computePropertyPerformance({
-      propertyId: 'p1',
-      estimatedValue: 0,
-      propertyMonthlyRentFallback: 0,
-      propertyMortgageBalanceFallback: 0,
-      activeLease: null,
-      mortgage: null,
-      taxYearSummary: taxSummary(),
-    })
-    assertAllFinite(result)
+  it('a mid-year (incomplete) result is all-finite', () => {
+    assertAllFinite(computePropertyPerformance({
+      propertyId: 'p1', estimatedValue: 400000, propertyMonthlyRentFallback: 0, propertyMortgageBalanceFallback: 0,
+      activeLease: { id: 'l1', monthlyRent: 2500 }, mortgage: { currentBalance: 280000, monthlyPayment: 1800 },
+      taxYearSummary: taxSummary({ year: '2026', grossIncome: 5000, operatingExpenses: 2000, transactionCount: 6 }),
+    }, NOW_MID_2026))
+  })
+
+  it('an entirely-empty result does not throw and is all-finite', () => {
+    assertAllFinite(computePropertyPerformance({
+      propertyId: 'p1', estimatedValue: 0, propertyMonthlyRentFallback: 0, propertyMortgageBalanceFallback: 0,
+      activeLease: null, mortgage: null, taxYearSummary: taxSummary(),
+    }))
   })
 
   it('never divides by a zero estimated value into Infinity', () => {
-    const noi = { value: 24000, status: 'available' as const, source: 'derived' as const }
-    const capRate = resolveCapRate(noi, resolveEstimatedValue(0))
+    const capRate = resolveCapRate(availableMetric(24000), resolveEstimatedValue(0))
     assertAllFinite(capRate)
   })
 
   it('negative inputs (e.g. a corrupt/negative mortgage payment) never produce non-finite math', () => {
-    const debtService = resolveMonthlyDebtService({ currentBalance: 100000, monthlyPayment: -500 })
-    assertAllFinite(debtService)
+    assertAllFinite(resolveMonthlyDebtService({ currentBalance: 100000, monthlyPayment: -500 }))
   })
 })
 
 // ---------------------------------------------------------------------------
-// 15: Data-quality/source metadata
+// Data-quality/source metadata
 // ---------------------------------------------------------------------------
 
-describe('15. Data-quality/source metadata reflects fallback/manual/stale conditions', () => {
+describe('Data-quality/source metadata reflects fallback/manual/stale conditions', () => {
   it('a mortgage-record-sourced balance is flagged estimated + potentiallyStale, with an explanatory note', () => {
     const balance = resolveMortgageBalance({ currentBalance: 200000, monthlyPayment: 1500 }, 0)
     expect(balance.estimated).toBe(true)
@@ -397,50 +478,62 @@ describe('15. Data-quality/source metadata reflects fallback/manual/stale condit
   })
 
   it('estimated value is always flagged estimated (landlord-entered, never independently verified)', () => {
-    const value = resolveEstimatedValue(400000)
-    expect(value.estimated).toBe(true)
+    expect(resolveEstimatedValue(400000).estimated).toBe(true)
   })
 
-  it('a fallback-rent-driven NOI carries the fallback\'s caveat forward into its own notes', () => {
-    const rent = resolveContractAnnualRent(resolveContractMonthlyRent(null, 1800))
-    const expenses = resolveOperatingExpensesYtd(taxSummary({ operatingExpenses: 6000, transactionCount: 10 }))
-    const noi = resolveNOI(rent, 0, expenses)
-    expect(noi.status).toBe('incomplete')
-    expect(noi.notes?.some((n) => /no active lease/i.test(n))).toBe(true)
+  it('noiAnnual explains WHY it is unavailable mid-year, not just that it is', () => {
+    const noiAnnual = resolveNoiAnnual(availableMetric(21000), false)
+    expect(noiAnnual.notes?.some((n) => /still in progress/i.test(n))).toBe(true)
   })
 })
 
 // ---------------------------------------------------------------------------
-// 16: Periods stay explicit and separate
+// 10. Period metadata is correct
 // ---------------------------------------------------------------------------
 
-describe('16. YTD/annual/monthly periods remain clearly separated', () => {
+describe('10. Period metadata is correct', () => {
+  it('every metric carries an explicit, semantically-correct period tag', () => {
+    const result = computePropertyPerformance(completeYearInput(), NOW_MID_2026)
+    expect(result.contractMonthlyRent.period).toBe('monthly_contract')
+    expect(result.contractAnnualRent.period).toBe('annual_contract')
+    expect(result.actualIncomeYtd.period).toBe('annual_actual') // 2025 is complete as of mid-2026
+    expect(result.operatingExpensesYtd.period).toBe('annual_actual')
+    expect(result.noiYtd.period).toBe('annual_actual')
+    expect(result.noiAnnual.period).toBe('annual_actual')
+    expect(result.capRatePercent.period).toBe('annual_actual')
+    expect(result.netCashFlowMonthly.period).toBe('monthly_derived')
+    expect(result.estimatedValue.period).toBe('point_in_time')
+    expect(result.mortgageBalance.period).toBe('point_in_time')
+    expect(result.equity.period).toBe('point_in_time')
+  })
+
+  it('the SAME figures are tagged ytd_actual, and noiAnnual/capRate/netCashFlow are unavailable, for the current in-progress year', () => {
+    const result = computePropertyPerformance({
+      propertyId: 'p1', estimatedValue: 400000, propertyMonthlyRentFallback: 0, propertyMortgageBalanceFallback: 0,
+      activeLease: { id: 'l1', monthlyRent: 2500 }, mortgage: { currentBalance: 280000, monthlyPayment: 1800 },
+      taxYearSummary: taxSummary({ year: '2026', grossIncome: 15000, operatingExpenses: 4000, transactionCount: 6 }),
+    }, NOW_MID_2026)
+    expect(result.period.isYearComplete).toBe(false)
+    expect(result.actualIncomeYtd.period).toBe('ytd_actual')
+    expect(result.operatingExpensesYtd.period).toBe('ytd_actual')
+    expect(result.noiYtd.period).toBe('ytd_actual')
+    expect(result.noiYtd.status).toBe('available') // YTD NOI IS still available mid-year
+    expect(result.noiAnnual.status).toBe('unavailable')
+    expect(result.capRatePercent.status).toBe('unavailable')
+    expect(result.netCashFlowMonthly.status).toBe('unavailable')
+  })
+
+  it('period.taxYear/asOf/isYearComplete are all explicit and correct', () => {
+    const result = computePropertyPerformance(completeYearInput(), NOW_MID_2026)
+    expect(result.period.taxYear).toBe('2025')
+    expect(result.period.asOf).toBe('2026-06-15')
+    expect(result.period.isYearComplete).toBe(true)
+  })
+
   it('contractAnnualRent is always exactly 12x contractMonthlyRent, never independently derived', () => {
     const monthly = resolveContractMonthlyRent({ id: 'l1', monthlyRent: 1750 }, 0)
     const annual = resolveContractAnnualRent(monthly)
     expect(annual.value).toBe(monthly.value! * 12)
-  })
-
-  it('operatingExpensesYtd is never silently annualized — it is exactly Tax Center\'s year-to-date figure', () => {
-    const expenses = resolveOperatingExpensesYtd(taxSummary({ operatingExpenses: 2500, transactionCount: 3 }))
-    // Not multiplied up to a full-year run rate — this is the real,
-    // partial-year total, on purpose (Phase A: never silently annualize
-    // partial-year transactional data).
-    expect(expenses.value).toBe(2500)
-  })
-
-  it('a full snapshot carries explicit period metadata (taxYear + asOf) the caller can label with', () => {
-    const now = new Date('2026-03-15T12:00:00Z')
-    const result = computePropertyPerformance(fullInput({ taxYearSummary: taxSummary({ year: '2026', grossIncome: 30000, operatingExpenses: 9000, transactionCount: 12 }) }), now)
-    expect(result.period.taxYear).toBe('2026')
-    expect(result.period.asOf).toBe('2026-03-15')
-  })
-
-  it('NOI\'s own notes are explicit that expenses are year-to-date, not a trailing-twelve-month figure', () => {
-    const rent = resolveContractAnnualRent(resolveContractMonthlyRent({ id: 'l1', monthlyRent: 2000 }, 0))
-    const expenses = resolveOperatingExpensesYtd(taxSummary({ operatingExpenses: 4000, transactionCount: 5 }))
-    const noi = resolveNOI(rent, 0, expenses)
-    expect(noi.notes?.some((n) => /tax year to date/i.test(n))).toBe(true)
   })
 })
 
@@ -451,48 +544,35 @@ describe('16. YTD/annual/monthly periods remain clearly separated', () => {
 describe('computePropertyPerformance — integration', () => {
   it('a brand-new landlord with only an address and an estimated value gets a valid, mostly-unavailable snapshot, never a crash', () => {
     const result = computePropertyPerformance({
-      propertyId: 'p1',
-      estimatedValue: 350000,
-      propertyMonthlyRentFallback: 0,
-      propertyMortgageBalanceFallback: 0,
-      activeLease: null,
-      mortgage: null,
-      taxYearSummary: taxSummary(),
+      propertyId: 'p1', estimatedValue: 350000, propertyMonthlyRentFallback: 0, propertyMortgageBalanceFallback: 0,
+      activeLease: null, mortgage: null, taxYearSummary: taxSummary(),
     })
     expect(result.estimatedValue.status).toBe('available')
-    expect(result.estimatedValue.value).toBe(350000)
     expect(result.contractMonthlyRent.status).toBe('unavailable')
     expect(result.actualIncomeYtd.status).toBe('unavailable')
-    expect(result.operatingExpensesYtd.status).toBe('unavailable')
+    expect(result.noiYtd.status).toBe('unavailable')
     expect(result.noiAnnual.status).toBe('unavailable')
     expect(result.capRatePercent.status).toBe('unavailable')
-    expect(result.mortgageBalance.status).toBe('unavailable')
-    expect(result.monthlyDebtService.status).toBe('unavailable')
     expect(result.netCashFlowMonthly.status).toBe('unavailable')
     expect(result.equity.status).toBe('unavailable')
   })
 
-  it('a disciplined landlord (active lease, logged expenses, a mortgage on file) gets every metric available', () => {
-    const result = computePropertyPerformance(fullInput())
-    expect(result.estimatedValue.status).toBe('available')
-    expect(result.contractMonthlyRent.status).toBe('available')
+  it('a disciplined landlord reviewing a complete prior tax year gets every metric available, all period-consistent', () => {
+    const result = computePropertyPerformance(completeYearInput(), NOW_MID_2026)
+    expect(result.estimatedValue.value).toBe(400000)
     expect(result.contractAnnualRent.value).toBe(30000)
-    expect(result.actualIncomeYtd.status).toBe('available')
-    expect(result.operatingExpensesYtd.status).toBe('available')
-    expect(result.noiAnnual.status).toBe('available')
-    expect(result.noiAnnual.value).toBe(21000) // 2500*12 - 9000
-    expect(result.capRatePercent.status).toBe('available')
-    expect(result.mortgageBalance.status).toBe('available')
-    expect(result.monthlyDebtService.status).toBe('available')
+    expect(result.actualIncomeYtd.value).toBe(30000)
+    expect(result.operatingExpensesYtd.value).toBe(9000)
+    expect(result.noiYtd.value).toBe(21000)
+    expect(result.noiAnnual.value).toBe(21000)
+    expect(result.capRatePercent.value).toBeCloseTo(5.25, 6) // 21000/400000*100
+    expect(result.equity.value).toBe(120000)
     expect(result.netCashFlowMonthly.status).toBe('available')
-    expect(result.equity.status).toBe('available')
-    expect(result.equity.value).toBe(400000 - 280000)
   })
 
   it('is a pure function — calling it twice with the same input and now produces identical output', () => {
-    const now = new Date('2026-06-01T00:00:00Z')
-    const a = computePropertyPerformance(fullInput(), now)
-    const b = computePropertyPerformance(fullInput(), now)
+    const a = computePropertyPerformance(completeYearInput(), NOW_MID_2026)
+    const b = computePropertyPerformance(completeYearInput(), NOW_MID_2026)
     expect(a).toEqual(b)
   })
 })

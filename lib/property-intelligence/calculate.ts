@@ -1,5 +1,5 @@
-// PropRoster — Property Intelligence V1, Phase B: shared calculation
-// engine.
+// PropRoster — Property Intelligence V1, Phase B (corrected in Phase B.1):
+// shared calculation engine.
 //
 // Pure, framework-free, no Supabase — every function here takes
 // already-resolved inputs (see types.ts's PropertyPerformanceInput) and
@@ -9,10 +9,35 @@
 // lives here, so the math can be unit tested without mocking anything.
 //
 // No new formulas. Every core number reuses lib/investment-calculations.ts
-// unchanged (calculateNOI/capRate/equity) — this file's only job is
-// deciding, from real data, whether each formula's inputs are trustworthy
-// enough to call at all (Phase A's central finding: PropRoster already had
-// correct formulas, it just never fed them live data).
+// unchanged (calculateNOI/capRate/equity) — this file's job is deciding,
+// from real data, whether each formula's inputs are trustworthy enough to
+// call at all, AND (Phase B.1) whether they share a compatible time period.
+//
+// --- Phase B.1 correction -------------------------------------------------
+// The original version of this file computed "annual NOI" as
+// (annualized contract rent) - (Tax Center's YEAR-TO-DATE operating
+// expenses). That mixes a full-year figure with a partial-year one and
+// called the result annual — exactly the false precision this whole
+// milestone exists to avoid, and exactly what Cap Rate (which requires a
+// real annual NOI) would then have silently inherited.
+//
+// The fix: this file now computes TWO NOI figures instead of one blended
+// one.
+//   - noiYtd   = actualIncomeYtd - operatingExpensesYtd, always the SAME
+//                period (whatever period taxYearSummary covers). Never
+//                annualized.
+//   - noiAnnual = the SAME figure, but ONLY exposed once
+//                `period.isYearComplete` confirms taxYearSummary actually
+//                covers a full, fully-elapsed tax year. Contract rent is
+//                deliberately NOT substituted in to force this metric to
+//                exist for a partial year — see
+//                docs/property-intelligence-v1-phase-b.md for the
+//                reasoning (Tax Center has no reliable per-category
+//                "this is a known annual figure regardless of elapsed
+//                time" classification today; inventing one would be
+//                exactly the kind of estimate this phase forbids).
+// Cap Rate and Net Cash Flow now both key off noiAnnual only — never
+// noiYtd, never contract rent.
 
 import { calculateNOI, capRate as calcCapRate, equity as calcEquity, num } from '../investment-calculations'
 import {
@@ -40,11 +65,11 @@ export function resolveContractMonthlyRent(activeLease: ActiveLeaseInput | null,
     // A real, entered value on an active lease — $0 is a genuine possible
     // fact (e.g. a family member paying no rent) and is not second-guessed
     // here; it is still "available," just worth a note for context.
-    return available(rent, 'active_lease', rent > 0 ? undefined : { notes: ['The active lease on file lists $0 monthly rent.'] })
+    return available(rent, 'active_lease', 'monthly_contract', rent > 0 ? undefined : { notes: ['The active lease on file lists $0 monthly rent.'] })
   }
   const fallback = num(propertyMonthlyRentFallback)
   if (fallback > 0) {
-    return available(fallback, 'property_fallback', {
+    return available(fallback, 'property_fallback', 'monthly_contract', {
       estimated: true,
       notes: ['No active lease on file — using the property\'s manually entered rent estimate, which may be stale.'],
     })
@@ -52,34 +77,41 @@ export function resolveContractMonthlyRent(activeLease: ActiveLeaseInput | null,
   return unavailable('none', ['No active lease and no fallback rent on file.'])
 }
 
-/** contractMonthlyRent, annualized — a contractual RATE, so annualizing it is legitimate regardless of how much of the year has elapsed (Phase A "Time Periods"). Mirrors the monthly metric's status/source/notes exactly. */
+/** contractMonthlyRent, annualized — a contractual RATE, so annualizing it is legitimate regardless of how much of the year has elapsed. Mirrors the monthly metric's status/source/notes exactly. NEVER used as an income input to noiAnnual (Phase B.1) — kept only as its own, independently useful figure. */
 export function resolveContractAnnualRent(contractMonthlyRent: Metric): Metric {
   if (contractMonthlyRent.status === 'unavailable' || contractMonthlyRent.value === null) {
     return unavailable(contractMonthlyRent.source, contractMonthlyRent.notes)
   }
-  return { ...contractMonthlyRent, value: contractMonthlyRent.value * 12 }
+  return { ...contractMonthlyRent, value: contractMonthlyRent.value * 12, period: 'annual_contract' }
 }
 
 /**
- * Actual cash-basis income for the current tax year to date — Tax
- * Center's already-resolved grossIncome (rental + other income,
- * tracked-or-manual-overridden), reused rather than re-summing
- * financial_transactions/rent_payments a second time (Phase A Section 5's
- * double-counting audit + Section 10's integration boundary). A genuinely
- * different concept from contract rent: a vacant stretch, a rent
- * concession, or simply "collected but not yet logged" all make this
- * differ from contractMonthlyRent x months-elapsed.
+ * Actual income for the tax year reviewed, to date — Tax Center's already-
+ * resolved grossIncome (ALL income categories it tracks: rental income
+ * AND any "other rental-related income," tracked-or-manual-overridden),
+ * reused rather than re-summing financial_transactions/rent_payments a
+ * second time (Phase A Section 5's double-counting audit + Section 10's
+ * integration boundary). This is NOT rent-only — it is labeled "income,"
+ * never "rent received." A genuinely different concept from contract
+ * rent: a vacant stretch, a rent concession, or simply "collected but not
+ * yet logged" all make this differ from contractMonthlyRent x
+ * months-elapsed.
+ *
+ * Tagged 'annual_actual' instead of 'ytd_actual' when the tax year has
+ * fully elapsed (isYearComplete) — same real number, just relabeled once
+ * its period is confirmed complete.
  */
-export function resolveActualIncomeYtd(taxYearSummary: TaxYearSummaryInput): Metric {
+export function resolveActualIncomeYtd(taxYearSummary: TaxYearSummaryInput, isYearComplete: boolean): Metric {
   const hasAnyData = taxYearSummary.transactionCount > 0 || taxYearSummary.hasManualRecord
+  const period = isYearComplete ? 'annual_actual' : 'ytd_actual'
   if (!hasAnyData) {
     return unavailable('none', ['Nothing has been logged in Tax Center for this property yet this year.'])
   }
-  return available(num(taxYearSummary.grossIncome), 'tax_center_resolved')
+  return available(num(taxYearSummary.grossIncome), 'tax_center_resolved', period)
 }
 
 /**
- * Effective operating expenses for the current tax year to date, reused
+ * Effective operating expenses for the tax year reviewed, to date, reused
  * directly from Tax Center's own manual-overrides-replace-tracked
  * resolution (lib/tax-center/manual-entry.ts's computeCategoryValue) —
  * never a second, independently-summed expense total, which is what
@@ -91,18 +123,22 @@ export function resolveActualIncomeYtd(taxYearSummary: TaxYearSummaryInput): Met
  * property/year (Phase A Section 7: "a true zero-expense property is
  * implausible and almost always means nothing logged yet"). Otherwise it
  * is 'incomplete' — a real number, but one that must never be presented
- * as a clean figure.
+ * as a clean figure, and never allowed to feed noiYtd/noiAnnual.
+ *
+ * Tagged 'annual_actual' instead of 'ytd_actual' once the tax year has
+ * fully elapsed — see resolveActualIncomeYtd's own doc comment.
  */
-export function resolveOperatingExpensesYtd(taxYearSummary: TaxYearSummaryInput): Metric {
+export function resolveOperatingExpensesYtd(taxYearSummary: TaxYearSummaryInput, isYearComplete: boolean): Metric {
   const hasAnyData = taxYearSummary.transactionCount > 0 || taxYearSummary.hasManualRecord
   const expenses = num(taxYearSummary.operatingExpenses)
+  const period = isYearComplete ? 'annual_actual' : 'ytd_actual'
   if (!hasAnyData) {
     return unavailable('none', ['Nothing has been logged in Tax Center for this property yet this year.'])
   }
   if (expenses === 0) {
-    return incomplete(0, 'tax_center_resolved', ['No operating expenses have been logged yet this tax year — this likely means nothing has been recorded, not that this property has no costs.'])
+    return incomplete(0, 'tax_center_resolved', period, ['No operating expenses have been logged yet this tax year — this likely means nothing has been recorded, not that this property has no costs.'])
   }
-  return available(expenses, 'tax_center_resolved')
+  return available(expenses, 'tax_center_resolved', period)
 }
 
 /**
@@ -121,7 +157,7 @@ export function resolveOperatingExpensesYtd(taxYearSummary: TaxYearSummaryInput)
  */
 export function resolveMortgageBalance(mortgage: MortgageInput | null, propertyMortgageBalanceFallback: number): Metric {
   if (mortgage) {
-    return available(num(mortgage.currentBalance), 'mortgage_record', {
+    return available(num(mortgage.currentBalance), 'mortgage_record', 'point_in_time', {
       estimated: true,
       potentiallyStale: true,
       notes: ['This balance has no ongoing update path in PropRoster today and may not reflect the current lender balance.'],
@@ -129,7 +165,7 @@ export function resolveMortgageBalance(mortgage: MortgageInput | null, propertyM
   }
   const fallback = num(propertyMortgageBalanceFallback)
   if (fallback > 0) {
-    return available(fallback, 'property_mortgage_balance', {
+    return available(fallback, 'property_mortgage_balance', 'point_in_time', {
       estimated: true,
       potentiallyStale: true,
       notes: ['No mortgage record on file — this reflects the property\'s manually entered balance, which may not be current.'],
@@ -151,9 +187,9 @@ export function resolveMonthlyDebtService(mortgage: MortgageInput | null): Metri
   }
   const payment = num(mortgage.monthlyPayment)
   if (payment <= 0) {
-    return incomplete(0, 'mortgage_record', ['A mortgage is on file but no monthly payment amount has been recorded.'])
+    return incomplete(0, 'mortgage_record', 'monthly_contract', ['A mortgage is on file but no monthly payment amount has been recorded.'])
   }
-  return available(payment, 'mortgage_record', { potentiallyStale: true })
+  return available(payment, 'mortgage_record', 'monthly_contract', { potentiallyStale: true })
 }
 
 /**
@@ -165,74 +201,79 @@ export function resolveMonthlyDebtService(mortgage: MortgageInput | null): Metri
 export function resolveEstimatedValue(estimatedValue: number): Metric {
   const value = num(estimatedValue)
   if (value <= 0) return unavailable('none', ['No estimated value has been entered for this property.'])
-  return available(value, 'property_estimated_value', { estimated: true })
+  return available(value, 'property_estimated_value', 'point_in_time', { estimated: true })
 }
 
 /**
- * NOI (this tax year so far, at the current contract rent) = grossIncome -
- * operatingExpensesYtd, via the existing calculateNOI() — unchanged
- * formula, only new live inputs (Phase A Section 6).
+ * noiYtd = actualIncomeYtd - operatingExpensesYtd, via the existing
+ * calculateNOI() — unchanged formula, only new live inputs (Phase A
+ * Section 6). Both inputs are guaranteed to cover the SAME period by
+ * construction (they both come from the same taxYearSummary), so this is
+ * always period-safe — unlike the pre-Phase-B.1 version, contract rent is
+ * never involved here at all.
  *
- * grossIncome = contractAnnualRent + any Tax Center "other rental-related
- * income" tracked for the year — Phase A's exact formula. Financing is
- * never part of either side.
- *
- * Only computed when operatingExpensesYtd is a trustworthy 'available'
- * figure (never on an 'incomplete'/suspicious-zero expense total — that
- * would silently overstate NOI, exactly the false precision this phase
- * exists to avoid) and contract rent is at least known (available OR the
- * flagged estimated fallback). A fallback-rent-sourced NOI is itself
- * marked 'incomplete' so it carries the same caveat forward.
+ * Only computed when BOTH inputs are a trustworthy 'available' figure —
+ * never on an 'incomplete'/suspicious-zero expense total (that would
+ * silently overstate NOI) and never when income is unavailable.
  */
-export function resolveNOI(contractAnnualRent: Metric, otherIncomeYtd: number, operatingExpensesYtd: Metric): Metric {
-  if (contractAnnualRent.status === 'unavailable' || contractAnnualRent.value === null) {
-    return unavailable('derived', ['No contract rent available to calculate income.'])
+export function resolveNoiYtd(actualIncomeYtd: Metric, operatingExpensesYtd: Metric): Metric {
+  if (actualIncomeYtd.status !== 'available' || actualIncomeYtd.value === null) {
+    return unavailable('derived', actualIncomeYtd.notes ?? ['Not enough income data logged yet this tax year.'])
   }
   if (operatingExpensesYtd.status !== 'available' || operatingExpensesYtd.value === null) {
     return unavailable('derived', operatingExpensesYtd.notes ?? ['Not enough expense data logged yet this tax year.'])
   }
-  const other = num(otherIncomeYtd)
-  const grossIncome = contractAnnualRent.value + other
-  const noi = calculateNOI(grossIncome, operatingExpensesYtd.value)
-  const notes: string[] = [`Income is the current lease's annualized contract rent${other > 0 ? ' plus other rental-related income tracked this year' : ''}; expenses are this tax year to date, not a full trailing-twelve-month figure.`]
-  if (contractAnnualRent.estimated) {
-    notes.push(...(contractAnnualRent.notes ?? []))
-    return incomplete(noi, 'derived', notes)
-  }
-  return available(noi, 'derived', { notes })
+  const noi = calculateNOI(actualIncomeYtd.value, operatingExpensesYtd.value)
+  return available(noi, 'derived', actualIncomeYtd.period)
 }
 
-/** Cap Rate = NOI / estimatedValue x 100, via the existing capRate(). Mirrors NOI's own confidence (available/incomplete) and additionally requires a real estimated value. */
+/**
+ * Annual NOI — the SAME noiYtd figure, exposed only once its underlying
+ * period is a CONFIRMED, fully-elapsed tax year (isYearComplete). This is
+ * the Phase B.1 fix in one function: no contract rent, no YTD expenses
+ * pretending to be annual — either the period genuinely covers a full
+ * year, or this metric is unavailable.
+ */
+export function resolveNoiAnnual(noiYtd: Metric, isYearComplete: boolean): Metric {
+  if (!isYearComplete) {
+    return unavailable('derived', ['This tax year is still in progress — PropRoster does not yet have a full year of data to calculate annual NOI. See NOI (year to date) instead.'])
+  }
+  if (noiYtd.status === 'unavailable' || noiYtd.value === null) {
+    return unavailable('derived', noiYtd.notes ?? ['Not enough data for a complete tax year to calculate annual NOI.'])
+  }
+  return available(noiYtd.value, 'derived', 'annual_actual', { notes: ['Based on this property\'s complete, actual income and expenses for the full tax year.'] })
+}
+
+/** Cap Rate = NOI / estimatedValue x 100, via the existing capRate(). Requires a genuine annual NOI (never noiYtd, never contract rent) and a real estimated value. */
 export function resolveCapRate(noiAnnual: Metric, estimatedValue: Metric): Metric {
-  if (noiAnnual.status === 'unavailable' || noiAnnual.value === null) {
-    return unavailable('derived', ['Not enough income/expense data to calculate NOI.'])
+  if (noiAnnual.status !== 'available' || noiAnnual.value === null) {
+    return unavailable('derived', noiAnnual.notes ?? ['A confirmed annual NOI is required to calculate Cap Rate.'])
   }
   if (estimatedValue.status === 'unavailable' || estimatedValue.value === null || estimatedValue.value <= 0) {
     return unavailable('derived', ['No estimated value on file to calculate Cap Rate against.'])
   }
   const pct = calcCapRate(noiAnnual.value, estimatedValue.value)
   if (pct === null || !Number.isFinite(pct)) return unavailable('derived', ['Cap Rate could not be calculated from the available data.'])
-  if (noiAnnual.status === 'incomplete') return incomplete(pct, 'derived', noiAnnual.notes ?? [])
-  return available(pct, 'derived', { notes: noiAnnual.notes, estimated: estimatedValue.estimated })
+  return available(pct, 'derived', 'annual_actual', { estimated: estimatedValue.estimated })
 }
 
 /**
- * Net Cash Flow (monthly) = NOI/12 - monthly debt service. Strictly
- * requires monthlyDebtService to be 'available' (never 'incomplete') —
- * Phase A: "Only calculate this when debt-service information is
- * sufficiently supported... do not treat missing mortgage information as
- * $0 debt service."
+ * Net Cash Flow (monthly) = annual NOI/12 - monthly debt service. Requires
+ * BOTH a genuine annual NOI (never noiYtd — dividing a partial-year NOI
+ * by 12 would misrepresent it as a monthly run rate) and a strictly
+ * 'available' monthly debt service (Phase A: "Only calculate this when
+ * debt-service information is sufficiently supported... do not treat
+ * missing mortgage information as $0 debt service").
  */
 export function resolveNetCashFlow(noiAnnual: Metric, monthlyDebtService: Metric): Metric {
-  if (noiAnnual.status === 'unavailable' || noiAnnual.value === null) {
-    return unavailable('derived', ['Not enough income/expense data to calculate NOI.'])
+  if (noiAnnual.status !== 'available' || noiAnnual.value === null) {
+    return unavailable('derived', noiAnnual.notes ?? ['A confirmed annual NOI is required to calculate Net Cash Flow.'])
   }
   if (monthlyDebtService.status !== 'available' || monthlyDebtService.value === null) {
     return unavailable('derived', monthlyDebtService.notes ?? ['Not enough mortgage/payment data to calculate Net Cash Flow.'])
   }
   const cashFlow = noiAnnual.value / 12 - monthlyDebtService.value
-  const notes = [...(noiAnnual.notes ?? [])]
-  return noiAnnual.status === 'incomplete' ? incomplete(cashFlow, 'derived', notes) : available(cashFlow, 'derived', { notes })
+  return available(cashFlow, 'derived', 'monthly_derived', { notes: noiAnnual.notes })
 }
 
 /**
@@ -250,11 +291,23 @@ export function resolveEquity(estimatedValue: Metric, mortgageBalance: Metric): 
     return unavailable('derived', ['No mortgage balance available — see mortgageBalance for why.'])
   }
   const value = calcEquity(estimatedValue.value, mortgageBalance.value)
-  return available(value, 'derived', {
+  return available(value, 'derived', 'point_in_time', {
     estimated: true, // estimatedValue is always landlord-entered, so equity can never be more certain than that
     potentiallyStale: mortgageBalance.potentiallyStale,
     notes: ['Based on the property\'s entered value and its on-file mortgage balance — not independently verified against a lender or appraisal.'],
   })
+}
+
+/**
+ * Whether `year` has fully elapsed relative to `now` — the ONLY condition
+ * under which this engine treats actual income/expense totals as a
+ * genuine annual basis. The year `now` itself falls in is ALWAYS
+ * "incomplete," even on December 31st, to avoid a fragile exact-date
+ * boundary check (types.ts's PropertyPerformancePeriod.isYearComplete).
+ */
+export function isYearComplete(year: string, now: Date): boolean {
+  const y = Number(year)
+  return Number.isFinite(y) && y < now.getFullYear()
 }
 
 // ---------------------------------------------------------------------------
@@ -267,15 +320,21 @@ export function resolveEquity(estimatedValue: Metric, mortgageBalance: Metric): 
  * misleading zero for "unknown" — every field independently degrades to
  * 'unavailable'/'incomplete' per its own resolver above. A brand-new
  * property with only an address and an estimated value still returns a
- * completely valid result (most fields 'unavailable').
+ * completely valid result (most fields 'unavailable'). It is completely
+ * normal and expected for noiAnnual/capRatePercent/netCashFlowMonthly to
+ * be 'unavailable' for a property being reviewed mid-year — see
+ * docs/property-intelligence-v1-phase-b.md.
  */
 export function computePropertyPerformance(input: PropertyPerformanceInput, now: Date = new Date()): PropertyPerformance {
+  const yearComplete = isYearComplete(input.taxYearSummary.year, now)
+
   const estimatedValue = resolveEstimatedValue(input.estimatedValue)
   const contractMonthlyRent = resolveContractMonthlyRent(input.activeLease, input.propertyMonthlyRentFallback)
   const contractAnnualRent = resolveContractAnnualRent(contractMonthlyRent)
-  const actualIncomeYtd = resolveActualIncomeYtd(input.taxYearSummary)
-  const operatingExpensesYtd = resolveOperatingExpensesYtd(input.taxYearSummary)
-  const noiAnnual = resolveNOI(contractAnnualRent, input.taxYearSummary.otherIncome ?? 0, operatingExpensesYtd)
+  const actualIncomeYtd = resolveActualIncomeYtd(input.taxYearSummary, yearComplete)
+  const operatingExpensesYtd = resolveOperatingExpensesYtd(input.taxYearSummary, yearComplete)
+  const noiYtd = resolveNoiYtd(actualIncomeYtd, operatingExpensesYtd)
+  const noiAnnual = resolveNoiAnnual(noiYtd, yearComplete)
   const capRatePercent = resolveCapRate(noiAnnual, estimatedValue)
   const mortgageBalance = resolveMortgageBalance(input.mortgage, input.propertyMortgageBalanceFallback)
   const monthlyDebtService = resolveMonthlyDebtService(input.mortgage)
@@ -284,17 +343,18 @@ export function computePropertyPerformance(input: PropertyPerformanceInput, now:
 
   return {
     propertyId: input.propertyId,
-    period: { taxYear: input.taxYearSummary.year, asOf: now.toISOString().slice(0, 10) },
+    period: { taxYear: input.taxYearSummary.year, asOf: now.toISOString().slice(0, 10), isYearComplete: yearComplete },
     estimatedValue,
     contractMonthlyRent,
     contractAnnualRent,
     actualIncomeYtd,
     operatingExpensesYtd,
-    noiAnnual,
-    capRatePercent,
+    noiYtd,
     mortgageBalance,
     monthlyDebtService,
-    netCashFlowMonthly,
     equity,
+    noiAnnual,
+    capRatePercent,
+    netCashFlowMonthly,
   }
 }
