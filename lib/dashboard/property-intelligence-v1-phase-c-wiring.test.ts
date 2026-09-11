@@ -14,6 +14,17 @@ import { join } from 'node:path'
 // to a Metric field on computePropertyPerformance()'s result, or that the
 // raw formula functions (calculateNOI/capRate/equity) never appear in
 // app/page.tsx at all.
+//
+// UPDATED for Phase C.1 (Unified Property Snapshot): the card grew a
+// secondary/contextual row (Mortgage Balance, Purchase Price/
+// Appreciation) between "YTD Performance" and "View performance", and
+// "View performance" itself dropped YTD NOI and Mortgage Balance since
+// those are now shown above it instead of being repeated. Assertions
+// about that older internal shape are updated in place below; new
+// Phase C.1-specific invariants (hero simplification, the rent-status
+// contradiction fix, Investment Analysis de-emphasis, the retired
+// "Estimated cash flow") live in
+// property-intelligence-v1-phase-c1-unified-snapshot.test.ts.
 
 const ROOT = join(__dirname, '..', '..')
 function readFile(relativePath: string): string {
@@ -32,11 +43,11 @@ const snapshotEnd = pageSource.indexOf('</details>\n          </div>', snapshotS
 const snapshotSlice = pageSource.slice(snapshotStart, snapshotEnd)
 
 describe('Property Intelligence V1, Phase C — wiring', () => {
-  it('the Property Snapshot section exists and is found inside the Overview tab, before the pre-existing Financial Details card', () => {
+  it('the Property Snapshot section exists and is found inside the Overview tab, before the "Expenses & tax" card (the old Financial Details card, renamed and slimmed by Phase C.1)', () => {
     expect(snapshotStart).toBeGreaterThan(-1)
     expect(snapshotSlice.length).toBeGreaterThan(0)
-    const financialDetailsCardIdx = pageSource.indexOf('financialDetailsCard')
-    expect(financialDetailsCardIdx).toBeGreaterThan(snapshotStart)
+    const expensesCardIdx = pageSource.indexOf('financialDetailsCard')
+    expect(expensesCardIdx).toBeGreaterThan(snapshotStart)
   })
 
   it('1. renders the three primary metrics with their required labels', () => {
@@ -45,13 +56,14 @@ describe('Property Intelligence V1, Phase C — wiring', () => {
     expect(snapshotSlice).toContain('<span>Monthly Rent</span>')
   })
 
-  it('every primary/YTD metric is read from the Phase B.1 engine result, never recomputed inline', () => {
+  it('every primary/YTD/secondary metric is read from the Phase B.1 engine result, never recomputed inline', () => {
     expect(snapshotSlice).toContain('metricMoney(performance.estimatedValue)')
     expect(snapshotSlice).toContain('metricMoney(performance.equity)')
     expect(snapshotSlice).toContain('metricMoney(performance.contractMonthlyRent)')
     expect(snapshotSlice).toContain('metricMoney(performance.actualIncomeYtd)')
     expect(snapshotSlice).toContain('metricMoney(performance.operatingExpensesYtd)')
     expect(snapshotSlice).toContain('metricMoney(performance.noiYtd)')
+    expect(snapshotSlice).toContain('metricMoney(performance.mortgageBalance)')
   })
 
   it('2. Monthly Rent uses contractMonthlyRent (active-lease-prioritized per Phase B.1) — never actual income, never a raw property field read directly in this section', () => {
@@ -83,13 +95,19 @@ describe('Property Intelligence V1, Phase C — wiring', () => {
   })
 
   it('5. current-year YTD NOI is never labeled "Annual NOI" anywhere in this section', () => {
-    expect(snapshotSlice).toContain('YTD NOI')
     expect(snapshotSlice).not.toMatch(/Annual NOI/)
     // The underlying engine field for a genuine full-year figure
     // (performance.noiAnnual) is deliberately NOT surfaced as its own
     // labeled row here — YTD NOI (performance.noiYtd) is the number this
     // phase shows; Cap Rate/Net Cash Flow are what noiAnnual unlocks.
     expect(snapshotSlice).not.toContain('performance.noiAnnual')
+  })
+
+  it("Phase C.1: YTD NOI is not repeated a second time inside 'View performance' — it's already shown once, in the YTD Performance row", () => {
+    const detailsIdx = snapshotSlice.indexOf('<details className="propertyPerformanceDetails">')
+    const detailsSlice = snapshotSlice.slice(detailsIdx)
+    expect(detailsSlice).not.toContain('<span>YTD NOI</span>')
+    expect(detailsSlice).not.toContain('performance.noiYtd')
   })
 
   it('6-7. Cap Rate is read from the engine\'s capRatePercent and never hardcoded/derived, so it can never show a fake 0%', () => {
@@ -156,5 +174,32 @@ describe('Property Intelligence V1, Phase C — wiring', () => {
 
   it('no lime/neon green or new color literals were introduced — every class used already exists in the shared design system', () => {
     expect(snapshotSlice).not.toMatch(/#[0-9a-fA-F]{3,8}/) // no inline hex colors in the JSX itself
+  })
+
+  describe('Phase C.1: secondary/contextual row (Mortgage Balance, Purchase Price)', () => {
+    const contextIdx = snapshotSlice.indexOf('propertySnapshotContext')
+    const contextSlice = snapshotSlice.slice(contextIdx, snapshotSlice.indexOf('<details', contextIdx))
+
+    it('exists between YTD Performance and View performance, reusing the existing .detailRows pattern (not a new stat-card design)', () => {
+      expect(contextIdx).toBeGreaterThan(-1)
+      expect(contextIdx).toBeGreaterThan(snapshotSlice.indexOf('YTD Performance'))
+      expect(contextIdx).toBeLessThan(snapshotSlice.indexOf('<details'))
+      expect(snapshotSlice).toContain('className="detailRows propertyPerformanceRows propertySnapshotContext"')
+    })
+
+    it('shows Mortgage Balance read from the engine, with its existing staleness note', () => {
+      expect(contextSlice).toContain('<span>Mortgage Balance</span><strong>{metricMoney(performance.mortgageBalance)}</strong>')
+      expect(contextSlice).toContain('performance.mortgageBalance.potentiallyStale')
+      expect(contextSlice).toContain('Based on the mortgage balance saved in PropRoster.')
+    })
+
+    it('shows Purchase Price and Appreciation using the SAME appreciationFor() calculation as before, relabeled "(est.)" so it never reads as an appraisal', () => {
+      expect(contextSlice).toContain('<span>Purchase Price</span><strong>{money(selected.purchase_price)}</strong>')
+      expect(contextSlice).toContain('Appreciation (est.)')
+      expect(contextSlice).toContain('appreciation.amount')
+      // Called exactly once (the pre-existing computation above the JSX
+      // return) — not a second call/formula added for this row.
+      expect(pageSource.match(/const appreciation = appreciationFor\(/g)?.length).toBe(1)
+    })
   })
 })

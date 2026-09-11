@@ -84,64 +84,43 @@ describe('Property navigation at mobile widths (Phase D.1: horizontally scrollab
   })
 })
 
-describe('Hero metric strip', () => {
-  const heroMetricsLine = pageSource.slice(pageSource.indexOf('<div className="heroMetrics">'), pageSource.indexOf('</div></div>\n        </section>'))
+// This describe block originally locked in the hero's .heroMetrics strip
+// (Value/Mortgage/Equity/Rent/Tax). Property Intelligence V1, Phase C.1
+// (Unified Property Snapshot) removes .heroMetrics entirely — the hero is
+// identity-only now. See
+// property-intelligence-v1-phase-c1-unified-snapshot.test.ts for the
+// current, authoritative assertions on the hero and the unified snapshot
+// that replaced it.
+describe('Hero metric strip (superseded by Phase C.1 — hero is identity-only now)', () => {
+  const heroIdx = pageSource.indexOf('<section className="propertyHero">')
+  const heroSlice = pageSource.slice(heroIdx, pageSource.indexOf('</section>', heroIdx))
 
-  it('contains exactly Value, Mortgage, Equity, Rent, and Tax', () => {
-    for (const label of ['<span>Value</span>', '<span>Mortgage</span>', '<span>Equity</span>', '<span>Rent</span>', '<span>Tax</span>']) {
-      expect(heroMetricsLine).toContain(label)
-    }
-  })
-
-  it('every value is sourced from real property data (selected.*/equity), never a hardcoded dollar figure', () => {
-    expect(heroMetricsLine).toContain('money(selected.estimated_value)')
-    expect(heroMetricsLine).toContain('money(selected.mortgage_balance)')
-    expect(heroMetricsLine).toContain('money(equity)')
-    expect(heroMetricsLine).toContain('money(selected.monthly_rent)')
-    expect(heroMetricsLine).toContain('money(selected.property_tax_annual)')
-    expect(heroMetricsLine).not.toMatch(/\$[\d,]{3,}/) // no literal dollar-figure strings
-  })
-
-  it('Tax shows a truthful "Not entered" fallback rather than fabricating or defaulting to $0 when property_tax_annual is null', () => {
-    expect(heroMetricsLine).toContain("selected.property_tax_annual != null")
-    expect(heroMetricsLine).toContain("'Not entered'")
-  })
-
-  it('the equity value reuses the existing calculation (estimated_value − mortgage_balance), not a new one', () => {
-    expect(pageSource).toContain('const equity = Number(selected.estimated_value) - Number(selected.mortgage_balance)')
+  it('.heroMetrics is gone — no financial figure is rendered in the hero', () => {
+    expect(heroSlice).not.toContain('heroMetrics')
+    expect(heroSlice).not.toMatch(/money\(selected\.(estimated_value|mortgage_balance|monthly_rent|property_tax_annual)\)/)
   })
 })
 
-describe('Financial Details card (Overview)', () => {
+// This describe block originally locked in the pre-Phase-C.1 "Financial
+// details" card's cash-flow row. Phase C.1 retired the naive
+// monthlyCashFlow formula from presentation entirely (it competed with
+// the Phase B.1 engine's period-safe Net Cash Flow/YTD NOI) and renamed
+// this card "Expenses & tax." See
+// property-intelligence-v1-phase-c1-unified-snapshot.test.ts for the
+// current, authoritative assertions.
+describe('"Expenses & tax" card, formerly "Financial Details" (superseded by Phase C.1)', () => {
   const overviewIndex = pageSource.indexOf('financialDetailsCard')
-  const cardSlice = pageSource.slice(overviewIndex, overviewIndex + 2200)
+  const cardSlice = pageSource.slice(overviewIndex, overviewIndex + 900)
 
-  // Superseded by Property Profile Mobile Polish V3 (Section 3): the
-  // card no longer repeats Value/Mortgage/Equity/Rent/Tax — those are
-  // already visible in the hero strip immediately above. See
-  // property-profile-mobile-polish-v3.test.ts for the current,
-  // authoritative assertions on this card's content.
-  it('no longer repeats the bare hero metrics (Value/Mortgage/Equity/Rent(Monthly)/Tax(Annual) rows) — superseded by Mobile Polish V3', () => {
+  it('no longer repeats the bare hero metrics, and no longer contains the retired Estimated cash flow row', () => {
     expect(cardSlice).not.toContain('<span>Value</span><strong>{money(selected.estimated_value)}</strong>')
     expect(cardSlice).not.toContain('<span>Mortgage</span><strong>{money(selected.mortgage_balance)}</strong>')
     expect(cardSlice).not.toContain('<span>Equity</span><strong>{money(equity)}</strong>')
-    expect(cardSlice).not.toContain('<span>Rent (Monthly)</span>')
-    expect(cardSlice).not.toContain('<span>Tax (Annual)</span>')
+    expect(cardSlice).not.toContain('Estimated cash flow')
+    expect(pageSource).not.toMatch(/const monthlyCashFlow =/)
   })
 
-  it('reuses the pre-existing monthlyCashFlow calculation — no new cash-flow formula was introduced', () => {
-    expect(pageSource).toContain('const monthlyCashFlow = Number(selected.monthly_rent) - Number(selected.monthly_expenses)')
-    // Exactly this one calculation of monthlyCashFlow exists in the file.
-    expect(pageSource.match(/const monthlyCashFlow =/g)?.length).toBe(1)
-    expect(cardSlice).toContain('{money(monthlyCashFlow)}/mo')
-  })
-
-  // Superseded by the Property Profile / PropCrew UX Improvement
-  // milestone: the card's own "View full Investment Analysis" link was
-  // removed as redundant with the hero's Investment Analysis button. See
-  // lib/dashboard/financial-details-cta-removal.test.ts for the current,
-  // authoritative assertions.
-  it('no longer links out to Investment Analysis from within the card — that button lives only in the hero now', () => {
+  it('no longer links out to Investment Analysis from within the card — that link lives only in the hero now', () => {
     expect(cardSlice).not.toContain('View full Investment Analysis')
   })
 })

@@ -2371,8 +2371,16 @@ export default function Home() {
   }
 
   if (selected) {
-    const monthlyCashFlow = Number(selected.monthly_rent) - Number(selected.monthly_expenses)
-    const equity = Number(selected.estimated_value) - Number(selected.mortgage_balance)
+    // Property Intelligence V1, Phase C.1 (Unified Property Snapshot): the
+    // naive `equity` (estimated value − mortgage balance, no unavailable
+    // handling) and `monthlyCashFlow` (rent − expenses, a second/competing
+    // "cash flow" concept next to the engine's period-safe Net Cash Flow)
+    // locals are retired from presentation — the unified Property Snapshot
+    // below reads performance.equity from the Phase B.1 engine instead, and
+    // Estimated cash flow is no longer shown anywhere (see the Overview
+    // section below for the full field-by-field disposition).
+    // appreciationFor() is unchanged and still used, as secondary/deeper
+    // purchase-price context inside the snapshot.
     const appreciation = appreciationFor(Number(selected.estimated_value), Number(selected.purchase_price))
 
     // Property-First UX Cleanup: the same tenant/occupancy + current-month
@@ -2423,6 +2431,20 @@ export default function Home() {
       year: performanceYear,
     }))
 
+    // Property Intelligence V1, Phase C.1: lib/rent-ledger/status.ts's
+    // RentStatus.Unknown means the payment DUE DATE can't be determined
+    // (no lease.rent_due_day on file) — it says nothing about whether the
+    // rent AMOUNT itself is known. The production property page showed
+    // "Occupied / Rent Unknown" status pills next to an already-visible
+    // rent figure, a real contradiction. deriveRentStatus() is correct for
+    // its own purpose (payment tracking, used elsewhere too) and is left
+    // untouched; the fix is presentation-only, gated on the SAME canonical
+    // rent metric this page already renders (performance.contractMonthlyRent)
+    // — reusing Property Intelligence's rent resolution rather than
+    // inventing a second, competing rule. "Rent Unknown" now only ever
+    // shows when the rent amount is genuinely unknown too.
+    const rentAmountKnown = performance.contractMonthlyRent.status === 'available'
+
     return (
       <main className="shell workspaceShell">
         <AuthHeader onBrandClick={() => setSelectedId(null)} onSmartUploadCompleted={() => void loadPortfolio()} registerSmartUploadTrigger={(fn) => { smartUploadTriggerRef.current = fn }} />
@@ -2438,22 +2460,29 @@ export default function Home() {
         <section className="propertyHero">
           <div className="heroPhoto">{selected.coverUrl ? <img src={selected.coverUrl} alt={selected.address} /> : <div className="heroPlaceholder"><span>Property photo</span><small>Add photos in the Photos tab</small></div>}</div>
           <div className="heroInfo">
+            {/* Property Intelligence V1, Phase C.1 (Unified Property
+                Snapshot): the hero is identity only now — photo, address,
+                city, status, and the property-scoped actions. It no longer
+                repeats Value/Mortgage/Equity/Rent/Tax (the old five-metric
+                hero strip): every financial number lives in exactly ONE
+                place, the Property Snapshot on the Overview tab below, so
+                a landlord never sees two different numbers answering the
+                same question at the same time. */}
             <div className="heroInfoHead">
               <div><p className="eyebrow">{selected.property_type.toUpperCase()}</p><h1>{selected.address}</h1><p className="heroCity">{selected.city}</p>
                 <div className="heroStatusPills">
                   {occupancy && <span className={`statusPill ${occupancyPillClass(occupancy)}`}>{occupancy === 'Occupancy unknown' ? 'Unknown' : occupancy === 'Upcoming tenancy' ? 'Upcoming' : occupancy}</span>}
-                  {currentRentRow && <span className={`statusPill ${rentStatusPillClass(currentRentRow.status)}`}>Rent {currentRentRow.status}</span>}
+                  {currentRentRow && !(currentRentRow.status === 'Unknown' && rentAmountKnown) && <span className={`statusPill ${rentStatusPillClass(currentRentRow.status)}`}>Rent {currentRentRow.status}</span>}
                 </div>
               </div>
-              <div className="heroInfoActions"><button className="secondary" onClick={() => openEditProperty(selected)}>Edit</button><Link className="secondary" href={`/investment-tools/property-evaluator?propertyId=${selected.id}`}>Investment Analysis</Link></div>
+              {/* Investment Analysis is a related but secondary action next
+                  to Edit — the same quiet brand-color text-link treatment
+                  as .needsAttentionViewAll (Simplification + Maintenance
+                  Workspace V2, Phase E1.1) so it no longer competes
+                  equal-weight with Edit for attention. Functionality and
+                  destination are unchanged. */}
+              <div className="heroInfoActions"><button className="secondary" onClick={() => openEditProperty(selected)}>Edit</button><Link className="heroInvestmentLink" href={`/investment-tools/property-evaluator?propertyId=${selected.id}`}>Investment Analysis</Link></div>
             </div>
-            {/* Property Profile Mobile Redesign V2: Tax joins the existing
-                Value/Mortgage/Equity/Rent snapshot as a 5th metric — the
-                same property_tax_annual value the Overview panel already
-                shows, never a Tax Center deductible total. It's nullable
-                (unlike the other four, which default to 0), so it gets an
-                explicit "Not entered" rather than a misleading $0. */}
-            <div className="heroMetrics"><div><span>Value</span><strong>{money(selected.estimated_value)}</strong></div><div><span>Mortgage</span><strong>{money(selected.mortgage_balance)}</strong></div><div><span>Equity</span><strong>{money(equity)}</strong></div><div><span>Rent</span><strong>{money(selected.monthly_rent)}/mo</strong></div><div><span>Tax</span><strong>{selected.property_tax_annual != null ? `${money(selected.property_tax_annual)}/yr` : 'Not entered'}</strong></div></div>
           </div>
         </section>
 
@@ -2469,14 +2498,22 @@ export default function Home() {
         {activeTab === 'Overview' && <section className="workspaceContent workspaceContentTight">
           <div className="sectionHead workspaceHeading workspaceHeadingTight"><div><p className="eyebrow">OVERVIEW</p><h2>At a glance</h2></div><button className="secondary" onClick={() => openEditProperty(selected)}>Edit property facts</button></div>
 
-          {/* Property Intelligence V1, Phase C: a calm, few-numbers
-              snapshot — Value/Equity/Rent, then this tax year's real
-              Income/Expenses/NOI. Every value comes straight from
-              computePropertyPerformance() above (metricMoney/metricPercent
-              are presentation-only — they never calculate anything, they
-              only decide how to render a Metric or its absence). No $0
-              stands in for "unknown": a metric that isn't available or
-              trustworthy enough renders as a quiet "—" instead. */}
+          {/* Property Intelligence V1, Phase C.1 (Unified Property
+              Snapshot): ONE card answers what do I own / what is it
+              worth / what does it earn / what does it cost / how is it
+              performing — instead of four places (the old hero metric
+              strip, this card, the Financial Details card, and Investment
+              Analysis) each showing overlapping or conflicting numbers.
+              Hierarchy: PRIMARY (Value/Equity/Rent) -> CURRENT
+              PERFORMANCE (this tax year's real Income/Expenses/NOI) ->
+              secondary/contextual (Mortgage Balance, Purchase Price) ->
+              "View performance" for the rest. Every value comes straight
+              from computePropertyPerformance() above (metricMoney/
+              metricPercent are presentation-only — they never calculate
+              anything, they only decide how to render a Metric or its
+              absence). No $0 stands in for "unknown": a metric that isn't
+              available or trustworthy enough renders as a quiet "—"
+              instead. */}
           <div className="overviewPanel propertySnapshotCard">
             <h3>Property Snapshot</h3>
             <div className="financialStats performanceStats">
@@ -2492,20 +2529,39 @@ export default function Home() {
               <div className={`financialStat${performance.noiYtd.status === 'available' && Number(performance.noiYtd.value) < 0 ? ' metricTone-bad' : ''}`}><span>NOI</span><strong>{metricMoney(performance.noiYtd)}</strong></div>
             </div>
 
+            {/* Secondary/contextual — quieter than the primary/performance
+                stat grids above (plain .detailRows label/value rows, the
+                same pattern the rest of the page already uses for
+                secondary info, not another headline-number grid).
+                Mortgage Balance moved here from "View performance" (it's
+                no longer buried behind a click); Purchase Price +
+                Appreciation moved here from the old Financial Details
+                card — same appreciationFor() logic, unchanged, just
+                relocated and relabeled "(est.)" so it never reads as an
+                appraisal. */}
+            <div className="detailRows propertyPerformanceRows propertySnapshotContext">
+              <div><span>Mortgage Balance</span><strong>{metricMoney(performance.mortgageBalance)}</strong></div>
+              {performance.mortgageBalance.potentiallyStale && <p className="propertyPerformanceNote">Based on the mortgage balance saved in PropRoster.</p>}
+              <div><span>Purchase Price</span><strong>{money(selected.purchase_price)}</strong></div>
+              {appreciation && <div className={appreciation.amount >= 0 ? 'metricTone-good' : 'metricTone-bad'}><span>Appreciation (est.)</span><strong>{signedMoney(appreciation.amount)} <small>({signedPercent(appreciation.percent)})</small></strong></div>}
+            </div>
+
             {/* Same native <details>/<summary> progressive-disclosure
                 pattern already used for the dashboard's Recent Activity
                 (Simplification + Maintenance Workspace V2, Phase E1) —
-                zero new JS, collapsed by default. */}
+                zero new JS, collapsed by default. Refined in Phase C.1 to
+                stop repeating what the primary/performance/secondary rows
+                above already show: YTD NOI (now in "YTD Performance") and
+                Mortgage Balance (now in the secondary row) were removed
+                from here — this disclosure now only holds figures that
+                aren't shown anywhere else on the card. */}
             <details className="propertyPerformanceDetails">
               <summary className="propertyPerformanceSummary">View performance</summary>
               <div className="detailRows propertyPerformanceRows">
-                <div className={performance.noiYtd.status === 'available' && Number(performance.noiYtd.value) < 0 ? 'metricTone-bad' : undefined}><span>YTD NOI</span><strong>{metricMoney(performance.noiYtd)}</strong></div>
                 <div><span>Cap Rate</span><strong>{metricPercent(performance.capRatePercent)}</strong></div>
                 {performance.capRatePercent.status !== 'available' && <p className="propertyPerformanceNote">Available after a complete year of income and expense data.</p>}
                 <div className={performance.netCashFlowMonthly.status === 'available' && Number(performance.netCashFlowMonthly.value) < 0 ? 'metricTone-bad' : undefined}><span>Net Cash Flow</span><strong>{metricMoney(performance.netCashFlowMonthly, '/mo')}</strong></div>
                 {performance.netCashFlowMonthly.status !== 'available' && <p className="propertyPerformanceNote">Available when complete annual performance and debt-service data are available.</p>}
-                <div><span>Mortgage Balance</span><strong>{metricMoney(performance.mortgageBalance)}</strong></div>
-                {performance.mortgageBalance.potentiallyStale && <p className="propertyPerformanceNote">Based on the mortgage balance saved in PropRoster.</p>}
                 <div><span>Contract Annual Rent</span><strong>{metricMoney(performance.contractAnnualRent)}</strong></div>
                 {performance.contractMonthlyRent.source === 'property_fallback' && <p className="propertyPerformanceNote">Based on the property's saved rent estimate — no active lease on file.</p>}
                 {performance.equity.status !== 'available' && <p className="propertyPerformanceNote">Add a property value and mortgage balance to estimate equity.</p>}
@@ -2513,32 +2569,24 @@ export default function Home() {
             </details>
           </div>
 
-          {/* Property Profile Mobile Polish V3 (Section 3): this card no
-              longer repeats Value/Mortgage/Equity/Rent/Tax — those are
-              already answered by the hero metric strip immediately
-              above, on every tab. This card now answers a DIFFERENT
-              question ("how is this property actually performing?"):
-              the carrying costs and cash-flow context the hero strip
-              doesn't show. Estimated cash flow is still the SAME
-              monthlyCashFlow value computed above (rent − expenses) —
-              no new calculation, no new formula. No cap-rate figure is
-              shown: no existing canonical cap-rate calculation exists
-              anywhere on this page to reuse, and Section 3 explicitly
-              forbids inventing one here. Every row below already existed
-              in the pre-V3 card (nothing new was added, only the
-              Value/Mortgage/Equity/Rent(Monthly)/Tax(Annual) rows that
-              purely duplicated the hero were removed). Property Profile /
-              PropCrew UX Improvement: this card's own bottom "View full
-              Investment Analysis ->" link was removed too — it duplicated
-              the Investment Analysis button already in the property hero
-              above (on every tab, not just Overview); that hero button is
-              untouched and is now the only Investment Analysis entry
-              point on this page. */}
+          {/* Property Intelligence V1, Phase C.1: field-by-field audit of
+              the old "Financial details" card — Monthly property expenses
+              and Annual property tax/HOA are editable property-level
+              inputs (not performance figures), so they stay, just
+              relabeled to make that distinction clear; Purchase Price and
+              Appreciation moved into the Property Snapshot above (still
+              the exact same appreciationFor() calculation); "Estimated
+              cash flow" (the old `selected.monthly_rent -
+              selected.monthly_expenses` formula) is retired from
+              presentation entirely — it conflicted with the engine's
+              period-safe Net Cash Flow and YTD NOI now shown above, and
+              this milestone deliberately does not delete the underlying
+              monthly_expenses/monthly_rent data or edit capability, only
+              this one competing display. */}
           <div className="overviewGrid">
-            <div className="overviewPanel financialDetailsCard"><h3>Financial details</h3><div className="detailRows">
+            <div className="overviewPanel financialDetailsCard"><h3>Expenses &amp; tax</h3><div className="detailRows">
               <div><span>Monthly property expenses</span><strong>{money(selected.monthly_expenses)}</strong></div>
-              <div className="highlightRow"><span>Estimated cash flow</span><strong>{money(monthlyCashFlow)}/mo</strong></div>
-              <div><span>Purchase price</span><strong>{money(selected.purchase_price)}</strong></div>{appreciation && <div className={appreciation.amount >= 0 ? 'metricTone-good' : 'metricTone-bad'}><span>Appreciation</span><strong>{signedMoney(appreciation.amount)} <small>({signedPercent(appreciation.percent)})</small></strong></div>}<div><span>Annual property tax</span><strong>{selected.property_tax_annual != null ? money(selected.property_tax_annual) : 'Not entered'}</strong></div>{selected.hoa_monthly != null && <div><span>HOA / month</span><strong>{money(selected.hoa_monthly)}</strong></div>}
+              <div><span>Annual property tax</span><strong>{selected.property_tax_annual != null ? money(selected.property_tax_annual) : 'Not entered'}</strong></div>{selected.hoa_monthly != null && <div><span>HOA / month</span><strong>{money(selected.hoa_monthly)}</strong></div>}
             </div>
             </div>
             <div className="overviewPanel"><h3>Property facts</h3><div className="detailRows">
@@ -2559,7 +2607,12 @@ export default function Home() {
                 <div><span>Occupancy</span><strong>{occupancy === 'Occupancy unknown' ? 'Unknown' : occupancy || 'Vacant'}</strong></div>
                 {currentLease && <div><span>Tenant</span><strong>{currentLease.tenant_name}</strong></div>}
                 {currentLease && <div><span>Lease term</span><strong>{new Date(`${currentLease.start_date}T12:00:00`).toLocaleDateString()} – {new Date(`${currentLease.end_date}T12:00:00`).toLocaleDateString()}</strong></div>}
-                {currentRentRow && <div><span>{formatPeriodLabel(currentRentPeriod)} rent</span><strong>{money(currentRentRow.expectedAmount)}</strong> <span className={`statusPill ${rentStatusPillClass(currentRentRow.status)}`}>{currentRentRow.status}</span></div>}
+                {/* Property Intelligence V1, Phase C.1: same rent-status
+                    fix as the hero — never pair a known rent amount with
+                    a "Rent Unknown" badge (that status only means the
+                    payment due-date can't be determined, not that the
+                    amount is unknown). See rentAmountKnown above. */}
+                {currentRentRow && <div><span>{formatPeriodLabel(currentRentPeriod)} rent</span><strong>{money(currentRentRow.expectedAmount)}</strong> {!(currentRentRow.status === 'Unknown' && rentAmountKnown) && <span className={`statusPill ${rentStatusPillClass(currentRentRow.status)}`}>{currentRentRow.status}</span>}</div>}
               </div>
               <button className="secondary" onClick={() => { setActiveTab('Rent'); setRentSubTab('Lease') }}>Open Rent</button>
             </div>

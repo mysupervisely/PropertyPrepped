@@ -210,7 +210,7 @@ h2, h3, p { margin-top: 0; }
 }
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 44px; }
 .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
-.stat span, .miniStats span, .heroMetrics span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 7px; }
+.stat span, .miniStats span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 7px; }
 .stat strong { font-size: 25px; letter-spacing: -0.6px; }
 .sectionHead { display: flex; justify-content: space-between; align-items: end; gap: 18px; margin-bottom: 16px; }
 /* Mobile Authentication & Layout Reliability V1 (real-iPhone follow-up):
@@ -303,14 +303,14 @@ h2, h3, p { margin-top: 0; }
    under the address — the "at a glance" tenant/rent context the spec
    asks the property workspace to surface immediately. */
 .heroStatusPills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 13px; }
-/* Property Profile Mobile Redesign V2: Tax joins Value/Mortgage/Equity/
-   Rent as a 5th metric — 5 columns on wide layouts, wrapping to 3+2 on
-   narrower ones (see the @media rules below) rather than shrinking
-   text to force 5 into one row forever. */
-.heroMetrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
-.heroMetrics > div { border-left: 1px solid var(--line); padding-left: 15px; }
-.heroMetrics > div:first-child { border-left: 0; padding-left: 0; }
-.heroMetrics strong { font-size: 17px; }
+/* Property Intelligence V1, Phase C.1 (Unified Property Snapshot): the
+   Investment Analysis link next to Edit gets the same quiet brand-color
+   text treatment as .needsAttentionViewAll (Simplification + Maintenance
+   Workspace V2, Phase E1.1) so it reads as secondary, not equal-weight
+   with Edit. */
+.heroInvestmentLink { flex-shrink: 0; border: 0; background: transparent; padding: 6px 2px; color: var(--brand); font-weight: 650; font-size: 13px; display: inline-flex; align-items: center; gap: 1px; }
+.heroInvestmentLink::after { content: '›'; font-size: 15px; line-height: 1; }
+.heroInvestmentLink:hover { text-decoration: underline; }
 /* Property Profile Mobile Redesign V2: a non-scrolling grid — all six
    property sections visible together, never a horizontally swiping
    row (the previous `display: flex; overflow-x: auto` let Documents/
@@ -360,6 +360,13 @@ h2, h3, p { margin-top: 0; }
 .propertySnapshotSubhead { margin-top: 22px; display: flex; align-items: baseline; gap: 8px; }
 .propertySnapshotYear { color: var(--muted); font-weight: 500; font-size: 12px; }
 .performanceStats.financialStats { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 0; }
+/* Phase C.1: secondary/contextual row (Mortgage Balance, Purchase Price)
+   — plain .detailRows label/value rows, deliberately quieter than the
+   .financialStat grids above so this reads as supporting context, not
+   another headline number. Same divider treatment as
+   .propertyPerformanceDetails below it, so the card's hierarchy reads
+   primary -> performance -> secondary -> deeper (View performance). */
+.propertySnapshotContext { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
 /* Same collapsed-by-default <details>/<summary> pattern as
    .recentActivityDetails (Simplification + Maintenance Workspace V2,
    Phase E1) — a plain "Show"/"Hide" text affordance, zero new JS. */
@@ -499,16 +506,6 @@ h2, h3, p { margin-top: 0; }
 @media (max-width: 900px) {
   .propertyHero { grid-template-columns: 1fr; gap: 22px; }
   .heroPhoto { height: 340px; }
-  /* Property Profile Mobile Polish V3: 5 metrics on a 6-column track —
-     Value/Mortgage/Equity each span 2 (three equal thirds filling row
-     1), Rent/Tax each span 3 (two equal halves filling row 2 exactly,
-     no empty trailing cell the way a plain 3-column grid with 5 items
-     would leave). Same technique at every width ≤900px; the 460px rule
-     below only adjusts gap/font-size, not the column layout itself. */
-  .heroMetrics { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .heroMetrics > div:nth-child(1), .heroMetrics > div:nth-child(2), .heroMetrics > div:nth-child(3) { grid-column: span 2; }
-  .heroMetrics > div:nth-child(4), .heroMetrics > div:nth-child(5) { grid-column: span 3; }
-  .heroMetrics > div:nth-child(4) { border-left: 0; padding-left: 0; }
   .overviewGrid { grid-template-columns: 1fr; }
   .documentLayout { grid-template-columns: 1fr; }
   .categoryPanel { position: static; display: flex; overflow-x: auto; gap: 5px; }
@@ -525,7 +522,6 @@ h2, h3, p { margin-top: 0; }
   .formGrid { grid-template-columns: 1fr; }
   .photo { height: 205px; }
   .heroPhoto { height: 245px; }
-  .heroMetrics { gap: 12px; }
   /* Simplification + Maintenance Workspace V2, Phase D.1: seven primary
      sections (Maintenance promoted alongside Overview/Rent/Details/
      PropCrew/Documents/Tax) no longer fit as an even, non-wrapping
@@ -556,12 +552,6 @@ h2, h3, p { margin-top: 0; }
 }
 @media (max-width: 460px) {
   .stats { grid-template-columns: 1fr; }
-  /* Keeps the same balanced thirds-then-halves layout from the 900px
-     rule at the narrowest widths too — only gap/type size shrink here,
-     never the column arrangement (which would reintroduce the
-     unbalanced trailing empty cell right when space is tightest). */
-  .heroMetrics { gap: 10px; }
-  .heroMetrics strong { font-size: 15px; }
   .topbar .secondary { padding: 9px 11px; font-size: 12px; }
   .photoUploader { grid-template-columns: 36px minmax(0, 1fr); justify-content: start; }
   .tabs button { font-size: 12px; padding: 9px 11px; }
@@ -1880,11 +1870,11 @@ h2, h3, p { margin-top: 0; }
 
 @media (max-width: 620px) {
   .heroInfoHead { flex-direction: column; align-items: stretch; }
-  /* QA: Edit/Investment Analysis sat too close to the Value/Mortgage row
-     below once the actions wrap under the title on mobile — this is the
-     last element before .heroMetrics at this width, so it's the one that
-     needs the breathing room, not .heroMetrics itself (kept untouched at
-     every other width). */
+  /* QA: Edit/Investment Analysis sat too close to whatever follows the
+     hero once the actions wrap under the title on mobile — Property
+     Intelligence V1, Phase C.1 removed the hero metric row that used to
+     sit here, but the property tabs nav immediately follows the hero
+     section, so the same breathing room still applies. */
   .heroInfoActions { justify-content: flex-start; flex-wrap: wrap; margin-bottom: 18px; }
 }
 
