@@ -220,9 +220,9 @@ describe('CTA after the pricing section', () => {
 })
 
 describe('Public Homepage V2: the three current product pillars are accurately scoped', () => {
-  it('features Tenant Connect, Maintenance Coordination and a Tax Center pillar, prominently, above the quiet secondary-features section', () => {
+  it('features Property Organization, Tenant Connect (which now covers the maintenance/coordination workflow) and a Tax Center pillar, prominently, above the quiet secondary-features section', () => {
+    expect(landingSource).toContain("heading: 'Your Property, Organized',")
     expect(landingSource).toContain("heading: 'Tenant Connect',")
-    expect(landingSource).toContain("heading: 'Maintenance Coordination',")
     expect(landingSource).toContain("heading: 'Live Tax Center',")
     const pillarsIdx = landingSource.indexOf('landingPillars')
     const secondaryIdx = landingSource.indexOf('landingSecondary')
@@ -240,6 +240,22 @@ describe('Public Homepage V2: the three current product pillars are accurately s
     expect(copy).not.toMatch(/text message.{0,20}provider|\bsms\b/)
     expect(copy).not.toContain('hires')
     expect(copy).not.toContain('automatically confirm')
+    expect(copy).not.toContain('independently authorizes')
+    expect(copy).not.toContain('autonomously approves')
+    expect(copy).not.toMatch(/chooses a (vendor|provider) without/)
+  })
+
+  it('Organization + Automation positioning follow-up: PropRoster is never framed as a property-management company, and does not attack property managers', () => {
+    const copyIdx = landingSource.indexOf('const PILLARS')
+    const copy = landingSource.slice(copyIdx).toLowerCase()
+    expect(copy).not.toContain('property management company')
+    expect(copy).not.toContain('property manager')
+    expect(copy).not.toContain('takes a cut')
+    // The old "SELF-MANAGE YOUR RENTALS WITHOUT DOING EVERYTHING YOURSELF"
+    // hero positioning (previous PR #62 pass) leaned too far toward
+    // property management and was explicitly replaced.
+    expect(landingSource).not.toContain('SELF-MANAGE YOUR RENTALS')
+    expect(landingSource).toContain('<h1>Your properties. Organized.</h1>')
   })
 
   it('never claims PropCrew is a marketplace or a PropRoster-supplied provider network', () => {
@@ -249,7 +265,7 @@ describe('Public Homepage V2: the three current product pillars are accurately s
   })
 
   it('never claims tax preparation, filing, or tax advice, other than the explicit disclaimer saying it does NOT', () => {
-    expect(landingSource).toContain('It does not prepare or file your taxes')
+    expect(landingSource).toContain('PropRoster does not prepare or file taxes, and this is not tax advice.')
     // Every other occurrence of "prepare"/"file" near "tax" must be part
     // of that one disclaimer sentence, never a standalone affirmative claim.
     const affirmative = [...landingSource.matchAll(/(?:prepares?|files?) (?:your )?tax(?:es)?/gi)]
@@ -258,11 +274,15 @@ describe('Public Homepage V2: the three current product pillars are accurately s
   })
 
   it('never claims live Cap Rate, NOI, Net Cash Flow or automated equity tracking as currently available (Property Intelligence has not shipped)', () => {
-    const lower = landingSource.toLowerCase()
-    expect(lower).not.toContain('cap rate')
-    expect(lower).not.toContain('net operating income')
-    expect(lower).not.toMatch(/\bnoi\b/)
-    expect(lower).not.toContain('net cash flow')
+    // Scoped to the actual copy strings (PILLARS onward), not developer
+    // comments earlier in the file that name these metrics specifically
+    // to document that they must NOT be claimed live.
+    const copyIdx = landingSource.indexOf('const PILLARS')
+    const copy = landingSource.slice(copyIdx).toLowerCase()
+    expect(copy).not.toContain('cap rate')
+    expect(copy).not.toContain('net operating income')
+    expect(copy).not.toMatch(/\bnoi\b/)
+    expect(copy).not.toContain('net cash flow')
   })
 })
 

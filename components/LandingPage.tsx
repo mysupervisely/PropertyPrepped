@@ -2,15 +2,25 @@
 
 // PropRoster: signed-out landing/sign-in experience.
 //
-// Public Homepage V2 (Product Story + Pricing Simplification): the
-// previous version of this page led with a permanently-embedded,
-// half-the-hero sign-in card and four/three separately-worded "why
-// PropRoster" sections that repeated the same few ideas (organize /
-// analyze / stay ahead / understand your data). This version leads with
-// the actual product story — Tenant Connect, Maintenance Coordination,
-// Live Tax Center, the three current pillars — and moves sign-in/sign-up
-// into an on-demand panel opened from "Log In" / "Start Free" in the
-// header, so it never competes with the story for space.
+// Public Homepage V2 (Product Story + Pricing Simplification, plus an
+// Organization + Automation positioning follow-up): the previous
+// homepage led with a permanently-embedded, half-the-hero sign-in card
+// and four/three separately-worded "why PropRoster" sections that
+// repeated the same few ideas. This version leads with the real product
+// story and moves sign-in/sign-up into an on-demand panel opened from
+// "Log In" / "Start Free" in the header, so it never competes with the
+// story for space.
+//
+// Positioning: PropRoster is not a property-management company and does
+// not compete with one on those terms - it is organization + automation
+// for a self-managing landlord who wants to keep control of their
+// properties, tenants and PropCrew without personally handling every
+// small coordination task. The three PILLARS below (Property
+// Organization + Data, Tenant Connect, Live Tax Center) are ordered
+// ORGANIZE -> AUTOMATE -> UNDERSTAND and are the actual homepage story;
+// there is no separate "mission" section duplicating the same idea right
+// after the hero - the "you stay in control" philosophy lives in Tenant
+// Connect's own subheading/closing line instead.
 //
 // Auth itself is UNCHANGED: same supabase.auth.signInWithPassword/signUp
 // calls, same submitAuth/switchMode functions, same IntendedRole choice.
@@ -59,6 +69,17 @@ function DollarIcon() {
   )
 }
 
+// Property Organization + Data pillar icon: a simple document/folder
+// stand-in for "everything about the property, organized" — the
+// foundation pillar.
+function FolderIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
+      <path d="M2.5 5.3a1.3 1.3 0 011.3-1.3h3.4l1.4 1.6h6.1a1.3 1.3 0 011.3 1.3v7.4a1.3 1.3 0 01-1.3 1.3H3.8a1.3 1.3 0 01-1.3-1.3V5.3z" stroke="#204b3b" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 // Tenant Connect pillar icon: two people, a simple stand-in for "you and
 // your tenant, connected" — matches the stroke weight/color of every
 // other landing icon rather than introducing a new visual style.
@@ -69,16 +90,6 @@ function PeopleIcon() {
       <path d="M2.8 16c.5-3 2.2-4.6 4.4-4.6s3.9 1.6 4.4 4.6" stroke="#204b3b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
       <circle cx="14.3" cy="7.3" r="2.1" stroke="#204b3b" strokeWidth="1.5" />
       <path d="M12.6 11.9c1.6-.5 3.6-.1 4.6 2.7" stroke="#204b3b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-// Maintenance Coordination pillar icon: a wrench.
-function WrenchIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
-      <path d="M13.4 3.2a3.6 3.6 0 00-4.7 4.4L3.3 12l1.8 1.8 4.4-5.4a3.6 3.6 0 004.4-4.7l-2.1 2.1-1.6-.4-.4-1.6 2.1-2.1-.5-.5z" stroke="#204b3b" strokeWidth="1.4" strokeLinejoin="round" />
-      <path d="M4 15.4a1.3 1.3 0 101.8 1.8" stroke="#204b3b" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   )
 }
@@ -136,34 +147,46 @@ function EyeIcon({ off }: { off: boolean }) {
   )
 }
 
-// Section 4/13: the three current product pillars — significantly more
-// prominent than generic document storage or Investment Tools, per this
-// milestone's brief. Copy describes only what is actually live today
-// (Section 5/6/7 of the brief) — no SMS outreach, no autonomous
-// contractor hiring, no automatic appointment confirmation, no tax
-// preparation/filing/advice.
-const PILLARS: { icon: React.ReactNode; heading: string; text: string }[] = [
+// Public Homepage V2 follow-up (Organization + Automation positioning):
+// the three current product pillars, reordered around ORGANIZE ->
+// AUTOMATE -> UNDERSTAND. Property Organization + Data is the
+// foundation pillar; Tenant Connect (now covering the maintenance/
+// coordination workflow that was previously its own separate pillar) is
+// where the automation/coordination value becomes concrete; Live Tax
+// Center closes the loop. Copy describes only what is actually live
+// today — no SMS outreach, no autonomous contractor hiring, no
+// automatic appointment confirmation, no tax preparation/filing/advice,
+// and no live Cap Rate/NOI/Net Cash Flow/equity (Property Intelligence
+// has not shipped past its Phase A architecture audit).
+const PILLARS: { icon: React.ReactNode; heading: string; subheading: string; body: string; closing: string; note?: string }[] = [
+  {
+    icon: <FolderIcon />,
+    heading: 'Your Property, Organized',
+    subheading: 'Everything about one of your biggest assets, in one place.',
+    body: 'Upload leases, insurance, mortgage information, receipts, expenses and important documents. PropRoster keeps it all organized around the property it belongs to, so your records and the numbers behind them stay together in one place.',
+    closing: 'Your property. Your documents. Your numbers. Organized.',
+  },
   {
     icon: <PeopleIcon />,
     heading: 'Tenant Connect',
-    text: 'Give your tenants one simple place to connect with you. They can see rental and lease information, check rent status, submit maintenance requests, share availability and follow what’s happening, without you piecing it together across texts and emails.',
-  },
-  {
-    icon: <WrenchIcon />,
-    heading: 'Maintenance Coordination',
-    text: 'Tenant reports it. PropRoster helps get it resolved. A request moves from your tenant to you to your trusted provider, with less back and forth between everyone involved. You stay in control of every confirmation.',
+    subheading: 'Keep control. Lose the coordination.',
+    body: 'A tenant reports a maintenance issue and shares their availability. You review the request and decide how to proceed, using someone from your own PropCrew, the providers and professionals you already know and trust. PropRoster helps move the request, availability and scheduling forward, so you are not personally coordinating every text, call and appointment.',
+    closing: 'Your tenant. Your PropCrew. Your approval. Less back-and-forth.',
   },
   {
     icon: <DollarIcon />,
     heading: 'Live Tax Center',
-    text: 'See your rental property’s tax year numbers take shape as you go. PropRoster organizes income, expenses and supporting records by property, so you are not reconstructing a year of activity every April.',
+    subheading: 'Stay organized all year, not just at tax time.',
+    body: 'Add expenses and upload receipts as they happen. PropRoster keeps your property financial records organized by property and by tax year, so you are not reconstructing an entire year the moment tax season arrives.',
+    closing: 'Add it as you go. PropRoster keeps it organized.',
+    note: 'PropRoster does not prepare or file taxes, and this is not tax advice.',
   },
 ]
 
 const WORKFLOW_STEPS = [
-  { title: 'Add your property', text: 'Enter the basics and PropRoster gives it a home for every record that follows.' },
-  { title: 'Connect your tenant', text: 'Send a secure invitation. Your tenant gets their own simple portal.' },
-  { title: 'Manage from one place', text: 'Rent, maintenance, documents and tax records, organized by property.' },
+  { title: 'Add your property', text: 'Bring the important information together.' },
+  { title: 'Connect your tenant', text: 'Keep requests and communication organized.' },
+  { title: 'Let PropRoster help coordinate', text: 'PropRoster helps move requests, availability and provider communication forward. You stay in control of every decision.' },
 ]
 
 // Section 9/14: secondary capabilities, deliberately a single quiet
@@ -272,9 +295,9 @@ export default function LandingPage() {
 
       <section className="landingHero">
         <div className="landingHeroContent">
-          <p className="landingHeroEyebrow">SELF-MANAGE YOUR RENTALS<br />WITHOUT DOING EVERYTHING YOURSELF.</p>
           <h1>Your properties. Organized.</h1>
-          <p className="landingHeroSub">PropRoster brings your properties, tenants, rent, maintenance, tax records and trusted providers together, so you can see what needs attention instead of tracking it all yourself.</p>
+          <p className="landingHeroTagline">Keep control of your properties without managing every little detail.</p>
+          <p className="landingHeroSub">PropRoster helps organize the information and numbers behind your properties, simplify communication with tenants and your trusted PropCrew, and automate routine coordination.</p>
           <div className="landingHeroCtas">
             <button type="button" className="primary landingCtaPrimary" onClick={() => openAuth('signup')}>Start Free</button>
           </div>
@@ -282,18 +305,24 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Section 4: the three current product pillars. */}
+      {/* Section 4: the three current product pillars, ORGANIZE -> AUTOMATE
+          -> UNDERSTAND. This also carries the "you stay in control"
+          philosophy the brief asked for (Tenant Connect's own subheading/
+          closing line) rather than a separate, largely-duplicative mission
+          section right after the hero. */}
       <section className="landingPillars">
         <div className="landingPillarsGrid">
           {PILLARS.map((item) => (
             <div className="landingPillarCard" key={item.heading}>
               <IconBadge>{item.icon}</IconBadge>
               <h2>{item.heading}</h2>
-              <p>{item.text}</p>
+              <p className="landingPillarSubhead">{item.subheading}</p>
+              <p>{item.body}</p>
+              <p className="landingPillarClosing">{item.closing}</p>
+              {item.note && <p className="landingPillarNote">{item.note}</p>}
             </div>
           ))}
         </div>
-        <p className="landingTaxDisclaimer">PropRoster helps you stay organized. It does not prepare or file your taxes, and it is not tax or legal advice.</p>
       </section>
 
       {/* Section 5: simple workflow. */}
