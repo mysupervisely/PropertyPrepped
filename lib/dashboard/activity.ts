@@ -67,7 +67,9 @@ export function maintenanceActivity(rows: MaintenanceActivityInput[], propertyLa
     id: `maintenance-${m.id}`, type: 'Maintenance',
     description: `Maintenance item added for ${propertyLabelById.get(m.property_id) || 'a property'}`,
     propertyId: m.property_id, timestamp: m.created_at,
-    nav: { tab: 'Details', propSubTab: 'Maintenance' },
+    // Simplification + Maintenance Workspace V2, Phase D: Maintenance
+    // promoted to its own top-level tab — no propSubTab anymore.
+    nav: { tab: 'Maintenance' },
     documentId: null,
   }))
 }

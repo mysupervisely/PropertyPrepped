@@ -18,20 +18,25 @@ const newRequestModalSource = readFile('components/maintenance/NewMaintenanceReq
 const caseDetailSource = readFile('components/maintenance/MaintenanceCaseDetail.tsx')
 const attentionSource = readFile('lib/dashboard/attention.ts')
 
-describe('Property Maintenance hub — one destination, Active Requests above Service History', () => {
-  it('Details > Maintenance renders Active Requests, then Service History, both reachable from one sub-tab', () => {
-    const start = pageSource.indexOf("propertySubTab === 'Maintenance' &&")
+// Simplification + Maintenance Workspace V2, Phase D.1/D.2: this
+// destination is no longer Details > Maintenance — Maintenance is now
+// its own primary property tab (activeTab === 'Maintenance'), and its
+// heavy header/oversized button/three-pill rows were simplified. See
+// that phase's own report for the full before/after.
+describe('Property Maintenance hub — one destination, "Needs attention" above Service history', () => {
+  it('the promoted Maintenance tab renders open requests ("Needs attention"), then Service history, both reachable from one primary tab', () => {
+    const start = pageSource.indexOf("activeTab === 'Maintenance' &&")
     expect(start).toBeGreaterThan(-1)
-    const end = pageSource.indexOf("propertySubTab === 'Systems'")
+    const end = pageSource.indexOf("activeTab === 'Details' &&")
     const hubBody = pageSource.slice(start, end)
-    const activeIdx = hubBody.indexOf('Active Requests')
-    const historyIdx = hubBody.indexOf('SERVICE HISTORY')
+    const activeIdx = hubBody.indexOf('Needs attention')
+    const historyIdx = hubBody.indexOf('Service history')
     expect(activeIdx).toBeGreaterThan(-1)
     expect(historyIdx).toBeGreaterThan(activeIdx)
   })
 
-  it('the property-level "+ New Maintenance Request" button opens the shared modal with this property pre-selected and hidden', () => {
-    expect(pageSource).toContain('<button className="primary" onClick={() => setShowNewMaintenanceRequest(true)}>+ New Maintenance Request</button>')
+  it('the property-level "+ New Request" action opens the shared modal with this property pre-selected and hidden — a small, secondary-styled action now, not a large primary button (real-device finding: "too in your face")', () => {
+    expect(pageSource).toContain('<button className="secondary" onClick={() => setShowNewMaintenanceRequest(true)}>+ New Request</button>')
     expect(pageSource).toContain('<NewMaintenanceRequestModal')
     expect(pageSource).toContain('fixedPropertyId={selected.id}')
   })
@@ -133,12 +138,27 @@ describe('PropWatch maintenance normalization — the M3.1 core fix', () => {
     expect(pageSource).not.toContain('buildOpenMaintenanceItems(maintenanceRecords, propertyLabelById)')
   })
 
-  it('the property-card "open maintenance" count uses the same canonical, active-case definition', () => {
-    const idx = pageSource.indexOf('const openMaintenanceCount = useMemo(')
-    const body = pageSource.slice(idx, idx + 400)
-    expect(body).toContain('enrichMaintenanceCases(maintenanceRequests, tenantRequests, intakeSessions)')
-    expect(body).toContain('.filter((c) => c.active)')
-    expect(body).not.toContain('maintenanceRecords.filter')
+  // Simplification + Maintenance Workspace V2, Phase E1: the dashboard's
+  // old standalone "Open Maintenance N items" subhead (and the
+  // openMaintenanceCount useMemo that only ever fed that one piece of
+  // text) is gone — the dashboard's Needs Your Attention section now
+  // folds open-maintenance rows straight into one flat list (see
+  // attentionRows in app/page.tsx). The canonical, active-case
+  // definition this test protects is exactly the same one; it just
+  // lives at enrichedRequestsForPropWatch (feeding
+  // buildOpenMaintenanceRequestItems, asserted in the sibling test
+  // above) instead of a second, now-removed derivation.
+  it('the dashboard\'s open-maintenance source is built from the same canonical, active-case definition (enrichMaintenanceCases), not a second derivation', () => {
+    const idx = pageSource.indexOf('const enrichedRequestsForPropWatch = ')
+    expect(idx).toBeGreaterThan(-1)
+    const line = pageSource.slice(idx, pageSource.indexOf('\n', idx))
+    expect(line).toContain('enrichMaintenanceCases(maintenanceRequests, tenantRequests, intakeSessions)')
+    // Scoped to this declaration's own line, not the whole file — the
+    // property-level Maintenance tab's unrelated Service History list
+    // (selectedMaintenance) legitimately filters maintenanceRecords
+    // elsewhere in this same large file; that's a different feature,
+    // not a reintroduction of the free-text-status bug this guards.
+    expect(line).not.toContain('maintenanceRecords.filter')
   })
 
   it('the legacy maintenance_records-based function still exists (not deleted) but is no longer the PropWatch data source — no destructive removal of working code', () => {

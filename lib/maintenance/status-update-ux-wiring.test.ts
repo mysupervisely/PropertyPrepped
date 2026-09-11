@@ -60,8 +60,16 @@ describe('Bug 1 — status change updates the UI immediately, without a manual r
     expect(body).not.toContain('await load()')
   })
 
-  it('the property-level inline status <select> is disabled while a mutation is in flight, guarding against a double-submit during the (now much shorter) busy window', () => {
-    expect(pageSource).toContain('<select aria-label={`Status for ${req.title}`} value={req.status} disabled={busy}')
+  // Simplification + Maintenance Workspace V2, Phase D.2 removed this
+  // inline per-row status <select> entirely — a duplicate status
+  // control competing with MaintenanceCaseDetail's own (which already
+  // carried this exact disabled-while-busy guard, still true below).
+  // Opening a row now goes straight to that one shared workspace, so
+  // there is no longer a second place a status change (and its
+  // double-submit risk) can happen from.
+  it('the property-level per-row status <select> is gone (Phase D.2) — status changes happen in the one shared MaintenanceCaseDetail workspace, which already guards against double-submit', () => {
+    expect(pageSource).not.toContain('<select aria-label={`Status for ${req.title}`}')
+    expect(pageSource).toContain('onOpen={() => setOpenMaintenanceCaseId(req.id)}')
   })
 
   it('the shared MaintenanceCaseDetail status <select> was already disabled while busy — untouched by this fix', () => {
@@ -105,19 +113,37 @@ describe('Bug 1 — a brief, visible "Status updated." confirmation, auto-dismis
 })
 
 describe('Bug 2 — exactly one "Urgent" badge per card, dedup is display-only, isUrgentCase() untouched', () => {
+  // Simplification + Maintenance Workspace V2, Phase D.1: both rows now
+  // render a single trailing slot that is EITHER the dedicated "Urgent"
+  // badge OR the compact status pill, never both — a ternary on the
+  // same showsDedicatedUrgentBadge() gate, not the old "&&"-rendered
+  // badge alongside a separately-rendered status pill. The invariant
+  // this describe block protects (gated on the shared helper, never on
+  // caseRow.urgent/req.urgent alone) still holds; only the JSX shape
+  // changed.
   it('the portfolio Command Center card (app/maintenance/page.tsx) gates the dedicated badge on showsDedicatedUrgentBadge(), not caseRow.urgent alone', () => {
-    expect(commandCenterPageSource).toContain('{showsDedicatedUrgentBadge(caseRow, caseRow.urgent) && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}')
+    expect(commandCenterPageSource).toContain('{showsDedicatedUrgentBadge(caseRow, caseRow.urgent) ? (')
+    expect(commandCenterPageSource).not.toContain('{caseRow.urgent ? (')
     expect(commandCenterPageSource).not.toContain('{caseRow.urgent && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}')
   })
 
   it('the property-level Active Requests row (app/page.tsx) gates the dedicated badge the same way', () => {
-    expect(pageSource).toContain('{showsDedicatedUrgentBadge(req, req.urgent) && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}')
+    expect(pageSource).toContain('const urgent = showsDedicatedUrgentBadge(req, req.urgent)')
+    expect(pageSource).toContain('{urgent ? <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span> : <span className="statusPill maintenanceRequestRowStatus">{req.status}</span>}')
     expect(pageSource).not.toContain('{req.urgent && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}')
   })
 
-  it('the priority pill next to it is completely unchanged — the fix removes a redundant badge, not the priority pill', () => {
-    expect(commandCenterPageSource).toContain('<span className={`statusPill priority${caseRow.priority}`}>{caseRow.priority}</span>')
-    expect(pageSource).toContain('<span className={`statusPill priority${req.priority}`}>{req.priority}</span>')
+  // Simplification + Maintenance Workspace V2, Phase D.2 later removed
+  // the priority pill from both the portfolio Command Center card and
+  // the property-level row (and their source/category pills too) — a
+  // separate, later, deliberate simplification, not a regression of
+  // this bugfix. The urgent badge guards above are what this bug
+  // actually protects, and they still hold: the urgent pill is now the
+  // only pill on either row, so the double-Urgent bug this describe
+  // block exists for cannot recur.
+  it('neither the portfolio Command Center card nor the property-level row has its own priority pill anymore (Phase D.2 removed the whole pill row on both)', () => {
+    expect(commandCenterPageSource).not.toMatch(/statusPill priority\$\{caseRow\.priority\}/)
+    expect(pageSource).not.toMatch(/statusPill priority\$\{req\.priority\}/)
   })
 
   it('isUrgentCase() itself — the deterministic safety classification — is byte-for-byte unmodified by this patch', () => {
@@ -125,8 +151,8 @@ describe('Bug 2 — exactly one "Urgent" badge per card, dedup is display-only, 
     expect(source).toContain("export function isUrgentCase(row: Pick<MaintenanceCaseRow, 'priority'>, linkedSessionOutcomes: (string | null)[]): boolean {\n  if (row.priority === 'Urgent') return true\n  return linkedSessionOutcomes.some((o) => o === 'escalated_urgent')\n}")
   })
 
-  it('the urgent safety banner inside MaintenanceCaseDetail (a separate concern from the list-card badge, out of this bug\'s scope) is untouched', () => {
-    expect(caseDetailSource).toContain('<strong>Urgent — safety concern reported.</strong>')
+  it('the urgent safety banner inside MaintenanceCaseDetail (a separate concern from the list-card badge, out of this bug\'s scope) still reads "Urgent: safety concern reported." — Phase C.1 changed only the punctuation (em dash to colon, the new site-wide no-em-dash copy rule) and the visual weight, never the meaning', () => {
+    expect(caseDetailSource).toContain('<strong>Urgent: safety concern reported.</strong>')
   })
 })
 

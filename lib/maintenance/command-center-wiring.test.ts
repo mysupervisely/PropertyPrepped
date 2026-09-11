@@ -29,7 +29,11 @@ describe('Portfolio-level Command Center — reachable, real, and reads the cano
 
   it('enriches cases with category (tenant_requests) and urgency (maintenance_intake_sessions) via the shared, tested pure module — never re-implements that logic inline', () => {
     expect(commandCenterPageSource).toContain("import {\n  enrichMaintenanceCases, sortCasesForCommandCenter, summarizeCommandCenter, relevantContactsForProperty,")
-    expect(commandCenterPageSource).toContain('enrichMaintenanceCases(cases, tenantRequests, intakeSessions)')
+    // Phase C: also threads providerOutreach/appointments through (both
+    // already fetched portfolio-wide for this page's own display needs)
+    // so nextAction reflects the full outreach/appointment lifecycle,
+    // not just "assigned or not."
+    expect(commandCenterPageSource).toContain('enrichMaintenanceCases(cases, tenantRequests, intakeSessions, providerOutreach, appointments)')
   })
 
   it('separates Active/Needs Attention from Completed/History, and never deletes a case to do so', () => {
@@ -38,30 +42,57 @@ describe('Portfolio-level Command Center — reachable, real, and reads the cano
     expect(commandCenterPageSource).not.toMatch(/\.delete\(\)/)
   })
 
-  it('shows current maintenance status and a next-action hint on every card, without overloading the card with every field', () => {
-    expect(commandCenterPageSource).toContain('NEXT_ACTION_LABEL[caseRow.nextAction]')
+  // Simplification + Maintenance Workspace V2, Phase D.1: the card's
+  // trailing badge is now the plain 4-value canonical status (a
+  // compact pill, matching the property-level row's identical
+  // treatment — one visual language) rather than the longer
+  // NEXT_ACTION_LABEL text, which could run long enough to wrap
+  // awkwardly in a fixed trailing column ("Confirm the proposed
+  // appointment"). The richer next-action detail still lives one tap
+  // away, in MaintenanceCaseDetail's own Next Step card — its
+  // authoritative home since Phase C.
+  it('shows current maintenance status on every card (a compact trailing pill, or "Urgent" when applicable), without overloading the card with every field', () => {
+    expect(commandCenterPageSource).toContain('<span className="statusPill maintenanceCommandCenterCardStatus">{caseRow.status}</span>')
   })
 })
 
 describe('Property-level view — enhanced, not replaced', () => {
+  // Phase D.1: the row's trailing slot is now a ternary (Urgent badge
+  // OR the compact status pill), not an "&&"-rendered badge beside a
+  // separate status element — see the Bug 2 dedup guard in
+  // status-update-ux-wiring.test.ts for the full invariant this
+  // protects (gated on showsDedicatedUrgentBadge(), never req.urgent
+  // alone).
   it('the existing per-request row now shows a deterministic urgency badge (from the enriched case, not a client-side guess) — see the Bug 2 dedup guard below for why the render condition also checks priority', () => {
-    expect(pageSource).toContain('{showsDedicatedUrgentBadge(req, req.urgent) && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}')
+    expect(pageSource).toContain('const urgent = showsDedicatedUrgentBadge(req, req.urgent)')
+    expect(pageSource).toContain('{urgent ? <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span> : <span className="statusPill maintenanceRequestRowStatus">{req.status}</span>}')
   })
 
-  it('the existing tenant-source badge and category lookup remain byte-for-byte intact (V1 regression guard)', () => {
-    expect(pageSource).toContain("req.source === 'tenant' && <span className=\"statusPill tenantSourceBadge\">Tenant</span>")
+  // Simplification + Maintenance Workspace V2, Phase D.2: the row's own
+  // three-pill header (Urgent + priority + a colored "Tenant" badge) is
+  // gone — source is now plain quiet meta text ("Tenant"/"Landlord"),
+  // matching the same "pill row removed, quiet text instead" direction
+  // Phase C.1 already applied to MaintenanceCaseDetail. The information
+  // itself (tenant vs. landlord origin, category) is still shown, in
+  // the new MaintenanceRequestRow component this list now renders —
+  // not byte-for-byte, but not lost either.
+  it('the tenant-vs-landlord source distinction and category lookup are still shown (now as quiet meta text in MaintenanceRequestRow, not a colored pill)', () => {
+    expect(pageSource).toContain("req.source === 'tenant' ? 'Tenant' : 'Landlord'")
     expect(pageSource).toContain('categoryByMaintenanceRequestId')
   })
 
-  it('a "Manage" action opens the SAME shared MaintenanceCaseDetail component the portfolio Command Center uses — one detail/actions implementation, not two', () => {
+  it('the whole row is the tap target that opens the SAME shared MaintenanceCaseDetail component the portfolio Command Center uses — one detail/actions implementation, not two (Phase D.2 replaced the separate "Manage" sub-button with a single tappable row, matching the Command Center\'s own card-is-the-button pattern)', () => {
     expect(pageSource).toContain("import { MaintenanceCaseDetail } from '../components/maintenance/MaintenanceCaseDetail'")
-    expect(pageSource).toContain('<button className="secondary" onClick={() => setOpenMaintenanceCaseId(req.id)}>Manage</button>')
+    expect(pageSource).toContain('function MaintenanceRequestRow(')
+    expect(pageSource).toContain('onOpen: () => void')
+    expect(pageSource).toContain('<MaintenanceRequestRow key={req.id} req={req} categoryByMaintenanceRequestId={categoryByMaintenanceRequestId} onOpen={() => setOpenMaintenanceCaseId(req.id)} onRemove={() => void removeRequest(req.id)} />')
     expect(pageSource).toContain('<MaintenanceCaseDetail')
   })
 
-  it('the existing status <select> and Remove button are untouched (both still present, unmodified)', () => {
-    expect(pageSource).toContain('{requestStatuses.map((s) => <option key={s}>{s}</option>)}')
-    expect(pageSource).toContain('<button className="dangerLink" onClick={() => void removeRequest(req.id)}>Remove</button>')
+  it('Remove is still present (a real hard delete, quiet but not removed); the old inline status <select> is intentionally gone from this list — Phase D.2 removed it as a duplicate status control (MaintenanceCaseDetail\'s own Advanced section already owns status changes; opening a row via onOpen reaches that same shared component)', () => {
+    expect(pageSource).not.toContain('{requestStatuses.map((s) => <option key={s}>{s}</option>)}')
+    expect(pageSource).toContain('onRemove: () => void')
+    expect(pageSource).toContain('<button className="dangerLink maintenanceRequestRowRemove" onClick={onRemove}>Remove</button>')
   })
 })
 
@@ -73,8 +104,8 @@ describe('PropCrew assignment — records the landlord\'s decision only', () => 
     }
   })
 
-  it('the assignment <select> itself never sends a message, creates a provider token, or schedules an appointment — it is a plain decision write, nothing else. Scoped to the assignment field specifically (not the whole file): Scheduling Coordination V1 legitimately adds its OWN separate, explicitly landlord-confirmed appointment feature elsewhere in this same component (Section 7 of that milestone) — a file-wide match would now collide with that unrelated, intentional feature.', () => {
-    const assignFieldSource = caseDetailSource.slice(caseDetailSource.indexOf('maintenanceAssignField'), caseDetailSource.indexOf('providerOutreachSection'))
+  it('the assignment <select> itself never sends a message, creates a provider token, or schedules an appointment — it is a plain decision write, nothing else. Scoped tightly to the assignField element\'s own definition (Phase C: this is now a single shared JSX value rendered in more than one place, so the boundary is its own declaration, not "until the next providerOutreachSection mention" — a file-wide/loosely-scoped match would now collide with this same component\'s unrelated, intentional next-step/appointment copy).', () => {
+    const assignFieldSource = caseDetailSource.slice(caseDetailSource.indexOf('const assignField = ('), caseDetailSource.indexOf('const noContactsNote ='))
     expect(assignFieldSource).not.toMatch(/property_messages|access_token|provider_token|notifyTenantConnect|schedule_appointment|appointment/i)
     expect(caseDetailSource).toContain('has not been notified or contacted')
   })
@@ -100,8 +131,14 @@ describe('Status model — reuses the existing four canonical values, no conflic
     // lib/maintenance/provider-outreach.ts's own header) rendered
     // elsewhere in this same component, so a file-wide text match is no
     // longer the right guard. What must still never happen is a "needs
-    // info"-flavored option inside THIS select.
-    const statusFieldSource = caseDetailSource.slice(caseDetailSource.indexOf('maintenanceStatusField'), caseDetailSource.indexOf('maintenanceStatusUpdateNotice'))
+    // info"-flavored option inside THIS select. Phase C moved this
+    // <select> into the "Advanced" details section — its own </label>
+    // close tag is now the tight, unambiguous boundary (maintenanceStatusUpdateNotice
+    // renders earlier in the file now, right under the Next Step card,
+    // so it's no longer a usable end marker here).
+    const statusFieldStart = caseDetailSource.indexOf('<label className="maintenanceStatusField">')
+    const statusFieldSource = caseDetailSource.slice(statusFieldStart, caseDetailSource.indexOf('</label>', statusFieldStart))
+    expect(statusFieldSource.length).toBeGreaterThan(0)
     expect(statusFieldSource).not.toMatch(/needs.?info/i)
   })
 

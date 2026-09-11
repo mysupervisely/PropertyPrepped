@@ -29,6 +29,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Wordmark } from './Wordmark'
 import { AuthNavMenu } from './AuthNavMenu'
+import { ProfileEntryButton } from './ProfileEntryButton'
+import { MobileBottomNav } from './MobileBottomNav'
 import { SmartUploadButton } from './SmartUploadButton'
 import { SmartUploadModal } from './SmartUpload/SmartUploadModal'
 import { UpgradePrompt } from './UpgradePrompt'
@@ -37,8 +39,28 @@ import { useAuthUser } from '../lib/useAuthUser'
 import { useSubscription } from '../lib/useSubscription'
 import { entitlementsFor } from '../lib/billing/entitlements'
 
-export function AuthHeader({ onBrandClick, onSmartUploadCompleted, registerSmartUploadTrigger }: { onBrandClick?: () => void; onSmartUploadCompleted?: () => void; registerSmartUploadTrigger?: (fn: () => void) => void }) {
+export function AuthHeader({
+  onBrandClick, onSmartUploadCompleted, registerSmartUploadTrigger, hideMobileNav,
+}: {
+  onBrandClick?: () => void
+  onSmartUploadCompleted?: () => void
+  registerSmartUploadTrigger?: (fn: () => void) => void
+  // Pricing (a public/marketing surface even when the visitor happens
+  // to be signed in) and the internal admin tool are not primary
+  // landlord destinations this bottom nav's items describe — see each
+  // call site for the explicit opt-out.
+  hideMobileNav?: boolean
+}) {
   const [smartUploadOpen, setSmartUploadOpen] = useState(false)
+  // Phase D.1 lifted this out of AuthNavMenu itself so the mobile
+  // bottom nav's old "More" button could open the exact same panel;
+  // Phase E1 removed that bottom-nav item, making the header's own
+  // hamburger the only opener again. Phase E1.1 removed the mobile
+  // hamburger too (see globals.css's own header-row comment) — the
+  // avatar (ProfileEntryButton) is now the mobile opener, the
+  // hamburger stays the desktop opener, both driving this SAME lifted
+  // state, never two separate menu instances.
+  const [navMenuOpen, setNavMenuOpen] = useState(false)
   // Launch Pricing: Smart Upload's entry point is global (this header
   // renders on every authenticated page), so the gate lives here rather
   // than being threaded through every page that renders AuthHeader.
@@ -71,13 +93,20 @@ export function AuthHeader({ onBrandClick, onSmartUploadCompleted, registerSmart
 
   return (
     <>
-      <header className="topbar authHeader">
+      <header className={`topbar authHeader${hideMobileNav ? '' : ' authHeaderWithBottomNav'}`}>
         <div className="topbarBrandGroup">
+          {/* Phase D.2: the landlord's own profile entry point ("me") —
+              always visible, distinct from the tools menu right next to
+              it. Phase E1.1: on mobile it also opens that SAME tools
+              menu (the hamburger trigger is desktop-only now) — see
+              ProfileEntryButton's own header comment for the full
+              reasoning. */}
+          <ProfileEntryButton menuOpen={navMenuOpen} onOpenMenu={() => setNavMenuOpen((o) => !o)} />
           {/* Dashboard Navigation Bug fix: reuse the exact same
               onBrandClick this header already threads to the wordmark
               below for the identical single-page-app reason — see
               AuthNavMenu's own comment on onDashboardNavigate. */}
-          <AuthNavMenu onDashboardNavigate={onBrandClick} />
+          <AuthNavMenu onDashboardNavigate={onBrandClick} open={navMenuOpen} onOpenChange={setNavMenuOpen} />
           {onBrandClick ? (
             <button className="brandButton" onClick={onBrandClick}>{brandContent}</button>
           ) : (
@@ -93,6 +122,15 @@ export function AuthHeader({ onBrandClick, onSmartUploadCompleted, registerSmart
           <SmartUploadButton onClick={() => (canUseSmartUpload ? setSmartUploadOpen(true) : setShowUpgrade(true))} />
         </div>
       </header>
+      {/* Simplification + Maintenance Workspace V2, Phase D.1: GLOBAL
+          mobile navigation — hidden on desktop entirely via CSS, and
+          not rendered at all on pricing/the admin tool (hideMobileNav).
+          Phase E1: down to four destinations (Dashboard/Maintenance/
+          PropCrew/Tax Center) — see MobileBottomNav's own header
+          comment. "More" is gone from this bar; the header's hamburger
+          trigger above is the one way to reach that panel now, on
+          every width. */}
+      {!hideMobileNav && <MobileBottomNav onDashboardNavigate={onBrandClick} />}
       <SmartUploadModal open={smartUploadOpen} onClose={() => setSmartUploadOpen(false)} onCompleted={onSmartUploadCompleted} />
       {showUpgrade && supabase && (
         <UpgradePrompt

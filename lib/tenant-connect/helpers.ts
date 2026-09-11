@@ -48,14 +48,20 @@ export function tenantDisplayName(tenantEmail: string, status: 'Invited' | 'Acti
 // Tenant Connect V1 (Milestone 24) — the compact Rent > Tenant status card.
 // ===========================================================================
 
-export type TenantConnectStatusLabel = 'Not invited' | 'Invitation pending' | 'Connected' | 'Access ended'
+// Simplification + Maintenance Workspace V2, Phase D.3: three labels,
+// not four — "avoid multiple labels/headings to communicate the same
+// status." A revoked tenant reads the same as one never invited
+// ('Not connected'); the landlord-facing distinction that actually
+// matters is whether the tenant currently has access, not the reason
+// they don't. (The underlying Invited/Active/Revoked/null status
+// itself is unchanged — this only renames the landlord-facing label.)
+export type TenantConnectStatusLabel = 'Not connected' | 'Invited' | 'Connected'
 
-/** The 4-state summary Section 2 asks for — a pure mapping from a tenant_property_access row's own status onto the landlord-facing label. `null` means no access row exists at all for this lease's tenant yet. */
+/** The landlord-facing status Section 2 asks for — a pure mapping from a tenant_property_access row's own status onto the landlord-facing label. `null` means no access row exists at all for this lease's tenant yet. */
 export function tenantConnectStatusLabel(status: 'Invited' | 'Active' | 'Revoked' | null): TenantConnectStatusLabel {
-  if (status === null) return 'Not invited'
-  if (status === 'Invited') return 'Invitation pending'
+  if (status === 'Invited') return 'Invited'
   if (status === 'Active') return 'Connected'
-  return 'Access ended'
+  return 'Not connected'
 }
 
 type AccessRowForLeaseMatch = { lease_id: string | null; status: 'Invited' | 'Active' | 'Revoked'; created_at: string }

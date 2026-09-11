@@ -46,11 +46,10 @@ import type { NewMaintenanceRequestPayload } from '../../lib/maintenance/new-req
 import {
   enrichMaintenanceCases, sortCasesForCommandCenter, summarizeCommandCenter, relevantContactsForProperty,
   showsDedicatedUrgentBadge,
-  NEXT_ACTION_LABEL,
   type MaintenanceCaseRow, type TenantRequestLink, type IntakeSessionOutcome,
   type PropCrewContactRef, type PropCrewLinkRef, type EnrichedMaintenanceCase, type MaintenanceCaseStatus,
 } from '../../lib/maintenance/command-center'
-import { maintenanceCategoryLabel } from '../../lib/maintenance/categories'
+import { MaintenanceCategoryIcon } from '../../components/icons/MaintenanceCategoryIcon'
 import { latestOutreachForContact, type ProviderOutreachRow } from '../../lib/maintenance/provider-outreach'
 import { sendProviderOutreach as postProviderOutreach, providerOutreachErrorMessage } from '../../lib/maintenance/provider-outreach-client'
 import { windowsForMaintenanceRequest, entryPreferenceForMaintenanceRequest, type AvailabilityWindow } from '../../lib/maintenance/availability'
@@ -110,7 +109,17 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [showHistory, setShowHistory] = useState(false)
+  // Simplification + Maintenance Workspace V2, Phase D.1: replaces the
+  // old separate "Needs attention" heading + "Show completed (N)"
+  // toggle with a compact filter row over the exact same already-
+  // computed active/sorted arrays below — no new query, no new
+  // derivation. 'My properties' (from the visual concept this phase is
+  // adapting) is meaningless here: RLS already scopes every case to
+  // the caller's own portfolio, so there is no OTHER set of properties
+  // to filter against — 'Urgent' is the genuinely useful third filter
+  // instead ("make it easy to see the maintenance cases the landlord
+  // needs to act on").
+  const [filter, setFilter] = useState<'attention' | 'all' | 'urgent'>('attention')
   const [openCaseId, setOpenCaseId] = useState<string | null>(null)
   const [showNewRequest, setShowNewRequest] = useState(false)
   const [newRequestError, setNewRequestError] = useState('')
@@ -178,8 +187,28 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
     const p = propertyById.get(propertyId)
     return p ? `${p.address}${p.city ? `, ${p.city}` : ''}` : 'Property'
   }
+  // Simplification + Maintenance Workspace V2, Phase D.2: a two-line
+  // address for the card list ("5558 Pats Point Dr" / "Winter Park, FL
+  // 32792") instead of propertyLabel()'s single comma-joined string,
+  // which wraps unpredictably on a narrow card. Presentation only —
+  // properties.address/city are unchanged, and this reads the exact
+  // same stored fields propertyLabel() already does (city already
+  // stores "City, State ZIP" as one field — see the Add Property
+  // form's own "City, state & ZIP" label). Still used only here;
+  // MaintenanceCaseDetail keeps propertyLabel()'s single-string prop.
+  const propertyAddressLines = (propertyId: string): { street: string; cityState: string | null } => {
+    const p = propertyById.get(propertyId)
+    if (!p) return { street: 'Property', cityState: null }
+    return { street: p.address, cityState: p.city || null }
+  }
 
-  const enriched = useMemo(() => enrichMaintenanceCases(cases, tenantRequests, intakeSessions), [cases, tenantRequests, intakeSessions])
+  // Simplification + Maintenance Workspace V2, Phase C: same reasoning
+  // as app/page.tsx's identical call — providerOutreach/appointments are
+  // already fetched portfolio-wide for this page's own display needs.
+  const enriched = useMemo(
+    () => enrichMaintenanceCases(cases, tenantRequests, intakeSessions, providerOutreach, appointments),
+    [cases, tenantRequests, intakeSessions, providerOutreach, appointments],
+  )
   const sorted = useMemo(() => sortCasesForCommandCenter(enriched), [enriched])
   const summary = useMemo(() => summarizeCommandCenter(enriched), [enriched])
   const active = sorted.filter((c) => c.active)
@@ -283,21 +312,28 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
     <main className="shell">
       <AuthHeader />
 
-      <section className="intro">
-        <p className="eyebrow">MAINTENANCE</p>
-        <h1>Maintenance Command Center</h1>
-        <p>Every active maintenance case across your portfolio, tenant- and landlord-reported alike, in one place.</p>
+      {/* Simplification + Maintenance Workspace V2, Phase D.2: "Maintenance,"
+          not "Maintenance Command Center" — product language a landlord
+          never needs. The explanatory paragraph is gone (the page is
+          understandable without it); a compact "N need attention · M
+          urgent" line replaces the old three-box stat grid, and "+ New
+          Request" is a small, secondary-styled action beside the
+          heading instead of a large primary button. Same
+          .maintenanceHubHead treatment as the promoted property-level
+          Maintenance tab — one visual language, not two. */}
+      <section className="intro maintenanceHubIntro">
+        <div className="maintenanceHubHead">
+          <h1>Maintenance</h1>
+          <button className="secondary" onClick={() => setShowNewRequest(true)}>+ New Request</button>
+        </div>
+        <p className="muted">
+          {summary.activeCount} need{summary.activeCount === 1 ? 's' : ''} attention
+          {summary.urgentCount > 0 ? ` · ${summary.urgentCount} urgent` : ''}
+          {summary.completedCount > 0 ? ` · ${summary.completedCount} completed` : ''}
+        </p>
       </section>
 
-      <div className="sectionHead workspaceHeading"><div /><button className="primary" onClick={() => setShowNewRequest(true)}>+ New Maintenance Request</button></div>
-
       {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
-
-      <div className="financialStats maintenanceSummaryStats">
-        <div className="financialStat"><span>Needs attention</span><strong>{summary.activeCount}</strong></div>
-        <div className="financialStat"><span>Urgent</span><strong>{summary.urgentCount}</strong></div>
-        <div className="financialStat"><span>Completed</span><strong>{summary.completedCount}</strong></div>
-      </div>
 
       {loading ? (
         <div className="emptyState"><strong>Loading…</strong></div>
@@ -305,31 +341,34 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
         <div className="emptyState"><strong>No maintenance requests yet.</strong><span>Requests your tenants submit through Tenant Connect, and any you log yourself, will show up here.</span></div>
       ) : (
         <>
-          <div className="sectionHead workspaceHeading"><div><h2>Needs attention</h2><p>{active.length} active case{active.length === 1 ? '' : 's'}.</p></div></div>
-          {active.length === 0 ? (
-            <div className="emptyState"><strong>Nothing needs attention right now.</strong></div>
-          ) : (
-            <div className="maintenanceCommandCenterList">
-              {active.map((c) => (
-                <MaintenanceCaseCard key={c.id} caseRow={c} propertyLabel={propertyLabel(c.property_id)} onOpen={() => setOpenCaseId(c.id)} />
-              ))}
-            </div>
-          )}
-
-          {history.length > 0 && (
-            <>
-              <button className="secondary maintenanceHistoryToggle" onClick={() => setShowHistory((s) => !s)}>
-                {showHistory ? 'Hide' : 'Show'} completed ({history.length})
-              </button>
-              {showHistory && (
-                <div className="maintenanceCommandCenterList maintenanceCommandCenterHistory">
-                  {history.map((c) => (
-                    <MaintenanceCaseCard key={c.id} caseRow={c} propertyLabel={propertyLabel(c.property_id)} onOpen={() => setOpenCaseId(c.id)} />
-                  ))}
+          {/* Phase D.2: each chip now shows a real count, read from the
+              same already-loaded/derived arrays the filter itself uses
+              (summary.activeCount/urgentCount, sorted.length) — no new
+              query. */}
+          <div className="maintenanceFilterRow" role="tablist" aria-label="Filter maintenance requests">
+            <button type="button" role="tab" aria-selected={filter === 'attention'} className={`maintenanceFilterChip${filter === 'attention' ? ' active' : ''}`} onClick={() => setFilter('attention')}>Needs attention ({summary.activeCount})</button>
+            <button type="button" role="tab" aria-selected={filter === 'all'} className={`maintenanceFilterChip${filter === 'all' ? ' active' : ''}`} onClick={() => setFilter('all')}>All requests ({sorted.length})</button>
+            {summary.urgentCount > 0 && (
+              <button type="button" role="tab" aria-selected={filter === 'urgent'} className={`maintenanceFilterChip${filter === 'urgent' ? ' active' : ''}`} onClick={() => setFilter('urgent')}>Urgent ({summary.urgentCount})</button>
+            )}
+          </div>
+          {(() => {
+            const filtered = filter === 'attention' ? active : filter === 'urgent' ? active.filter((c) => c.urgent) : sorted
+            if (filtered.length === 0) {
+              return (
+                <div className="emptyState">
+                  <strong>{filter === 'urgent' ? 'No urgent requests right now.' : 'Nothing needs attention right now.'}</strong>
                 </div>
-              )}
-            </>
-          )}
+              )
+            }
+            return (
+              <div className="maintenanceCommandCenterList">
+                {filtered.map((c) => (
+                  <MaintenanceCaseCard key={c.id} caseRow={c} address={propertyAddressLines(c.property_id)} onOpen={() => setOpenCaseId(c.id)} />
+                ))}
+              </div>
+            )
+          })()}
         </>
       )}
 
@@ -371,23 +410,48 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
   )
 }
 
-// Mobile-first card: readable, obvious urgency, obvious property
-// identity, large tap target (the whole card is the button), minimal
-// horizontal scroll (no wide table anywhere in this file).
-function MaintenanceCaseCard({ caseRow, propertyLabel, onOpen }: { caseRow: EnrichedMaintenanceCase; propertyLabel: string; onOpen: () => void }) {
+// Simplification + Maintenance Workspace V2, Phase D.2: refined further
+// toward the approved visual concept. Title is the only strong-weight
+// text now (dark, semibold) — the property address moved to a muted,
+// two-line presentation (street, then city/state/zip, when the
+// property has both — see propertyAddressLines() above) instead of a
+// single bold comma-joined string, and the status pill uses a quiet
+// neutral treatment unless the case is genuinely urgent (see
+// .maintenanceCommandCenterCardStatus in globals.css). A completed
+// case (caseRow.active === false, only reachable via the "All
+// requests" filter) gets a calm, reduced-opacity treatment — still
+// fully readable, never hidden. Mobile-first card: obvious urgency,
+// obvious property identity, large tap target (the whole card is the
+// button), minimal horizontal scroll (no wide table anywhere in this
+// file).
+function MaintenanceCaseCard({ caseRow, address, onOpen }: {
+  caseRow: EnrichedMaintenanceCase
+  address: { street: string; cityState: string | null }
+  onOpen: () => void
+}) {
+  const classNames = [
+    'maintenanceCommandCenterCard',
+    caseRow.urgent ? 'maintenanceCommandCenterCardUrgent' : '',
+    !caseRow.active ? 'maintenanceCommandCenterCardCompleted' : '',
+  ].filter(Boolean).join(' ')
   return (
-    <button className={`maintenanceCommandCenterCard${caseRow.urgent ? ' maintenanceCommandCenterCardUrgent' : ''}`} onClick={onOpen}>
-      <div className="maintenanceCommandCenterCardTop">
-        {showsDedicatedUrgentBadge(caseRow, caseRow.urgent) && <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>}
-        <span className={`statusPill priority${caseRow.priority}`}>{caseRow.priority}</span>
-        <span className={`statusPill ${caseRow.source === 'tenant' ? 'tenantSourceBadge' : 'landlordSourceBadge'}`}>{caseRow.source === 'tenant' ? 'Tenant' : 'Landlord'}</span>
-      </div>
-      <strong className="maintenanceCommandCenterCardProperty">{propertyLabel}</strong>
-      <span className="maintenanceCommandCenterCardTitle">{caseRow.title}</span>
-      <span className="muted maintenanceCommandCenterCardMeta">
-        {caseRow.category ? `${maintenanceCategoryLabel(caseRow.category)} · ` : ''}{new Date(caseRow.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+    <button className={classNames} onClick={onOpen}>
+      <MaintenanceCategoryIcon category={caseRow.category} className="maintenanceCommandCenterCardIcon" />
+      <span className="maintenanceCommandCenterCardBody">
+        <span className="maintenanceCommandCenterCardTitle">{caseRow.title}</span>
+        <span className="maintenanceCommandCenterCardAddress">
+          {address.street}
+          {address.cityState && <span className="maintenanceCommandCenterCardAddressCityState">{address.cityState}</span>}
+        </span>
+        <span className="maintenanceCommandCenterCardMeta">
+          Opened {new Date(caseRow.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} &middot; {caseRow.source === 'tenant' ? 'Tenant' : 'Landlord'}
+        </span>
       </span>
-      <span className="muted maintenanceCommandCenterCardNext">{NEXT_ACTION_LABEL[caseRow.nextAction]}</span>
+      {showsDedicatedUrgentBadge(caseRow, caseRow.urgent) ? (
+        <span className="statusPill pillBad maintenanceUrgentBadge">Urgent</span>
+      ) : (
+        <span className="statusPill maintenanceCommandCenterCardStatus">{caseRow.status}</span>
+      )}
     </button>
   )
 }

@@ -52,18 +52,22 @@ describe('tenantDisplayName', () => {
   })
 })
 
-describe('tenantConnectStatusLabel (Tenant Connect V1)', () => {
-  it('maps null (no access row) to "Not invited"', () => {
-    expect(tenantConnectStatusLabel(null)).toBe('Not invited')
+// Simplification + Maintenance Workspace V2, Phase D.3: three
+// landlord-facing labels, not four (Revoked now reads the same as
+// null — "Not connected" — since what matters to the landlord is
+// whether the tenant currently has access, not why they don't).
+describe('tenantConnectStatusLabel (Tenant Connect V1, Phase D.3 labels)', () => {
+  it('maps null (no access row) to "Not connected"', () => {
+    expect(tenantConnectStatusLabel(null)).toBe('Not connected')
   })
-  it('maps Invited to "Invitation pending"', () => {
-    expect(tenantConnectStatusLabel('Invited')).toBe('Invitation pending')
+  it('maps Invited to "Invited"', () => {
+    expect(tenantConnectStatusLabel('Invited')).toBe('Invited')
   })
   it('maps Active to "Connected"', () => {
     expect(tenantConnectStatusLabel('Active')).toBe('Connected')
   })
-  it('maps Revoked to "Access ended"', () => {
-    expect(tenantConnectStatusLabel('Revoked')).toBe('Access ended')
+  it('maps Revoked to "Not connected" — same as never invited, not a fourth distinct label', () => {
+    expect(tenantConnectStatusLabel('Revoked')).toBe('Not connected')
   })
 })
 

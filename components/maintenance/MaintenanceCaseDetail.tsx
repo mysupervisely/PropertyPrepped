@@ -1,58 +1,101 @@
 'use client'
 
-// PropRoster — Tenant Connect + Maintenance Coordination, M3: Landlord
-// Maintenance Command Center V1.
+// PropRoster — Simplification + Maintenance Workspace V2, Phase C.
 //
-// The shared "open a case, see everything, act on it" detail/actions
-// modal — mounted from BOTH the new portfolio-wide Command Center
-// (app/maintenance/page.tsx) and the existing property-level
-// Maintenance requests list (app/page.tsx's Rent > Tenant tab), so
-// there is exactly one detail/actions experience, not two competing
-// ones. Deliberately a "dumb" component: every write goes through a
-// caller-supplied callback (onAssign/onStatusChange) — this file never
-// touches Supabase directly, so both call sites keep using their own
-// already-established loadPortfolio()/reload pattern afterward.
+// The shared "open a case, see everything, act on it" workspace —
+// mounted from BOTH the portfolio-wide Command Center
+// (app/maintenance/page.tsx) and the property-level Maintenance hub
+// (app/page.tsx's Details > Maintenance), so there is exactly one
+// detail/actions experience, not two competing ones. Still a "dumb"
+// component: every write goes through a caller-supplied callback
+// (onAssign/onStatusChange/onSendOutreach/onConfirmAppointment/
+// onDeclineAppointment) — this file never touches Supabase directly.
 //
-// SCOPE (M3 only — see this milestone's own brief):
-// - Overview: property, source, category (tenant-sourced only),
-//   tenant name/email, the case's own `description` (for a
-//   tenant-sourced case this IS the full structured Guided Intake
-//   summary — GuidedIntake.tsx builds it via buildSummary() and it is
-//   copied verbatim onto this row by the M1.1 trigger; nothing here
-//   re-fetches or re-renders raw maintenance_intake_answers rows).
-// - Safety/urgency: a prominent, non-dismissible banner when `urgent`
-//   is true — never a control the landlord can toggle here. Urgency
-//   itself is decided entirely upstream (Guided Intake's deterministic
-//   safety logic, or the case's own landlord-set Urgent priority) and
-//   is read-only in this component, by design — this UI cannot
-//   override or downgrade a safety classification.
-// - PropCrew assignment: assign/change/remove ONLY — records the
-//   landlord's decision on assigned_contact_id. Never sends a message,
-//   never exposes tenant info to the provider, never implies
-//   acceptance/scheduling (see this milestone's own explicit "do NOT"
-//   list).
-// - Status: the pre-existing four-value canonical status model only
-//   (Submitted/Scheduled/In Progress/Completed) — no new status value.
-//   "Mark Completed" is a one-tap fast path to the same status change
-//   the select below can also make.
+// PRODUCT PRINCIPLE (this phase's own brief): ONE REQUEST. ONE
+// WORKSPACE. ONE OBVIOUS NEXT ACTION. Rather than showing every field
+// at once (M3's original flat layout), this now leads with a single
+// "next step" card driven entirely by caseRow.nextAction — a derived
+// value (lib/maintenance/command-center.ts's nextActionFor(), extended
+// this phase to understand the full outreach/appointment lifecycle,
+// not just "assigned or not"). No new schema, no new persisted state:
+// every state below is read from columns that already existed before
+// this phase (maintenance_requests.status/assigned_contact_id,
+// maintenance_provider_outreach.status,
+// maintenance_appointments.status).
 //
-// KNOWN GAP (documented, not implemented — see this milestone's own
-// completion report and docs/tenant-connect-m3-landlord-command-
-// center.md): "Mark Needs More Information" and a landlord-only
-// internal note both have no home in the current schema. Neither
-// button/field exists here. Do not add either without the smallest-
-// compatible migration documented there being reviewed and applied
-// first.
+// Lower-priority information (the full request description/tenant
+// intake, provider outreach history, manual status override) moves
+// behind native <details>/<summary> progressive disclosure — plain
+// HTML, keyboard-accessible and discoverable by default, no new
+// interaction pattern to build or test. Safety information (the urgent
+// banner) and essential coordination info (tenant availability, entry
+// preference) are NEVER collapsed — they render exactly where M3/
+// Scheduling Coordination V1 already placed them, still before the
+// provider section, unchanged in content.
+//
+// PHASE C.1 — VISUAL SIMPLIFICATION: real-device testing after Phase C
+// found the workflow logic correct but visually indistinguishable from
+// the pre-Phase-C layout. This pass recomposes the screen rather than
+// tuning font sizes: a short static "Maintenance" eyebrow (not the
+// property name) leads, the issue title is the loudest text on the
+// screen, property/reporter/date collapse into one quiet two-line
+// block, the priority/source/category pill row is gone entirely (the
+// same information now lives as plain text or is simply not shown at
+// this depth), the Next Step card gets a second, quieter visual state
+// for "nothing is actually being asked of the landlord right now"
+// (awaiting_provider/awaiting_proposal/scheduled/completed), the
+// coordination info (tenant availability/entry preference) is one
+// compact two-row block instead of a bulleted list, and the three
+// progressive-disclosure sections read as plain rows with a
+// trailing chevron rather than bordered sub-cards. No workflow/state
+// logic changed here — see command-center.ts's own history for that.
+//
+// SCOPE UNCHANGED FROM EARLIER MILESTONES (see their own history for
+// the full reasoning, none of it revisited here):
+// - Assigning a provider never contacts them — Contact PropCrew stays
+//   an explicit, confirmed landlord action (Tenant Connect: Provider
+//   Outreach V1, Section 1).
+// - A provider's proposed time never auto-confirms — Confirm/Decline
+//   stay explicit landlord actions (Scheduling Coordination V1,
+//   Section 7).
+// - Urgency is decided entirely upstream (deterministic Guided Intake
+//   safety rules, or the case's own landlord-set Urgent priority) and
+//   is read-only here — this UI cannot override or downgrade it.
+// - The four-value canonical status model (Submitted/Scheduled/In
+//   Progress/Completed) is unchanged — no new status value.
+//
+// KNOWN LIMITATION (documented, not solved here — see this phase's own
+// completion report): when a provider marks "I Need More Information,"
+// there is no landlord-reply/chat mechanism in the current
+// architecture — Section 5 of Provider Outreach V1 deliberately built
+// exactly three provider actions and no message thread. The safest
+// EXISTING action is offered instead: "Contact again," which re-sends
+// the same outreach email (a fresh, explicit, confirmed send, logged
+// as its own row) — not a targeted reply to the provider's specific
+// question. A real two-way reply thread is out of scope for this
+// phase (the brief's own "do not build Service Thread").
+//
+// COPY: no em dashes in any user-facing string in this file (a new
+// site-wide requirement introduced in Phase C.1 — see this phase's own
+// report for the full site-wide-audit follow-up this implies for the
+// rest of the app, not performed here).
 
 import { useState } from 'react'
 import type { EnrichedMaintenanceCase, MaintenanceCaseStatus, PropCrewContactRef } from '../../lib/maintenance/command-center'
 import { maintenanceCategoryLabel } from '../../lib/maintenance/categories'
-import { NEXT_ACTION_LABEL } from '../../lib/maintenance/command-center'
 import { PROVIDER_OUTREACH_STATUS_LABEL, type ProviderOutreachRow } from '../../lib/maintenance/provider-outreach'
 import { groupWindowsByDate, WINDOW_LABEL_RANGE, ENTRY_PREFERENCE_LABEL, formatAppointmentDateTime, type AvailabilityWindow, type EntryPreference } from '../../lib/maintenance/availability'
 import type { AppointmentRow } from '../../lib/maintenance/appointments'
 
 const STATUSES: MaintenanceCaseStatus[] = ['Submitted', 'Scheduled', 'In Progress', 'Completed']
+
+// Next Step states where nothing is actually being asked of the
+// landlord right now — these render the card in its quieter visual
+// state (see .maintenanceNextStepQuiet) instead of the brand-tinted
+// "this needs you" treatment. Kept as a plain string list (not the
+// NextAction type) so this file doesn't need to import it just for
+// this one comparison.
+const CALM_NEXT_ACTIONS = ['awaiting_provider', 'awaiting_proposal', 'scheduled', 'completed']
 
 export function MaintenanceCaseDetail({
   caseRow, propertyLabel, contacts, busy, statusUpdateMessage, onAssign, onStatusChange, onClose,
@@ -63,35 +106,14 @@ export function MaintenanceCaseDetail({
   propertyLabel: string
   contacts: PropCrewContactRef[]
   busy: boolean
-  // Bug fix (real-device iPhone testing, M3.1 follow-up): a brief,
-  // caller-owned confirmation string ("Status updated.") shown right
-  // after a status change, so the landlord sees feedback without
-  // needing to close this modal or reload. Purely a display prop —
-  // still a "dumb" component: the caller (app/page.tsx or
-  // app/maintenance/page.tsx) owns setting and clearing it.
   statusUpdateMessage?: string
   onAssign: (contactId: string | null) => void
   onStatusChange: (status: MaintenanceCaseStatus) => void
   onClose: () => void
-  // Tenant Connect: Provider Outreach V1 — the most recent outreach row
-  // for the CURRENTLY assigned contact (null when never contacted), so
-  // this component just renders it (Section 6); the actual send still
-  // goes through onSendOutreach() — the caller's own page-level
-  // handler does the real POST to /api/maintenance/provider-outreach/send,
-  // matching the same "dumb component, write via callback" contract
-  // onAssign/onStatusChange already use. This component owns only the
-  // LOCAL confirm-dialog UI state below, never the write itself.
   outreach?: ProviderOutreachRow | null
   outreachBusy?: boolean
   outreachError?: string
   onSendOutreach?: () => void
-  // Scheduling Coordination V1 — availability/entry preference are
-  // read-only here (Section 4: the tenant supplied them; nothing in
-  // this component ever edits or invents them). `appointment` is the
-  // latest proposal for the CURRENTLY relevant outreach (null until a
-  // provider proposes one) — confirm/decline still go through
-  // caller-supplied callbacks, same "dumb component" contract as
-  // onAssign/onSendOutreach.
   availabilityWindows?: AvailabilityWindow[]
   entryPreference?: EntryPreference | null
   appointment?: AppointmentRow | null
@@ -102,179 +124,283 @@ export function MaintenanceCaseDetail({
 }) {
   const assignedContact = contacts.find((c) => c.id === caseRow.assigned_contact_id) || null
   const [showContactConfirm, setShowContactConfirm] = useState(false)
+  const hasAvailability = Boolean(availabilityWindows && availabilityWindows.length > 0)
+  const providerName = assignedContact ? `${assignedContact.name}${assignedContact.business_name ? ` · ${assignedContact.business_name}` : ''}` : ''
+  const shortDate = new Date(caseRow.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  const nextStepNeedsAttention = !CALM_NEXT_ACTIONS.includes(caseRow.nextAction)
+
+  // The one assignment control, rendered in exactly one place per
+  // render: prominently in the Next Step card when picking/re-picking
+  // a provider IS the next step (assign_provider/provider_declined),
+  // otherwise as the quieter "Change provider" control inside the
+  // collapsed Provider section. Same element, same handler, either
+  // way — reassignment and initial assignment have always been one
+  // write path, not a special case.
+  const assignField = (
+    <label className="maintenanceAssignField">
+      <span>{caseRow.assigned_contact_id ? 'Change provider' : 'Assigned PropCrew contact'}</span>
+      <select
+        aria-label="Assigned PropCrew contact"
+        value={caseRow.assigned_contact_id || ''}
+        disabled={busy}
+        onChange={(e) => onAssign(e.target.value || null)}
+      >
+        <option value="">Unassigned</option>
+        {contacts.map((c) => <option key={c.id} value={c.id}>{c.name}{c.business_name ? ` (${c.business_name})` : ''} · {c.role}</option>)}
+      </select>
+    </label>
+  )
+  const noContactsNote = !contacts.length && <p className="muted maintenanceAssignedNote">No PropCrew contacts for this property yet. Add one from PropCrew.</p>
+
+  // The one "Contact PropCrew" trigger + its guard (no email on file /
+  // duplicate-send protection) — reused for both a first contact and a
+  // needs_information "contact again," since both are the exact same
+  // explicit, confirmed send.
+  const contactAction = assignedContact && (
+    assignedContact.email ? (
+      (!outreach || outreach.status !== 'sent') && (
+        <button type="button" className="primary" disabled={busy || outreachBusy} onClick={() => setShowContactConfirm(true)}>
+          {outreach ? `Contact ${assignedContact.name} again` : `Contact ${assignedContact.name}`}
+        </button>
+      )
+    ) : (
+      <p className="muted maintenanceOutreachStatus">Add an email address for {assignedContact.name} in PropCrew to contact them through PropRoster.</p>
+    )
+  )
+
+  function renderNextStep() {
+    switch (caseRow.nextAction) {
+      case 'assign_provider':
+        return (
+          <>
+            <p className="maintenanceNextStepHeading">Assign a provider</p>
+            {assignField}
+            {noContactsNote}
+          </>
+        )
+      case 'contact_provider':
+        if (!assignedContact) return <p className="maintenanceNextStepHeading">Assign a provider</p>
+        return (
+          <>
+            <p className="maintenanceNextStepHeading">{providerName}</p>
+            <p className="muted">{assignedContact.name} has not been notified or contacted.</p>
+            {contactAction}
+          </>
+        )
+      case 'awaiting_provider':
+        return (
+          <>
+            <p className="maintenanceNextStepHeading">Waiting for {assignedContact?.name || 'the provider'}</p>
+            {outreach && <p className="muted">Contacted {new Date(outreach.sent_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</p>}
+          </>
+        )
+      case 'provider_declined':
+        return (
+          <>
+            <p className="maintenanceNextStepHeading">Choose another provider</p>
+            <p className="muted">{providerName} can&rsquo;t help with this.</p>
+            {assignField}
+          </>
+        )
+      case 'needs_information':
+        return (
+          <>
+            <p className="maintenanceNextStepHeading">{providerName} needs more information</p>
+            {outreach?.provider_message && <p className="maintenanceProviderQuestion">&quot;{outreach.provider_message}&quot;</p>}
+            {/* Known limitation — see this file's own header. No reply
+                thread exists; the safest existing action is a fresh,
+                explicit re-send, not a targeted answer. */}
+            <p className="muted">Can&rsquo;t reply directly here. Contact again to resend.</p>
+            {contactAction}
+          </>
+        )
+      case 'awaiting_proposal':
+        return (
+          <>
+            <p className="maintenanceNextStepHeading">{assignedContact?.name || 'Provider'} accepted</p>
+            <p className="muted">Waiting for a proposed time.</p>
+          </>
+        )
+      case 'confirm_or_decline':
+        if (!appointment) return null
+        return (
+          <>
+            <p className="maintenanceNextStepHeading">{providerName} can come</p>
+            <p className="maintenanceNextStepAppointment">{formatAppointmentDateTime(appointment.proposed_local_start_at)}</p>
+            {hasAvailability && (
+              appointment.matched_availability
+                ? <span className="statusPill pillGood">Matches tenant availability</span>
+                : <span className="statusPill pillBad">Outside the tenant&apos;s provided availability</span>
+            )}
+            {appointmentError && <p className="errorMessage">{appointmentError}</p>}
+            <div className="modalActions">
+              <button type="button" className="secondary" disabled={appointmentBusy} onClick={onDeclineAppointment}>Decline / Request Another Time</button>
+              <button type="button" className="primary" disabled={appointmentBusy} onClick={onConfirmAppointment}>{appointmentBusy ? 'Confirming…' : 'Confirm Appointment'}</button>
+            </div>
+          </>
+        )
+      case 'scheduled':
+        return (
+          <>
+            <p className="maintenanceNextStepHeading">Scheduled</p>
+            {appointment && (
+              <p className="maintenanceNextStepAppointment maintenanceAppointmentConfirmed">
+                {formatAppointmentDateTime(appointment.proposed_local_start_at)}
+                <br />{providerName}
+              </p>
+            )}
+          </>
+        )
+      case 'in_progress':
+        return (
+          <>
+            <p className="maintenanceNextStepHeading">In progress</p>
+            <button type="button" className="primary maintenanceMarkCompleted" disabled={busy} onClick={() => onStatusChange('Completed')}>Mark Completed</button>
+          </>
+        )
+      case 'completed':
+        return <p className="maintenanceNextStepHeading">Completed</p>
+      default:
+        return null
+    }
+  }
 
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal maintenanceCaseDetailModal">
         <div className="modalTop">
           <div>
-            <p className="eyebrow">{propertyLabel}</p>
+            <p className="eyebrow">Maintenance</p>
             <h2>{caseRow.title}</h2>
           </div>
           <button className="iconButton" onClick={onClose} aria-label="Close">×</button>
         </div>
 
+        <div className="maintenanceCaseMeta">
+          <p>{propertyLabel}</p>
+          <p>{caseRow.category ? `${maintenanceCategoryLabel(caseRow.category)} · ` : ''}{caseRow.tenant_name} · {shortDate}</p>
+        </div>
+
         {caseRow.urgent && (
           <div className="maintenanceUrgentBanner" role="alert">
-            <strong>Urgent — safety concern reported.</strong>
-            <span>This classification is set automatically by deterministic Guided Intake safety rules and cannot be changed here.</span>
+            <strong>Urgent: safety concern reported.</strong>
+            <span>Set automatically by Guided Intake safety rules and cannot be changed here.</span>
           </div>
         )}
 
-        <div className="maintenanceCaseMeta">
-          <span className={`statusPill priority${caseRow.priority}`}>{caseRow.priority}</span>
-          <span className={`statusPill ${caseRow.source === 'tenant' ? 'tenantSourceBadge' : 'landlordSourceBadge'}`}>{caseRow.source === 'tenant' ? 'Tenant' : 'Landlord'}</span>
-          {caseRow.category && <span className="statusPill maintenanceCategoryBadge">{maintenanceCategoryLabel(caseRow.category)}</span>}
-          <span className="muted">{new Date(caseRow.created_at).toLocaleString()}</span>
+        {/* B. NEXT STEP — the single strongest visual area, driven
+            entirely by caseRow.nextAction. Never more than one
+            primary/dominant action at a time. A quieter visual variant
+            (.maintenanceNextStepQuiet) applies for the states where
+            nothing is actually being asked of the landlord. */}
+        <div className={`maintenanceNextStepCard${nextStepNeedsAttention ? '' : ' maintenanceNextStepQuiet'}`}>
+          <p className="maintenanceNextStepLabel">Next step</p>
+          {renderNextStep()}
         </div>
+        {statusUpdateMessage && <p className="maintenanceStatusUpdateNotice" role="status">{statusUpdateMessage}</p>}
 
-        <div className="maintenanceCaseOverview">
-          <p><strong>{caseRow.tenant_name}</strong>{caseRow.tenant_email ? ` · ${caseRow.tenant_email}` : ''}</p>
-          {caseRow.description && <pre className="maintenanceCaseDescription">{caseRow.description}</pre>}
-        </div>
-
-        {/* Scheduling Coordination V1 (Section 4) — shown before the
-            PropCrew section below, so the landlord sees this BEFORE
-            deciding to contact a provider, per this milestone's own
-            ordering. A landlord-created case (no linked tenant_requests
-            row) or a tenant who skipped this shows the same neutral
-            "not provided" state — outreach is never blocked on it
-            either way (Section 4: "do not block provider outreach
-            solely because availability is missing"). */}
+        {/* C. Essential coordination info — tenant availability/entry
+            preference. Never collapsed: Scheduling Coordination V1's
+            own requirement is that this is visible BEFORE deciding to
+            contact a provider, and it never authorizes entry by
+            itself. Same position/content as before this phase, now a
+            compact label/value block instead of a bulleted list. */}
         <div className="maintenanceAvailabilitySection">
-          <span className="maintenanceAssignFieldLabel">Tenant Availability</span>
-          {availabilityWindows && availabilityWindows.length > 0 ? (
-            <ul className="maintenanceAvailabilityList">
-              {groupWindowsByDate(availabilityWindows).map((g) => (
-                <li key={g.date}>
-                  <strong>{new Date(`${g.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</strong>
-                  <span className="muted">{g.labels.map((l) => WINDOW_LABEL_RANGE[l].display).join(', ')}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="muted">Tenant availability not provided.</p>
-          )}
-          {entryPreference && <p className="muted maintenanceEntryPreference">Entry preference: {ENTRY_PREFERENCE_LABEL[entryPreference]}</p>}
-        </div>
-
-        <div className="maintenanceCaseActionArea">
-          <label className="maintenanceAssignField">
-            <span>Assigned PropCrew contact</span>
-            <select
-              aria-label="Assigned PropCrew contact"
-              value={caseRow.assigned_contact_id || ''}
-              disabled={busy}
-              onChange={(e) => onAssign(e.target.value || null)}
-            >
-              <option value="">Unassigned</option>
-              {contacts.map((c) => <option key={c.id} value={c.id}>{c.name}{c.business_name ? ` (${c.business_name})` : ''} · {c.role}</option>)}
-            </select>
-          </label>
-          {assignedContact && !outreach && <p className="muted maintenanceAssignedNote">Recorded as your decision only — {assignedContact.name} has not been notified or contacted.</p>}
-          {!contacts.length && <p className="muted maintenanceAssignedNote">No PropCrew contacts for this property yet. Add one from PropCrew.</p>}
-
-          {/* Tenant Connect: Provider Outreach V1 (Section 1/6) — only
-              ever offered when the assigned contact actually has an
-              email on file; never automatic just because a contact was
-              assigned (Section 1's own explicit instruction). */}
-          {assignedContact && (
-            <div className="providerOutreachSection">
-              <span className="maintenanceAssignFieldLabel">PropCrew</span>
-              {outreach ? (
-                <p className="muted maintenanceOutreachStatus">
-                  <strong>{assignedContact.name}{assignedContact.business_name ? ` – ${assignedContact.business_name}` : ''}</strong>
-                  <br />
-                  {outreach.status === 'sent' ? (
-                    <>Request sent<br />{new Date(outreach.sent_at).toLocaleString()}</>
-                  ) : (
-                    <strong>{PROVIDER_OUTREACH_STATUS_LABEL[outreach.status]}</strong>
-                  )}
-                  {outreach.status === 'needs_information' && outreach.provider_message && (
-                    <><br /><em>&quot;{outreach.provider_message}&quot;</em></>
-                  )}
-                </p>
-              ) : null}
-              {outreachError && <p className="errorMessage">{outreachError}</p>}
-
-              {/* Scheduling Coordination V1 (Section 7) — a proposal is
-                  never auto-confirmed; landlord must explicitly confirm
-                  or decline. Once confirmed, this becomes the read-only
-                  "Scheduled" display and the Confirm/Decline buttons
-                  disappear (there is nothing left to decide). */}
-              {appointment && appointment.status === 'proposed' && (
-                <div className="maintenanceAppointmentProposal">
-                  <p className="muted maintenanceOutreachStatus">
-                    <strong>Proposed appointment</strong><br />
-                    {formatAppointmentDateTime(appointment.proposed_local_start_at)}
-                    {/* Bug fix (real-device testing, PR #60): matched_availability is
-                        stored false both when a proposal is genuinely outside the
-                        tenant's windows AND when the tenant never provided any
-                        availability at all (matchProposedTime() returns false for an
-                        empty window list — see its own doc comment). Showing "Outside
-                        the tenant's provided availability" in the second case is
-                        logically backwards — there was nothing to be outside of. Only
-                        render either badge when real availability windows exist; when
-                        none were provided, the "Tenant availability not provided."
-                        line already shown above is sufficient — omit rather than
-                        repeat it here. */}
-                    {availabilityWindows && availabilityWindows.length > 0 && (
-                      appointment.matched_availability
-                        ? <><br /><span className="statusPill pillGood">Matches tenant availability</span></>
-                        : <><br /><span className="statusPill pillBad">Outside the tenant&apos;s provided availability</span></>
-                    )}
-                  </p>
-                  {appointmentError && <p className="errorMessage">{appointmentError}</p>}
-                  <div className="modalActions">
-                    <button type="button" className="secondary" disabled={appointmentBusy} onClick={onDeclineAppointment}>Decline / Request Another Time</button>
-                    <button type="button" className="primary" disabled={appointmentBusy} onClick={onConfirmAppointment}>{appointmentBusy ? 'Confirming…' : 'Confirm Appointment'}</button>
-                  </div>
-                </div>
-              )}
-              {appointment && appointment.status === 'confirmed' && (
-                <p className="muted maintenanceOutreachStatus maintenanceAppointmentConfirmed">
-                  <strong>Scheduled</strong><br />
-                  {formatAppointmentDateTime(appointment.proposed_local_start_at)}
-                  <br />{assignedContact.name}{assignedContact.business_name ? ` – ${assignedContact.business_name}` : ''}
-                </p>
-              )}
-              {assignedContact.email ? (
-                (!outreach || outreach.status !== 'sent') && (
-                  <button type="button" className="secondary" disabled={busy || outreachBusy} onClick={() => setShowContactConfirm(true)}>Contact PropCrew</button>
-                )
-              ) : (
-                <p className="muted maintenanceOutreachStatus">Add an email address for {assignedContact.name} in PropCrew to contact them through PropRoster.</p>
-              )}
+          <div className="maintenanceCoordinationRow">
+            <span className="maintenanceCoordinationLabel">Tenant availability</span>
+            {availabilityWindows && availabilityWindows.length > 0 ? (
+              <span className="maintenanceCoordinationValue">
+                {groupWindowsByDate(availabilityWindows).map((g, i) => (
+                  <span key={g.date}>
+                    {i > 0 ? ', ' : ''}
+                    {new Date(`${g.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short' })} {g.labels.map((l) => WINDOW_LABEL_RANGE[l].display).join('/')}
+                  </span>
+                ))}
+              </span>
+            ) : (
+              <span className="muted maintenanceCoordinationValue">Tenant availability not provided.</span>
+            )}
+          </div>
+          {entryPreference && (
+            <div className="maintenanceCoordinationRow">
+              <span className="maintenanceCoordinationLabel">Entry preference</span>
+              <span className="maintenanceCoordinationValue">{ENTRY_PREFERENCE_LABEL[entryPreference]}</span>
             </div>
           )}
-
-          <label className="maintenanceStatusField">
-            <span>Status</span>
-            <select aria-label="Case status" value={caseRow.status} disabled={busy} onChange={(e) => onStatusChange(e.target.value as MaintenanceCaseStatus)}>
-              {STATUSES.map((s) => <option key={s}>{s}</option>)}
-            </select>
-          </label>
-          {statusUpdateMessage && <p className="maintenanceStatusUpdateNotice" role="status">{statusUpdateMessage}</p>}
-          <p className="muted maintenanceNextAction">Next: {NEXT_ACTION_LABEL[caseRow.nextAction]}</p>
-
-          {caseRow.status !== 'Completed' && (
-            <button className="primary maintenanceMarkCompleted" disabled={busy} onClick={() => onStatusChange('Completed')}>Mark Completed</button>
-          )}
+          <p className="maintenanceCoordinationNote">Availability doesn&rsquo;t authorize entry.</p>
         </div>
+
+        {/* D. Progressive disclosure — lower-priority information the
+            landlord can open when needed, never competing with the
+            Next Step card above. Native <details>: keyboard-accessible
+            and discoverable by default, no new interaction pattern. */}
+        <details className="maintenanceDetailsSection">
+          <summary>Request details</summary>
+          <div className="maintenanceCaseOverview">
+            <p><strong>{caseRow.tenant_name}</strong>{caseRow.tenant_email ? ` · ${caseRow.tenant_email}` : ''}</p>
+            {caseRow.description && <pre className="maintenanceCaseDescription">{caseRow.description}</pre>}
+          </div>
+        </details>
+
+        <details className="maintenanceDetailsSection">
+          <summary>Provider</summary>
+          <div className="providerOutreachSection">
+            {assignedContact ? (
+              <>
+                <div>
+                  <p className="maintenanceProviderRowName">{assignedContact.name}</p>
+                  {(assignedContact.business_name || assignedContact.role) && (
+                    <p className="muted maintenanceProviderRowSub">{assignedContact.business_name}{assignedContact.business_name && assignedContact.role ? ' · ' : ''}{assignedContact.role}</p>
+                  )}
+                </div>
+                {outreach && (
+                  <p className="muted maintenanceOutreachStatus">
+                    {outreach.status === 'sent' ? <>Request sent {new Date(outreach.sent_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</> : <strong>{PROVIDER_OUTREACH_STATUS_LABEL[outreach.status]}</strong>}
+                    {outreach.status === 'needs_information' && outreach.provider_message && <><br /><em>&quot;{outreach.provider_message}&quot;</em></>}
+                  </p>
+                )}
+                {outreachError && <p className="errorMessage">{outreachError}</p>}
+                {/* The action itself already renders prominently in the
+                    Next Step card for contact_provider/needs_information —
+                    only offer it again here (quietly) for the states
+                    where it isn't already the headline action (e.g. the
+                    landlord wants to reach out again after acceptance). */}
+                {caseRow.nextAction !== 'contact_provider' && caseRow.nextAction !== 'needs_information' && contactAction}
+              </>
+            ) : (
+              <p className="muted maintenanceAssignedNote">No provider assigned yet.</p>
+            )}
+            {caseRow.nextAction !== 'assign_provider' && caseRow.nextAction !== 'provider_declined' && (
+              <>
+                {assignField}
+                {noContactsNote}
+              </>
+            )}
+          </div>
+        </details>
+
+        <details className="maintenanceDetailsSection">
+          <summary>Advanced</summary>
+          <div className="maintenanceCaseActionArea">
+            <label className="maintenanceStatusField">
+              <span>Status</span>
+              <select aria-label="Case status" value={caseRow.status} disabled={busy} onChange={(e) => onStatusChange(e.target.value as MaintenanceCaseStatus)}>
+                {STATUSES.map((s) => <option key={s}>{s}</option>)}
+              </select>
+            </label>
+            {caseRow.status !== 'Completed' && (
+              <button className="secondary maintenanceMarkCompleted" disabled={busy} onClick={() => onStatusChange('Completed')}>Mark Completed</button>
+            )}
+          </div>
+        </details>
       </div>
 
-      {/* Section 1's own example confirmation, verbatim structure —
-          landlord authorization is required before any email goes out;
-          this is the one and only place onSendOutreach() is ever
-          called. Stacks on top of the modal above it (later in DOM
-          order, same .overlay/.modal pattern already used elsewhere in
-          this app for a nested confirm). */}
       {showContactConfirm && assignedContact && (
         <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowContactConfirm(false)}>
           <div className="modal">
             <div className="modalTop"><h2>Contact {assignedContact.name}{assignedContact.business_name ? ` at ${assignedContact.business_name}` : ''}?</h2><button className="iconButton" onClick={() => setShowContactConfirm(false)}>×</button></div>
             <p>PropRoster will send the maintenance request to {assignedContact.name} so they can review and respond.</p>
-            <div className="maintenanceCaseMeta">
+            <div className="maintenanceContactConfirmMeta">
               <span className="muted">{propertyLabel}</span>
               <span className="muted">{caseRow.title}</span>
               <span className="muted">{assignedContact.email}</span>

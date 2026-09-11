@@ -20,17 +20,29 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { notifyTenantConnect } from '../../lib/tenant-connect/notify-client'
 import { TENANT_REQUEST_STATUSES, type TenantRequest, type TenantRequestStatus } from '../../lib/tenant-connect/types'
 import type { PropertyMessage } from '../../lib/tenant-connect/types'
+import { MaintenanceCategoryIcon } from '../icons/MaintenanceCategoryIcon'
 import { maintenanceCategoryLabel } from '../../lib/maintenance/categories'
 
 type AccessRef = { id: string; tenant_email: string }
 
 export function TenantRequestsPanel({
-  supabase, propertyId, ownerId, tenantConnectEnabled,
+  supabase, propertyId, ownerId, tenantConnectEnabled, onOpenInMaintenance,
 }: {
   supabase: SupabaseClient
   propertyId: string
   ownerId: string
   tenantConnectEnabled: boolean
+  // Simplification + Maintenance Workspace V2, Phase D.3: this page is
+  // not the canonical maintenance-management workspace, and every
+  // tenant_requests row already carries a guaranteed link to its
+  // canonical case (tenant_requests_create_maintenance_case() sets
+  // maintenance_request_id before the row is ever visible — see
+  // lib/tenant-connect/types.ts's own comment on that column). The
+  // landlord's own conversation thread with the tenant stays here
+  // (a genuinely separate, still-live feature), but this optional
+  // callback gives a one-tap path into the real workspace instead of
+  // asking the landlord to remember "Details > Maintenance."
+  onOpenInMaintenance?: (maintenanceRequestId: string) => void
 }) {
   const [requests, setRequests] = useState<TenantRequest[]>([])
   const [accessById, setAccessById] = useState<Map<string, AccessRef>>(new Map())
@@ -140,25 +152,26 @@ export function TenantRequestsPanel({
 
   return (
     <div className="tenantRequestsPanel">
-      <div className="sectionHead workspaceHeading"><div><p className="eyebrow">TENANT CONNECT</p><h3>Requests</h3></div></div>
+      <div className="maintenanceHubHead">
+        <h3 className="maintenanceHubSectionTitle">Requests</h3>
+        {requests.length > 0 && <span className="muted">{requests.length}</span>}
+      </div>
       {error && <div className="statusMessage errorMessage">{error}<button onClick={() => setError('')}>×</button></div>}
       {loading ? (
         <p className="muted">Loading requests…</p>
       ) : requests.length ? (
-        <div className="maintenanceList">
+        <div className="maintenanceRequestList">
           {requests.map((r) => (
-            <button key={r.id} className="maintenanceRow requestRow tenantRequestRow" onClick={() => void openRequest(r)}>
-              <div className="maintenanceDate"><strong>{new Date(r.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</strong><span>{new Date(r.created_at).getFullYear()}</span></div>
-              <div className="maintenanceBody">
-                <div className="maintenanceTitle">
-                  <div>
-                    <span className={`statusPill ${r.status === 'New' ? 'pillWarn' : r.status === 'Resolved' ? 'pillGood' : ''}`}>{r.status}</span>
-                    <h3>{r.title}</h3>
-                    <p>{maintenanceCategoryLabel(r.category)} · {accessById.get(r.tenant_access_id)?.tenant_email || 'Tenant'}</p>
-                  </div>
-                </div>
-              </div>
-            </button>
+            <div className="maintenanceRequestRow" key={r.id}>
+              <button className="maintenanceRequestRowMain" onClick={() => void openRequest(r)}>
+                <MaintenanceCategoryIcon category={r.category} className="maintenanceRequestRowIcon" />
+                <span className="maintenanceRequestRowMainBody">
+                  <span className="maintenanceRequestRowTitle">{r.title}</span>
+                  <span className="muted maintenanceRequestRowMeta">{new Date(r.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                </span>
+                <span className={`statusPill maintenanceRequestRowStatus ${r.status === 'New' ? 'pillWarn' : r.status === 'Resolved' ? 'pillGood' : ''}`}>{r.status}</span>
+              </button>
+            </div>
           ))}
         </div>
       ) : (
@@ -169,7 +182,7 @@ export function TenantRequestsPanel({
         <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && closeModal()}>
           <div className="modal tenantConnectThreadModal">
             <div className="modalTop">
-              <div><p className="eyebrow">{maintenanceCategoryLabel(open.category).toUpperCase()}</p><h2>{open.title}</h2></div>
+              <div><p className="eyebrow">{maintenanceCategoryLabel(open.category)}</p><h2>{open.title}</h2></div>
               <button className="iconButton" onClick={closeModal}>×</button>
             </div>
             <div className="tenantConnectThreadMeta">
@@ -178,6 +191,16 @@ export function TenantRequestsPanel({
                 {TENANT_REQUEST_STATUSES.map((s) => <option key={s}>{s}</option>)}
               </select>
             </div>
+            {/* Phase D.3: one tap into the canonical Maintenance
+                workspace — this is not where the landlord manages the
+                maintenance lifecycle (assign a provider, change the
+                case status, schedule); it is the tenant's own
+                conversation, kept separate on purpose. */}
+            {open.maintenance_request_id && onOpenInMaintenance && (
+              <button type="button" className="tenantRequestViewInMaintenance" onClick={() => onOpenInMaintenance(open.maintenance_request_id as string)}>
+                View in Maintenance &rarr;
+              </button>
+            )}
             <p className="requestDescription">{open.description}</p>
             <div className="tenantConnectThread">
               {threadMessages.map((m) => (

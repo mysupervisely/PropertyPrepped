@@ -19,10 +19,14 @@ function readFile(relativePath: string): string {
 const pageSource = readFile('app/page.tsx')
 const cssSource = readFile('app/globals.css')
 
-describe('All six property sections exist and are always rendered in the tab nav', () => {
-  it('the Tab type and tabs array are exactly the six existing sections, unchanged', () => {
-    expect(pageSource).toContain("type Tab = 'Overview' | 'Rent' | 'Details' | 'PropCrew' | 'Documents' | 'Tax'")
-    expect(pageSource).toContain("const tabs: Tab[] = ['Overview', 'Rent', 'Details', 'PropCrew', 'Documents', 'Tax']")
+describe('All seven property sections exist and are always rendered in the tab nav', () => {
+  // Simplification + Maintenance Workspace V2, Phase D promotes
+  // Maintenance from a Details sub-tab to its own primary Tab — the
+  // six-section baseline this milestone originally locked in is now
+  // seven; see that phase's own report for the full reasoning.
+  it('the Tab type and tabs array include the promoted Maintenance tab', () => {
+    expect(pageSource).toContain("type Tab = 'Overview' | 'Rent' | 'Maintenance' | 'Details' | 'PropCrew' | 'Documents' | 'Tax'")
+    expect(pageSource).toContain("const tabs: Tab[] = ['Overview', 'Rent', 'Maintenance', 'Details', 'PropCrew', 'Documents', 'Tax']")
   })
 
   it('the nav renders every entry in `tabs` unconditionally — no filtering, no "more" menu, no truncation', () => {
@@ -48,25 +52,34 @@ describe('All six property sections exist and are always rendered in the tab nav
   })
 })
 
-describe('No horizontal scrolling/swiping for the six-section property navigation', () => {
-  it('.tabs is a non-scrolling grid, not the old horizontally-scrolling flex row', () => {
+// Originally "No horizontal scrolling/swiping for the six-section
+// property navigation." Simplification + Maintenance Workspace V2,
+// Phase D.1 deliberately introduces a horizontally scrollable mobile
+// tab strip: seven equal-weight primary tabs no longer fit the old
+// fixed 3-per-row grid without leaving a lone, oddly stretched 7th tab
+// on its own mostly-empty row — a single scrollable row was judged
+// less broken-looking than that, and was one of the two approaches
+// that phase's own brief offered. Desktop/default stays a plain,
+// non-scrolling grid (ample width for seven short labels in one row).
+describe('Property navigation at mobile widths (Phase D.1: horizontally scrollable, desktop/default stays a plain grid)', () => {
+  it('.tabs is a non-scrolling grid at desktop/default width', () => {
     const rule = cssSource.match(/\.tabs\s*\{[^}]*\}/)?.[0] || ''
     expect(rule).toContain('display: grid')
     expect(rule).not.toContain('overflow-x')
     expect(rule).not.toContain('display: flex')
   })
 
-  it('mobile breakpoints keep .tabs a fixed-column grid (3 columns = 2 rows of 3), never overflow-x, all the way down to the smallest reviewed width', () => {
+  it('the 760px breakpoint switches .tabs to a single horizontally scrollable row, replacing the old fixed 3-column grid', () => {
     const mobileBlocks = [...cssSource.matchAll(/@media \(max-width: (760|460)px\) \{([\s\S]*?)\n\}/g)]
     expect(mobileBlocks.length).toBeGreaterThan(0)
     const tabsRulesInMobileBlocks = mobileBlocks
       .map((m) => m[2].match(/\.tabs(?:\s+button)?\s*\{[^}]*\}/g) || [])
       .flat()
-    expect(tabsRulesInMobileBlocks.some((r) => r.includes('grid-template-columns: repeat(3'))).toBe(true)
-    for (const rule of tabsRulesInMobileBlocks) expect(rule).not.toContain('overflow-x')
+    expect(tabsRulesInMobileBlocks.some((r) => r.includes('overflow-x: auto'))).toBe(true)
+    expect(tabsRulesInMobileBlocks.some((r) => r.includes('grid-template-columns: repeat(3'))).toBe(false)
   })
 
-  it('no carousel/"more menu" class names were introduced for the property nav', () => {
+  it('no carousel/"more menu" class names were introduced for the property nav — a plain scrollable row, not a new interaction pattern', () => {
     expect(pageSource).not.toMatch(/propertyTabsCarousel|propertyTabsMore|propertyTabsOverflow/)
   })
 })

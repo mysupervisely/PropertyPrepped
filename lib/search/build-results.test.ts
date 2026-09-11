@@ -107,9 +107,9 @@ describe('searchSystems', () => {
 describe('searchMaintenance', () => {
   const rows = [{ id: 'm1', property_id: 'p1', description: 'Roof repair after storm', category: 'Repair', vendor: 'ABC Roofing' }]
 
-  it('matches on description and routes to the Property/Maintenance tab', () => {
+  it('matches on description and routes to the promoted top-level Maintenance tab (Phase D)', () => {
     const results = searchMaintenance(rows, ['roof', 'repair'], propertyById)
-    expect(results[0].href).toBe('/?openProperty=p1&openTab=Details&openPropSubTab=Maintenance')
+    expect(results[0].href).toBe('/?openProperty=p1&openTab=Maintenance')
   })
 })
 

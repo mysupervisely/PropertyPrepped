@@ -24,10 +24,16 @@ describe('Tenant Connect V1 lives inside Property > Rent > Tenant, not a new des
     expect(nearby).toContain('<TenantRequestsPanel')
   })
 
-  it('Tenant Connect M3.1: the old "+ Log request" modal (setShowRequestForm/requestDraft/saveRequest) was replaced by the shared NewMaintenanceRequestModal (+ New Maintenance Request), reachable from Details > Maintenance — same canonical maintenance_requests table, improved form (no forced tenant name, current-tenant prefill). See docs/tenant-connect-m3.1-maintenance-workflow-unification.md.', () => {
+  // Phase D.2 later shortened the button's own rendered text from "+ New
+  // Maintenance Request" to "+ New Request" (a real-device finding: the
+  // old button was "too in your face") — this test's own literal string
+  // was quietly still matching only a source comment by the time that
+  // happened (a false-positive proxy), so it's rescoped to the actual
+  // rendered button text below rather than left silently vacuous.
+  it('Tenant Connect M3.1: the old "+ Log request" modal (setShowRequestForm/requestDraft/saveRequest) was replaced by the shared NewMaintenanceRequestModal, reachable from the promoted Maintenance tab — same canonical maintenance_requests table, improved form (no forced tenant name, current-tenant prefill). See docs/tenant-connect-m3.1-maintenance-workflow-unification.md.', () => {
     expect(source).not.toContain('setShowRequestForm')
     expect(source).not.toContain('requestDraft')
-    expect(source).toContain('+ New Maintenance Request')
+    expect(source).toContain('+ New Request</button>')
     expect(source).toContain("client.from('maintenance_requests').select('*')")
   })
 
@@ -46,21 +52,40 @@ describe('Tenant Connect V1 lives inside Property > Rent > Tenant, not a new des
     expect(source).toContain('buildTenantRequestDateItems(tenantRequests, propertyLabelById)')
   })
 
+  // Simplification + Maintenance Workspace V2, Phase D later added
+  // 'Maintenance' as its own top-level Tab (an unrelated, deliberate
+  // promotion out of Details — see that phase's own report), so the
+  // Tab union now has seven members instead of six. The invariant this
+  // test actually protects — that Tenant Connect itself never got its
+  // own top-level tab value — still holds; only the (unrelated)
+  // Maintenance member is new.
   it('does not add a new top-level Tab value for Tenant Connect', () => {
-    expect(source).toContain("type Tab = 'Overview' | 'Rent' | 'Details' | 'PropCrew' | 'Documents' | 'Tax'")
+    expect(source).toContain("type Tab = 'Overview' | 'Rent' | 'Maintenance' | 'Details' | 'PropCrew' | 'Documents' | 'Tax'")
+    expect(source).not.toMatch(/'Tenant ?Connect'/)
   })
 })
 
 describe('Maintenance Coordination M2.1 review pass (Part 4) — minimum landlord visibility on the existing maintenance_requests list', () => {
   const source = readFile('app/page.tsx')
 
-  it('shows a Tenant source badge on a tenant-originated maintenance_requests row', () => {
-    expect(source).toContain("req.source === 'tenant' && <span className=\"statusPill tenantSourceBadge\">Tenant</span>")
+  // Phase D.2 later replaced the colored "Tenant" pill with plain quiet
+  // meta text (matching Phase C.1's "pill row removed" direction) — the
+  // underlying visibility this M2.1 pass added is still there, just not
+  // as a pill anymore.
+  it('shows the tenant/landlord source on a maintenance_requests row (now quiet meta text, not a colored pill)', () => {
+    expect(source).toContain("req.source === 'tenant' ? 'Tenant' : 'Landlord'")
   })
 
+  // Phase D.1: the category is now shown as a leading icon
+  // (MaintenanceCategoryIcon), not a text label — matching the same
+  // icon-leading row redesign applied to the portfolio Command Center
+  // card. The underlying derivation (category looked up from the
+  // already-fetched portfolio-wide tenant_requests, since
+  // maintenance_requests itself has no category column) is unchanged.
   it('shows the category for a tenant-originated row, derived from the already-fetched portfolio-wide tenant_requests (maintenance_requests itself has no category column)', () => {
     expect(source).toContain('categoryByMaintenanceRequestId')
-    expect(source).toContain('maintenanceCategoryLabel(categoryByMaintenanceRequestId.get(req.id)!)')
+    expect(source).toContain("import { MaintenanceCategoryIcon } from '../components/icons/MaintenanceCategoryIcon'")
+    expect(source).toContain('<MaintenanceCategoryIcon category={category} className="maintenanceRequestRowIcon" />')
   })
 })
 

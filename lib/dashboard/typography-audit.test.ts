@@ -19,11 +19,24 @@ const ROOT = join(__dirname, '..', '..')
 const CSS = readFileSync(join(ROOT, 'app/globals.css'), 'utf8')
 
 describe('Global h1 letter-spacing is proportional (em-relative), not a fixed px value', () => {
-  it('the base h1 rule uses an em-relative letter-spacing', () => {
-    const match = CSS.match(/\nh1 \{ font-size: clamp\([^}]*\}/)
+  // Simplification V2, Phase B: the base h1 rule now reads its
+  // font-size/letter-spacing/weight through the shared --text-display/
+  // --tracking-tight/--weight-semibold tokens instead of inline literal
+  // values — same numeric letter-spacing as before (-0.02em), just
+  // centralized. The regression this guard actually protects against
+  // (a fixed-px letter-spacing under a responsive clamp()) still can't
+  // happen: it's enforced at the token definition now, not per-rule.
+  it('the base h1 rule uses the shared --tracking-tight token for letter-spacing, not an inline value', () => {
+    const match = CSS.match(/\nh1 \{ font-size: var\(--text-display\)[^}]*\}/)
     expect(match).not.toBeNull()
-    expect(match![0]).toMatch(/letter-spacing: -0\.\d+em/)
+    expect(match![0]).toMatch(/letter-spacing: var\(--tracking-tight\)/)
     expect(match![0]).not.toMatch(/letter-spacing: -\d+px/)
+  })
+
+  it('--tracking-tight itself is an em-relative value, never a fixed px — this is what actually keeps every token consumer (h1 included) proportional', () => {
+    const rootMatch = CSS.match(/--tracking-tight:\s*([^;]+);/)
+    expect(rootMatch).not.toBeNull()
+    expect(rootMatch![1].trim()).toMatch(/^-0\.\d+em$/)
   })
 
   it('the landing hero h1 (its own clamp()) is also em-relative, base and mobile override alike', () => {

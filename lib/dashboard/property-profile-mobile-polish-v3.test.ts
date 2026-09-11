@@ -81,16 +81,30 @@ describe('Section 2: the five-metric mobile layout intentionally balances 3 + 2,
   })
 })
 
-describe('Section 5: the six-tab navigation is unchanged by this milestone', () => {
-  it('the tabs array and non-scrolling grid nav are untouched', () => {
-    expect(pageSource).toContain("const tabs: Tab[] = ['Overview', 'Rent', 'Details', 'PropCrew', 'Documents', 'Tax']")
+// Section 5 originally locked in the six-tab navigation as "unchanged by
+// this milestone." Simplification + Maintenance Workspace V2, Phase D
+// deliberately changes both the tabs array (Maintenance promoted to a
+// primary tab — seven now) and the mobile nav pattern (a horizontally
+// scrollable strip instead of a fixed 3-per-row grid, which would
+// otherwise leave a lone, oddly stretched 7th tab on its own row) — see
+// that phase's own report. Updated here to reflect the new, current,
+// intentional state rather than re-asserting the old one.
+describe('Section 5: the primary tab nav reflects Phase D\'s Maintenance promotion', () => {
+  it('the tabs array includes the promoted Maintenance tab', () => {
+    expect(pageSource).toContain("const tabs: Tab[] = ['Overview', 'Rent', 'Maintenance', 'Details', 'PropCrew', 'Documents', 'Tax']")
+  })
+
+  it('the desktop/default .tabs rule is still a non-scrolling grid, now sized for seven tabs', () => {
     const tabsRule = cssSource.match(/\.tabs\s*\{[^}]*\}/)?.[0] || ''
     expect(tabsRule).toContain('display: grid')
+    expect(tabsRule).toContain('repeat(7, minmax(0, 1fr))')
     expect(tabsRule).not.toContain('overflow-x')
   })
 
-  it('the mobile 3-column (2-row) tab grid still exists, unmodified by this milestone', () => {
-    expect(cssSource).toContain('.tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }')
+  it('the old fixed 3-column (2-row) mobile tab grid is gone, replaced by a single horizontally scrollable row (Phase D.1)', () => {
+    expect(cssSource).not.toContain('.tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }')
+    expect(cssSource).toContain('.tabs { display: flex; grid-template-columns: none;')
+    expect(cssSource).toMatch(/\.tabs \{ display: flex;[^}]*overflow-x: auto/)
   })
 })
 

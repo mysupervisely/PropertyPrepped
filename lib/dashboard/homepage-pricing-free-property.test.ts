@@ -78,8 +78,12 @@ describe('Pricing is reachable from the public homepage without an account', () 
     expect(landingSource).toContain('<Link href="/pricing" className="landingNavLink">Pricing</Link>')
   })
 
+  // Simplification + Maintenance Workspace V2, Phase D.1 gave the
+  // signed-in branch a hideMobileNav prop (Pricing is a public/
+  // marketing surface, excluded from the new mobile bottom nav) —
+  // reachability while signed out is otherwise unchanged.
   it('/pricing itself remains reachable while signed out (unchanged — this milestone does not touch that page)', () => {
-    expect(pricingPageSource).toContain('ready && user ? <AuthHeader /> : (')
+    expect(pricingPageSource).toContain('ready && user ? <AuthHeader hideMobileNav /> : (')
   })
 })
 

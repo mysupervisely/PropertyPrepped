@@ -213,16 +213,40 @@ describe('Mobile layout — header horizontal-overflow fix (measured, not guesse
     expect(cssSource).not.toContain('@media (max-width: 380px) {\n  /* The new hamburger button')
   })
 
-  it('the existing 430px shrink treatment for the Smart Upload/search buttons is untouched — this fix is additive (wrap the row when it still does not fit), not a replacement for the existing shrink behavior', () => {
-    expect(cssSource).toContain('@media (max-width: 430px) {\n  .smartUploadButton { padding: 10px 12px; font-size: 12.5px; gap: 5px; }\n  .topbarActions { gap: 7px; }\n  .headerSearchButton { width: 36px; height: 36px; font-size: 14px; }\n}')
+  // Simplification + Maintenance Workspace V2, Phase E1: restoring the
+  // profile avatar (Phase D.2) reintroduced the exact overflow this
+  // block fixed, at the exact widths (390-393px) it was fixed for — the
+  // .topbar wrap fallback above is the safety net either way, but E1's
+  // own fix was to shrink this same 430px treatment further (plus the
+  // avatar/hamburger/wordmark/gaps) so the row no longer NEEDS to fall
+  // back to wrapping at ordinary iPhone widths — see globals.css's own
+  // "Phase E1: restoring the profile avatar..." comment for the
+  // measured-with-real-Chromium reasoning. The values changed; the
+  // shrink treatment's existence (not removed) is still the invariant.
+  // Phase E1.1: removing the mobile hamburger and shortening Smart
+  // Upload's mobile label freed real row width, so these values were
+  // relaxed back toward more comfortable sizing (still measured with
+  // real Chromium, not guessed) — the shrink treatment's continued
+  // existence is the invariant, not these exact numbers.
+  it('the 430px shrink treatment for the Smart Upload/search buttons still exists (relaxed in Phase E1.1 now that the mobile hamburger is gone, not removed)', () => {
+    expect(cssSource).toContain('@media (max-width: 430px) {\n  .smartUploadButton { padding: 8px 11px; font-size: 12.5px; gap: 5px; }\n  .topbarActions { gap: 6px; }\n  .headerSearchButton { width: 34px; height: 34px; font-size: 13.5px; }\n}')
   })
 
   it('no global overflow-x:hidden was added anywhere as a substitute fix — the milestone\'s own "do not globally hide overflow" instruction', () => {
     expect(cssSource).not.toMatch(/^(html|body)\s*\{[^}]*overflow-x:\s*hidden/m)
   })
 
-  it('the Smart Upload button label text itself is unchanged ("+ Smart Upload," never shortened, per its own existing comment) — the fix is layout (wrap), not a copy change', () => {
-    expect(readFile('components/SmartUploadButton.tsx')).toContain('<span>Smart Upload</span>')
+  // Phase E1.1 deliberately reversed this: the label now IS width-aware
+  // ("+ Upload" on mobile, "+ Smart Upload" on desktop) as part of
+  // winning back a one-row mobile header — see SmartUploadButton.tsx's
+  // own header comment. The invariant this guards is narrower now: the
+  // desktop-facing full label still says "Smart Upload," not something
+  // else, and it's a real CSS-toggled text node, not lost copy.
+  it('the full "Smart Upload" label is preserved for desktop (CSS-toggled, not deleted) alongside the new mobile-only "Upload" label', () => {
+    const source = readFile('components/SmartUploadButton.tsx')
+    expect(source).toContain('<span className="smartUploadLabelFull">Smart Upload</span>')
+    expect(source).toContain('<span className="smartUploadLabelShort">Upload</span>')
+    expect(source).toContain('aria-label="Smart Upload"')
   })
 })
 
@@ -233,7 +257,11 @@ describe('Mobile layout — remaining left-edge clipping fix (real-iPhone follow
 
   it('.sectionHead gets a flex-wrap safety net at <=480px — the same proven pattern as .topbar — so a row that still does not fit wraps to two lines instead of overflowing', () => {
     const idx = cssSource.indexOf('.sectionHead > div:first-child { min-width: 0; }')
-    const body = cssSource.slice(idx, idx + 400)
+    // Widened from 400 (Simplification V2, Phase B added a doc comment
+    // on .sectionHead h2 in between, pushing this @media rule further
+    // down the file — still immediately after, just not within the old
+    // fixed window).
+    const body = cssSource.slice(idx, idx + 700)
     expect(body).toMatch(/@media \(max-width: 480px\) \{\s*\.sectionHead \{ flex-wrap: wrap; \}\s*\}/)
   })
 
@@ -246,8 +274,11 @@ describe('Mobile layout — remaining left-edge clipping fix (real-iPhone follow
     expect(cssSource).not.toMatch(/\.welcomeIntro h1 \{[^}]*letter-spacing/)
   })
 
-  it('the base h1 rule (the fallback .welcomeIntro h1 now uses) is untouched — this is a targeted removal of one override, not a change to shared typography', () => {
-    expect(cssSource).toContain('h1 { font-size: clamp(34px, 5vw, 55px); line-height: 1.15; margin: 0; letter-spacing: -0.02em; }')
+  it('the base h1 rule (the fallback .welcomeIntro h1 now uses) still has the exact same font-size/line-height/margin/letter-spacing this milestone tuned — Simplification V2 Phase B tokenized those values (var(--text-display) etc, same numbers) and added an explicit font-weight, but did not change this rule\'s sizing/spacing', () => {
+    expect(cssSource).toContain('h1 { font-size: var(--text-display); line-height: var(--line-tight); margin: 0; letter-spacing: var(--tracking-tight); font-weight: var(--weight-semibold); }')
+    expect(cssSource).toMatch(/--text-display:\s*clamp\(34px,\s*5vw,\s*55px\)/)
+    expect(cssSource).toMatch(/--line-tight:\s*1\.15/)
+    expect(cssSource).toMatch(/--tracking-tight:\s*-0\.02em/)
   })
 
   it('the welcome subtitle (<p>, the sibling real-device testing did NOT report as clipped) is untouched — this fix is scoped to the one element that was actually reported', () => {
@@ -259,5 +290,47 @@ describe('Mobile layout — remaining left-edge clipping fix (real-iPhone follow
     const idx = cssSource.indexOf('.sectionHead > div:first-child { min-width: 0; }')
     const body = cssSource.slice(Math.max(0, idx - 50), idx + 500)
     expect(body).not.toMatch(/margin-left:\s*-|padding-left:\s*\d{2,}px/)
+  })
+})
+
+describe('Phase B.1 (real-iPhone follow-up) — authenticated left-edge clipping recurred despite the .topbar fix above; the document itself could still be left horizontally scrolled', () => {
+  it('.shell (the authenticated page\'s own root container — header included, per AuthHeader rendering as its first child) contains its own children instead of html/body, the same pattern already proven for .tenantPortalShell', () => {
+    const shellRule = cssSource.match(/\.shell \{[^}]*\}/)
+    expect(shellRule).not.toBeNull()
+    expect(shellRule![0]).toMatch(/overflow-x:\s*hidden/)
+    // Still not html/body — this containment lives on the page's own
+    // shell, not masked at the document root (the existing guard above
+    // in this file already enforces the html/body prohibition
+    // generally; this asserts the fix actually landed somewhere real).
+    expect(cssSource).not.toMatch(/^(html|body)\s*\{[^}]*overflow-x:\s*hidden/m)
+  })
+
+  it('.workspaceShell (the property-detail variant of the same root container) does not reintroduce visible overflow', () => {
+    const rule = cssSource.match(/\.workspaceShell \{[^}]*\}/)
+    expect(rule).not.toBeNull()
+    expect(rule![0]).not.toMatch(/overflow-x:\s*visible/)
+  })
+
+  it('a real sign-in (user transitioning from signed-out to signed-in) resets BOTH scroll axes exactly once — not just vertical, which every pre-existing window.scrollTo() call in this file already handled on its own trigger', () => {
+    const idx = pageSource.indexOf('if (!user) return\n    if (typeof window === \'undefined\') return\n    window.scrollTo({ left: 0, top: 0 })')
+    expect(idx).toBeGreaterThan(-1)
+    // The effect this line belongs to must be keyed by user?.id (fires
+    // once per actual sign-in transition, not on every render) and must
+    // guard on `user` being truthy (never fires on sign-out/first mount
+    // with no session) — both real behavioral properties, not just "the
+    // string exists somewhere."
+    const effectStart = pageSource.lastIndexOf('useEffect(() => {', idx)
+    const effectBody = pageSource.slice(effectStart, idx + 200)
+    expect(effectBody).toMatch(/\}, \[user\?\.id\]\)/)
+    expect(effectBody).toContain('if (!user) return')
+  })
+
+  it('the two pre-existing "scroll to top" call sites (surfaceError, openProperty) now reset horizontal position too, not only vertical', () => {
+    expect(pageSource).not.toMatch(/window\.scrollTo\(\{ top: 0, behavior: 'smooth' \}\)/)
+    const scrollCalls = pageSource.match(/window\.scrollTo\(\{[^}]*\}\)/g) || []
+    expect(scrollCalls.length).toBeGreaterThanOrEqual(3) // sign-in reset + surfaceError + openProperty
+    for (const call of scrollCalls) {
+      expect(call).toMatch(/left:\s*0/)
+    }
   })
 })
