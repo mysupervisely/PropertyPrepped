@@ -350,23 +350,79 @@ h2, h3, p { margin-top: 0; }
 .detailRows .highlightRow { margin-top: 4px; padding: 14px 12px; border: 0; border-radius: 10px; background: var(--brand-soft); color: var(--brand); }
 .detailRows .highlightRow span { color: var(--brand); }
 
-/* Property Intelligence V1, Phase C: property Overview snapshot. Reuses
-   .financialStats/.financialStat (the Ledger tab's own metric-card
-   pattern) rather than a new card style, restyled to 3-across (this
-   milestone never shows more than 3 metrics per row) so the look stays
-   consistent across the app. */
+/* Property Intelligence V1, Phase C (restyled in Phase C.3, refined
+   after a second round of real-device feedback): property Overview
+   snapshot. Phase C originally reused .financialStats/.financialStat
+   (the Ledger tab's own large bordered metric-card pattern); real
+   iPhone/Safari feedback on the shipped design called that "more like a
+   form than a snapshot" — every metric in its own oversized bordered
+   box made the card tall and scroll-heavy. Phase C.3's first pass went
+   fully borderless (typography + spacing + dividers only); a second
+   real-device look found THAT read as everything running together with
+   too little grouping. This version lands in between: small, quiet,
+   roughly-equal-height TILES (.propertySnapshotMetric — a light neutral
+   fill, no border, no shadow, softly rounded) group the numbers without
+   turning the card into a stack of cards. The outer .overviewPanel is
+   still the only real "card" — these tiles are internal grouping, not a
+   second layer of containment. */
 .propertySnapshotCard { margin-bottom: 20px; }
 .propertySnapshotCard h3 { margin-bottom: 14px; }
-.propertySnapshotSubhead { margin-top: 22px; display: flex; align-items: baseline; gap: 8px; }
-.propertySnapshotYear { color: var(--muted); font-weight: 500; font-size: 12px; }
-.performanceStats.financialStats { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 0; }
-/* Phase C.1: secondary/contextual row (Mortgage Balance, Purchase Price)
-   — plain .detailRows label/value rows, deliberately quieter than the
-   .financialStat grids above so this reads as supporting context, not
-   another headline number. Same divider treatment as
-   .propertyPerformanceDetails below it, so the card's hierarchy reads
-   primary -> performance -> secondary -> deeper (View performance). */
-.propertySnapshotContext { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+/* Phase C.3: doubles as the "YTD Performance"/"Full-Year Performance"
+   section eyebrow — uppercase/letter-spaced like every other quiet
+   section label in the app, but the year badge next to it stays normal
+   case (it's a value, not a label). */
+.propertySnapshotSubhead { margin-top: 22px; display: flex; align-items: baseline; gap: 8px; text-transform: uppercase; letter-spacing: .03em; font-size: 12.5px; color: var(--muted); font-weight: 650; }
+.propertySnapshotYear { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: none; letter-spacing: normal; }
+
+/* One quiet rule instead of a full border-top — the divider IS the
+   containment between sections, not a boxed sub-panel. Prefixed
+   .propertySnapshot* throughout (not the bare .snapshot* the Dashboard's
+   unrelated Portfolio Snapshot already uses at line ~713 below) so
+   nothing here can collide with or override that out-of-scope surface. */
+.propertySnapshotDivider { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
+
+/* Primary metrics: Value/Equity/Rent/Mortgage, 2 columns x 2 rows.
+   Value-first, label-second (the number is what a landlord scans for;
+   the label just confirms it) — the opposite order from .financialStat,
+   deliberately, for this denser layout.
+   Real-device follow-up: the borderless version (typography/spacing
+   alone) read as "everything running together" on an actual iPhone —
+   this reintroduces containment, but as small, quiet TILES nested
+   inside the one .propertySnapshotCard, not a second layer of full
+   bordered cards. A light neutral fill (--bg, the page's own
+   background — one step darker than the white card) does the
+   separating; no border, no shadow, so it stays a quiet grouping cue
+   rather than another "card inside a card." min-height (not height) so
+   a wrapped label/value never gets clipped — ~84px lands primary tiles
+   in the requested 80-100px range at normal type sizes while still
+   growing safely if content wraps. */
+.propertySnapshotPrimaryGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.propertySnapshotMetric { display: flex; flex-direction: column; justify-content: center; gap: 3px; min-width: 0; background: var(--bg); border-radius: 12px; padding: 12px 14px; min-height: 84px; }
+.propertySnapshotMetric strong { font-size: 22px; font-weight: 700; letter-spacing: -.3px; line-height: 1.15; overflow-wrap: break-word; }
+.propertySnapshotMetric span { font-size: 12px; color: var(--muted); font-weight: var(--weight-medium); }
+
+/* YTD Performance reuses the exact same quiet-tile pattern, 3 columns,
+   sized a step down (smaller min-height/padding/type) from the primary
+   grid so hierarchy still reads primary -> performance at a glance. */
+.propertySnapshotSecondaryGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+.propertySnapshotSecondaryGrid .propertySnapshotMetric { min-height: 66px; padding: 10px 11px; }
+.propertySnapshotSecondaryGrid .propertySnapshotMetric strong { font-size: 16px; }
+
+/* Phase C.3 follow-up (2nd real-device round): Cap Rate/Net Cash Flow,
+   now visible in the main card instead of only inside "View
+   performance." Same quiet-tile pattern (combined with
+   .propertySnapshotSecondaryGrid for its gap/margin-top/tile sizing),
+   just 2 columns instead of 3, and one step smaller/quieter again —
+   these are secondary to BOTH the primary grid and the current-year YTD
+   figures, never meant to compete with either for attention. */
+.propertySnapshotPerformanceGrid { grid-template-columns: 1fr 1fr; }
+.propertySnapshotPerformanceGrid .propertySnapshotMetric strong { font-size: 15px; }
+
+/* Purchase Price + Appreciation: one quiet inline sentence, not two more
+   boxed rows — genuinely secondary context, read once and done. */
+.propertySnapshotContextLine { margin: 0; font-size: 13px; color: var(--muted); }
+.propertySnapshotContextLine strong { color: var(--text); font-weight: 650; }
+
 /* Same collapsed-by-default <details>/<summary> pattern as
    .recentActivityDetails (Simplification + Maintenance Workspace V2,
    Phase E1) — a plain "Show"/"Hide" text affordance, zero new JS. */
@@ -387,8 +443,30 @@ h2, h3, p { margin-top: 0; }
    this grid of plain rows rather than as a card-level <h3>. */
 .propertyPerformanceRows .propertyPerformanceYearHead { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 8px; margin: 0 0 2px; font-size: 13px; font-weight: 650; }
 
-@media (max-width: 560px) {
-  .performanceStats.financialStats { grid-template-columns: 1fr; }
+@media (max-width: 360px) {
+  /* Only the very narrowest phones need any adjustment at all. Measured
+     (not guessed): at 320px a 2-column primary tile's own padding
+     leaves ~88px of content width, and "$2,350/mo" (the longest primary
+     string) renders at ~92px at the base 22px/19px sizes — just wide
+     enough to force a mid-word wrap ("$2,350/m" + "o"). Same problem for
+     the 3-column YTD tiles ("$14,100" vs. their ~50px content width).
+     Padding and type size both step down here (never the grid itself,
+     which stays 2/3 columns — collapsing to 1 column would make the
+     card scroll-heavy again, the exact thing this phase exists to fix),
+     verified against real canvas-measured text widths so the fix is
+     never "narrower than it needs to be" as a guess would risk. */
+  .propertySnapshotMetric { padding: 9px 10px; }
+  .propertySnapshotMetric strong { font-size: 17px; }
+  .propertySnapshotSecondaryGrid .propertySnapshotMetric { padding: 7px 8px; }
+  .propertySnapshotSecondaryGrid .propertySnapshotMetric strong { font-size: 14px; }
+  /* Phase C.3 follow-up (2nd real-device round): the Performance tiles
+     share .propertySnapshotSecondaryGrid with the YTD tiles (for the
+     narrow-width padding fix above), which would otherwise also reset
+     their font-size to the same 14px here — losing the "one visible
+     step quieter than YTD" hierarchy the new Performance section is
+     supposed to keep. Placed after the shared rule so it wins the
+     cascade at this breakpoint too (same specificity, later wins). */
+  .propertySnapshotPerformanceGrid .propertySnapshotMetric strong { font-size: 13px; }
 }
 
 /* Property Profile / PropCrew UX Improvement: the Financial Details
@@ -1655,32 +1733,20 @@ h2, h3, p { margin-top: 0; }
    floating on top of a dialog, per "must not overlap dialogs/modals." */
 
 /* Extra bottom clearance so a page's own last real content is never
-   hidden behind the fixed bar — scoped to body.hasBottomNav, the class
-   MobileBottomNav itself toggles only while mounted, so pages that
-   never render it (Pricing, the admin tool) are completely unaffected.
-   Phase C.2: a real iPhone/Safari session proved the old fixed-pixel
-   assumption (nav ≈ 64-70px, install hint ≈ 70px) wrong — Dynamic
-   Type/font-size settings can wrap either bar's text taller than that,
-   and a hardcoded offset has no way to notice. Both MobileBottomNav and
-   InstallPrompt now publish their OWN real rendered height via a
-   ResizeObserver, as --bottom-nav-height / --install-hint-height custom
-   properties on <html> — every rule below reads the measured value, not
-   a guess. The px fallbacks only cover the brief instant before the
-   first measurement lands (or a browser without ResizeObserver); they
-   are not the primary mechanism, and are sized generously (not tightly)
-   so that instant never under-clears. body.hasInstallHint is the exact
-   same toggle-only-while-mounted pattern as hasBottomNav, set by
-   InstallPrompt itself. */
+   hidden behind the FIXED bottom nav bar — scoped to body.hasBottomNav,
+   the class MobileBottomNav itself toggles only while mounted, so pages
+   that never render it (Pricing, the admin tool) are completely
+   unaffected. MobileBottomNav publishes its own real rendered height via
+   a ResizeObserver, as --bottom-nav-height on <html>, so this reads the
+   measured value rather than a guess — Dynamic Type/font-size settings
+   can wrap the nav's labels taller than any fixed constant would assume.
+   The px fallback only covers the brief instant before the first
+   measurement lands (or a browser without ResizeObserver). This rule is
+   independent of the install hint below — the install hint is no longer
+   a fixed overlay that needs its own clearance calculation at all (see
+   its own rule's comment). */
 @media (max-width: 760px) {
   body.hasBottomNav .shell { padding-bottom: calc(var(--bottom-nav-height, 64px) + env(safe-area-inset-bottom) + 24px); }
-  body.hasInstallHint .shell { padding-bottom: calc(var(--install-hint-height, 76px) + 24px); }
-  /* Both bars mounted at once: reserve clearance for both, stacked. */
-  body.hasBottomNav.hasInstallHint .shell { padding-bottom: calc(var(--bottom-nav-height, 64px) + env(safe-area-inset-bottom) + var(--install-hint-height, 76px) + 28px); }
-  /* The PWA install hint is a separate, unrelated fixed bar (mounted
-     app-wide in app/layout.tsx) — raised clear of the bottom nav's real
-     measured height so the two never visually collide regardless of
-     either one's actual rendered height. */
-  body.hasBottomNav .installHint { bottom: calc(var(--bottom-nav-height, 64px) + env(safe-area-inset-bottom) + 12px); }
 }
 
 /* Sub-tabs (Property / Documents / People second-level navigation) —
@@ -2062,15 +2128,36 @@ h2, h3, p { margin-top: 0; }
 
 /* ============================================================
    PWA/Mobile Installability V1 — install guidance bar
-   (components/InstallPrompt.tsx). Deliberately NOT a popup/modal: a
-   slim, dismissible bar pinned near the bottom of the viewport, never
-   covering more than one line of content, respecting the home-indicator
-   safe area on notch devices.
-   ============================================================ */
-.installHint { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 40; display: flex; align-items: center; gap: 10px; background: var(--brand); color: white; border-radius: 12px; padding: 10px 14px; font-size: 13px; line-height: 1.4; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+   (components/InstallPrompt.tsx). Deliberately NOT a popup/modal.
+   Property Intelligence V1, Phase C.3 follow-up (2nd real-device round):
+   this WAS `position: fixed`, kept clear of content via a measured CSS
+   custom property. Multiple real iPhone/Safari screenshots showed it
+   still covering product content regardless. Now rendered in normal
+   document flow (a plain block at the end of <body> — see
+   app/layout.tsx), so it scrolls with the page and literally cannot
+   cover anything — no offset/clearance math of any kind. The home-
+   indicator safe area is still respected, just as normal trailing
+   margin instead of a fixed-position offset. */
+.installHint { display: flex; align-items: center; gap: 10px; background: var(--brand); color: white; border-radius: 12px; padding: 10px 14px; font-size: 13px; line-height: 1.4; box-shadow: 0 6px 18px rgba(0,0,0,.18); margin: 16px max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
 .installHint strong { font-weight: 700; }
 .installHint button { border: 0; background: rgba(255,255,255,.18); color: white; border-radius: 8px; padding: 6px 10px; font-weight: 650; font-size: 12px; white-space: nowrap; }
 .installHintDismiss { margin-left: auto; background: transparent !important; padding: 2px 6px !important; font-size: 18px; line-height: 1; }
+@media (min-width: 720px) {
+  /* A full-width bar reads fine as a slim mobile strip but oddly wide
+     stretched across a desktop viewport — a modest max-width, centered,
+     keeps it feeling like a compact suggestion rather than a banner ad. */
+  .installHint { max-width: 640px; margin-left: auto; margin-right: auto; }
+}
+@media (max-width: 760px) {
+  /* Plain, static clearance from the fixed bottom nav — not a measured
+     value, deliberately: this is ordinary trailing margin on the last
+     thing in the page, so being generous rather than exact costs
+     nothing (a little extra whitespace at the very bottom of a
+     scrollable page, never content hidden behind the nav). No
+     ResizeObserver, no CSS custom property, no ordering dependency on
+     anything else having measured itself first. */
+  body.hasBottomNav .installHint { margin-bottom: calc(70px + env(safe-area-inset-bottom) + 16px); }
+}
 @media (max-width: 480px) {
   .installHint { font-size: 12.5px; padding: 9px 12px; }
 }

@@ -90,9 +90,13 @@ describe('Phase C.2, Part 2: Full-Year Performance section — wiring', () => {
     expect(snapshotSlice).toContain('Full-Year Performance <span className="propertySnapshotYear">{priorYearPerformance.period.taxYear}</span>')
   })
 
-  it('18. no qualifying year fails quietly — a plain conditional note, never a fabricated number standing in for the missing section', () => {
-    expect(snapshotSlice).toContain('{priorYearPerformance ? (')
-    expect(snapshotSlice).toContain('No completed prior tax year has enough data on file yet for full-year performance.')
+  it('18. no qualifying year fails quietly — a plain conditional, never a fabricated number standing in for the missing section (Phase C.3 follow-up, 2nd real-device round: Cap Rate/Net Cash Flow/the "no qualifying year" note now live in the main card\'s visible Performance section, so this deeper "View performance" block simply renders nothing extra via `&&` rather than repeating an explanation)', () => {
+    expect(snapshotSlice).toContain('{priorYearPerformance && (')
+    // The visible Performance section (outside this describe block\'s
+    // narrower slice, covered in property-snapshot-compact-v1-wiring.test.ts)
+    // now owns the single quiet explanatory note — it is deliberately not
+    // duplicated here.
+    expect(snapshotSlice).not.toContain('No completed prior tax year has enough data on file yet for full-year performance.')
     expect(snapshotSlice).not.toMatch(/priorYearPerformance\s*\|\|\s*\{/) // never a fallback fake object
   })
 
@@ -107,17 +111,20 @@ describe('Phase C.2, Part 3: financing_status — engine-decided, not React-deci
     expect(pageSource).not.toContain('financingStatus ===')
   })
 
-  it('Estimated Equity and Mortgage Balance in the visible snapshot are read exactly as before (performance.equity/performance.mortgageBalance) — Phase C.2 changes what those metrics RESOLVE to, never how React reads them', () => {
+  it('Estimated Equity and Mortgage Balance in the visible snapshot are still read straight from the same engine metrics (performance.equity/performance.mortgageBalance) — Phase C.2 changes what those metrics RESOLVE to, never how React reads them; Phase C.3 changed only the PRESENTATION helper (metricCompactMoney wraps performance.equity now for a "$350K"-style figure, but reads the exact same Metric)', () => {
     const snapshotStart = pageSource.indexOf('propertySnapshotCard')
     const snapshotEnd = pageSource.indexOf('</details>\n          </div>', snapshotStart) + '</details>\n          </div>'.length
     const snapshotSlice = pageSource.slice(snapshotStart, snapshotEnd)
-    expect(snapshotSlice).toContain('metricMoney(performance.equity)')
+    expect(snapshotSlice).toContain('metricCompactMoney(performance.equity)')
     expect(snapshotSlice).toContain('metricMoney(performance.mortgageBalance)')
   })
 
-  it('the confirmed-zero explanatory note is read verbatim from the engine\'s own note, never a hardcoded "Paid Off"/"No Mortgage" string in React', () => {
-    expect(pageSource).toContain("performance.mortgageBalance.source === 'financing_status_confirmed' && <p className=\"propertyPerformanceNote\">{performance.mortgageBalance.notes?.[0]}</p>")
-    expect(pageSource).not.toContain('mortgage balance is a confirmed $0') // that exact copy lives only in calculate.ts
+  it('Phase C.3 follow-up (2nd real-device round): the confirmed-zero explanatory note is now REMOVED from the rendered UI entirely (real-device feedback: internal data-quality/engineering context a landlord doesn\'t need repeated — the "Paid Off"/"No Mortgage" primary tile already says what matters) — but the underlying engine note itself is untouched, it simply isn\'t read into JSX here anymore', () => {
+    expect(pageSource).not.toContain("performance.mortgageBalance.source === 'financing_status_confirmed' && <p className=\"propertyPerformanceNote\">{performance.mortgageBalance.notes?.[0]}</p>")
+    expect(pageSource).not.toContain('mortgage balance is a confirmed $0') // that exact copy lives only in calculate.ts, never duplicated into a React string
+    // The financing-status word is still read for the primary Mortgage
+    // tile itself — only the explanatory paragraph beneath it is gone.
+    expect(pageSource).toContain("performance.mortgageBalance.source === 'financing_status_confirmed' ? selected.financing_status")
   })
 
   it('calculate.ts checks financing_status BEFORE falling back to a mortgage row/property fallback, in both resolveMortgageBalance and resolveMonthlyDebtService', () => {
@@ -145,35 +152,55 @@ describe('19. The unified Property Snapshot remains intact — Phase C.2 extende
     expect(heroSlice).not.toContain('heroMetrics')
   })
 
-  it('primary/YTD Performance rows are byte-for-byte the same as Phase C.1 — this phase only added to what follows them', () => {
+  it('primary/YTD Performance rows still read the exact same engine metrics as Phase C.1/C.2 — Phase C.3 (compact redesign) only changed markup/CSS presentation, never which Metric backs which figure', () => {
     const snapshotStart = pageSource.indexOf('propertySnapshotCard')
     const snapshotEnd = pageSource.indexOf('</details>\n          </div>', snapshotStart) + '</details>\n          </div>'.length
     const snapshotSlice = pageSource.slice(snapshotStart, snapshotEnd)
-    expect(snapshotSlice).toContain('<span>Estimated Value</span><strong>{metricMoney(performance.estimatedValue)}</strong>')
-    expect(snapshotSlice).toContain('<span>Estimated Equity</span><strong>{metricMoney(performance.equity)}</strong>')
-    expect(snapshotSlice).toContain('<span>Monthly Rent</span><strong>{metricMoney(performance.contractMonthlyRent)}</strong>')
-    expect(snapshotSlice).toContain('<span>Income</span><strong>{metricMoney(performance.actualIncomeYtd)}</strong>')
-    expect(snapshotSlice).toContain('<span>Expenses</span><strong>{metricMoney(performance.operatingExpensesYtd)}</strong>')
+    expect(snapshotSlice).toContain('metricCompactMoney(performance.estimatedValue)')
+    expect(snapshotSlice).toContain('metricCompactMoney(performance.equity)')
+    expect(snapshotSlice).toContain("metricMoney(performance.contractMonthlyRent, '/mo')")
+    expect(snapshotSlice).toContain('metricMoney(performance.actualIncomeYtd)')
+    expect(snapshotSlice).toContain('metricMoney(performance.operatingExpensesYtd)')
   })
 })
 
-describe('Phase C.2, Part 4: install banner — real height measurement, not a hardcoded pixel guess', () => {
-  it('the old hardcoded 64px/70px nav-height assumptions are gone from the clearance rules', () => {
+describe('Phase C.2, Part 4 (superseded by Phase C.3 follow-up, 2nd real-device round): install banner is now a normal in-flow block, not a measured fixed overlay', () => {
+  // Multiple real iPhone/Safari screenshots (Dashboard maintenance cards,
+  // Property Snapshot, Expenses & tax) showed the Phase C.2 measured-
+  // clearance `position: fixed` banner STILL covering product content —
+  // a fixed overlay computing its own clearance is fundamentally fragile.
+  // The fix is architectural: <InstallPrompt /> now renders inside
+  // <body>, after {children} (app/layout.tsx), as a plain, non-fixed
+  // block — it scrolls with the page and can never cover anything, by
+  // construction rather than by calculation. Every ResizeObserver/custom-
+  // property/body-class mechanism that existed solely to support the old
+  // fixed-overlay clearance is gone; bottom-nav safe-area handling
+  // (independently required, unrelated to this fix) is untouched.
+
+  it('the old hardcoded 64px/70px nav-height assumptions, and the measured-install-hint-clearance mechanism, are all gone', () => {
     expect(cssSource).not.toMatch(/body\.hasBottomNav \.shell \{ padding-bottom: calc\(70px/)
     expect(cssSource).not.toMatch(/body\.hasBottomNav \.installHint \{ bottom: calc\(64px/)
+    expect(cssSource).not.toContain('--install-hint-height')
+    expect(cssSource).not.toContain('hasInstallHint')
   })
 
-  it('clearance rules read the real measured heights via CSS custom properties, with a fallback only for the instant before the first measurement', () => {
+  it('the bottom-nav clearance CSS custom property is still kept — it is independently required for the shell\'s own padding and is unrelated to the install-hint fix', () => {
     expect(cssSource).toContain('var(--bottom-nav-height, 64px)')
-    expect(cssSource).toContain('var(--install-hint-height, 76px)')
   })
 
-  it('a dedicated hasInstallHint body class (mirroring the existing hasBottomNav pattern) reserves shell clearance only while the hint is actually visible', () => {
-    expect(cssSource).toContain('body.hasInstallHint .shell')
-    expect(cssSource).toContain('body.hasBottomNav.hasInstallHint .shell') // both bars stacked
+  it('.installHint is no longer position: fixed — it is an ordinary flex block using normal margin (including safe-area-aware trailing margin), not a fixed-position offset', () => {
+    const idx = cssSource.indexOf('.installHint {')
+    const rule = cssSource.slice(idx, cssSource.indexOf('}', idx) + 1)
+    expect(rule).not.toContain('position: fixed')
+    expect(rule).toContain('margin:')
+    expect(rule).toContain('env(safe-area-inset-')
   })
 
-  it('MobileBottomNav publishes its own real rendered height via ResizeObserver, not a guess', () => {
+  it('a plain, static (not measured) trailing margin gives the banner breathing room above the fixed bottom nav on narrow viewports — deliberately not exact, since normal in-flow whitespace costs nothing', () => {
+    expect(cssSource).toContain('body.hasBottomNav .installHint { margin-bottom: calc(70px')
+  })
+
+  it('MobileBottomNav publishes its own real rendered height via ResizeObserver, not a guess — unaffected by the install-banner fix', () => {
     const navSource = readFile('components/MobileBottomNav.tsx')
     expect(navSource).toContain('new ResizeObserver(')
     expect(navSource).toContain("document.documentElement.style.setProperty('--bottom-nav-height'")
@@ -182,13 +209,23 @@ describe('Phase C.2, Part 4: install banner — real height measurement, not a h
     expect(navSource).toContain("document.documentElement.style.removeProperty('--bottom-nav-height')")
   })
 
-  it('InstallPrompt publishes its own real rendered height, toggles hasInstallHint only while visible, and cleans up on dismiss', () => {
+  it('InstallPrompt no longer measures itself or toggles any body class — no ResizeObserver, no --install-hint-height, no hasInstallHint anywhere in its source', () => {
     const installSource = readFile('components/InstallPrompt.tsx')
-    expect(installSource).toContain("document.body.classList.add('hasInstallHint')")
-    expect(installSource).toContain("document.body.classList.remove('hasInstallHint')")
-    expect(installSource).toContain('new ResizeObserver(')
-    expect(installSource).toContain("document.documentElement.style.setProperty('--install-hint-height'")
-    expect(installSource).toContain("document.documentElement.style.removeProperty('--install-hint-height')")
+    expect(installSource).not.toContain('hasInstallHint')
+    expect(installSource).not.toContain('new ResizeObserver(')
+    expect(installSource).not.toContain("setProperty('--install-hint-height'")
+    expect(installSource).not.toContain('useRef')
+  })
+
+  it('<InstallPrompt /> is rendered inside <body>, after {children} — this is what makes it a normal in-flow block instead of needing position: fixed', () => {
+    const layoutSource = readFile('app/layout.tsx')
+    const bodyIdx = layoutSource.indexOf('<body>')
+    const bodyEnd = layoutSource.indexOf('</body>')
+    const bodySlice = layoutSource.slice(bodyIdx, bodyEnd)
+    const childrenIdx = bodySlice.indexOf('{children}')
+    const installIdx = bodySlice.indexOf('<InstallPrompt />')
+    expect(childrenIdx).toBeGreaterThan(-1)
+    expect(installIdx).toBeGreaterThan(childrenIdx) // after the page content, not before/beside it
   })
 
   it('dismiss/install functionality itself is completely unchanged', () => {
