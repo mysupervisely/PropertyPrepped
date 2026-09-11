@@ -210,7 +210,7 @@ h2, h3, p { margin-top: 0; }
 }
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 44px; }
 .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
-.stat span, .miniStats span, .heroMetrics span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 7px; }
+.stat span, .miniStats span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 7px; }
 .stat strong { font-size: 25px; letter-spacing: -0.6px; }
 .sectionHead { display: flex; justify-content: space-between; align-items: end; gap: 18px; margin-bottom: 16px; }
 /* Mobile Authentication & Layout Reliability V1 (real-iPhone follow-up):
@@ -303,14 +303,14 @@ h2, h3, p { margin-top: 0; }
    under the address — the "at a glance" tenant/rent context the spec
    asks the property workspace to surface immediately. */
 .heroStatusPills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 13px; }
-/* Property Profile Mobile Redesign V2: Tax joins Value/Mortgage/Equity/
-   Rent as a 5th metric — 5 columns on wide layouts, wrapping to 3+2 on
-   narrower ones (see the @media rules below) rather than shrinking
-   text to force 5 into one row forever. */
-.heroMetrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
-.heroMetrics > div { border-left: 1px solid var(--line); padding-left: 15px; }
-.heroMetrics > div:first-child { border-left: 0; padding-left: 0; }
-.heroMetrics strong { font-size: 17px; }
+/* Property Intelligence V1, Phase C.1 (Unified Property Snapshot): the
+   Investment Analysis link next to Edit gets the same quiet brand-color
+   text treatment as .needsAttentionViewAll (Simplification + Maintenance
+   Workspace V2, Phase E1.1) so it reads as secondary, not equal-weight
+   with Edit. */
+.heroInvestmentLink { flex-shrink: 0; border: 0; background: transparent; padding: 6px 2px; color: var(--brand); font-weight: 650; font-size: 13px; display: inline-flex; align-items: center; gap: 1px; }
+.heroInvestmentLink::after { content: '›'; font-size: 15px; line-height: 1; }
+.heroInvestmentLink:hover { text-decoration: underline; }
 /* Property Profile Mobile Redesign V2: a non-scrolling grid — all six
    property sections visible together, never a horizontally swiping
    row (the previous `display: flex; overflow-x: auto` let Documents/
@@ -349,6 +349,47 @@ h2, h3, p { margin-top: 0; }
 .detailRows strong { font-size: 14px; }
 .detailRows .highlightRow { margin-top: 4px; padding: 14px 12px; border: 0; border-radius: 10px; background: var(--brand-soft); color: var(--brand); }
 .detailRows .highlightRow span { color: var(--brand); }
+
+/* Property Intelligence V1, Phase C: property Overview snapshot. Reuses
+   .financialStats/.financialStat (the Ledger tab's own metric-card
+   pattern) rather than a new card style, restyled to 3-across (this
+   milestone never shows more than 3 metrics per row) so the look stays
+   consistent across the app. */
+.propertySnapshotCard { margin-bottom: 20px; }
+.propertySnapshotCard h3 { margin-bottom: 14px; }
+.propertySnapshotSubhead { margin-top: 22px; display: flex; align-items: baseline; gap: 8px; }
+.propertySnapshotYear { color: var(--muted); font-weight: 500; font-size: 12px; }
+.performanceStats.financialStats { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 0; }
+/* Phase C.1: secondary/contextual row (Mortgage Balance, Purchase Price)
+   — plain .detailRows label/value rows, deliberately quieter than the
+   .financialStat grids above so this reads as supporting context, not
+   another headline number. Same divider treatment as
+   .propertyPerformanceDetails below it, so the card's hierarchy reads
+   primary -> performance -> secondary -> deeper (View performance). */
+.propertySnapshotContext { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+/* Same collapsed-by-default <details>/<summary> pattern as
+   .recentActivityDetails (Simplification + Maintenance Workspace V2,
+   Phase E1) — a plain "Show"/"Hide" text affordance, zero new JS. */
+.propertyPerformanceDetails { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
+.propertyPerformanceDetails summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px; color: var(--brand); font-weight: 650; font-size: 13.5px; }
+.propertyPerformanceDetails summary::-webkit-details-marker { display: none; }
+.propertyPerformanceDetails summary::after { content: '›'; font-size: 16px; }
+.propertyPerformanceDetails[open] summary::after { content: '‹'; }
+.propertyPerformanceDetails[open] summary { margin-bottom: 14px; }
+.propertyPerformanceRows .propertyPerformanceNote { grid-column: 1 / -1; color: var(--muted); font-size: 11.5px; line-height: 1.4; margin: -8px 0 4px; }
+/* Two notes can land back-to-back (e.g. a fallback-rent note immediately
+   followed by the equity-explanation note) — extra space keeps them
+   reading as two distinct facts, not one run-on caption. */
+.propertyPerformanceRows .propertyPerformanceNote + .propertyPerformanceNote { margin-top: 8px; }
+/* Phase C.2: the "Full-Year Performance" sub-heading inside View
+   performance — same muted-year-badge language .propertySnapshotYear
+   already established for "YTD Performance", just sized to sit inside
+   this grid of plain rows rather than as a card-level <h3>. */
+.propertyPerformanceRows .propertyPerformanceYearHead { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 8px; margin: 0 0 2px; font-size: 13px; font-weight: 650; }
+
+@media (max-width: 560px) {
+  .performanceStats.financialStats { grid-template-columns: 1fr; }
+}
 
 /* Property Profile / PropCrew UX Improvement: the Financial Details
    card's own bottom "View full Investment Analysis" CTA (Property
@@ -470,16 +511,6 @@ h2, h3, p { margin-top: 0; }
 @media (max-width: 900px) {
   .propertyHero { grid-template-columns: 1fr; gap: 22px; }
   .heroPhoto { height: 340px; }
-  /* Property Profile Mobile Polish V3: 5 metrics on a 6-column track —
-     Value/Mortgage/Equity each span 2 (three equal thirds filling row
-     1), Rent/Tax each span 3 (two equal halves filling row 2 exactly,
-     no empty trailing cell the way a plain 3-column grid with 5 items
-     would leave). Same technique at every width ≤900px; the 460px rule
-     below only adjusts gap/font-size, not the column layout itself. */
-  .heroMetrics { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .heroMetrics > div:nth-child(1), .heroMetrics > div:nth-child(2), .heroMetrics > div:nth-child(3) { grid-column: span 2; }
-  .heroMetrics > div:nth-child(4), .heroMetrics > div:nth-child(5) { grid-column: span 3; }
-  .heroMetrics > div:nth-child(4) { border-left: 0; padding-left: 0; }
   .overviewGrid { grid-template-columns: 1fr; }
   .documentLayout { grid-template-columns: 1fr; }
   .categoryPanel { position: static; display: flex; overflow-x: auto; gap: 5px; }
@@ -496,7 +527,6 @@ h2, h3, p { margin-top: 0; }
   .formGrid { grid-template-columns: 1fr; }
   .photo { height: 205px; }
   .heroPhoto { height: 245px; }
-  .heroMetrics { gap: 12px; }
   /* Simplification + Maintenance Workspace V2, Phase D.1: seven primary
      sections (Maintenance promoted alongside Overview/Rent/Details/
      PropCrew/Documents/Tax) no longer fit as an even, non-wrapping
@@ -527,12 +557,6 @@ h2, h3, p { margin-top: 0; }
 }
 @media (max-width: 460px) {
   .stats { grid-template-columns: 1fr; }
-  /* Keeps the same balanced thirds-then-halves layout from the 900px
-     rule at the narrowest widths too — only gap/type size shrink here,
-     never the column arrangement (which would reintroduce the
-     unbalanced trailing empty cell right when space is tightest). */
-  .heroMetrics { gap: 10px; }
-  .heroMetrics strong { font-size: 15px; }
   .topbar .secondary { padding: 9px 11px; font-size: 12px; }
   .photoUploader { grid-template-columns: 36px minmax(0, 1fr); justify-content: start; }
   .tabs button { font-size: 12px; padding: 9px 11px; }
@@ -1633,13 +1657,30 @@ h2, h3, p { margin-top: 0; }
 /* Extra bottom clearance so a page's own last real content is never
    hidden behind the fixed bar — scoped to body.hasBottomNav, the class
    MobileBottomNav itself toggles only while mounted, so pages that
-   never render it (Pricing, the admin tool) are completely unaffected. */
+   never render it (Pricing, the admin tool) are completely unaffected.
+   Phase C.2: a real iPhone/Safari session proved the old fixed-pixel
+   assumption (nav ≈ 64-70px, install hint ≈ 70px) wrong — Dynamic
+   Type/font-size settings can wrap either bar's text taller than that,
+   and a hardcoded offset has no way to notice. Both MobileBottomNav and
+   InstallPrompt now publish their OWN real rendered height via a
+   ResizeObserver, as --bottom-nav-height / --install-hint-height custom
+   properties on <html> — every rule below reads the measured value, not
+   a guess. The px fallbacks only cover the brief instant before the
+   first measurement lands (or a browser without ResizeObserver); they
+   are not the primary mechanism, and are sized generously (not tightly)
+   so that instant never under-clears. body.hasInstallHint is the exact
+   same toggle-only-while-mounted pattern as hasBottomNav, set by
+   InstallPrompt itself. */
 @media (max-width: 760px) {
-  body.hasBottomNav .shell { padding-bottom: calc(70px + env(safe-area-inset-bottom) + 70px); }
+  body.hasBottomNav .shell { padding-bottom: calc(var(--bottom-nav-height, 64px) + env(safe-area-inset-bottom) + 24px); }
+  body.hasInstallHint .shell { padding-bottom: calc(var(--install-hint-height, 76px) + 24px); }
+  /* Both bars mounted at once: reserve clearance for both, stacked. */
+  body.hasBottomNav.hasInstallHint .shell { padding-bottom: calc(var(--bottom-nav-height, 64px) + env(safe-area-inset-bottom) + var(--install-hint-height, 76px) + 28px); }
   /* The PWA install hint is a separate, unrelated fixed bar (mounted
-     app-wide in app/layout.tsx) — raised clear of the bottom nav so
-     the two never visually collide. */
-  body.hasBottomNav .installHint { bottom: calc(64px + env(safe-area-inset-bottom) + 12px); }
+     app-wide in app/layout.tsx) — raised clear of the bottom nav's real
+     measured height so the two never visually collide regardless of
+     either one's actual rendered height. */
+  body.hasBottomNav .installHint { bottom: calc(var(--bottom-nav-height, 64px) + env(safe-area-inset-bottom) + 12px); }
 }
 
 /* Sub-tabs (Property / Documents / People second-level navigation) —
@@ -1851,11 +1892,11 @@ h2, h3, p { margin-top: 0; }
 
 @media (max-width: 620px) {
   .heroInfoHead { flex-direction: column; align-items: stretch; }
-  /* QA: Edit/Investment Analysis sat too close to the Value/Mortgage row
-     below once the actions wrap under the title on mobile — this is the
-     last element before .heroMetrics at this width, so it's the one that
-     needs the breathing room, not .heroMetrics itself (kept untouched at
-     every other width). */
+  /* QA: Edit/Investment Analysis sat too close to whatever follows the
+     hero once the actions wrap under the title on mobile — Property
+     Intelligence V1, Phase C.1 removed the hero metric row that used to
+     sit here, but the property tabs nav immediately follows the hero
+     section, so the same breathing room still applies. */
   .heroInfoActions { justify-content: flex-start; flex-wrap: wrap; margin-bottom: 18px; }
 }
 

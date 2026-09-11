@@ -5,10 +5,20 @@ import { join } from 'node:path'
 // Property Profile / PropCrew UX Improvement, Part 1 — regression guards
 // for removing the redundant "View full Investment Analysis ->" CTA from
 // the Financial Details card, while keeping the main Investment Analysis
-// button in the property hero and every Financial Details row/
+// link in the property hero and every remaining Financial Details row/
 // calculation intact. Same source-read technique as
 // property-profile-mobile-polish-v3.test.ts (no jsdom/React Testing
 // Library in this repo).
+//
+// UPDATED for Property Intelligence V1, Phase C.1 (Unified Property
+// Snapshot): the card was renamed "Expenses & tax" and slimmed —
+// Estimated cash flow was retired from presentation, Purchase Price/
+// Appreciation moved into the unified Property Snapshot, and the hero's
+// Investment Analysis button became a quiet text link (.heroInvestmentLink,
+// same destination/functionality). See
+// property-intelligence-v1-phase-c1-unified-snapshot.test.ts for the
+// full set of current assertions on that phase; this file keeps the
+// still-true "no redundant CTA" invariants updated in place.
 
 const ROOT = join(__dirname, '..', '..')
 function readFile(relativePath: string): string {
@@ -19,7 +29,7 @@ const pageSource = readFile('app/page.tsx')
 const cardIndex = pageSource.indexOf('financialDetailsCard')
 const cardSlice = pageSource.slice(cardIndex, pageSource.indexOf('overviewPanel"><h3>Property facts'))
 
-describe('The redundant bottom CTA is removed from the Financial Details card', () => {
+describe('The redundant bottom CTA is removed from the "Expenses & tax" card (formerly Financial Details)', () => {
   it('the card no longer contains "View full Investment Analysis" text or a link to the evaluator', () => {
     expect(cardSlice).not.toContain('View full Investment Analysis')
     expect(cardSlice).not.toContain('/investment-tools/property-evaluator?propertyId=')
@@ -33,36 +43,44 @@ describe('The redundant bottom CTA is removed from the Financial Details card', 
     expect(cssSource).not.toMatch(/\.financialDetailsLink\s*\{/)
   })
 
-  it('there is exactly one Link to the property evaluator on the whole page (the hero button) — not two', () => {
+  it('there is exactly one Link to the property evaluator on the whole page (the hero link) — not two', () => {
     const matches = pageSource.match(/href={`\/investment-tools\/property-evaluator\?propertyId=\$\{selected\.id\}`}/g) || []
     expect(matches.length).toBe(1)
   })
 })
 
-describe('The main Investment Analysis button near the top of the property profile is untouched', () => {
-  it('the hero still has its Edit + Investment Analysis actions', () => {
+describe('The Investment Analysis entry point near the top of the property profile is untouched (Phase C.1: presentation-only de-emphasis)', () => {
+  it('the hero still has its Edit + Investment Analysis actions, now with Investment Analysis as a quiet text link rather than a bordered button', () => {
     const heroActionsIdx = pageSource.indexOf('heroInfoActions')
     const slice = pageSource.slice(heroActionsIdx, heroActionsIdx + 400)
     expect(slice).toContain('>Edit</button>')
     expect(slice).toContain('>Investment Analysis</Link>')
+    expect(slice).toContain('className="heroInvestmentLink"')
     expect(slice).toContain('/investment-tools/property-evaluator?propertyId=')
   })
 })
 
-describe('Financial Details rows and calculations are preserved exactly as before', () => {
-  it('Monthly property expenses, Estimated cash flow, Purchase price, Appreciation, and Annual property tax all remain, using the existing data/calculations', () => {
+describe('"Expenses & tax" rows and calculations are preserved for everything still shown there', () => {
+  it('Monthly property expenses and Annual property tax remain, using the existing data/calculations', () => {
     expect(cardSlice).toContain('<span>Monthly property expenses</span><strong>{money(selected.monthly_expenses)}</strong>')
-    expect(cardSlice).toContain('<span>Estimated cash flow</span><strong>{money(monthlyCashFlow)}/mo</strong>')
-    expect(cardSlice).toContain('<span>Purchase price</span><strong>{money(selected.purchase_price)}</strong>')
-    expect(cardSlice).toContain('appreciation.amount')
     expect(cardSlice).toContain('<span>Annual property tax</span>')
     expect(cardSlice).toContain("selected.property_tax_annual != null ? money(selected.property_tax_annual) : 'Not entered'")
   })
 
-  it('no financial formula changed — monthlyCashFlow/equity/appreciation are still computed exactly once, the same way', () => {
-    expect(pageSource.match(/const monthlyCashFlow =/g)?.length).toBe(1)
-    expect(pageSource).toContain('const monthlyCashFlow = Number(selected.monthly_rent) - Number(selected.monthly_expenses)')
-    expect(pageSource.match(/const equity =/g)?.length).toBe(1)
-    expect(pageSource).toContain('const equity = Number(selected.estimated_value) - Number(selected.mortgage_balance)')
+  it('Estimated cash flow was deliberately retired from presentation (Phase C.1) — it is no longer on this card or anywhere else, but the underlying rent/expenses data and edit capability are untouched', () => {
+    expect(cardSlice).not.toContain('Estimated cash flow')
+    expect(pageSource).not.toMatch(/const monthlyCashFlow =/)
+    expect(pageSource).toContain('selected.monthly_expenses')
+    expect(pageSource).toContain('selected.monthly_rent')
+  })
+
+  it('Purchase Price and Appreciation moved into the unified Property Snapshot (not deleted) — same appreciationFor() calculation, computed once', () => {
+    expect(cardSlice).not.toContain('Purchase price')
+    expect(cardSlice).not.toContain('Appreciation')
+    const snapshotIdx = pageSource.indexOf('propertySnapshotContext')
+    const snapshotSlice = pageSource.slice(snapshotIdx, snapshotIdx + 1300)
+    expect(snapshotSlice).toContain('<span>Purchase Price</span><strong>{money(selected.purchase_price)}</strong>')
+    expect(snapshotSlice).toContain('appreciation.amount')
+    expect(pageSource.match(/const appreciation = appreciationFor\(/g)?.length).toBe(1)
   })
 })

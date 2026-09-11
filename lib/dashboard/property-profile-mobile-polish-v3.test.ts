@@ -17,67 +17,27 @@ function readFile(relativePath: string): string {
 const pageSource = readFile('app/page.tsx')
 const cssSource = readFile('app/globals.css')
 
-describe('Section 1/2: the five top metrics remain, sourced exactly as before', () => {
-  const heroMetricsSlice = pageSource.slice(pageSource.indexOf('<div className="heroMetrics">'), pageSource.indexOf('</div></div>\n        </section>'))
+// Sections 1/2 originally locked in the hero's five-metric .heroMetrics
+// strip (Value/Mortgage/Equity/Rent/Tax) and its 3+2 mobile layout.
+// Property Intelligence V1, Phase C.1 (Unified Property Snapshot)
+// deliberately removes .heroMetrics entirely — the hero is identity-only
+// now (photo/address/city/status/actions); every financial number lives
+// in exactly one place, the Property Snapshot on the Overview tab. See
+// property-intelligence-v1-phase-c1-unified-snapshot.test.ts for the
+// current, authoritative assertions on the hero and the unified snapshot.
+describe('Section 1/2: the hero no longer duplicates financial numbers (superseded by Phase C.1)', () => {
+  const heroIdx = pageSource.indexOf('<section className="propertyHero">')
+  const heroSlice = pageSource.slice(heroIdx, pageSource.indexOf('</section>', heroIdx))
 
-  it('Value, Mortgage, Equity, Rent, and Tax are all still present in the hero strip', () => {
-    for (const label of ['<span>Value</span>', '<span>Mortgage</span>', '<span>Equity</span>', '<span>Rent</span>', '<span>Tax</span>']) {
-      expect(heroMetricsSlice).toContain(label)
-    }
+  it('.heroMetrics is gone — the hero is identity-only', () => {
+    expect(heroSlice).not.toContain('heroMetrics')
+    expect(heroSlice).not.toContain('money(selected.estimated_value)')
+    expect(heroSlice).not.toContain('money(selected.mortgage_balance)')
+    expect(heroSlice).not.toContain('money(selected.monthly_rent)')
   })
 
-  it('uses the exact same existing sources — no new formulas', () => {
-    expect(heroMetricsSlice).toContain('money(selected.estimated_value)')
-    expect(heroMetricsSlice).toContain('money(selected.mortgage_balance)')
-    expect(heroMetricsSlice).toContain('money(equity)')
-    expect(heroMetricsSlice).toContain('money(selected.monthly_rent)')
-    expect(heroMetricsSlice).toContain('money(selected.property_tax_annual)')
-  })
-
-  it('Tax still shows "Not entered" (never $0) when property_tax_annual is null', () => {
-    expect(heroMetricsSlice).toContain('selected.property_tax_annual != null')
-    expect(heroMetricsSlice).toContain("'Not entered'")
-    // Guards against a regression that would coerce a null tax value
-    // into money(0) — e.g. `money(selected.property_tax_annual || 0)`.
-    expect(heroMetricsSlice).not.toMatch(/property_tax_annual\s*\|\|\s*0/)
-  })
-
-  it('the equity calculation is untouched (estimated_value − mortgage_balance)', () => {
-    expect(pageSource).toContain('const equity = Number(selected.estimated_value) - Number(selected.mortgage_balance)')
-  })
-})
-
-describe('Section 2: the five-metric mobile layout intentionally balances 3 + 2, no empty trailing cell', () => {
-  it('.heroMetrics uses a 6-column track with explicit spans, not a plain repeat(3) that would leave an empty 6th cell', () => {
-    const mobileRule = cssSource.match(/@media \(max-width: 900px\) \{([\s\S]*?)\n\}/)?.[1] || ''
-    expect(mobileRule).toContain('.heroMetrics { grid-template-columns: repeat(6, minmax(0, 1fr)); }')
-    // First three metrics (Value/Mortgage/Equity) each span 2 of 6
-    // columns — three equal thirds filling row 1 exactly.
-    expect(mobileRule).toMatch(/nth-child\(1\)[^{]*nth-child\(2\)[^{]*nth-child\(3\)[^{]*\{\s*grid-column: span 2;/)
-    // Last two metrics (Rent/Tax) each span 3 of 6 columns — two equal
-    // halves filling row 2 exactly, no leftover empty cell.
-    expect(mobileRule).toMatch(/nth-child\(4\)[^{]*nth-child\(5\)[^{]*\{\s*grid-column: span 3;/)
-  })
-
-  it('no plain repeat(3, 1fr) heroMetrics rule survives anywhere that would reintroduce the unbalanced empty-cell layout', () => {
-    expect(cssSource).not.toMatch(/\.heroMetrics\s*\{\s*grid-template-columns:\s*repeat\(3/)
-  })
-
-  it('the 460px (narrowest) breakpoint only adjusts spacing/type size, never re-overrides the column layout', () => {
-    const narrowRule = cssSource.match(/@media \(max-width: 460px\) \{([\s\S]*?)\n\}/)?.[1] || ''
-    const heroMetricsLines = narrowRule.match(/\.heroMetrics[^{]*\{[^}]*\}/g) || []
-    for (const line of heroMetricsLines) expect(line).not.toContain('grid-template-columns')
-  })
-
-  it('no horizontal scrolling was introduced for the metric strip', () => {
-    const heroMetricsRules = cssSource.match(/\.heroMetrics[^{]*\{[^}]*\}/g) || []
-    for (const rule of heroMetricsRules) expect(rule).not.toContain('overflow-x')
-  })
-
-  it('typography was not shrunk substantially — the smallest heroMetrics font-size is still 15px (a modest step down from the 17px base, not a drastic one)', () => {
-    const sizes = [...cssSource.matchAll(/\.heroMetrics strong \{ font-size: (\d+)px; \}/g)].map((m) => Number(m[1]))
-    expect(sizes.length).toBeGreaterThan(0)
-    for (const size of sizes) expect(size).toBeGreaterThanOrEqual(15)
+  it('no orphaned .heroMetrics CSS rules survive the removal', () => {
+    expect(cssSource).not.toMatch(/\.heroMetrics\s*\{/)
   })
 })
 
@@ -108,47 +68,45 @@ describe('Section 5: the primary tab nav reflects Phase D\'s Maintenance promoti
   })
 })
 
-describe('Section 3: Financial Details no longer blindly duplicates the hero metrics', () => {
+// Section 3 originally locked in the pre-Phase-C.1 "Financial details"
+// card (Monthly property expenses, Estimated cash flow, Purchase price,
+// Appreciation, Annual property tax, HOA). Property Intelligence V1,
+// Phase C.1 retired "Estimated cash flow" from presentation (it competed
+// with the engine's period-safe Net Cash Flow/YTD NOI) and moved Purchase
+// Price/Appreciation into the unified Property Snapshot above — this
+// card, renamed "Expenses & tax", now holds only the remaining editable
+// property-level inputs. See
+// property-intelligence-v1-phase-c1-unified-snapshot.test.ts for the
+// current, authoritative assertions on all of this.
+describe('Section 3: "Expenses & tax" (formerly Financial Details) no longer duplicates or competes with the Property Snapshot (superseded by Phase C.1)', () => {
   const cardIndex = pageSource.indexOf('financialDetailsCard')
   const cardSlice = pageSource.slice(cardIndex, pageSource.indexOf('overviewPanel"><h3>Property facts'))
 
-  it('does not repeat the bare Value / Mortgage / Equity / Rent (Monthly) / Tax (Annual) rows the hero strip already shows', () => {
+  it('does not repeat Value / Mortgage / Equity / Rent / Tax, and no longer shows Estimated cash flow, Purchase price, or Appreciation', () => {
     expect(cardSlice).not.toContain('<span>Value</span><strong>{money(selected.estimated_value)}</strong>')
     expect(cardSlice).not.toContain('<span>Mortgage</span><strong>{money(selected.mortgage_balance)}</strong>')
     expect(cardSlice).not.toContain('<span>Equity</span><strong>{money(equity)}</strong>')
-    expect(cardSlice).not.toContain('Rent (Monthly)')
-    expect(cardSlice).not.toContain('Tax (Annual)')
+    expect(cardSlice).not.toContain('Estimated cash flow')
+    expect(cardSlice).not.toContain('Purchase price')
+    expect(cardSlice).not.toContain('Appreciation')
   })
 
-  it('uses only existing, already-available property fields/calculations: monthly expenses, cash flow, purchase price, appreciation, annual property tax, HOA', () => {
+  it('keeps only Monthly property expenses, Annual property tax, and HOA — editable inputs, not performance figures', () => {
+    expect(cardSlice).toContain('<h3>Expenses &amp; tax</h3>')
     expect(cardSlice).toContain('<span>Monthly property expenses</span><strong>{money(selected.monthly_expenses)}</strong>')
-    expect(cardSlice).toContain('<span>Estimated cash flow</span><strong>{money(monthlyCashFlow)}/mo</strong>')
-    expect(cardSlice).toContain('<span>Purchase price</span><strong>{money(selected.purchase_price)}</strong>')
     expect(cardSlice).toContain('<span>Annual property tax</span>')
-    expect(cardSlice).toContain('appreciation.amount')
     expect(cardSlice).toContain('selected.hoa_monthly')
   })
 
-  it('Annual property tax uses the same "Not entered" fallback as the hero strip, never a fabricated $0', () => {
+  it('Annual property tax uses the same "Not entered" fallback as before, never a fabricated $0', () => {
     expect(cardSlice).toContain("selected.property_tax_annual != null ? money(selected.property_tax_annual) : 'Not entered'")
   })
 
-  it('reuses the pre-existing monthlyCashFlow calculation — exactly one definition exists in the file, no new formula', () => {
-    expect(pageSource).toContain('const monthlyCashFlow = Number(selected.monthly_rent) - Number(selected.monthly_expenses)')
-    expect(pageSource.match(/const monthlyCashFlow =/g)?.length).toBe(1)
+  it('no cap-rate (or other) formula was introduced on this card — it stays a plain list of stored fields', () => {
+    expect(cardSlice).not.toMatch(/capRate|cap_rate|CapRate/)
   })
 
-  it('no new cap-rate (or other new financial) formula was introduced — none existed on this page before, and none was added', () => {
-    expect(pageSource).not.toMatch(/capRate|cap_rate|CapRate/)
-  })
-
-  // Superseded by the Property Profile / PropCrew UX Improvement
-  // milestone: the card's own bottom "View full Investment Analysis ->"
-  // CTA was removed as redundant with the Investment Analysis button
-  // already in the property hero (present on every tab, not just
-  // Overview). See lib/dashboard/financial-details-cta-removal.test.ts
-  // for the current, authoritative assertions.
-  it('no longer has its own bottom "View full Investment Analysis" CTA — the hero button is the only Investment Analysis entry point now', () => {
+  it('no longer has its own bottom "View full Investment Analysis" CTA — the hero link is the only Investment Analysis entry point now', () => {
     expect(cardSlice).not.toContain('View full Investment Analysis')
     expect(cardSlice).not.toContain('financialDetailsLink')
   })

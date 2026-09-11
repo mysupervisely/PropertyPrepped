@@ -40,7 +40,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { GridIcon, WrenchIcon, PeopleIcon, ReceiptIcon } from './icons/NavIcons'
 
 export function MobileBottomNav({
@@ -49,6 +49,7 @@ export function MobileBottomNav({
   onDashboardNavigate?: () => void
 }) {
   const pathname = usePathname()
+  const navRef = useRef<HTMLElement>(null)
 
   // Lets CSS give .shell/.installHint extra bottom clearance only on
   // the pages that actually render this bar — see globals.css's
@@ -58,6 +59,31 @@ export function MobileBottomNav({
   useEffect(() => {
     document.body.classList.add('hasBottomNav')
     return () => { document.body.classList.remove('hasBottomNav') }
+  }, [])
+
+  // Property Intelligence V1, Phase C.2: publish this bar's REAL
+  // rendered height as --bottom-nav-height instead of every other
+  // fixed-position element (the PWA install hint) guessing it with a
+  // hardcoded pixel constant — a real iPhone/Safari session proved that
+  // constant wrong. getBoundingClientRect() (border-box, including
+  // padding/border — the actual space this bar occupies) is used
+  // instead of ResizeObserver's own contentRect so the published height
+  // already accounts for the safe-area-inset-bottom padding baked into
+  // this bar itself; consumers add nothing extra on top of it for that.
+  // display:none at desktop widths naturally reports a height of 0, so
+  // no separate width check is needed here — the measurement itself
+  // already reflects whether the bar is actually visible.
+  useEffect(() => {
+    const el = navRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => {
+      document.documentElement.style.setProperty('--bottom-nav-height', `${el.getBoundingClientRect().height}px`)
+    })
+    observer.observe(el)
+    return () => {
+      observer.disconnect()
+      document.documentElement.style.removeProperty('--bottom-nav-height')
+    }
   }, [])
 
   // Phase E1: Dashboard is the one destination for "/" now (no more
@@ -71,7 +97,7 @@ export function MobileBottomNav({
   const isTaxCenter = pathname === '/tax-center'
 
   return (
-    <nav className="mobileBottomNav" aria-label="Primary">
+    <nav ref={navRef} className="mobileBottomNav" aria-label="Primary">
       <Link
         href="/"
         aria-current={isDashboard ? 'page' : undefined}
