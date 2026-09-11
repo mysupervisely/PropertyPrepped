@@ -40,8 +40,13 @@ describe('Global h1 letter-spacing is proportional (em-relative), not a fixed px
   })
 
   it('the landing hero h1 (its own clamp()) is also em-relative, base and mobile override alike', () => {
-    expect(CSS).toMatch(/\.landingHeroHeadline h1 \{[^}]*letter-spacing: -0\.\d+em/)
-    expect(CSS).toMatch(/\.landingHeroHeadline h1 \{ letter-spacing: -0\.\d+em; \}/)
+    // Public Homepage V2 restructured the hero (no more .landingHeroHeadline
+    // wrapper — the h1 now sits directly in .landingHeroContent), but the
+    // same underlying invariant this guard protects (proportional,
+    // em-relative letter-spacing under a responsive clamp(), at both the
+    // base rule and its mobile override) is unchanged.
+    expect(CSS).toMatch(/\.landingHeroContent h1 \{[^}]*letter-spacing: -0\.\d+em/)
+    expect(CSS).toMatch(/\.landingHeroContent h1 \{ letter-spacing: -0\.\d+em; \}/)
   })
 
   it('no copy/markup workaround (non-breaking spaces, manual <br> mid-sentence) was used to paper over the spacing instead of fixing the CSS', () => {

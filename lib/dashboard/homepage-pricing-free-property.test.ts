@@ -3,7 +3,10 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { PLANS, PUBLIC_PLAN_ORDER, PLAN_FEATURE_HIGHLIGHTS, EARLY_ACCESS_PRICING } from '../billing/plans'
 
-// Public Homepage Pricing + First Property Free.
+// Public Homepage Pricing + First Property Free (extended by Public
+// Homepage V2 — Product Story + Pricing Simplification, which rewrote
+// components/LandingPage.tsx's structure and copy but never the
+// underlying facts these tests protect).
 //
 // Audit findings this milestone is built on (see the completion report
 // for the full writeup):
@@ -15,7 +18,7 @@ import { PLANS, PUBLIC_PLAN_ORDER, PLAN_FEATURE_HIGHLIGHTS, EARLY_ACCESS_PRICING
 //     later, AUTHENTICATED-ONLY action reachable only from an already
 //     signed-in account choosing to upgrade — so "No credit card
 //     required" to start is also genuinely true.
-// Every test below asserts the homepage's new copy/prices trace back to
+// Every test below asserts the homepage's copy/prices trace back to
 // these same verified facts — never a second, hand-typed source that
 // could drift.
 
@@ -61,15 +64,23 @@ describe('Above-the-fold free-property message', () => {
     expect(landingSource.slice(h1Idx, h1End)).not.toContain('credit card')
   })
 
-  it('the free-property note appears after the primary CTA buttons, not before/inside them', () => {
+  it('the free-property note appears after the primary CTA button, not before/inside it', () => {
     const ctaIdx = landingSource.indexOf('landingHeroCtas')
     const noteIdx = landingSource.indexOf('landingHeroFreeNote')
     expect(noteIdx).toBeGreaterThan(ctaIdx)
   })
 
-  it('the primary hero CTA reads truthfully to what it actually does (starts the existing signup flow) and stays non-aggressive', () => {
-    expect(landingSource).toContain('onClick={startSignup}>Start Free</button>')
+  it('the primary hero CTA reads truthfully to what it actually does (opens the existing signup flow) and stays non-aggressive', () => {
+    expect(landingSource).toContain("onClick={() => openAuth('signup')}>Start Free</button>")
     expect(landingSource.toLowerCase()).not.toMatch(/act now|limited time|don't miss|hurry/)
+  })
+
+  it('Public Homepage V2: there is exactly ONE primary hero CTA — Rental Property Analyzer is no longer a competing hero-level button (Section 11)', () => {
+    const heroIdx = landingSource.indexOf('<section className="landingHero">')
+    const heroEnd = landingSource.indexOf('</section>', heroIdx)
+    const heroBlock = landingSource.slice(heroIdx, heroEnd)
+    expect(heroBlock).not.toContain('rental-analyzer')
+    expect((heroBlock.match(/landingCtaPrimary/g) || []).length).toBe(1)
   })
 })
 
@@ -84,6 +95,34 @@ describe('Pricing is reachable from the public homepage without an account', () 
   // reachability while signed out is otherwise unchanged.
   it('/pricing itself remains reachable while signed out (unchanged — this milestone does not touch that page)', () => {
     expect(pricingPageSource).toContain('ready && user ? <AuthHeader hideMobileNav /> : (')
+  })
+})
+
+describe('Public Homepage V2: returning-user sign-in moved to the header, not a permanent embedded card', () => {
+  it('the header exposes a clear "Log In" action alongside "Start Free" (Section 12), both opening the same existing auth panel', () => {
+    expect(landingSource).toContain("<button type=\"button\" className=\"landingNavLogin\" onClick={() => openAuth('signin')}>Log In</button>")
+    expect(landingSource).toContain("<button type=\"button\" className=\"primary landingNavStartFree\" onClick={() => openAuth('signup')}>Start Free</button>")
+  })
+
+  it('the sign-in/sign-up form only renders when opened — it is not part of the hero\'s permanent layout', () => {
+    const heroIdx = landingSource.indexOf('<section className="landingHero">')
+    const heroEnd = landingSource.indexOf('</section>', heroIdx)
+    const heroBlock = landingSource.slice(heroIdx, heroEnd)
+    expect(heroBlock).not.toContain('landingSignInCard')
+    expect(landingSource).toContain('{authOpen && (')
+  })
+
+  it('auth behavior itself is completely unchanged: same submitAuth/switchMode functions, same signInWithPassword/signUp calls', () => {
+    expect(landingSource).toContain('async function submitAuth()')
+    expect(landingSource).toContain('function switchMode(')
+    expect(landingSource).toContain('supabase.auth.signInWithPassword({ email: email.trim(), password })')
+    expect(landingSource).toContain('supabase.auth.signUp({ email: email.trim(), password })')
+  })
+
+  it('the auth overlay can be dismissed (backdrop click and an explicit close button), same interaction pattern as every other modal in the app', () => {
+    expect(landingSource).toContain('className="overlay landingAuthOverlay"')
+    expect(landingSource).toContain('e.target === e.currentTarget && closeAuth()')
+    expect(landingSource).toContain('aria-label="Close" onClick={closeAuth}')
   })
 })
 
@@ -113,7 +152,11 @@ describe('Homepage pricing section reads from the canonical source — never a s
     const sectionEnd = landingSource.indexOf('</section>', sectionIdx)
     const section = landingSource.slice(sectionIdx, sectionEnd)
     expect(section).toContain('{def.maxProperties === 1')
-    expect(section).not.toMatch(/\b5 propert(y|ies)\b|\b15 propert(y|ies)\b/)
+    // "More than 15 properties?" (the 16+/contact line) is expected text,
+    // not a plan-card duplicate — this only guards against a hardcoded
+    // "Up to 5/15 properties" standing in for {def.maxProperties} on a
+    // plan card itself.
+    expect(section).not.toMatch(/Up to (5|15) propert(y|ies)\b/)
   })
 
   it('feature bullets come from PLAN_FEATURE_HIGHLIGHTS, not a second, separately-typed bullet list', () => {
@@ -126,12 +169,13 @@ describe('Homepage pricing section reads from the canonical source — never a s
     }
   })
 
-  it('the "Early Access Pricing" pill uses the same EARLY_ACCESS_PRICING flag and isPaid condition as /pricing (paid plans only)', () => {
+  it('the "Early Access Pricing" pill uses the same EARLY_ACCESS_PRICING flag and isPaid condition as /pricing (paid plans only) — Public Homepage V2 turned the flag off as pricing-clutter cleanup, but the shared rendering logic is unchanged', () => {
     const sectionIdx = landingSource.indexOf('landingPricing" id="pricing"')
     const sectionEnd = landingSource.indexOf('</section>', sectionIdx)
     const section = landingSource.slice(sectionIdx, sectionEnd)
     expect(section).toContain("isPaid && EARLY_ACCESS_PRICING && <span className=\"statusPill pricingEarlyAccess\">Early Access Pricing</span>")
     expect(section).toContain("const isPaid = planId !== 'free'")
+    expect(EARLY_ACCESS_PRICING).toBe(false)
   })
 
   it('does not invent a fourth/new tier — exactly PUBLIC_PLAN_ORDER\'s plans are shown, same as /pricing\'s purchasable cards', () => {
@@ -145,20 +189,80 @@ describe('Homepage pricing section reads from the canonical source — never a s
     expect(section).toContain('className="pricingGrid landingPricingGrid"')
     expect(section).toContain('className={`pricingCard')
   })
+
+  it('does not create a new "Automate" tier — Automate stays absent from this compact section, same as before (Section 17/25)', () => {
+    const sectionIdx = landingSource.indexOf('landingPricing" id="pricing"')
+    const sectionEnd = landingSource.indexOf('</section>', sectionIdx)
+    const section = landingSource.slice(sectionIdx, sectionEnd)
+    expect(section).not.toContain('Automate')
+  })
+
+  it('16+ properties has a simple, honest contact line — reuses the exact same mailto address /pricing already uses, never a fabricated contact route', () => {
+    expect(landingSource).toContain('More than 15 properties?')
+    expect(landingSource).toContain('mailto:sales@proproster.com?subject=PropRoster%20%E2%80%94%2016%2B%20properties')
+    expect(pricingPageSource).toContain('mailto:sales@proproster.com?subject=PropRoster%20%E2%80%94%2016%2B%20properties')
+  })
 })
 
 describe('CTA after the pricing section', () => {
-  it('uses the exact verified copy and routes into the real, existing signup flow (startSignup — no new signup page/route)', () => {
+  it('uses the exact verified copy and routes into the real, existing signup flow (openAuth — no new signup page/route)', () => {
     const sectionIdx = landingSource.indexOf('landingPricing" id="pricing"')
     const sectionEnd = landingSource.indexOf('</section>', sectionIdx)
     const block = landingSource.slice(sectionIdx, sectionEnd)
     expect(block).toContain('Start with your first property free.')
-    expect(block).toContain('onClick={startSignup}>Get Started Free</button>')
+    expect(block).toContain("onClick={() => openAuth('signup')}>Get Started Free</button>")
     expect(block).toContain('No credit card required.')
   })
 
   it('the pricing section also links to the full /pricing page (Coming Soon + 16+ tiers live there, not duplicated here)', () => {
-    expect(landingSource).toContain('<Link href="/pricing" className="landingPricingFullLink">View full pricing details →</Link>')
+    expect(landingSource).toContain('<Link href="/pricing" className="landingPricingFullLink">View full pricing details &rarr;</Link>')
+  })
+})
+
+describe('Public Homepage V2: the three current product pillars are accurately scoped', () => {
+  it('features Tenant Connect, Maintenance Coordination and a Tax Center pillar, prominently, above the quiet secondary-features section', () => {
+    expect(landingSource).toContain("heading: 'Tenant Connect',")
+    expect(landingSource).toContain("heading: 'Maintenance Coordination',")
+    expect(landingSource).toContain("heading: 'Live Tax Center',")
+    const pillarsIdx = landingSource.indexOf('landingPillars')
+    const secondaryIdx = landingSource.indexOf('landingSecondary')
+    expect(pillarsIdx).toBeGreaterThan(-1)
+    expect(secondaryIdx).toBeGreaterThan(pillarsIdx)
+  })
+
+  it('never claims SMS provider outreach, autonomous contractor hiring, or automatic appointment confirmation', () => {
+    // Scoped to the actual copy strings this milestone wrote (the PILLARS/
+    // WORKFLOW_STEPS/SECONDARY_FEATURES arrays and the JSX text below
+    // them) rather than the whole file, which also contains developer
+    // comments referencing "sms"-adjacent words like "signInWithPassword".
+    const copyIdx = landingSource.indexOf('const PILLARS')
+    const copy = landingSource.slice(copyIdx).toLowerCase()
+    expect(copy).not.toMatch(/text message.{0,20}provider|\bsms\b/)
+    expect(copy).not.toContain('hires')
+    expect(copy).not.toContain('automatically confirm')
+  })
+
+  it('never claims PropCrew is a marketplace or a PropRoster-supplied provider network', () => {
+    const lower = landingSource.toLowerCase()
+    expect(lower).not.toContain('marketplace')
+    expect(lower).not.toContain('provider network')
+  })
+
+  it('never claims tax preparation, filing, or tax advice, other than the explicit disclaimer saying it does NOT', () => {
+    expect(landingSource).toContain('It does not prepare or file your taxes')
+    // Every other occurrence of "prepare"/"file" near "tax" must be part
+    // of that one disclaimer sentence, never a standalone affirmative claim.
+    const affirmative = [...landingSource.matchAll(/(?:prepares?|files?) (?:your )?tax(?:es)?/gi)]
+      .filter((m) => !landingSource.slice(Math.max(0, m.index! - 20), m.index! + 40).includes('does not'))
+    expect(affirmative).toEqual([])
+  })
+
+  it('never claims live Cap Rate, NOI, Net Cash Flow or automated equity tracking as currently available (Property Intelligence has not shipped)', () => {
+    const lower = landingSource.toLowerCase()
+    expect(lower).not.toContain('cap rate')
+    expect(lower).not.toContain('net operating income')
+    expect(lower).not.toMatch(/\bnoi\b/)
+    expect(lower).not.toContain('net cash flow')
   })
 })
 
@@ -168,6 +272,16 @@ describe('No unsupported claims are introduced', () => {
     const lower = landingSource.toLowerCase()
     for (const phrase of forbidden) {
       expect(lower).not.toContain(phrase)
+    }
+  })
+
+  it('no em dashes appear in user-facing copy strings (Section 22 — normal punctuation only)', () => {
+    // Scoped to the actual rendered-text literals this milestone wrote,
+    // not the whole file — JSX/comment source elsewhere may still use an
+    // em dash in developer-facing prose, which is exempt.
+    const copyBlocks = [...landingSource.matchAll(/(?:text|heading|title):\s*'([^']*)'/g)].map((m) => m[1])
+    for (const line of copyBlocks) {
+      expect(line).not.toContain('—')
     }
   })
 
@@ -184,20 +298,20 @@ describe('Mobile pricing layout — no horizontal scroll at iPhone widths (360/3
     expect(css).toMatch(/@media \(max-width: 620px\) \{ \.pricingGrid \{ grid-template-columns: 1fr; \} \}/)
   })
 
-  it('the homepage pricing section has its own mobile padding at both the 980px and 560px breakpoints already used for the rest of the hero/landing content', () => {
+  it('the homepage pricing section has its own mobile padding at both the 980px and 560px breakpoints already used for the rest of the landing page', () => {
     expect(css).toMatch(/@media \(max-width: 980px\) \{[\s\S]*?\.landingPricing \{ padding: 0 22px; \}[\s\S]*?\}/)
     expect(css).toMatch(/@media \(max-width: 560px\) \{[\s\S]*?\.landingPricing \{ padding: 0 16px; margin: 6px auto 44px; \}[\s\S]*?\}/)
   })
 
-  it('the CTA button below the pricing cards is full-width on mobile (same treatment as the hero CTAs), so it stays easy to tap without causing overflow', () => {
+  it('the CTA button below the pricing cards is full-width on mobile (same treatment as the hero CTA), so it stays easy to tap without causing overflow', () => {
     expect(css).toContain('.landingPricingCta .landingCtaPrimary { width: 100%; }')
   })
 
-  it('nothing in the new CSS sets a fixed pixel width wide enough to force horizontal scroll on a 360px viewport', () => {
-    const newRulesMatch = css.match(/\/\* Public Homepage Pricing \+ First Property Free[\s\S]*?\.landingPricingFullLink:hover \{ text-decoration: underline; \}/)
-    expect(newRulesMatch).not.toBeNull()
-    const newRules = newRulesMatch![0]
-    const fixedWidths = [...newRules.matchAll(/(?<!max-)width:\s*(\d+)px/g)].map((m) => Number(m[1]))
+  it('nothing in the landing-page CSS sets a fixed pixel width wide enough to force horizontal scroll on a 360px viewport', () => {
+    const blockMatch = css.match(/\/\* Public Homepage V2[\s\S]*?\.landingSignInCard \{ padding: 24px 18px; border-radius: 18px; \}\n\}/)
+    expect(blockMatch).not.toBeNull()
+    const block = blockMatch![0]
+    const fixedWidths = [...block.matchAll(/(?<!max-)width:\s*(\d+)px/g)].map((m) => Number(m[1]))
     for (const w of fixedWidths) expect(w).toBeLessThan(360)
   })
 })
@@ -209,9 +323,14 @@ describe('Existing authenticated pricing/billing behavior is unchanged', () => {
     expect(pricingPageSource).toContain('isCurrent ? (\n                  <button className="secondary" disabled>Current Plan</button>')
   })
 
-  it('lib/billing/plans.ts and lib/billing/entitlements.ts are unmodified in substance — same PlanId union, same PurchasablePlanId', () => {
+  it('lib/billing/plans.ts keeps the same PlanId union, same PurchasablePlanId — only marketing copy fields changed this milestone', () => {
     expect(plansSource).toContain("export type PlanId = 'free' | 'organize' | 'manage' | 'automate' | 'investor' | 'portfolio' | 'portfolio_pro' | 'owner'")
     expect(plansSource).toContain("export type PurchasablePlanId = 'organize' | 'manage'")
+  })
+
+  it('actual billing prices (priceMonthly) are untouched this milestone — display-only pricing simplification never changed what Stripe charges (Section 18: CRITICAL BILLING SAFETY CHECK)', () => {
+    expect(PLANS.organize.priceMonthly).toBe(9.99)
+    expect(PLANS.manage.priceMonthly).toBe(19.99)
   })
 
   it('no Stripe/checkout/entitlement file was touched by this milestone (schema, stripe.ts, entitlements.ts, checkout route)', () => {
