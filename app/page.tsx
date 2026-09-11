@@ -39,6 +39,14 @@ import {
   deriveOccupancy, deriveLeaseStatus, selectCurrentLease, sortLeaseHistory,
   normalizeTenants, isValidRentDueDay, formatRentDueDay,
 } from '../lib/leases/status'
+// Property Intelligence V1, Phase C: this page never calculates NOI/Cap
+// Rate/Equity/Net Cash Flow itself — it only builds the Phase B.1 engine's
+// input from data already loaded above (selectedLeases/selectedMortgages/
+// selectedTransactions/selectedTaxRecords/selectedTaxCustomItems) and
+// renders whatever computePropertyPerformance() returns.
+import { buildPropertyPerformanceInput } from '../lib/property-intelligence/resolve'
+import { computePropertyPerformance } from '../lib/property-intelligence/calculate'
+import type { Metric as PropertyPerformanceMetric } from '../lib/property-intelligence/types'
 import { periodFromDate, formatPeriodLabel, type RentStatus } from '../lib/rent-ledger/status'
 import {
   buildRentLedgerRows, buildRentDateItems, buildVacancyItems, buildSystemWarrantyDateItems, type VacancyItem,
@@ -301,6 +309,25 @@ const money = (n: number) => new Intl.NumberFormat('en-US', {
 // this is deliberately separate, not a change to existing formatting).
 const signedMoney = (n: number) => (n >= 0 ? `+${money(n)}` : money(n))
 const signedPercent = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`
+
+// Property Intelligence V1, Phase C: presentation-only. These NEVER
+// calculate anything — they only decide how to DISPLAY a
+// lib/property-intelligence Metric (or its absence). Every number already
+// came from computePropertyPerformance(). 'incomplete' renders the same
+// as 'unavailable' (a quiet "—") rather than a qualified number — Phase A
+// Section 7 allows either treatment for the "some but not all inputs
+// present" tier, and a calm, single empty-state is simpler here than a
+// second visual treatment for a case (an operating-expense total of
+// exactly $0 with other data present) none of Phase C's primary metrics
+// hit often enough to warrant it.
+function metricMoney(metric: PropertyPerformanceMetric, suffix = ''): string {
+  if (metric.status !== 'available' || metric.value === null) return '—'
+  return `${money(metric.value)}${suffix}`
+}
+function metricPercent(metric: PropertyPerformanceMetric): string {
+  if (metric.status !== 'available' || metric.value === null) return '—'
+  return `${metric.value.toFixed(1)}%`
+}
 
 // Appreciation = estimated/current value - purchase price (what the
 // property itself has gained since purchase). Deliberately NOT Equity
@@ -2370,6 +2397,32 @@ export default function Home() {
     // second query or a re-derivation.
     const selectedRentPayments = rentPayments.filter((p) => p.property_id === selectedId).sort((a, b) => b.date_received.localeCompare(a.date_received))
 
+    // Property Intelligence V1, Phase C: builds the Phase B.1 engine's
+    // input from data this page already loaded above — selectedLeases,
+    // selectedMortgages (already `.order('created_at', {ascending:false})`
+    // from loadPortfolio(), so `[0]` is the same "current mortgage" this
+    // page's own Mortgage tab already treats as authoritative),
+    // selectedTransactions/selectedMaintenance/selectedTaxRecords/
+    // selectedTaxCustomItems filtered to the current calendar year. No new
+    // fetch, no formula written here — buildPropertyPerformanceInput() and
+    // computePropertyPerformance() (lib/property-intelligence/) do 100% of
+    // the math; this block only assembles their input.
+    const performanceYear = String(new Date().getFullYear())
+    const performanceYearTaxRecord = selectedTaxRecords.find((r) => String(r.tax_year) === performanceYear) || null
+    const performanceYearCustomItems = selectedTaxCustomItems
+      .filter((r) => String(r.tax_year) === performanceYear)
+      .map((r) => ({ id: r.id, propertyId: r.property_id, taxYear: r.tax_year, description: r.description, amount: Number(r.amount), group: r.category_group, notes: r.notes, documentId: r.document_id }))
+    const performance = computePropertyPerformance(buildPropertyPerformanceInput({
+      property: selected,
+      leases: selectedLeases,
+      currentMortgage: selectedMortgages[0] || null,
+      yearTransactions: selectedTransactions.filter((tx) => tx.transaction_date.startsWith(performanceYear)),
+      yearMaintenanceRecords: selectedMaintenance.filter((m) => m.service_date.startsWith(performanceYear)),
+      taxRecord: performanceYearTaxRecord,
+      yearCustomItems: performanceYearCustomItems,
+      year: performanceYear,
+    }))
+
     return (
       <main className="shell workspaceShell">
         <AuthHeader onBrandClick={() => setSelectedId(null)} onSmartUploadCompleted={() => void loadPortfolio()} registerSmartUploadTrigger={(fn) => { smartUploadTriggerRef.current = fn }} />
@@ -2415,6 +2468,50 @@ export default function Home() {
 
         {activeTab === 'Overview' && <section className="workspaceContent workspaceContentTight">
           <div className="sectionHead workspaceHeading workspaceHeadingTight"><div><p className="eyebrow">OVERVIEW</p><h2>At a glance</h2></div><button className="secondary" onClick={() => openEditProperty(selected)}>Edit property facts</button></div>
+
+          {/* Property Intelligence V1, Phase C: a calm, few-numbers
+              snapshot — Value/Equity/Rent, then this tax year's real
+              Income/Expenses/NOI. Every value comes straight from
+              computePropertyPerformance() above (metricMoney/metricPercent
+              are presentation-only — they never calculate anything, they
+              only decide how to render a Metric or its absence). No $0
+              stands in for "unknown": a metric that isn't available or
+              trustworthy enough renders as a quiet "—" instead. */}
+          <div className="overviewPanel propertySnapshotCard">
+            <h3>Property Snapshot</h3>
+            <div className="financialStats performanceStats">
+              <div className="financialStat"><span>Estimated Value</span><strong>{metricMoney(performance.estimatedValue)}</strong></div>
+              <div className="financialStat"><span>Estimated Equity</span><strong>{metricMoney(performance.equity)}</strong></div>
+              <div className="financialStat"><span>Monthly Rent</span><strong>{metricMoney(performance.contractMonthlyRent)}</strong></div>
+            </div>
+
+            <h3 className="propertySnapshotSubhead">YTD Performance <span className="propertySnapshotYear">{performance.period.taxYear}</span></h3>
+            <div className="financialStats performanceStats">
+              <div className="financialStat"><span>Income</span><strong>{metricMoney(performance.actualIncomeYtd)}</strong></div>
+              <div className="financialStat"><span>Expenses</span><strong>{metricMoney(performance.operatingExpensesYtd)}</strong></div>
+              <div className={`financialStat${performance.noiYtd.status === 'available' && Number(performance.noiYtd.value) < 0 ? ' metricTone-bad' : ''}`}><span>NOI</span><strong>{metricMoney(performance.noiYtd)}</strong></div>
+            </div>
+
+            {/* Same native <details>/<summary> progressive-disclosure
+                pattern already used for the dashboard's Recent Activity
+                (Simplification + Maintenance Workspace V2, Phase E1) —
+                zero new JS, collapsed by default. */}
+            <details className="propertyPerformanceDetails">
+              <summary className="propertyPerformanceSummary">View performance</summary>
+              <div className="detailRows propertyPerformanceRows">
+                <div className={performance.noiYtd.status === 'available' && Number(performance.noiYtd.value) < 0 ? 'metricTone-bad' : undefined}><span>YTD NOI</span><strong>{metricMoney(performance.noiYtd)}</strong></div>
+                <div><span>Cap Rate</span><strong>{metricPercent(performance.capRatePercent)}</strong></div>
+                {performance.capRatePercent.status !== 'available' && <p className="propertyPerformanceNote">Available after a complete year of income and expense data.</p>}
+                <div className={performance.netCashFlowMonthly.status === 'available' && Number(performance.netCashFlowMonthly.value) < 0 ? 'metricTone-bad' : undefined}><span>Net Cash Flow</span><strong>{metricMoney(performance.netCashFlowMonthly, '/mo')}</strong></div>
+                {performance.netCashFlowMonthly.status !== 'available' && <p className="propertyPerformanceNote">Available when complete annual performance and debt-service data are available.</p>}
+                <div><span>Mortgage Balance</span><strong>{metricMoney(performance.mortgageBalance)}</strong></div>
+                {performance.mortgageBalance.potentiallyStale && <p className="propertyPerformanceNote">Based on the mortgage balance saved in PropRoster.</p>}
+                <div><span>Contract Annual Rent</span><strong>{metricMoney(performance.contractAnnualRent)}</strong></div>
+                {performance.contractMonthlyRent.source === 'property_fallback' && <p className="propertyPerformanceNote">Based on the property's saved rent estimate — no active lease on file.</p>}
+                {performance.equity.status !== 'available' && <p className="propertyPerformanceNote">Add a property value and mortgage balance to estimate equity.</p>}
+              </div>
+            </details>
+          </div>
 
           {/* Property Profile Mobile Polish V3 (Section 3): this card no
               longer repeats Value/Mortgage/Equity/Rent/Tax — those are

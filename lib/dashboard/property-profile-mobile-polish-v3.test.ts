@@ -138,8 +138,19 @@ describe('Section 3: Financial Details no longer blindly duplicates the hero met
     expect(pageSource.match(/const monthlyCashFlow =/g)?.length).toBe(1)
   })
 
-  it('no new cap-rate (or other new financial) formula was introduced — none existed on this page before, and none was added', () => {
-    expect(pageSource).not.toMatch(/capRate|cap_rate|CapRate/)
+  it('no new cap-rate (or other new financial) formula was introduced on this card — none existed here before, and none was added', () => {
+    // Superseded, narrowly, by Property Intelligence V1 Phase C: this
+    // page now DISPLAYS a Cap Rate figure elsewhere (the new Property
+    // Snapshot's "View performance" disclosure), but it is read verbatim
+    // from lib/property-intelligence's computePropertyPerformance()
+    // result (performance.capRatePercent) — never calculated here. This
+    // guard is rescoped to the Financial Details card specifically
+    // (cardSlice, unchanged since this test's own describe block scope)
+    // plus a repo-wide check that no cap-rate FORMULA (a division/percent
+    // literal) was ever written directly in app/page.tsx — see
+    // lib/dashboard/property-intelligence-v1-phase-c-wiring.test.ts for
+    // the full set of "no formulas duplicated in the UI layer" guards.
+    expect(cardSlice).not.toMatch(/capRate|cap_rate|CapRate/)
   })
 
   // Superseded by the Property Profile / PropCrew UX Improvement
