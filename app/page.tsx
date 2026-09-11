@@ -329,6 +329,28 @@ function metricPercent(metric: PropertyPerformanceMetric): string {
   return `${metric.value.toFixed(1)}%`
 }
 
+// Property Intelligence V1, Phase C.3: metricCompactMoney/
+// signedCompactMoney reuse the EXISTING compactMoney() helper (defined
+// below, "Homepage snapshot cleanup" — the Dashboard Portfolio
+// Snapshot's own "$1.82M instead of $1,820,000" abbreviation) rather
+// than introducing a second, differently-tuned abbreviation rule for the
+// same handful of large, round headline figures (Estimated Value/
+// Equity, Purchase Price, Appreciation). Never used for Rent/Income/
+// Expenses/NOI/Cap Rate/Net Cash Flow, where the exact figure matters.
+// Still presentation-only — never calculates anything; every value still
+// comes straight from computePropertyPerformance() or the raw property
+// row, exactly as metricMoney/money already do. (Declared as functions,
+// not const, so they can be defined here and still reference
+// compactMoney/money below — both are only ever CALLED during render,
+// long after the whole module has finished evaluating.)
+function metricCompactMoney(metric: PropertyPerformanceMetric): string {
+  if (metric.status !== 'available' || metric.value === null) return '—'
+  return compactMoney(metric.value)
+}
+function signedCompactMoney(n: number): string {
+  return n >= 0 ? `+${compactMoney(n)}` : compactMoney(n)
+}
+
 // Appreciation = estimated/current value - purchase price (what the
 // property itself has gained since purchase). Deliberately NOT Equity
 // (value - debt, what the owner would keep if sold today) and NOT
@@ -2529,58 +2551,67 @@ export default function Home() {
         {activeTab === 'Overview' && <section className="workspaceContent workspaceContentTight">
           <div className="sectionHead workspaceHeading workspaceHeadingTight"><div><p className="eyebrow">OVERVIEW</p><h2>At a glance</h2></div><button className="secondary" onClick={() => openEditProperty(selected)}>Edit property facts</button></div>
 
-          {/* Property Intelligence V1, Phase C.1 (Unified Property
-              Snapshot): ONE card answers what do I own / what is it
-              worth / what does it earn / what does it cost / how is it
-              performing — instead of four places (the old hero metric
-              strip, this card, the Financial Details card, and Investment
-              Analysis) each showing overlapping or conflicting numbers.
-              Hierarchy: PRIMARY (Value/Equity/Rent) -> CURRENT
-              PERFORMANCE (this tax year's real Income/Expenses/NOI) ->
-              secondary/contextual (Mortgage Balance, Purchase Price) ->
-              "View performance" for the rest. Every value comes straight
-              from computePropertyPerformance() above (metricMoney/
-              metricPercent are presentation-only — they never calculate
-              anything, they only decide how to render a Metric or its
-              absence). No $0 stands in for "unknown": a metric that isn't
-              available or trustworthy enough renders as a quiet "—"
-              instead. */}
+          {/* Property Intelligence V1, Phase C.3 (Compact Property
+              Snapshot): same ONE card, same data, same hierarchy as
+              Phase C.1/C.2 — PRIMARY (Value/Equity/Rent/Mortgage) ->
+              CURRENT PERFORMANCE (this tax year's real Income/Expenses/
+              NOI) -> secondary/contextual (Purchase Price/Appreciation)
+              -> "View performance" for the rest. Only the PRESENTATION
+              changed, per real iPhone/Safari feedback: the old design
+              put every metric inside its own bordered box (a form, not
+              a snapshot) and caused excessive scrolling. This version
+              uses typography/spacing/dividers instead — the outer
+              .propertySnapshotCard is the only container. Every value
+              still comes straight from computePropertyPerformance()
+              (metricMoney/metricPercent/metricCompactMoney are
+              presentation-only — they never calculate anything, they
+              only decide how to render a Metric or its absence). No $0
+              stands in for "unknown": a metric that isn't available or
+              trustworthy enough renders as a quiet "—" instead. */}
           <div className="overviewPanel propertySnapshotCard">
             <h3>Property Snapshot</h3>
-            <div className="financialStats performanceStats">
-              <div className="financialStat"><span>Estimated Value</span><strong>{metricMoney(performance.estimatedValue)}</strong></div>
-              <div className="financialStat"><span>Estimated Equity</span><strong>{metricMoney(performance.equity)}</strong></div>
-              <div className="financialStat"><span>Monthly Rent</span><strong>{metricMoney(performance.contractMonthlyRent)}</strong></div>
+
+            {/* Compact 2x2 grid, no per-metric borders — value first
+                (the number a landlord scans for), label second and
+                muted. Mortgage moved up from the old secondary section:
+                it's one of the four things "what do I own" needs to
+                answer at a glance, not a deeper detail. When financing_
+                status confirms there's no mortgage at all, the primary
+                figure reads the status word itself ("Paid Off"/"No
+                Mortgage") instead of a redundant "$0" — a presentation
+                choice only; the underlying Metric/value is unchanged
+                and the same source already exists. */}
+            <div className="propertySnapshotPrimaryGrid">
+              <div className="propertySnapshotMetric"><strong>{metricCompactMoney(performance.estimatedValue)}</strong><span>Est. Value</span></div>
+              <div className="propertySnapshotMetric"><strong>{metricCompactMoney(performance.equity)}</strong><span>Est. Equity</span></div>
+              <div className="propertySnapshotMetric"><strong>{metricMoney(performance.contractMonthlyRent, '/mo')}</strong><span>Monthly Rent</span></div>
+              <div className="propertySnapshotMetric"><strong>{performance.mortgageBalance.source === 'financing_status_confirmed' ? selected.financing_status : metricMoney(performance.mortgageBalance)}</strong><span>Mortgage</span></div>
             </div>
+            {performance.mortgageBalance.potentiallyStale && <p className="propertyPerformanceNote">Based on the mortgage balance saved in PropRoster.</p>}
+            {/* Phase C.2: a financing_status-confirmed $0 (Paid Off/No
+                Mortgage) reads its own explanatory note straight from
+                the engine — never a hardcoded "Paid Off" string here,
+                so it stays correct for either status automatically. */}
+            {performance.mortgageBalance.source === 'financing_status_confirmed' && <p className="propertyPerformanceNote">{performance.mortgageBalance.notes?.[0]}</p>}
+
+            <hr className="propertySnapshotDivider" />
 
             <h3 className="propertySnapshotSubhead">YTD Performance <span className="propertySnapshotYear">{performance.period.taxYear}</span></h3>
-            <div className="financialStats performanceStats">
-              <div className="financialStat"><span>Income</span><strong>{metricMoney(performance.actualIncomeYtd)}</strong></div>
-              <div className="financialStat"><span>Expenses</span><strong>{metricMoney(performance.operatingExpensesYtd)}</strong></div>
-              <div className={`financialStat${performance.noiYtd.status === 'available' && Number(performance.noiYtd.value) < 0 ? ' metricTone-bad' : ''}`}><span>NOI</span><strong>{metricMoney(performance.noiYtd)}</strong></div>
+            <div className="propertySnapshotSecondaryGrid">
+              <div className="propertySnapshotMetric"><strong>{metricMoney(performance.actualIncomeYtd)}</strong><span>Income</span></div>
+              <div className="propertySnapshotMetric"><strong>{metricMoney(performance.operatingExpensesYtd)}</strong><span>Expenses</span></div>
+              <div className={`propertySnapshotMetric${performance.noiYtd.status === 'available' && Number(performance.noiYtd.value) < 0 ? ' metricTone-bad' : ''}`}><strong>{metricMoney(performance.noiYtd)}</strong><span>NOI</span></div>
             </div>
 
-            {/* Secondary/contextual — quieter than the primary/performance
-                stat grids above (plain .detailRows label/value rows, the
-                same pattern the rest of the page already uses for
-                secondary info, not another headline-number grid).
-                Mortgage Balance moved here from "View performance" (it's
-                no longer buried behind a click); Purchase Price +
-                Appreciation moved here from the old Financial Details
-                card — same appreciationFor() logic, unchanged, just
-                relocated and relabeled "(est.)" so it never reads as an
-                appraisal. */}
-            <div className="detailRows propertyPerformanceRows propertySnapshotContext">
-              <div><span>Mortgage Balance</span><strong>{metricMoney(performance.mortgageBalance)}</strong></div>
-              {performance.mortgageBalance.potentiallyStale && <p className="propertyPerformanceNote">Based on the mortgage balance saved in PropRoster.</p>}
-              {/* Phase C.2: a financing_status-confirmed $0 (Paid Off/No
-                  Mortgage) reads its own explanatory note straight from
-                  the engine — never a hardcoded "Paid Off" string here,
-                  so it stays correct for either status automatically. */}
-              {performance.mortgageBalance.source === 'financing_status_confirmed' && <p className="propertyPerformanceNote">{performance.mortgageBalance.notes?.[0]}</p>}
-              <div><span>Purchase Price</span><strong>{money(selected.purchase_price)}</strong></div>
-              {appreciation && <div className={appreciation.amount >= 0 ? 'metricTone-good' : 'metricTone-bad'}><span>Appreciation (est.)</span><strong>{signedMoney(appreciation.amount)} <small>({signedPercent(appreciation.percent)})</small></strong></div>}
-            </div>
+            <hr className="propertySnapshotDivider" />
+
+            {/* Purchase Price + Appreciation — one quiet inline line
+                instead of two more boxed rows. Same appreciationFor()
+                calculation as before, unchanged, just reformatted.
+                Purchase Price itself is unconditional, matching the
+                exact pre-Phase-C.3 behavior (this is a presentation
+                pass, not a new "hide when not entered" rule). */}
+            <p className="propertySnapshotContextLine">Purchase <strong>{compactMoney(selected.purchase_price)}</strong>{appreciation && <> · <span className={appreciation.amount >= 0 ? 'metricTone-good' : 'metricTone-bad'}><strong>{signedCompactMoney(appreciation.amount)}</strong> appreciation</span></>}</p>
 
             {/* Same native <details>/<summary> progressive-disclosure
                 pattern already used for the dashboard's Recent Activity
@@ -2588,7 +2619,7 @@ export default function Home() {
                 zero new JS, collapsed by default. Refined in Phase C.1 to
                 stop repeating what the primary/performance/secondary rows
                 above already show: YTD NOI (now in "YTD Performance") and
-                Mortgage Balance (now in the secondary row) were removed
+                Mortgage Balance (now in the primary grid) were removed
                 from here — this disclosure now only holds figures that
                 aren't shown anywhere else on the card. Phase C.2: Cap
                 Rate and Net Cash Flow now read from priorYearPerformance

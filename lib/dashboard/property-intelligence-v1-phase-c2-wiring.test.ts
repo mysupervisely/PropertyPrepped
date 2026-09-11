@@ -107,11 +107,11 @@ describe('Phase C.2, Part 3: financing_status — engine-decided, not React-deci
     expect(pageSource).not.toContain('financingStatus ===')
   })
 
-  it('Estimated Equity and Mortgage Balance in the visible snapshot are read exactly as before (performance.equity/performance.mortgageBalance) — Phase C.2 changes what those metrics RESOLVE to, never how React reads them', () => {
+  it('Estimated Equity and Mortgage Balance in the visible snapshot are still read straight from the same engine metrics (performance.equity/performance.mortgageBalance) — Phase C.2 changes what those metrics RESOLVE to, never how React reads them; Phase C.3 changed only the PRESENTATION helper (metricCompactMoney wraps performance.equity now for a "$350K"-style figure, but reads the exact same Metric)', () => {
     const snapshotStart = pageSource.indexOf('propertySnapshotCard')
     const snapshotEnd = pageSource.indexOf('</details>\n          </div>', snapshotStart) + '</details>\n          </div>'.length
     const snapshotSlice = pageSource.slice(snapshotStart, snapshotEnd)
-    expect(snapshotSlice).toContain('metricMoney(performance.equity)')
+    expect(snapshotSlice).toContain('metricCompactMoney(performance.equity)')
     expect(snapshotSlice).toContain('metricMoney(performance.mortgageBalance)')
   })
 
@@ -145,15 +145,15 @@ describe('19. The unified Property Snapshot remains intact — Phase C.2 extende
     expect(heroSlice).not.toContain('heroMetrics')
   })
 
-  it('primary/YTD Performance rows are byte-for-byte the same as Phase C.1 — this phase only added to what follows them', () => {
+  it('primary/YTD Performance rows still read the exact same engine metrics as Phase C.1/C.2 — Phase C.3 (compact redesign) only changed markup/CSS presentation, never which Metric backs which figure', () => {
     const snapshotStart = pageSource.indexOf('propertySnapshotCard')
     const snapshotEnd = pageSource.indexOf('</details>\n          </div>', snapshotStart) + '</details>\n          </div>'.length
     const snapshotSlice = pageSource.slice(snapshotStart, snapshotEnd)
-    expect(snapshotSlice).toContain('<span>Estimated Value</span><strong>{metricMoney(performance.estimatedValue)}</strong>')
-    expect(snapshotSlice).toContain('<span>Estimated Equity</span><strong>{metricMoney(performance.equity)}</strong>')
-    expect(snapshotSlice).toContain('<span>Monthly Rent</span><strong>{metricMoney(performance.contractMonthlyRent)}</strong>')
-    expect(snapshotSlice).toContain('<span>Income</span><strong>{metricMoney(performance.actualIncomeYtd)}</strong>')
-    expect(snapshotSlice).toContain('<span>Expenses</span><strong>{metricMoney(performance.operatingExpensesYtd)}</strong>')
+    expect(snapshotSlice).toContain('metricCompactMoney(performance.estimatedValue)')
+    expect(snapshotSlice).toContain('metricCompactMoney(performance.equity)')
+    expect(snapshotSlice).toContain("metricMoney(performance.contractMonthlyRent, '/mo')")
+    expect(snapshotSlice).toContain('metricMoney(performance.actualIncomeYtd)')
+    expect(snapshotSlice).toContain('metricMoney(performance.operatingExpensesYtd)')
   })
 })
 

@@ -350,23 +350,52 @@ h2, h3, p { margin-top: 0; }
 .detailRows .highlightRow { margin-top: 4px; padding: 14px 12px; border: 0; border-radius: 10px; background: var(--brand-soft); color: var(--brand); }
 .detailRows .highlightRow span { color: var(--brand); }
 
-/* Property Intelligence V1, Phase C: property Overview snapshot. Reuses
-   .financialStats/.financialStat (the Ledger tab's own metric-card
-   pattern) rather than a new card style, restyled to 3-across (this
-   milestone never shows more than 3 metrics per row) so the look stays
-   consistent across the app. */
+/* Property Intelligence V1, Phase C (restyled in Phase C.3): property
+   Overview snapshot. Phase C originally reused .financialStats/
+   .financialStat (the Ledger tab's own bordered metric-card pattern);
+   real iPhone/Safari feedback on the shipped design called that "more
+   like a form than a snapshot" — every metric in its own bordered box
+   made the card tall and scroll-heavy. Phase C.3 keeps the exact same
+   data/hierarchy but replaces the bordered-card grid with plain
+   typography + spacing + subtle dividers, Apple-financial-summary style
+   — the card itself (.overviewPanel) is the only container; nothing
+   inside it gets its own border. */
 .propertySnapshotCard { margin-bottom: 20px; }
 .propertySnapshotCard h3 { margin-bottom: 14px; }
-.propertySnapshotSubhead { margin-top: 22px; display: flex; align-items: baseline; gap: 8px; }
-.propertySnapshotYear { color: var(--muted); font-weight: 500; font-size: 12px; }
-.performanceStats.financialStats { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 0; }
-/* Phase C.1: secondary/contextual row (Mortgage Balance, Purchase Price)
-   — plain .detailRows label/value rows, deliberately quieter than the
-   .financialStat grids above so this reads as supporting context, not
-   another headline number. Same divider treatment as
-   .propertyPerformanceDetails below it, so the card's hierarchy reads
-   primary -> performance -> secondary -> deeper (View performance). */
-.propertySnapshotContext { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+/* Phase C.3: doubles as the "YTD Performance"/"Full-Year Performance"
+   section eyebrow — uppercase/letter-spaced like every other quiet
+   section label in the app, but the year badge next to it stays normal
+   case (it's a value, not a label). */
+.propertySnapshotSubhead { margin-top: 22px; display: flex; align-items: baseline; gap: 8px; text-transform: uppercase; letter-spacing: .03em; font-size: 12.5px; color: var(--muted); font-weight: 650; }
+.propertySnapshotYear { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: none; letter-spacing: normal; }
+
+/* One quiet rule instead of a full border-top — the divider IS the
+   containment between sections, not a boxed sub-panel. Prefixed
+   .propertySnapshot* throughout (not the bare .snapshot* the Dashboard's
+   unrelated Portfolio Snapshot already uses at line ~713 below) so
+   nothing here can collide with or override that out-of-scope surface. */
+.propertySnapshotDivider { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
+
+/* Primary metrics: Value/Equity/Rent/Mortgage, 2 columns x 2 rows.
+   Value-first, label-second (the number is what a landlord scans for;
+   the label just confirms it) — the opposite order from .financialStat,
+   deliberately, for this denser layout. */
+.propertySnapshotPrimaryGrid { display: grid; grid-template-columns: 1fr 1fr; row-gap: 20px; column-gap: 16px; }
+.propertySnapshotMetric { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.propertySnapshotMetric strong { font-size: 25px; font-weight: 700; letter-spacing: -.4px; line-height: 1.15; overflow-wrap: break-word; }
+.propertySnapshotMetric span { font-size: 12.5px; color: var(--muted); font-weight: var(--weight-medium); }
+
+/* YTD Performance reuses the exact same .propertySnapshotMetric pattern,
+   3 columns, sized a step down from the primary grid so hierarchy reads
+   primary -> performance at a glance without a second visual language. */
+.propertySnapshotSecondaryGrid { display: grid; grid-template-columns: repeat(3, 1fr); row-gap: 14px; column-gap: 12px; margin-top: 14px; }
+.propertySnapshotSecondaryGrid .propertySnapshotMetric strong { font-size: 18px; }
+
+/* Purchase Price + Appreciation: one quiet inline sentence, not two more
+   boxed rows — genuinely secondary context, read once and done. */
+.propertySnapshotContextLine { margin: 0; font-size: 13px; color: var(--muted); }
+.propertySnapshotContextLine strong { color: var(--text); font-weight: 650; }
+
 /* Same collapsed-by-default <details>/<summary> pattern as
    .recentActivityDetails (Simplification + Maintenance Workspace V2,
    Phase E1) — a plain "Show"/"Hide" text affordance, zero new JS. */
@@ -387,8 +416,14 @@ h2, h3, p { margin-top: 0; }
    this grid of plain rows rather than as a card-level <h3>. */
 .propertyPerformanceRows .propertyPerformanceYearHead { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 8px; margin: 0 0 2px; font-size: 13px; font-weight: 650; }
 
-@media (max-width: 560px) {
-  .performanceStats.financialStats { grid-template-columns: 1fr; }
+@media (max-width: 360px) {
+  /* Only the very narrowest phones need any adjustment at all — 2 and 3
+     columns of short compact numbers ($350K, $2,350/mo) already fit
+     comfortably down to 320px; this just trims type size a touch rather
+     than collapsing the grid to 1 column (which would make the card
+     scroll-heavy again, the exact thing this phase exists to fix). */
+  .propertySnapshotMetric strong { font-size: 21px; }
+  .propertySnapshotSecondaryGrid .propertySnapshotMetric strong { font-size: 16px; }
 }
 
 /* Property Profile / PropCrew UX Improvement: the Financial Details

@@ -74,12 +74,12 @@ describe('"Expenses & tax" rows and calculations are preserved for everything st
     expect(pageSource).toContain('selected.monthly_rent')
   })
 
-  it('Purchase Price and Appreciation moved into the unified Property Snapshot (not deleted) — same appreciationFor() calculation, computed once', () => {
+  it('Purchase Price and Appreciation moved into the unified Property Snapshot (not deleted) — same appreciationFor() calculation, computed once (Phase C.3: now one compact inline line, .propertySnapshotContextLine, instead of two boxed rows)', () => {
     expect(cardSlice).not.toContain('Purchase price')
     expect(cardSlice).not.toContain('Appreciation')
-    const snapshotIdx = pageSource.indexOf('propertySnapshotContext')
-    const snapshotSlice = pageSource.slice(snapshotIdx, snapshotIdx + 1300)
-    expect(snapshotSlice).toContain('<span>Purchase Price</span><strong>{money(selected.purchase_price)}</strong>')
+    const snapshotIdx = pageSource.indexOf('propertySnapshotContextLine')
+    const snapshotSlice = pageSource.slice(snapshotIdx, snapshotIdx + 500)
+    expect(snapshotSlice).toContain('Purchase <strong>{compactMoney(selected.purchase_price)}</strong>')
     expect(snapshotSlice).toContain('appreciation.amount')
     expect(pageSource.match(/const appreciation = appreciationFor\(/g)?.length).toBe(1)
   })

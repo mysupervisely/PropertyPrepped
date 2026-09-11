@@ -198,6 +198,41 @@ Five scenarios (A: Paid Off with valid current + prior year data — Equity = Va
 
 None identified. The 3-year lookback is a deliberate, documented bound — a property with 4+ consecutive empty/insufficient years still correctly shows no full-year performance rather than reaching further back; this was judged acceptable (a landlord in that situation has a data-entry problem Full-Year Performance can't paper over) rather than in-scope to fix here. `financing_status` is still only read, never written, by anything in `lib/property-intelligence/` — the edit form (`app/page.tsx`) is unchanged.
 
+## Phase C.3 — Compact Property Snapshot (production polish)
+
+The Property Intelligence data and architecture were approved after C.1/C.2 shipped to production, but a real iPhone/Safari review of the live property page found the Property Snapshot's PRESENTATION visually poor: every metric lived in its own bordered box (`.financialStat`), reading "more like a form than a snapshot" and causing excessive vertical scrolling. This phase is presentation-only — **no financial logic changed**: every figure still comes from the exact same `computePropertyPerformance()`/`selectPriorYearPerformance()` call, reading the exact same `Metric` fields as Phase C.1/C.2. Only the markup and CSS changed.
+
+### What changed
+
+- **No bordered box per metric.** The old `.financialStats.performanceStats`/`.financialStat` grid (and the boxed `.propertySnapshotContext` secondary-row panel) are gone from this card entirely. The outer `.overviewPanel.propertySnapshotCard` is the only container; typography, spacing, and a plain `<hr class="propertySnapshotDivider">` establish hierarchy instead.
+- **Value-first, label-second.** Every metric now renders as `<strong>{value}</strong><span>{label}</span>` (the opposite order from the old `.financialStat` pattern) — the number a landlord scans for comes first, its label confirms it.
+- **Mortgage joined the primary grid.** Value/Equity/Rent/Mortgage now render together as a compact 2×2 grid (`.propertySnapshotPrimaryGrid`), matching "what do I own" as one glance instead of splitting Mortgage into a separate boxed section. When `performance.mortgageBalance.source === 'financing_status_confirmed'` (Paid Off/No Mortgage), the primary figure shows the financing-status word itself ("Paid Off"/"No Mortgage") instead of a redundant "$0" — a presentation choice only, reading `selected.financing_status` (already-loaded) purely for display text; the underlying `Metric`/decision is unchanged and still made entirely by the engine.
+- **Large headline figures abbreviate.** Estimated Value, Estimated Equity, Purchase Price, and Appreciation now render through `metricCompactMoney()`/`compactMoney()` ("$350K" instead of "$350,000") — reusing the **exact pre-existing `compactMoney()` helper** the Dashboard's Portfolio Snapshot already introduced ("Homepage snapshot cleanup"), not a second, differently-tuned abbreviation rule. Monthly Rent, Mortgage Balance (when not financing-status-confirmed), Income, Expenses, NOI, Annual NOI, Net Cash Flow, and Contract Annual Rent all keep their exact, unabbreviated figures — precision matters for those, never for a home's ballpark value.
+- **YTD Performance** — same 3 metrics, same `.propertySnapshotMetric` pattern, sized a step down from the primary grid via CSS only.
+- **Purchase Price + Appreciation collapsed into one quiet inline sentence** ("Purchase $150K · +$200K appreciation", `.propertySnapshotContextLine`) instead of two boxed detail rows. Same `appreciationFor()` calculation, called once, unchanged. Purchase Price stays unconditional — this pass didn't add a new "hide when not entered" rule.
+- **"View performance" is untouched** — same `<details>`, same `priorYearPerformance`/Cap Rate/Net Cash Flow/Contract Annual Rent sourcing Phase C.2 already established.
+- **Mobile**: a single `@media (max-width: 360px)` rule trims type size a step (never collapses the grid to 1 column — that would reintroduce the scroll-heavy card this phase exists to fix). 2 and 3 columns of compact figures already fit comfortably down to 320px.
+
+### What did NOT change
+
+The Dashboard's own Portfolio Snapshot (`.portfolioSnapshot`/`.snapshotMetrics`/bare `.snapshotMetric`) — a separate, pre-existing, unrelated surface that happens to share the word "snapshot" — was not touched. All new CSS classes are `.propertySnapshot*`-prefixed specifically so nothing here can collide with or override that out-of-scope pattern (confirmed no naming collision remained via `tsc`/build). No Phase D portfolio aggregation was started. No schema changes. No calculation, resolver, or engine file was touched.
+
+### Tests
+
+`lib/dashboard/property-snapshot-compact-v1-wiring.test.ts` (new, 21 tests) — the presentation invariants above: no bordered-box classes survive, value-first ordering, the 4-metric primary grid, the financing-status display-text rule, `compactMoney()` reuse (not redefinition), the collapsed context line, "View performance" untouched, and — critically — that the Dashboard's Portfolio Snapshot classes/behavior are completely unchanged.
+
+`lib/dashboard/property-intelligence-v1-phase-c-wiring.test.ts`, `property-intelligence-v1-phase-c2-wiring.test.ts`, `financial-details-cta-removal.test.ts` — rescoped in place (repo convention: protect the same invariant with updated literals) for the new value-first markup, the `metricCompactMoney` presentation helper, and the inline context line.
+
+Targeted run (`lib/property-intelligence/`, `lib/dashboard/`): all passing. Full suite: 2141/2141 tests passing (124 files). `npx tsc --noEmit` and `npm run build` both clean.
+
+### Visual QA
+
+Four scenarios (A: Paid Off, reproducing the exact production data the user reviewed on a real iPhone — Estimated Value $350,000, Purchase Price $150,000, Monthly Rent $2,350; B: Active Mortgage with complete data, including a correctly-toned negative Net Cash Flow; C: Unknown financing status with no qualifying prior year — quiet "—"/omission, zero fabricated numbers; D: large headline figures / a wrapping "No Mortgage" label, to stress-test the abbreviation and wrapping rules), computed through the real engine (`tsx`, not hand-typed numbers) and rendered in a static HTML mirror of the exact JSX/CSS, screenshotted at 320/390/430/1280px. No horizontal overflow at any width or scenario. The card is dramatically shorter than the Phase C.1/C.2 bordered-box version at every width — confirmed visually, not just by absence-of-overflow.
+
+### Remaining duplication / UX limitations
+
+None identified. This was a presentation-only pass; every data/calculation limitation already documented in Phase C.1/C.2 is unchanged.
+
 ## Recommended Phase D scope
 
 Per Phase A Section 9/18: add Net Cash Flow to the dashboard's Portfolio Snapshot (`Properties · Estimated Value · Monthly Income · Monthly Expenses · Net Cash Flow`), aggregating each property's already-computed `PropertyPerformance` — summing only `available` values, never averaging Cap Rate across properties (portfolio Cap Rate, if ever built, is `total portfolio NOI / total portfolio value`, not an average — and is explicitly not required for V1 per Phase A). No new per-property calculation work; Phase C already produces the numbers to sum.
