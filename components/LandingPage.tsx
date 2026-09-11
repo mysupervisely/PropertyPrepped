@@ -287,6 +287,12 @@ export default function LandingPage() {
         <nav className="landingNav" aria-label="Landing page">
           <Link href="/pricing" className="landingNavLink">Pricing</Link>
           <button type="button" className="landingNavLogin" onClick={() => openAuth('signin')}>Log In</button>
+          {/* Public Homepage V3, real-iPhone follow-up (2nd round): this
+              button (and its onClick) is unchanged — .landingNavStartFree
+              is hidden at the same narrow-mobile breakpoint that already
+              hides the Pricing link above (app/globals.css), so mobile
+              doesn't show "Start Free" twice in one viewport (header +
+              hero). Desktop keeps all four header items. */}
           <button type="button" className="primary landingNavStartFree" onClick={() => openAuth('signup')}>Start Free</button>
         </nav>
       </header>

@@ -240,3 +240,115 @@ describe('Public Homepage V3: everything else on the page is untouched (out of s
     expect(landingSource).toContain('Let PropRoster help coordinate')
   })
 })
+
+// Public Homepage V3, real-iPhone follow-up (2nd round): two small
+// refinements after a real-device review of the previous round's deploy
+// preview approved the overall direction (subtle house background,
+// compact hero, 2x2 pillars, current copy/layout) but flagged (a) "Start
+// Free" appearing twice in the same initial mobile viewport (header +
+// hero) and (b) the background photo reading slightly too faint on a
+// real screen. Both fixes are presentation-only tweaks to the SAME
+// architecture already in place — no JS viewport detection, no new
+// breakpoint, no copy/layout change.
+describe('1-6. Public Homepage V3: mobile header no longer duplicates "Start Free" — presentation only', () => {
+  it('the header still renders Pricing/Log In/Start Free unconditionally in JSX — nothing was removed from the markup, only hidden by CSS at the narrow breakpoint', () => {
+    const headerStart = landingSource.indexOf('<header className="landingHeader">')
+    const headerEnd = landingSource.indexOf('</header>')
+    const headerSlice = landingSource.slice(headerStart, headerEnd)
+    expect(headerSlice).toContain('<Link href="/pricing" className="landingNavLink">Pricing</Link>')
+    expect(headerSlice).toContain('className="landingNavLogin"')
+    expect(headerSlice).toContain('className="primary landingNavStartFree"')
+    // Same onClick/route as before — functionality is completely
+    // unchanged, this is a display-only fix.
+    expect(headerSlice).toContain("onClick={() => openAuth('signup')}>Start Free</button>")
+  })
+
+  it('3-4. at the existing narrow-mobile breakpoint (the same one that already hides the Pricing link), only the header\'s Start Free is hidden — Log In stays visible', () => {
+    const bp560Start = cssSource.indexOf('@media (max-width: 560px)', cssSource.indexOf('.landingHero {'))
+    const bp560 = cssSource.slice(bp560Start, cssSource.indexOf('\n}', cssSource.indexOf('.landingSignInCard { padding: 24px 18px', bp560Start)) + 2)
+    expect(bp560).toContain('.landingNavLink { display: none; }')
+    expect(bp560).toContain('.landingNavStartFree { display: none; }')
+    expect(bp560).not.toMatch(/\.landingNavLogin\s*\{[^}]*display:\s*none/)
+  })
+
+  it('5. Pricing is not reintroduced as a mobile-header replacement for the hidden Start Free — it stays hidden too, exactly as before this round', () => {
+    const bp560Start = cssSource.indexOf('@media (max-width: 560px)', cssSource.indexOf('.landingHero {'))
+    const bp560 = cssSource.slice(bp560Start, cssSource.indexOf('\n}', cssSource.indexOf('.landingSignInCard { padding: 24px 18px', bp560Start)) + 2)
+    expect(bp560).toContain('.landingNavLink { display: none; }')
+  })
+
+  it('desktop keeps all four header items — the hide rule only exists inside the ≤560px media query, never at the base/desktop rule level', () => {
+    const beforeMediaQueries = cssSource.slice(0, cssSource.indexOf('@media (max-width: 980px)'))
+    expect(beforeMediaQueries).not.toMatch(/\.landingNavStartFree\s*\{[^}]*display:\s*none/)
+  })
+
+  it('2. the hero\'s own Start Free CTA is completely unaffected by this change — untouched copy, untouched onClick, still the single conversion point on mobile', () => {
+    const heroStart = landingSource.indexOf('<section className="landingHero">')
+    const heroEnd = landingSource.indexOf('</section>', heroStart) + '</section>'.length
+    const heroSlice = landingSource.slice(heroStart, heroEnd)
+    expect(heroSlice).toContain("onClick={() => openAuth('signup')}>Start Free</button>")
+  })
+})
+
+describe('7. Public Homepage V3: the background-photo architecture from the previous round is preserved, only re-tuned', () => {
+  it('still the same background-layer classes — no standalone image/card returns', () => {
+    expect(landingSource).toContain('className="landingHeroBg" aria-hidden="true"')
+    expect(landingSource).toContain('className="landingHeroBgImage"')
+    expect(landingSource).toContain('className="landingHeroBgFade"')
+    expect(landingSource).not.toMatch(/landingHeroVisual|landingHeroImageFrame|landingHeroGrid/)
+  })
+
+  it('8. still exactly one <img> in the whole page, still decorative (empty alt, aria-hidden wrapper) — no image card was reintroduced', () => {
+    expect((landingSource.match(/<img\b/g) || []).length).toBe(1)
+    const imgMatch = landingSource.match(/<img\b[^>]*\/>/)
+    expect(imgMatch![0]).toMatch(/alt=""/)
+  })
+
+  it('the mobile-tuned opacity moved only slightly (a restrained bump, not a return to a strong photograph) and is still well below 50%', () => {
+    const bp980Start = cssSource.indexOf('@media (max-width: 980px)')
+    const bp980 = cssSource.slice(bp980Start, cssSource.indexOf('@media (max-width: 560px)', bp980Start))
+    const mobileOpacity = Number((bp980.match(/\.landingHeroBgImage \{[^}]*opacity:\s*([\d.]+)/) || [])[1])
+    expect(mobileOpacity).toBeGreaterThan(0.1) // more perceptible than before this round
+    expect(mobileOpacity).toBeLessThan(0.3) // still restrained, nowhere near a full photograph
+    const desktopOpacity = Number((cssSource.match(/\.landingHeroBgImage \{[^}]*opacity:\s*([\d.]+)/) || [])[1])
+    expect(mobileOpacity).toBeLessThan(desktopOpacity) // mobile still recedes further than desktop
+  })
+
+  it('the blur/desaturation "soft atmosphere" treatment is unchanged — a more visible opacity was not paired with removing the softening', () => {
+    const imageRule = cssSource.match(/\.landingHeroBgImage \{[^}]*\}/)?.[0] || ''
+    expect(imageRule).toMatch(/filter:\s*blur\(/)
+  })
+
+  it('the fade still fully covers the text zone (the left portion stays at full opaque coverage) — the adjustment only moved the reveal point, it never reduced the left/text-side coverage', () => {
+    const bp980Start = cssSource.indexOf('@media (max-width: 980px)')
+    const bp980 = cssSource.slice(bp980Start, cssSource.indexOf('@media (max-width: 560px)', bp980Start))
+    expect(bp980).toMatch(/rgba\(245, 247, 249, 1\) 0%, rgba\(245, 247, 249, 1\) \d+%/)
+  })
+})
+
+describe('9. Public Homepage V3: four-pillar structure remains unchanged by this round', () => {
+  it('still exactly four pillars, exact same headings/copy as the previous round', () => {
+    expect(landingSource).toContain("heading: 'Organize', body: 'Property information, documents, leases and numbers in one place.'")
+    expect(landingSource).toContain("heading: 'Coordinate', body: 'Connect tenants with your trusted PropCrew without all the back-and-forth.'")
+    expect(landingSource).toContain("heading: 'Automate', body: 'Simplify routine follow-ups and coordination while you stay in control.'")
+    expect(landingSource).toContain("heading: 'Understand', body: 'See the financial picture of each property and your portfolio more clearly.'")
+  })
+
+  it('still collapses to 2x2 at the ≤980px breakpoint — unchanged from the previous round', () => {
+    const bp980Start = cssSource.indexOf('@media (max-width: 980px)')
+    const bp980 = cssSource.slice(bp980Start, cssSource.indexOf('@media (max-width: 560px)', bp980Start))
+    expect(bp980).toMatch(/\.landingPillarsGrid \{ grid-template-columns:\s*repeat\(2,/)
+  })
+})
+
+describe('10. Public Homepage V3: hero copy, height, and CTA note are unaffected by this round\'s two small tweaks', () => {
+  it('H1/tagline/sub/free-note text is still byte-for-byte the same', () => {
+    const heroStart = landingSource.indexOf('<section className="landingHero">')
+    const heroEnd = landingSource.indexOf('</section>', heroStart) + '</section>'.length
+    const heroSlice = landingSource.slice(heroStart, heroEnd)
+    expect(heroSlice).toContain('<h1>Your properties. Organized.</h1>')
+    expect(heroSlice).toContain('<p className="landingHeroTagline">Keep control of your properties without managing every little detail.</p>')
+    expect(heroSlice).toContain('<p className="landingHeroSub">PropRoster helps organize the information and numbers behind your properties, simplify communication with tenants and your trusted PropCrew, and automate routine coordination.</p>')
+    expect(heroSlice).toContain('<p className="landingHeroFreeNote">Start with your first property free. No credit card required.</p>')
+  })
+})

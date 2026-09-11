@@ -1397,10 +1397,15 @@ h2, h3, p { margin-top: 0; }
      at narrower widths, where there's less horizontal room for it to
      "emerge" gracefully — this is tuning the SAME background layer, not
      a different treatment or a reintroduced standalone image block. */
-  .landingHeroBgImage { object-position: 84% 66%; opacity: .16; }
+  /* 2nd real-device round: a real iPhone found this a little TOO faint —
+     a small, restrained bump (opacity .16 -> .19, and the fade's own
+     reveal starting a touch earlier/finishing a touch sooner) so the
+     architecture is a little easier to perceive on the right, without
+     touching the left/text zone's own full-opacity coverage at all. */
+  .landingHeroBgImage { object-position: 84% 66%; opacity: .19; }
   .landingHeroBgFade {
     background:
-      linear-gradient(100deg, rgba(245, 247, 249, 1) 0%, rgba(245, 247, 249, 1) 62%, rgba(245, 247, 249, .65) 78%, rgba(245, 247, 249, 0) 98%),
+      linear-gradient(100deg, rgba(245, 247, 249, 1) 0%, rgba(245, 247, 249, 1) 58%, rgba(245, 247, 249, .58) 76%, rgba(245, 247, 249, 0) 95%),
       linear-gradient(180deg, rgba(245, 247, 249, .85) 0%, rgba(245, 247, 249, 0) 22%, rgba(245, 247, 249, 0) 70%, rgba(245, 247, 249, .9) 100%);
   }
 }
@@ -1409,6 +1414,15 @@ h2, h3, p { margin-top: 0; }
   .landingHeader { padding: 16px 16px; }
   .landingNav { gap: 10px; }
   .landingNavLink { display: none; }
+  /* Public Homepage V3, real-iPhone follow-up (2nd round): real-device
+     review found "Start Free" appearing twice in the same initial
+     mobile viewport (header + hero) — repetitive. The hero's own CTA is
+     the intended primary conversion point; the header's copy is hidden
+     here (same breakpoint/pattern as the Pricing link above), not
+     replaced with anything else. Presentation only — the button, its
+     onClick, and the /pricing route it never touched are all untouched;
+     desktop keeps all four header items exactly as before. */
+  .landingNavStartFree { display: none; }
   .landingHero { padding: 44px 16px 40px; }
   .landingHeroInner h1 { letter-spacing: -0.02em; }
   .landingPillars { padding: 40px 16px 4px; }
