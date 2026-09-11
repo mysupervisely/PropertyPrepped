@@ -293,15 +293,45 @@ export default function LandingPage() {
         </nav>
       </header>
 
+      {/* Public Homepage V3 (Marketing-First Hero): reintroduces a real
+          property photo — deliberately reusing public/hero-property.jpg,
+          the exact image Public Homepage V2 kept in reserve "in case a
+          future pass wants to reintroduce photography deliberately"
+          (see public/README.md) rather than sourcing a new one. Copy is
+          untouched (same H1/tagline/sub/CTA/free-note V2 already
+          shipped) — only the layout changes, from a centered single
+          column to a two-column "copy left, home right" grid on desktop
+          that stacks (copy first, image below) on mobile so the message
+          still reads before any image weight loads. The image sits in
+          its own soft, offset backdrop card (.landingHeroVisual) rather
+          than a bare pasted-in rectangle, using only existing brand
+          tokens (--brand-soft, --radius-card), so it reads as one
+          integrated, premium composition instead of stock photography
+          dropped on top of a SaaS page. */}
       <section className="landingHero">
-        <div className="landingHeroContent">
-          <h1>Your properties. Organized.</h1>
-          <p className="landingHeroTagline">Keep control of your properties without managing every little detail.</p>
-          <p className="landingHeroSub">PropRoster helps organize the information and numbers behind your properties, simplify communication with tenants and your trusted PropCrew, and automate routine coordination.</p>
-          <div className="landingHeroCtas">
-            <button type="button" className="primary landingCtaPrimary" onClick={() => openAuth('signup')}>Start Free</button>
+        <div className="landingHeroGrid">
+          <div className="landingHeroContent">
+            <h1>Your properties. Organized.</h1>
+            <p className="landingHeroTagline">Keep control of your properties without managing every little detail.</p>
+            <p className="landingHeroSub">PropRoster helps organize the information and numbers behind your properties, simplify communication with tenants and your trusted PropCrew, and automate routine coordination.</p>
+            <div className="landingHeroCtas">
+              <button type="button" className="primary landingCtaPrimary" onClick={() => openAuth('signup')}>Start Free</button>
+            </div>
+            <p className="landingHeroFreeNote">Start with your first property free. No credit card required.</p>
           </div>
-          <p className="landingHeroFreeNote">Start with your first property free. No credit card required.</p>
+          <div className="landingHeroVisual">
+            <div className="landingHeroImageFrame">
+              <img
+                className="landingHeroImage"
+                src="/hero-property.jpg"
+                alt="A modern single-family home at dusk"
+                width={1536}
+                height={1024}
+                loading="eager"
+                fetchPriority="high"
+              />
+            </div>
+          </div>
         </div>
       </section>
 
