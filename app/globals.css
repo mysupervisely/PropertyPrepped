@@ -381,6 +381,11 @@ h2, h3, p { margin-top: 0; }
    followed by the equity-explanation note) — extra space keeps them
    reading as two distinct facts, not one run-on caption. */
 .propertyPerformanceRows .propertyPerformanceNote + .propertyPerformanceNote { margin-top: 8px; }
+/* Phase C.2: the "Full-Year Performance" sub-heading inside View
+   performance — same muted-year-badge language .propertySnapshotYear
+   already established for "YTD Performance", just sized to sit inside
+   this grid of plain rows rather than as a card-level <h3>. */
+.propertyPerformanceRows .propertyPerformanceYearHead { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 8px; margin: 0 0 2px; font-size: 13px; font-weight: 650; }
 
 @media (max-width: 560px) {
   .performanceStats.financialStats { grid-template-columns: 1fr; }
@@ -1652,13 +1657,30 @@ h2, h3, p { margin-top: 0; }
 /* Extra bottom clearance so a page's own last real content is never
    hidden behind the fixed bar — scoped to body.hasBottomNav, the class
    MobileBottomNav itself toggles only while mounted, so pages that
-   never render it (Pricing, the admin tool) are completely unaffected. */
+   never render it (Pricing, the admin tool) are completely unaffected.
+   Phase C.2: a real iPhone/Safari session proved the old fixed-pixel
+   assumption (nav ≈ 64-70px, install hint ≈ 70px) wrong — Dynamic
+   Type/font-size settings can wrap either bar's text taller than that,
+   and a hardcoded offset has no way to notice. Both MobileBottomNav and
+   InstallPrompt now publish their OWN real rendered height via a
+   ResizeObserver, as --bottom-nav-height / --install-hint-height custom
+   properties on <html> — every rule below reads the measured value, not
+   a guess. The px fallbacks only cover the brief instant before the
+   first measurement lands (or a browser without ResizeObserver); they
+   are not the primary mechanism, and are sized generously (not tightly)
+   so that instant never under-clears. body.hasInstallHint is the exact
+   same toggle-only-while-mounted pattern as hasBottomNav, set by
+   InstallPrompt itself. */
 @media (max-width: 760px) {
-  body.hasBottomNav .shell { padding-bottom: calc(70px + env(safe-area-inset-bottom) + 70px); }
+  body.hasBottomNav .shell { padding-bottom: calc(var(--bottom-nav-height, 64px) + env(safe-area-inset-bottom) + 24px); }
+  body.hasInstallHint .shell { padding-bottom: calc(var(--install-hint-height, 76px) + 24px); }
+  /* Both bars mounted at once: reserve clearance for both, stacked. */
+  body.hasBottomNav.hasInstallHint .shell { padding-bottom: calc(var(--bottom-nav-height, 64px) + env(safe-area-inset-bottom) + var(--install-hint-height, 76px) + 28px); }
   /* The PWA install hint is a separate, unrelated fixed bar (mounted
-     app-wide in app/layout.tsx) — raised clear of the bottom nav so
-     the two never visually collide. */
-  body.hasBottomNav .installHint { bottom: calc(64px + env(safe-area-inset-bottom) + 12px); }
+     app-wide in app/layout.tsx) — raised clear of the bottom nav's real
+     measured height so the two never visually collide regardless of
+     either one's actual rendered height. */
+  body.hasBottomNav .installHint { bottom: calc(var(--bottom-nav-height, 64px) + env(safe-area-inset-bottom) + 12px); }
 }
 
 /* Sub-tabs (Property / Documents / People second-level navigation) —

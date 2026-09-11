@@ -42,7 +42,7 @@
 import { calculateNOI, capRate as calcCapRate, equity as calcEquity, num } from '../investment-calculations'
 import {
   available, incomplete, unavailable,
-  type ActiveLeaseInput, type Metric, type MortgageInput,
+  type ActiveLeaseInput, type FinancingStatus, type Metric, type MortgageInput,
   type PropertyPerformance, type PropertyPerformanceInput, type TaxYearSummaryInput,
 } from './types'
 
@@ -153,9 +153,21 @@ export function resolveOperatingExpensesYtd(taxYearSummary: TaxYearSummaryInput,
  * has no way to distinguish "this property genuinely has no mortgage"
  * from "a mortgage was simply never entered" (both look identical — zero
  * rows). Never guess between them (Phase A Section 17 / this module's own
- * "mortgage" doc comment in types.ts).
+ * "mortgage" doc comment in types.ts) — UNLESS the landlord has actually
+ * told us, via financingStatus (Phase C.2). 'Paid Off'/'No Mortgage'
+ * checked FIRST: a landlord's explicit confirmation is more trustworthy
+ * than a leftover/stale mortgage row that should have been removed, and
+ * resolves this exact ambiguity for the real subset of properties where
+ * it's been set. 'Active Mortgage' and 'Unknown' change nothing below —
+ * the pre-Phase-C.2 behavior applies exactly as before, never assuming a
+ * zero balance from a missing mortgage row on its own.
  */
-export function resolveMortgageBalance(mortgage: MortgageInput | null, propertyMortgageBalanceFallback: number): Metric {
+export function resolveMortgageBalance(mortgage: MortgageInput | null, propertyMortgageBalanceFallback: number, financingStatus: FinancingStatus): Metric {
+  if (financingStatus === 'Paid Off' || financingStatus === 'No Mortgage') {
+    return available(0, 'financing_status_confirmed', 'point_in_time', {
+      notes: [`This property is marked "${financingStatus}" — mortgage balance is a confirmed $0, not an assumption.`],
+    })
+  }
   if (mortgage) {
     return available(num(mortgage.currentBalance), 'mortgage_record', 'point_in_time', {
       estimated: true,
@@ -179,9 +191,18 @@ export function resolveMortgageBalance(mortgage: MortgageInput | null, propertyM
  * — never recomputed via amortization (Phase A: "a field already stored,
  * not derived"). Requires an actual mortgage row; the flat
  * properties.mortgage_balance fallback carries no payment figure at all,
- * so there is nothing to resolve without one.
+ * so there is nothing to resolve without one — UNLESS financingStatus
+ * (Phase C.2) confirms there is genuinely no debt to service at all. Same
+ * precedence/reasoning as resolveMortgageBalance above: an explicit Paid
+ * Off/No Mortgage confirmation is checked first and produces a KNOWN
+ * $0, never assumed from an Active Mortgage or Unknown status alone.
  */
-export function resolveMonthlyDebtService(mortgage: MortgageInput | null): Metric {
+export function resolveMonthlyDebtService(mortgage: MortgageInput | null, financingStatus: FinancingStatus): Metric {
+  if (financingStatus === 'Paid Off' || financingStatus === 'No Mortgage') {
+    return available(0, 'financing_status_confirmed', 'monthly_contract', {
+      notes: [`This property is marked "${financingStatus}" — monthly debt service is a confirmed $0, not an assumption.`],
+    })
+  }
   if (!mortgage) {
     return unavailable('none', ['No mortgage record on file — PropRoster cannot determine debt service. This does not necessarily mean the property has no financing.'])
   }
@@ -336,8 +357,8 @@ export function computePropertyPerformance(input: PropertyPerformanceInput, now:
   const noiYtd = resolveNoiYtd(actualIncomeYtd, operatingExpensesYtd)
   const noiAnnual = resolveNoiAnnual(noiYtd, yearComplete)
   const capRatePercent = resolveCapRate(noiAnnual, estimatedValue)
-  const mortgageBalance = resolveMortgageBalance(input.mortgage, input.propertyMortgageBalanceFallback)
-  const monthlyDebtService = resolveMonthlyDebtService(input.mortgage)
+  const mortgageBalance = resolveMortgageBalance(input.mortgage, input.propertyMortgageBalanceFallback, input.financingStatus)
+  const monthlyDebtService = resolveMonthlyDebtService(input.mortgage, input.financingStatus)
   const netCashFlowMonthly = resolveNetCashFlow(noiAnnual, monthlyDebtService)
   const equity = resolveEquity(estimatedValue, mortgageBalance)
 
@@ -357,4 +378,43 @@ export function computePropertyPerformance(input: PropertyPerformanceInput, now:
     capRatePercent,
     netCashFlowMonthly,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Phase C.2: most recent qualifying completed year
+// ---------------------------------------------------------------------------
+
+/**
+ * Selects the most recent, fully-elapsed prior tax year with enough
+ * actual data to produce a trustworthy annual NOI, and returns that
+ * year's full PropertyPerformance — or null when none of the supplied
+ * candidates qualify (a quiet "no prior year available," never a
+ * fabricated number).
+ *
+ * `candidateInputs` should already be ordered most-recent-year-first — a
+ * caller-supplied, BOUNDED lookback (app/page.tsx's Phase C.2 wiring
+ * uses the last 3 calendar years; see docs/property-intelligence-v1-
+ * phase-c.md), never unbounded history. This function does not load any
+ * data itself and never grows that list — it only decides, using the
+ * exact same computePropertyPerformance() as everything else in this
+ * module, which one (if any) is good enough to call "full-year
+ * performance."
+ *
+ * "Qualifies" is deliberately NOT a second, parallel data-sufficiency
+ * rule — it reuses computePropertyPerformance()'s own noiAnnual as the
+ * single source of truth for "is this a confirmed, trustworthy annual
+ * NOI," exactly the same gate resolveNoiAnnual/resolveActualIncomeYtd/
+ * resolveOperatingExpensesYtd already enforce (a year with zero
+ * transactions and no manual record, or only a suspicious $0 expense
+ * total, never qualifies). Defensively re-checks isYearComplete itself
+ * (rather than trusting the caller) so this function can never be misused
+ * to select the current, still-in-progress year.
+ */
+export function selectPriorYearPerformance(candidateInputs: PropertyPerformanceInput[], now: Date = new Date()): PropertyPerformance | null {
+  for (const input of candidateInputs) {
+    if (!isYearComplete(input.taxYearSummary.year, now)) continue
+    const candidate = computePropertyPerformance(input, now)
+    if (candidate.noiAnnual.status === 'available') return candidate
+  }
+  return null
 }

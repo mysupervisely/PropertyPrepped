@@ -37,6 +37,14 @@ export type MetricStatus = 'available' | 'incomplete' | 'unavailable'
  * Where a metric's value (or its main input) actually came from — lets a
  * future UI explain itself ("from your active lease" vs. "a manual
  * estimate") without re-deriving that from the raw data again.
+ *
+ * 'financing_status_confirmed' (Phase C.2) marks a mortgage balance/
+ * debt-service figure of exactly $0 that the landlord explicitly
+ * confirmed via properties.financing_status ('Paid Off'/'No Mortgage') —
+ * a KNOWN zero, distinct from every other source above, none of which
+ * can ever legitimately resolve to a confirmed zero on their own (a
+ * missing mortgage row/balance is 'unavailable', never $0 — see
+ * resolveMortgageBalance's own doc comment in calculate.ts).
  */
 export type DataSource =
   | 'active_lease'
@@ -45,6 +53,7 @@ export type DataSource =
   | 'property_estimated_value'
   | 'property_mortgage_balance'
   | 'mortgage_record'
+  | 'financing_status_confirmed'
   | 'derived'
   | 'none'
 
@@ -123,6 +132,31 @@ export function incomplete(value: number, source: DataSource, period: MetricPeri
   return { value, status: 'incomplete', source, period, notes, ...meta }
 }
 
+/**
+ * Phase C.2: properties.financing_status — mirrors the exact values
+ * app/page.tsx's FINANCING_STATUS_OPTIONS already offers and
+ * supabase/schema.sql's properties_financing_status_check constraint
+ * already enforces (`check (financing_status is null or financing_status
+ * in ('Active Mortgage', 'Paid Off', 'No Mortgage', 'Unknown'))`). Not a
+ * new financing-status system — the same one, reused.
+ */
+export type FinancingStatus = 'Active Mortgage' | 'Paid Off' | 'No Mortgage' | 'Unknown'
+
+const KNOWN_FINANCING_STATUSES: readonly FinancingStatus[] = ['Active Mortgage', 'Paid Off', 'No Mortgage', 'Unknown']
+
+/**
+ * Defensive normalization at the engine boundary: null, undefined, or any
+ * value outside the known set collapses to 'Unknown' — the exact same
+ * "explicit, honest default" rule the column's own edit form already
+ * documents ("a blank/never-set mortgage field must never be silently
+ * read as 'Paid Off' or 'No Mortgage'"). This is what actually keeps a
+ * schema-legal-but-unexpected string from ever accidentally triggering
+ * Paid Off/No Mortgage semantics below.
+ */
+export function normalizeFinancingStatus(value: string | null | undefined): FinancingStatus {
+  return (KNOWN_FINANCING_STATUSES as readonly string[]).includes(value ?? '') ? (value as FinancingStatus) : 'Unknown'
+}
+
 // ---------------------------------------------------------------------------
 // Resolver inputs — already-fetched/already-resolved rows only. Nothing in
 // this module (or calculate.ts) ever calls Supabase; that separation is
@@ -185,6 +219,18 @@ export type PropertyPerformanceInput = {
   activeLease: ActiveLeaseInput | null
   /** The mortgage row this app already treats as current, or null when no mortgage row exists for this property AT ALL (schema cannot distinguish "genuinely no mortgage" from "mortgage data never entered" — see Phase A Section 17 and this module's own header comment). */
   mortgage: MortgageInput | null
+  /**
+   * Phase C.2: properties.financing_status, already normalized (see
+   * normalizeFinancingStatus). 'Paid Off'/'No Mortgage' let the engine
+   * treat mortgage balance/debt service as a CONFIRMED $0 rather than
+   * 'unavailable' — resolving the "no mortgage vs. never entered"
+   * ambiguity Phase A Section 17/Phase C flagged as a future opportunity,
+   * for the real subset of properties where the landlord has actually
+   * said so. 'Active Mortgage' and 'Unknown' change nothing — the
+   * pre-Phase-C.2 mortgage-row/fallback/unavailable behavior applies
+   * exactly as before.
+   */
+  financingStatus: FinancingStatus
   /**
    * The tax year being reviewed — typically the current calendar year (a
    * still-in-progress, YTD period), but may also be a completed prior

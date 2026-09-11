@@ -21,7 +21,7 @@
 // Never blocks sign-in, never appears over the auth screens' primary
 // actions, and reads/writes nothing except one localStorage flag.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const DISMISS_KEY = 'proproster-install-hint-dismissed'
 
@@ -54,6 +54,7 @@ export function InstallPrompt() {
   const [visible, setVisible] = useState(false)
   const [iosHint, setIosHint] = useState(false)
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
+  const hintRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (isStandalone() || wasDismissed()) return
@@ -72,6 +73,33 @@ export function InstallPrompt() {
     window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
     return () => window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt)
   }, [])
+
+  // Phase C.2 (real iPhone/Safari collision fix): while visible, mirror
+  // MobileBottomNav's own "toggle a body class only while mounted"
+  // pattern (hasInstallHint alongside its hasBottomNav) so app/globals.css
+  // can reserve real bottom clearance for THIS bar's actual content —
+  // never a fixed pixel guess, since Dynamic Type/font-size settings can
+  // wrap this text onto a second or third line taller than any constant
+  // assumes. Both the class and the measured height are removed the
+  // instant the hint is dismissed/hidden, so no clearance lingers behind
+  // it (no excessive blank space once it's gone).
+  useEffect(() => {
+    if (!visible) return
+    document.body.classList.add('hasInstallHint')
+    const el = hintRef.current
+    let observer: ResizeObserver | undefined
+    if (el && typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => {
+        document.documentElement.style.setProperty('--install-hint-height', `${el.getBoundingClientRect().height}px`)
+      })
+      observer.observe(el)
+    }
+    return () => {
+      document.body.classList.remove('hasInstallHint')
+      observer?.disconnect()
+      document.documentElement.style.removeProperty('--install-hint-height')
+    }
+  }, [visible])
 
   function dismiss() {
     setVisible(false)
@@ -93,7 +121,7 @@ export function InstallPrompt() {
   if (!visible) return null
 
   return (
-    <div className="installHint" role="note">
+    <div ref={hintRef} className="installHint" role="note">
       {iosHint ? (
         <span>Install PropRoster: tap <strong>Share</strong> → <strong>Add to Home Screen</strong>.</span>
       ) : (

@@ -45,7 +45,7 @@ import {
 // selectedTransactions/selectedTaxRecords/selectedTaxCustomItems) and
 // renders whatever computePropertyPerformance() returns.
 import { buildPropertyPerformanceInput } from '../lib/property-intelligence/resolve'
-import { computePropertyPerformance } from '../lib/property-intelligence/calculate'
+import { computePropertyPerformance, selectPriorYearPerformance } from '../lib/property-intelligence/calculate'
 import type { Metric as PropertyPerformanceMetric } from '../lib/property-intelligence/types'
 import { periodFromDate, formatPeriodLabel, type RentStatus } from '../lib/rent-ledger/status'
 import {
@@ -2431,6 +2431,37 @@ export default function Home() {
       year: performanceYear,
     }))
 
+    // Property Intelligence V1, Phase C.2: the most recent, fully-elapsed
+    // PRIOR tax year with enough real data for trustworthy full-year
+    // performance (Annual NOI/Cap Rate/Net Cash Flow) — a BOUNDED lookback
+    // of the 3 calendar years before the current one, never unbounded
+    // history (see docs/property-intelligence-v1-phase-c.md for why 3).
+    // No new Supabase query: selectedTransactions/selectedMaintenance/
+    // selectedTaxRecords/selectedTaxCustomItems already hold this
+    // property's ENTIRE history (loadPortfolio()'s own queries have no
+    // date filter at all — confirmed before writing this), so each
+    // candidate year below is just a different in-memory filter of data
+    // already in hand, exactly the same filtering pattern already used
+    // for performanceYear above. selectPriorYearPerformance()
+    // (lib/property-intelligence/calculate.ts) is the ONE place that
+    // decides which year, if any, actually qualifies — this block only
+    // builds candidates, it never decides "good enough" itself.
+    const PRIOR_YEAR_LOOKBACK = 3
+    const priorYearCandidates = Array.from({ length: PRIOR_YEAR_LOOKBACK }, (_, i) => String(Number(performanceYear) - (i + 1)))
+      .map((year) => buildPropertyPerformanceInput({
+        property: selected,
+        leases: selectedLeases,
+        currentMortgage: selectedMortgages[0] || null,
+        yearTransactions: selectedTransactions.filter((tx) => tx.transaction_date.startsWith(year)),
+        yearMaintenanceRecords: selectedMaintenance.filter((m) => m.service_date.startsWith(year)),
+        taxRecord: selectedTaxRecords.find((r) => String(r.tax_year) === year) || null,
+        yearCustomItems: selectedTaxCustomItems
+          .filter((r) => String(r.tax_year) === year)
+          .map((r) => ({ id: r.id, propertyId: r.property_id, taxYear: r.tax_year, description: r.description, amount: Number(r.amount), group: r.category_group, notes: r.notes, documentId: r.document_id })),
+        year,
+      }))
+    const priorYearPerformance = selectPriorYearPerformance(priorYearCandidates)
+
     // Property Intelligence V1, Phase C.1: lib/rent-ledger/status.ts's
     // RentStatus.Unknown means the payment DUE DATE can't be determined
     // (no lease.rent_due_day on file) — it says nothing about whether the
@@ -2542,6 +2573,11 @@ export default function Home() {
             <div className="detailRows propertyPerformanceRows propertySnapshotContext">
               <div><span>Mortgage Balance</span><strong>{metricMoney(performance.mortgageBalance)}</strong></div>
               {performance.mortgageBalance.potentiallyStale && <p className="propertyPerformanceNote">Based on the mortgage balance saved in PropRoster.</p>}
+              {/* Phase C.2: a financing_status-confirmed $0 (Paid Off/No
+                  Mortgage) reads its own explanatory note straight from
+                  the engine — never a hardcoded "Paid Off" string here,
+                  so it stays correct for either status automatically. */}
+              {performance.mortgageBalance.source === 'financing_status_confirmed' && <p className="propertyPerformanceNote">{performance.mortgageBalance.notes?.[0]}</p>}
               <div><span>Purchase Price</span><strong>{money(selected.purchase_price)}</strong></div>
               {appreciation && <div className={appreciation.amount >= 0 ? 'metricTone-good' : 'metricTone-bad'}><span>Appreciation (est.)</span><strong>{signedMoney(appreciation.amount)} <small>({signedPercent(appreciation.percent)})</small></strong></div>}
             </div>
@@ -2554,14 +2590,30 @@ export default function Home() {
                 above already show: YTD NOI (now in "YTD Performance") and
                 Mortgage Balance (now in the secondary row) were removed
                 from here — this disclosure now only holds figures that
-                aren't shown anywhere else on the card. */}
+                aren't shown anywhere else on the card. Phase C.2: Cap
+                Rate and Net Cash Flow now read from priorYearPerformance
+                (the most recent qualifying COMPLETED year, selected by
+                lib/property-intelligence's selectPriorYearPerformance) —
+                never from `performance` (the current, still-in-progress
+                year), which is why these could practically never appear
+                before this phase. Current-year `performance` is still
+                used for Contract Annual Rent/the equity note below, since
+                neither is year-specific. */}
             <details className="propertyPerformanceDetails">
               <summary className="propertyPerformanceSummary">View performance</summary>
               <div className="detailRows propertyPerformanceRows">
-                <div><span>Cap Rate</span><strong>{metricPercent(performance.capRatePercent)}</strong></div>
-                {performance.capRatePercent.status !== 'available' && <p className="propertyPerformanceNote">Available after a complete year of income and expense data.</p>}
-                <div className={performance.netCashFlowMonthly.status === 'available' && Number(performance.netCashFlowMonthly.value) < 0 ? 'metricTone-bad' : undefined}><span>Net Cash Flow</span><strong>{metricMoney(performance.netCashFlowMonthly, '/mo')}</strong></div>
-                {performance.netCashFlowMonthly.status !== 'available' && <p className="propertyPerformanceNote">Available when complete annual performance and debt-service data are available.</p>}
+                {priorYearPerformance ? (
+                  <>
+                    <h4 className="propertyPerformanceYearHead">Full-Year Performance <span className="propertySnapshotYear">{priorYearPerformance.period.taxYear}</span></h4>
+                    <div className={priorYearPerformance.noiAnnual.status === 'available' && Number(priorYearPerformance.noiAnnual.value) < 0 ? 'metricTone-bad' : undefined}><span>Annual NOI</span><strong>{metricMoney(priorYearPerformance.noiAnnual)}</strong></div>
+                    <div><span>Cap Rate</span><strong>{metricPercent(priorYearPerformance.capRatePercent)}</strong></div>
+                    {priorYearPerformance.capRatePercent.status !== 'available' && <p className="propertyPerformanceNote">No estimated value on file to calculate Cap Rate against.</p>}
+                    <div className={priorYearPerformance.netCashFlowMonthly.status === 'available' && Number(priorYearPerformance.netCashFlowMonthly.value) < 0 ? 'metricTone-bad' : undefined}><span>Net Cash Flow</span><strong>{metricMoney(priorYearPerformance.netCashFlowMonthly, '/mo')}</strong></div>
+                    {priorYearPerformance.netCashFlowMonthly.status !== 'available' && <p className="propertyPerformanceNote">Available when complete annual performance and debt-service data are available.</p>}
+                  </>
+                ) : (
+                  <p className="propertyPerformanceNote">No completed prior tax year has enough data on file yet for full-year performance.</p>
+                )}
                 <div><span>Contract Annual Rent</span><strong>{metricMoney(performance.contractAnnualRent)}</strong></div>
                 {performance.contractMonthlyRent.source === 'property_fallback' && <p className="propertyPerformanceNote">Based on the property's saved rent estimate — no active lease on file.</p>}
                 {performance.equity.status !== 'available' && <p className="propertyPerformanceNote">Add a property value and mortgage balance to estimate equity.</p>}

@@ -94,13 +94,10 @@ describe('Property Intelligence V1, Phase C — wiring', () => {
     expect(snapshotSlice).toContain('YTD Performance')
   })
 
-  it('5. current-year YTD NOI is never labeled "Annual NOI" anywhere in this section', () => {
-    expect(snapshotSlice).not.toMatch(/Annual NOI/)
-    // The underlying engine field for a genuine full-year figure
-    // (performance.noiAnnual) is deliberately NOT surfaced as its own
-    // labeled row here — YTD NOI (performance.noiYtd) is the number this
-    // phase shows; Cap Rate/Net Cash Flow are what noiAnnual unlocks.
-    expect(snapshotSlice).not.toContain('performance.noiAnnual')
+  it('5. current-year YTD Performance never labels its own figures "Annual" — the CURRENT-year `performance.noiAnnual` is never surfaced (Phase C.2: an "Annual NOI" row now legitimately exists, but only from priorYearPerformance, a different, completed year)', () => {
+    const primarySlice = snapshotSlice.slice(0, snapshotSlice.indexOf('propertySnapshotContext'))
+    expect(primarySlice).not.toMatch(/Annual NOI/)
+    expect(snapshotSlice).not.toContain('performance.noiAnnual') // the current-year field specifically
   })
 
   it("Phase C.1: YTD NOI is not repeated a second time inside 'View performance' — it's already shown once, in the YTD Performance row", () => {
@@ -110,13 +107,21 @@ describe('Property Intelligence V1, Phase C — wiring', () => {
     expect(detailsSlice).not.toContain('performance.noiYtd')
   })
 
-  it('6-7. Cap Rate is read from the engine\'s capRatePercent and never hardcoded/derived, so it can never show a fake 0%', () => {
-    expect(snapshotSlice).toContain('<span>Cap Rate</span><strong>{metricPercent(performance.capRatePercent)}</strong>')
+  it('6-7. Cap Rate is read from the engine\'s capRatePercent and never hardcoded/derived, so it can never show a fake 0% — Phase C.2: sourced from priorYearPerformance (the selected completed year), never the current, still-in-progress `performance`', () => {
+    expect(snapshotSlice).toContain('<span>Cap Rate</span><strong>{metricPercent(priorYearPerformance.capRatePercent)}</strong>')
+    expect(snapshotSlice).not.toContain('metricPercent(performance.capRatePercent)') // the current-year field specifically
     expect(snapshotSlice).not.toMatch(/capRatePercent\s*[:=]/) // never assigned/computed here, only read
   })
 
-  it('8. Net Cash Flow is read from the engine\'s netCashFlowMonthly and never hardcoded/derived', () => {
-    expect(snapshotSlice).toContain("<span>Net Cash Flow</span><strong>{metricMoney(performance.netCashFlowMonthly, '/mo')}</strong>")
+  it('8. Net Cash Flow is read from the engine\'s netCashFlowMonthly and never hardcoded/derived — Phase C.2: from priorYearPerformance, same reasoning as Cap Rate', () => {
+    expect(snapshotSlice).toContain("<span>Net Cash Flow</span><strong>{metricMoney(priorYearPerformance.netCashFlowMonthly, '/mo')}</strong>")
+    expect(snapshotSlice).not.toContain("metricMoney(performance.netCashFlowMonthly, '/mo')")
+  })
+
+  it('Phase C.2: Annual NOI (full-year performance) is read from priorYearPerformance.noiAnnual, never hardcoded/derived, and only rendered when a qualifying year was actually selected', () => {
+    expect(snapshotSlice).toContain('<span>Annual NOI</span><strong>{metricMoney(priorYearPerformance.noiAnnual)}</strong>')
+    expect(snapshotSlice).toContain('{priorYearPerformance ? (')
+    expect(snapshotSlice).toContain('No completed prior tax year has enough data on file yet for full-year performance.')
   })
 
   it('9. Estimated Equity has a quiet, conditional explanation when unavailable — never an alarming banner, never shown when equity IS available', () => {
@@ -137,12 +142,12 @@ describe('Property Intelligence V1, Phase C — wiring', () => {
     expect(snapshotSlice).not.toMatch(/performance\.\w+\.value\s*[-+*/]\s*performance\.\w+\.value/)
   })
 
-  it('11b. app/page.tsx never imports the raw calculation primitives (calculateNOI/capRate/equity) — only the Phase B.1 wrapper functions', () => {
+  it('11b. app/page.tsx never imports the raw calculation primitives (calculateNOI/capRate/equity) — only the Phase B.1/C.2 wrapper functions', () => {
     expect(pageSource).not.toContain("from '../lib/investment-calculations'")
     expect(pageSource).not.toContain('calculateNOI(')
     expect(pageSource).not.toMatch(/\bcapRate\(/)
     expect(pageSource).toContain("import { buildPropertyPerformanceInput } from '../lib/property-intelligence/resolve'")
-    expect(pageSource).toContain("import { computePropertyPerformance } from '../lib/property-intelligence/calculate'")
+    expect(pageSource).toContain("import { computePropertyPerformance, selectPriorYearPerformance } from '../lib/property-intelligence/calculate'")
   })
 
   it('11c. the engine input is assembled from data this page already loaded — no new Supabase query added for Phase C', () => {
@@ -167,9 +172,10 @@ describe('Property Intelligence V1, Phase C — wiring', () => {
     expect(snapshotSlice).toMatch(/className=\{`financialStat\$\{/)
   })
 
-  it('negative NOI/Net Cash Flow use the existing subtle metricTone-bad class, never a new alarming/danger style', () => {
+  it('negative NOI/Net Cash Flow use the existing subtle metricTone-bad class, never a new alarming/danger style — both the current-year YTD NOI and the selected prior year\'s Annual NOI/Net Cash Flow', () => {
     expect(snapshotSlice).toContain("Number(performance.noiYtd.value) < 0 ? ' metricTone-bad' : ''")
-    expect(snapshotSlice).toContain("Number(performance.netCashFlowMonthly.value) < 0 ? 'metricTone-bad' : undefined")
+    expect(snapshotSlice).toContain("Number(priorYearPerformance.noiAnnual.value) < 0 ? 'metricTone-bad' : undefined")
+    expect(snapshotSlice).toContain("Number(priorYearPerformance.netCashFlowMonthly.value) < 0 ? 'metricTone-bad' : undefined")
   })
 
   it('no lime/neon green or new color literals were introduced — every class used already exists in the shared design system', () => {

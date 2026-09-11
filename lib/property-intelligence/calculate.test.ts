@@ -56,6 +56,7 @@ function completeYearInput(overrides: Partial<PropertyPerformanceInput> = {}): P
     propertyMortgageBalanceFallback: 0,
     activeLease: { id: 'lease-1', monthlyRent: 2500 },
     mortgage: { currentBalance: 280000, monthlyPayment: 1800 },
+    financingStatus: 'Unknown',
     taxYearSummary: taxSummary({ year: '2025', grossIncome: 30000, operatingExpenses: 9000, transactionCount: 24, hasManualRecord: false }),
     ...overrides,
   }
@@ -212,6 +213,7 @@ describe('2. Annual contract rent is never combined with YTD operating expenses 
       propertyMortgageBalanceFallback: 0,
       activeLease: { id: 'l1', monthlyRent: 2500 }, // would annualize to $30,000
       mortgage: null,
+      financingStatus: 'Unknown',
       taxYearSummary: taxSummary({ year: '2026', operatingExpenses: 9000, transactionCount: 12 }), // YTD, current year
     }, NOW_MID_2026)
 
@@ -294,7 +296,7 @@ describe('5. Cap Rate works when a genuinely compatible annual NOI basis is supp
 describe('6. Net Cash Flow does not divide YTD NOI by 12', () => {
   it('unavailable when only a YTD (not annual) NOI exists, even with a real mortgage payment on file', () => {
     const noiYtdOnly = availableMetric(9000) // deliberately NOT run through resolveNoiAnnual
-    const debtService = resolveMonthlyDebtService({ currentBalance: 280000, monthlyPayment: 1500 })
+    const debtService = resolveMonthlyDebtService({ currentBalance: 280000, monthlyPayment: 1500 }, 'Unknown')
     // Directly simulate the mistake: pass a YTD-tagged NOI where an
     // annual one is required. resolveNetCashFlow must still refuse it
     // once the annual gate is applied upstream — this test exercises the
@@ -304,6 +306,7 @@ describe('6. Net Cash Flow does not divide YTD NOI by 12', () => {
       propertyId: 'p1', estimatedValue: 400000, propertyMonthlyRentFallback: 0, propertyMortgageBalanceFallback: 0,
       activeLease: { id: 'l1', monthlyRent: 2500 },
       mortgage: { currentBalance: 280000, monthlyPayment: 1500 },
+      financingStatus: 'Unknown',
       taxYearSummary: taxSummary({ year: '2026', grossIncome: 5000, operatingExpenses: 9000, transactionCount: 6 }),
     }, NOW_MID_2026)
     expect(result.noiYtd.value).toBe(-4000) // a real, available YTD figure
@@ -316,7 +319,7 @@ describe('6. Net Cash Flow does not divide YTD NOI by 12', () => {
 
 describe('7. Net Cash Flow becomes unavailable when a valid annual/compatible NOI basis is absent', () => {
   it('unavailable when noiAnnual is unavailable, even with valid debt service', () => {
-    const debtService = resolveMonthlyDebtService({ currentBalance: 280000, monthlyPayment: 1500 })
+    const debtService = resolveMonthlyDebtService({ currentBalance: 280000, monthlyPayment: 1500 }, 'Unknown')
     const cashFlow = resolveNetCashFlow(unavailableMetric, debtService)
     expect(cashFlow.status).toBe('unavailable')
     expect(cashFlow.value).toBeNull()
@@ -324,7 +327,7 @@ describe('7. Net Cash Flow becomes unavailable when a valid annual/compatible NO
 
   it('unavailable when there is no mortgage record on file at all, even with a valid annual NOI', () => {
     const noiAnnual = resolveNoiAnnual(availableMetric(24000), true)
-    const debtService = resolveMonthlyDebtService(null)
+    const debtService = resolveMonthlyDebtService(null, 'Unknown')
     const cashFlow = resolveNetCashFlow(noiAnnual, debtService)
     expect(cashFlow.status).toBe('unavailable')
     expect(cashFlow.value).toBeNull()
@@ -332,7 +335,7 @@ describe('7. Net Cash Flow becomes unavailable when a valid annual/compatible NO
 
   it('unavailable when a mortgage record exists but has no payment amount recorded (incomplete debt service never feeds cash flow)', () => {
     const noiAnnual = resolveNoiAnnual(availableMetric(24000), true)
-    const debtService = resolveMonthlyDebtService({ currentBalance: 280000, monthlyPayment: 0 })
+    const debtService = resolveMonthlyDebtService({ currentBalance: 280000, monthlyPayment: 0 }, 'Unknown')
     expect(debtService.status).toBe('incomplete')
     const cashFlow = resolveNetCashFlow(noiAnnual, debtService)
     expect(cashFlow.status).toBe('unavailable')
@@ -340,7 +343,7 @@ describe('7. Net Cash Flow becomes unavailable when a valid annual/compatible NO
 
   it('is available and period-consistent when both a confirmed annual NOI and a real monthly payment exist', () => {
     const noiAnnual = resolveNoiAnnual(availableMetric(24000), true)
-    const debtService = resolveMonthlyDebtService({ currentBalance: 280000, monthlyPayment: 1500 })
+    const debtService = resolveMonthlyDebtService({ currentBalance: 280000, monthlyPayment: 1500 }, 'Unknown')
     const cashFlow = resolveNetCashFlow(noiAnnual, debtService)
     expect(cashFlow.status).toBe('available')
     expect(cashFlow.value).toBeCloseTo(24000 / 12 - 1500, 6) // 500
@@ -380,7 +383,7 @@ describe('Expense resolution does not double-count manual and tracked amounts', 
 describe('Equity', () => {
   it('works when value + mortgage balance exist', () => {
     const value = resolveEstimatedValue(400000)
-    const balance = resolveMortgageBalance({ currentBalance: 280000, monthlyPayment: 1800 }, 0)
+    const balance = resolveMortgageBalance({ currentBalance: 280000, monthlyPayment: 1800 }, 0, 'Unknown')
     const equity = resolveEquity(value, balance)
     expect(equity.value).toBe(120000)
     expect(equity.status).toBe('available')
@@ -388,13 +391,13 @@ describe('Equity', () => {
   })
 
   it('is unavailable when required inputs are missing', () => {
-    const equity = resolveEquity(resolveEstimatedValue(0), resolveMortgageBalance({ currentBalance: 100000, monthlyPayment: 900 }, 0))
+    const equity = resolveEquity(resolveEstimatedValue(0), resolveMortgageBalance({ currentBalance: 100000, monthlyPayment: 900 }, 0, 'Unknown'))
     expect(equity.status).toBe('unavailable')
     expect(equity.value).toBeNull()
   })
 
   it('never treats a missing mortgage record as $0 debt', () => {
-    const equity = resolveEquity(resolveEstimatedValue(400000), resolveMortgageBalance(null, 0))
+    const equity = resolveEquity(resolveEstimatedValue(400000), resolveMortgageBalance(null, 0, 'Unknown'))
     expect(equity.status).toBe('unavailable')
   })
 })
@@ -412,6 +415,7 @@ describe('11. Missing values remain null/unavailable rather than zero', () => {
       propertyMortgageBalanceFallback: 0,
       activeLease: null,
       mortgage: null,
+      financingStatus: 'Unknown',
       taxYearSummary: taxSummary(),
     })
     for (const [key, metric] of Object.entries(result)) {
@@ -444,6 +448,7 @@ describe('12. No NaN/Infinity outputs', () => {
     assertAllFinite(computePropertyPerformance({
       propertyId: 'p1', estimatedValue: 400000, propertyMonthlyRentFallback: 0, propertyMortgageBalanceFallback: 0,
       activeLease: { id: 'l1', monthlyRent: 2500 }, mortgage: { currentBalance: 280000, monthlyPayment: 1800 },
+      financingStatus: 'Unknown',
       taxYearSummary: taxSummary({ year: '2026', grossIncome: 5000, operatingExpenses: 2000, transactionCount: 6 }),
     }, NOW_MID_2026))
   })
@@ -451,7 +456,7 @@ describe('12. No NaN/Infinity outputs', () => {
   it('an entirely-empty result does not throw and is all-finite', () => {
     assertAllFinite(computePropertyPerformance({
       propertyId: 'p1', estimatedValue: 0, propertyMonthlyRentFallback: 0, propertyMortgageBalanceFallback: 0,
-      activeLease: null, mortgage: null, taxYearSummary: taxSummary(),
+      activeLease: null, mortgage: null, financingStatus: 'Unknown', taxYearSummary: taxSummary(),
     }))
   })
 
@@ -461,7 +466,7 @@ describe('12. No NaN/Infinity outputs', () => {
   })
 
   it('negative inputs (e.g. a corrupt/negative mortgage payment) never produce non-finite math', () => {
-    assertAllFinite(resolveMonthlyDebtService({ currentBalance: 100000, monthlyPayment: -500 }))
+    assertAllFinite(resolveMonthlyDebtService({ currentBalance: 100000, monthlyPayment: -500 }, 'Unknown'))
   })
 })
 
@@ -471,7 +476,7 @@ describe('12. No NaN/Infinity outputs', () => {
 
 describe('Data-quality/source metadata reflects fallback/manual/stale conditions', () => {
   it('a mortgage-record-sourced balance is flagged estimated + potentiallyStale, with an explanatory note', () => {
-    const balance = resolveMortgageBalance({ currentBalance: 200000, monthlyPayment: 1500 }, 0)
+    const balance = resolveMortgageBalance({ currentBalance: 200000, monthlyPayment: 1500 }, 0, 'Unknown')
     expect(balance.estimated).toBe(true)
     expect(balance.potentiallyStale).toBe(true)
     expect(balance.notes?.length).toBeGreaterThan(0)
@@ -511,6 +516,7 @@ describe('10. Period metadata is correct', () => {
     const result = computePropertyPerformance({
       propertyId: 'p1', estimatedValue: 400000, propertyMonthlyRentFallback: 0, propertyMortgageBalanceFallback: 0,
       activeLease: { id: 'l1', monthlyRent: 2500 }, mortgage: { currentBalance: 280000, monthlyPayment: 1800 },
+      financingStatus: 'Unknown',
       taxYearSummary: taxSummary({ year: '2026', grossIncome: 15000, operatingExpenses: 4000, transactionCount: 6 }),
     }, NOW_MID_2026)
     expect(result.period.isYearComplete).toBe(false)
@@ -545,7 +551,7 @@ describe('computePropertyPerformance — integration', () => {
   it('a brand-new landlord with only an address and an estimated value gets a valid, mostly-unavailable snapshot, never a crash', () => {
     const result = computePropertyPerformance({
       propertyId: 'p1', estimatedValue: 350000, propertyMonthlyRentFallback: 0, propertyMortgageBalanceFallback: 0,
-      activeLease: null, mortgage: null, taxYearSummary: taxSummary(),
+      activeLease: null, mortgage: null, financingStatus: 'Unknown', taxYearSummary: taxSummary(),
     })
     expect(result.estimatedValue.status).toBe('available')
     expect(result.contractMonthlyRent.status).toBe('unavailable')

@@ -78,7 +78,7 @@ describe('"Expenses & tax" rows and calculations are preserved for everything st
     expect(cardSlice).not.toContain('Purchase price')
     expect(cardSlice).not.toContain('Appreciation')
     const snapshotIdx = pageSource.indexOf('propertySnapshotContext')
-    const snapshotSlice = pageSource.slice(snapshotIdx, snapshotIdx + 500)
+    const snapshotSlice = pageSource.slice(snapshotIdx, snapshotIdx + 1300)
     expect(snapshotSlice).toContain('<span>Purchase Price</span><strong>{money(selected.purchase_price)}</strong>')
     expect(snapshotSlice).toContain('appreciation.amount')
     expect(pageSource.match(/const appreciation = appreciationFor\(/g)?.length).toBe(1)

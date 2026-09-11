@@ -13,11 +13,20 @@
 // (isYearComplete) from `year` vs. `now` itself, so this file only needs
 // to pass the year and the resolved totals through — it does not decide
 // annual-vs-YTD periods itself.
+//
+// Phase C.2: buildPropertyPerformanceInput() still builds exactly ONE
+// year's input, same as before — app/page.tsx calls it once per
+// candidate year (current + a bounded lookback of prior years) and hands
+// the resulting list to calculate.ts's selectPriorYearPerformance(),
+// which is the one that decides which year (if any) qualifies. This file
+// gained only one new pass-through: properties.financing_status, run
+// through normalizeFinancingStatus() so an unexpected/blank value can
+// never reach the engine unnormalized.
 
 import { selectCurrentLease, type LeaseWithId } from '../leases/status'
 import { computePropertyTaxSummary } from '../tax-center/aggregate'
 import type { CustomTaxItemInput, MaintenanceRecordInput, TaxRecordInput, TransactionInput } from '../tax-center/types'
-import type { MortgageInput, PropertyPerformanceInput } from './types'
+import { normalizeFinancingStatus, type MortgageInput, type PropertyPerformanceInput } from './types'
 
 export type PropertyRow = {
   id: string
@@ -30,6 +39,8 @@ export type PropertyRow = {
   monthly_rent: number
   /** properties.mortgage_balance — the flat fallback, only used when no mortgage row exists. */
   mortgage_balance: number
+  /** properties.financing_status (Phase C.2) — passed through normalizeFinancingStatus, so any value outside the known set (or null/undefined) safely becomes 'Unknown' rather than reaching the engine unnormalized. */
+  financing_status?: string | null
 }
 
 /** Only the fields lease-status derivation and rent resolution actually need — a caller's real LeaseRecord row satisfies this without reshaping. */
@@ -98,6 +109,7 @@ export function buildPropertyPerformanceInput(params: BuildPropertyPerformanceIn
     propertyMortgageBalanceFallback: property.mortgage_balance,
     activeLease: currentLease ? { id: currentLease.id, monthlyRent: currentLease.monthly_rent } : null,
     mortgage,
+    financingStatus: normalizeFinancingStatus(property.financing_status),
     taxYearSummary: {
       year,
       grossIncome: summary.grossIncome,
