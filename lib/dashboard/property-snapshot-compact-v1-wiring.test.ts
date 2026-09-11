@@ -122,15 +122,92 @@ describe('Phase C.3: no new calculation — every value still traces to the exac
   })
 })
 
-describe('Phase C.3: "View performance" disclosure is untouched in content/structure', () => {
-  it('still holds Full-Year Performance (when a qualifying year exists), Cap Rate, Net Cash Flow, and Contract Annual Rent, sourced exactly as Phase C.2 left them', () => {
+describe('Phase C.3 follow-up (2nd real-device round): "View performance" no longer duplicates Cap Rate/Net Cash Flow now that they are visible in the main card', () => {
+  it('holds Full-Year Performance/Annual NOI (when a qualifying year exists) and Contract Annual Rent, but Cap Rate and Net Cash Flow are gone — they now live in the visible Performance section above', () => {
     const detailsIdx = snapshotSlice.indexOf('<details className="propertyPerformanceDetails">')
     const details = snapshotSlice.slice(detailsIdx)
-    expect(details).toContain('{priorYearPerformance ? (')
+    expect(details).toContain('{priorYearPerformance && (')
     expect(details).toContain('metricMoney(priorYearPerformance.noiAnnual)')
-    expect(details).toContain('metricPercent(priorYearPerformance.capRatePercent)')
-    expect(details).toContain("metricMoney(priorYearPerformance.netCashFlowMonthly, '/mo')")
     expect(details).toContain('metricMoney(performance.contractAnnualRent)')
+    expect(details).not.toContain('metricPercent(priorYearPerformance.capRatePercent)')
+    expect(details).not.toContain("metricMoney(priorYearPerformance.netCashFlowMonthly, '/mo')")
+    expect(details).not.toContain('<span>Cap Rate</span>')
+    expect(details).not.toContain('<span>Net Cash Flow</span>')
+  })
+
+  it('the disclosure itself still exists and is still reachable — deduplication removed repeated content, not the feature', () => {
+    expect(snapshotSlice).toContain('<details className="propertyPerformanceDetails">')
+    expect(snapshotSlice).toContain('<summary className="propertyPerformanceSummary">View performance</summary>')
+  })
+})
+
+describe('Phase C.3 follow-up (2nd real-device round): visible "Performance" section — Cap Rate + Net Cash Flow', () => {
+  // Real-device review approved the primary/YTD tile design as final and
+  // asked for exactly one more addition: Cap Rate and Net Cash Flow,
+  // previously buried inside "View performance," now visible in the main
+  // snapshot as their own compact, visually secondary section — same
+  // .propertySnapshotMetric tile pattern, two columns, quieter type than
+  // the primary/YTD grids above it.
+  const perfHeadIdx = snapshotSlice.indexOf('propertySnapshotSubhead">Performance')
+  const perfGridIdx = snapshotSlice.indexOf('className="propertySnapshotSecondaryGrid propertySnapshotPerformanceGrid"', perfHeadIdx)
+  const perfGridEnd = snapshotSlice.indexOf('propertySnapshotDivider', perfGridIdx)
+  const perfGrid = snapshotSlice.slice(perfGridIdx, perfGridEnd)
+
+  it('3-4. Cap Rate and Net Cash Flow each render as their own visible tile in the main snapshot (not just inside the deeper disclosure)', () => {
+    expect(perfHeadIdx).toBeGreaterThan(-1)
+    expect(perfGrid).toContain('<span>Cap Rate</span>')
+    expect(perfGrid).toContain('<span>Net Cash Flow</span>')
+  })
+
+  it('5-6. Cap Rate is read verbatim from priorYearPerformance.capRatePercent (the canonical Property Intelligence output for a completed year) — never derived from the current, still-in-progress YTD `performance`, never annualizing a partial year', () => {
+    expect(perfGrid).toContain('metricPercent(priorYearPerformance.capRatePercent)')
+    expect(perfGrid).not.toContain('performance.capRatePercent') // the current-year YTD field, specifically
+    expect(perfGrid).not.toMatch(/\*\s*12|\/\s*12/) // no annualizing arithmetic in this tile
+  })
+
+  it('7. Net Cash Flow is read verbatim from priorYearPerformance.netCashFlowMonthly — never the retired naive rent-minus-expenses calculation', () => {
+    expect(perfGrid).toContain("metricMoney(priorYearPerformance.netCashFlowMonthly, '/mo')")
+    expect(perfGrid).not.toMatch(/contractMonthlyRent\.value\s*-\s*.*[Ee]xpense/)
+    expect(perfGrid).not.toMatch(/monthly_rent\s*-\s*monthly_expenses/)
+  })
+
+  it('8. the section carries a completed-year label ("Performance · <year>") when priorYearPerformance exists — never implying these are current-year YTD figures', () => {
+    const headSlice = snapshotSlice.slice(perfHeadIdx, perfHeadIdx + 200)
+    expect(headSlice).toContain('priorYearPerformance && <> <span className="propertySnapshotYear">· {priorYearPerformance.period.taxYear}</span></>')
+  })
+
+  it('9-10. when no qualifying completed year exists, both tiles render a quiet "—" — never a fabricated 0%/$0 — with one shared, non-repeated explanatory note underneath', () => {
+    expect(perfGrid).toContain("priorYearPerformance ? metricPercent(priorYearPerformance.capRatePercent) : '—'")
+    expect(perfGrid).toContain("priorYearPerformance ? metricMoney(priorYearPerformance.netCashFlowMonthly, '/mo') : '—'")
+    expect(perfGrid).toContain('{!priorYearPerformance && <p className="propertyPerformanceNote">Full-year data needed for annual performance.</p>}')
+  })
+
+  it('the Performance tiles reuse the exact same .propertySnapshotMetric/.propertySnapshotSecondaryGrid tile pattern as the YTD row — two columns, no new card style, no charts/gauges', () => {
+    expect(perfGridIdx).toBeGreaterThan(-1)
+    expect(cssSource).toContain('.propertySnapshotPerformanceGrid { grid-template-columns: 1fr 1fr; }')
+    expect(perfGrid).not.toMatch(/<canvas|<svg/)
+  })
+
+  it('visually a step quieter than the primary/YTD grids above it (smaller tile type), not the same size repeated', () => {
+    expect(cssSource).toContain('.propertySnapshotPerformanceGrid .propertySnapshotMetric strong { font-size: 15px; }')
+    const ytdFontSize = Number(cssSource.match(/\.propertySnapshotSecondaryGrid \.propertySnapshotMetric strong \{ font-size: (\d+)px; \}/)?.[1])
+    const perfFontSize = Number(cssSource.match(/\.propertySnapshotPerformanceGrid \.propertySnapshotMetric strong \{ font-size: (\d+)px; \}/)?.[1])
+    expect(perfFontSize).toBeLessThan(ytdFontSize)
+  })
+
+  it('stays a step quieter than YTD tiles even at the ≤360px narrow-phone breakpoint — both grids share .propertySnapshotSecondaryGrid there (for the shared padding fix), so a dedicated override keeps Performance from converging to the exact same size as YTD', () => {
+    const narrowBlockIdx = cssSource.indexOf('@media (max-width: 360px)')
+    const narrowBlockEnd = cssSource.indexOf('\n}', narrowBlockIdx)
+    const narrowBlock = cssSource.slice(narrowBlockIdx, narrowBlockEnd)
+    const ytdMatch = narrowBlock.match(/\.propertySnapshotSecondaryGrid \.propertySnapshotMetric strong \{ font-size: (\d+)px; \}/)
+    const perfMatch = narrowBlock.match(/\.propertySnapshotPerformanceGrid \.propertySnapshotMetric strong \{ font-size: (\d+)px; \}/)
+    expect(ytdMatch).not.toBeNull()
+    expect(perfMatch).not.toBeNull()
+    // The Performance override must appear AFTER the shared YTD rule in
+    // source order — equal specificity means the later rule wins the
+    // cascade, so ordering here is what actually keeps it smaller.
+    expect(narrowBlock.indexOf(perfMatch![0])).toBeGreaterThan(narrowBlock.indexOf(ytdMatch![0]))
+    expect(Number(perfMatch![1])).toBeLessThan(Number(ytdMatch![1]))
   })
 })
 

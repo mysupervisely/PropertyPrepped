@@ -56,16 +56,27 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* Property Intelligence V1, Phase C.3 follow-up: rendered inside
+            <body>, after the page's own content, deliberately — this is
+            what makes it a normal, in-flow block (see InstallPrompt.tsx's
+            own top comment) rather than a fixed overlay computing its own
+            clearance. Every route shares this one root layout, so it
+            naturally appears at the bottom of whichever page is showing
+            (Dashboard, a property page, etc.) without any per-page
+            wiring. Renders nothing visible until it has something to
+            show (see the component itself). */}
+        <InstallPrompt />
+      </body>
       {/* Global GA4 site tag (components/GoogleAnalytics.tsx) — loaded
           once here so every route gets it, matching next/script's own
           documented "Application Scripts" pattern for a root-layout
           third-party script. */}
       <GoogleAnalytics />
-      {/* PWA/Mobile Installability V1 — both render nothing visible by
-          default; see each component's own top comment. */}
+      {/* PWA/Mobile Installability V1 — renders nothing visible by
+          default; see the component's own top comment. */}
       <ServiceWorkerRegistration />
-      <InstallPrompt />
     </html>
   )
 }

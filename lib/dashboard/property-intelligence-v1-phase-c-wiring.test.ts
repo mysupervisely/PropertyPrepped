@@ -122,21 +122,21 @@ describe('Property Intelligence V1, Phase C — wiring', () => {
     expect(detailsSlice).not.toContain('performance.noiYtd')
   })
 
-  it('6-7. Cap Rate is read from the engine\'s capRatePercent and never hardcoded/derived, so it can never show a fake 0% — Phase C.2: sourced from priorYearPerformance (the selected completed year), never the current, still-in-progress `performance`', () => {
-    expect(snapshotSlice).toContain('<span>Cap Rate</span><strong>{metricPercent(priorYearPerformance.capRatePercent)}</strong>')
+  it('6-7. Cap Rate is read from the engine\'s capRatePercent and never hardcoded/derived, so it can never show a fake 0% — Phase C.2: sourced from priorYearPerformance (the selected completed year), never the current, still-in-progress `performance`. Phase C.3 follow-up (2nd real-device round): Cap Rate is now a visible tile in the main snapshot (value-first), and renders a quiet "—" rather than any figure when no qualifying completed year exists', () => {
+    expect(snapshotSlice).toContain('<strong>{priorYearPerformance ? metricPercent(priorYearPerformance.capRatePercent) : \'—\'}</strong><span>Cap Rate</span>')
     expect(snapshotSlice).not.toContain('metricPercent(performance.capRatePercent)') // the current-year field specifically
     expect(snapshotSlice).not.toMatch(/capRatePercent\s*[:=]/) // never assigned/computed here, only read
   })
 
-  it('8. Net Cash Flow is read from the engine\'s netCashFlowMonthly and never hardcoded/derived — Phase C.2: from priorYearPerformance, same reasoning as Cap Rate', () => {
-    expect(snapshotSlice).toContain("<span>Net Cash Flow</span><strong>{metricMoney(priorYearPerformance.netCashFlowMonthly, '/mo')}</strong>")
+  it('8. Net Cash Flow is read from the engine\'s netCashFlowMonthly and never hardcoded/derived — Phase C.2: from priorYearPerformance, same reasoning as Cap Rate. Phase C.3 follow-up: also now a visible main-snapshot tile, "—" when unavailable', () => {
+    expect(snapshotSlice).toContain("metricMoney(priorYearPerformance.netCashFlowMonthly, '/mo') : '—'}</strong><span>Net Cash Flow</span>")
     expect(snapshotSlice).not.toContain("metricMoney(performance.netCashFlowMonthly, '/mo')")
   })
 
-  it('Phase C.2: Annual NOI (full-year performance) is read from priorYearPerformance.noiAnnual, never hardcoded/derived, and only rendered when a qualifying year was actually selected', () => {
+  it('Phase C.2: Annual NOI (full-year performance) is read from priorYearPerformance.noiAnnual, never hardcoded/derived, and only rendered when a qualifying year was actually selected. Phase C.3 follow-up: now lives only inside "View performance" (Cap Rate/Net Cash Flow moved to the visible Performance section), rendered with `&&` (nothing at all, not an explanatory fallback) when no qualifying year exists — the visible Performance section\'s own note already explains that once', () => {
     expect(snapshotSlice).toContain('<span>Annual NOI</span><strong>{metricMoney(priorYearPerformance.noiAnnual)}</strong>')
-    expect(snapshotSlice).toContain('{priorYearPerformance ? (')
-    expect(snapshotSlice).toContain('No completed prior tax year has enough data on file yet for full-year performance.')
+    expect(snapshotSlice).toContain('{priorYearPerformance && (')
+    expect(snapshotSlice).not.toContain('No completed prior tax year has enough data on file yet for full-year performance.')
   })
 
   it('9. Estimated Equity has a quiet, conditional explanation when unavailable — never an alarming banner, never shown when equity IS available', () => {
@@ -181,10 +181,15 @@ describe('Property Intelligence V1, Phase C — wiring', () => {
     expect(cssSource).toMatch(/@media \(max-width: 360px\) \{[\s\S]*?\.propertySnapshotMetric strong \{ font-size: \d+px; \}/)
   })
 
-  it('Phase C.3: every primary/YTD metric uses the shared .propertySnapshotMetric pattern — no metric gets its own bordered box, and the count matches exactly 4 primary + 3 YTD (one with a conditional metricTone-bad modifier)', () => {
+  it('Phase C.3: every primary/YTD/Performance metric uses the shared .propertySnapshotMetric pattern — no metric gets its own bordered box, and the count matches exactly 4 primary + Income + Expenses + Cap Rate (one static count each), with NOI and Net Cash Flow using a dynamic conditional-tone template instead', () => {
     expect(snapshotSlice).toContain('className="propertySnapshotPrimaryGrid"')
     expect(snapshotSlice).toContain('className="propertySnapshotSecondaryGrid"')
-    expect((snapshotSlice.match(/className="propertySnapshotMetric"/g) || []).length).toBe(6) // 4 primary + Income + Expenses (NOI uses the dynamic template below)
+    // Phase C.3 follow-up (2nd real-device round): the new visible
+    // Performance section's Cap Rate tile also uses the plain string
+    // form (7 = 4 primary + Income + Expenses + Cap Rate); NOI and
+    // Net Cash Flow both use the dynamic template below since either
+    // can carry a conditional metricTone-bad modifier.
+    expect((snapshotSlice.match(/className="propertySnapshotMetric"/g) || []).length).toBe(7)
     expect(snapshotSlice).toMatch(/className=\{`propertySnapshotMetric\$\{/)
     // The old per-metric bordered-card class is gone from this card
     // entirely — real iPhone/Safari feedback called that "more like a
@@ -193,10 +198,10 @@ describe('Property Intelligence V1, Phase C — wiring', () => {
     expect(snapshotSlice).not.toContain('className="financialStats performanceStats"')
   })
 
-  it('negative NOI/Net Cash Flow use the existing subtle metricTone-bad class, never a new alarming/danger style — both the current-year YTD NOI and the selected prior year\'s Annual NOI/Net Cash Flow', () => {
+  it('negative NOI/Net Cash Flow use the existing subtle metricTone-bad class, never a new alarming/danger style — both the current-year YTD NOI and the selected prior year\'s Annual NOI/Net Cash Flow (Phase C.3 follow-up: Net Cash Flow\'s tone check moved into the visible Performance tile\'s template, now guarded by `?.` since priorYearPerformance can be null)', () => {
     expect(snapshotSlice).toContain("Number(performance.noiYtd.value) < 0 ? ' metricTone-bad' : ''")
     expect(snapshotSlice).toContain("Number(priorYearPerformance.noiAnnual.value) < 0 ? 'metricTone-bad' : undefined")
-    expect(snapshotSlice).toContain("Number(priorYearPerformance.netCashFlowMonthly.value) < 0 ? 'metricTone-bad' : undefined")
+    expect(snapshotSlice).toContain("priorYearPerformance?.netCashFlowMonthly.status === 'available' && Number(priorYearPerformance.netCashFlowMonthly.value) < 0 ? ' metricTone-bad' : ''")
   })
 
   it('no lime/neon green or new color literals were introduced — every class used already exists in the shared design system', () => {
@@ -211,11 +216,17 @@ describe('Property Intelligence V1, Phase C — wiring', () => {
       expect(mortgageIdx).toBeLessThan(snapshotSlice.indexOf('YTD Performance')) // primary grid comes before YTD Performance
     })
 
-    it('Mortgage Balance/staleness note logic is preserved exactly — same engine field, same note, just relocated below the primary grid instead of inside a boxed detail row', () => {
+    it('Mortgage Balance staleness note is preserved (same engine field, same note, relocated below the primary grid) — but Phase C.3 follow-up (2nd real-device round) REMOVES the financing_status_confirmed explanatory note from the rendered UI entirely: it\'s internal data-quality/engineering context a landlord doesn\'t need repeated, and the "Paid Off"/"No Mortgage" primary tile already communicates what matters', () => {
       expect(snapshotSlice).toContain('performance.mortgageBalance.potentiallyStale')
       expect(snapshotSlice).toContain('Based on the mortgage balance saved in PropRoster.')
+      // The financing-status word itself is still read for the primary
+      // tile (that's the whole point of the tile) —
       expect(snapshotSlice).toContain("performance.mortgageBalance.source === 'financing_status_confirmed'")
-      expect(snapshotSlice).toContain('{performance.mortgageBalance.notes?.[0]}')
+      // — but the engine's own explanatory sentence for that confirmed
+      // $0 (rendered, pre-follow-up, as this exact paragraph) is no
+      // longer rendered anywhere in this card.
+      expect(snapshotSlice).not.toContain("{performance.mortgageBalance.source === 'financing_status_confirmed' && <p className=\"propertyPerformanceNote\">{performance.mortgageBalance.notes?.[0]}</p>}")
+      expect(snapshotSlice).not.toContain('{performance.mortgageBalance.notes?.[0]}')
     })
 
     it('Purchase Price and Appreciation use the SAME appreciationFor() calculation as before, now a single compact inline line ("Purchase $Xk · +$Yk appreciation") instead of two boxed rows', () => {

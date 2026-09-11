@@ -2588,11 +2588,17 @@ export default function Home() {
               <div className="propertySnapshotMetric"><strong>{performance.mortgageBalance.source === 'financing_status_confirmed' ? selected.financing_status : metricMoney(performance.mortgageBalance)}</strong><span>Mortgage</span></div>
             </div>
             {performance.mortgageBalance.potentiallyStale && <p className="propertyPerformanceNote">Based on the mortgage balance saved in PropRoster.</p>}
-            {/* Phase C.2: a financing_status-confirmed $0 (Paid Off/No
-                Mortgage) reads its own explanatory note straight from
-                the engine — never a hardcoded "Paid Off" string here,
-                so it stays correct for either status automatically. */}
-            {performance.mortgageBalance.source === 'financing_status_confirmed' && <p className="propertyPerformanceNote">{performance.mortgageBalance.notes?.[0]}</p>}
+            {/* Phase C.3 follow-up (2nd real-device round): the engine's
+                own explanatory note for a financing_status-confirmed $0
+                ("This property is marked 'Paid Off' — mortgage balance
+                is a confirmed $0, not an assumption.") used to render
+                here too. Real-device feedback: that's internal data-
+                quality/engineering context, not something a landlord
+                needs to read every time — the "Paid Off"/"No Mortgage"
+                tile above already communicates what matters. Removed
+                from the UI only; performance.mortgageBalance.notes still
+                exists on the Metric itself (untouched), it just isn't
+                rendered here anymore. */}
 
             <hr className="propertySnapshotDivider" />
 
@@ -2602,6 +2608,34 @@ export default function Home() {
               <div className="propertySnapshotMetric"><strong>{metricMoney(performance.operatingExpensesYtd)}</strong><span>Expenses</span></div>
               <div className={`propertySnapshotMetric${performance.noiYtd.status === 'available' && Number(performance.noiYtd.value) < 0 ? ' metricTone-bad' : ''}`}><strong>{metricMoney(performance.noiYtd)}</strong><span>NOI</span></div>
             </div>
+
+            <hr className="propertySnapshotDivider" />
+
+            {/* Phase C.3 follow-up (2nd real-device round): Cap Rate and
+                Net Cash Flow are now visible in the main snapshot instead
+                of only inside "View performance" — both real annualized
+                metrics matter enough to see at a glance, not just YTD.
+                Sourced from priorYearPerformance (the most recent
+                qualifying COMPLETED year — lib/property-intelligence's
+                selectPriorYearPerformance), never from the current-year
+                `performance`, which is why the label carries that year
+                explicitly: these are NOT 2026 YTD figures. Read verbatim
+                from the engine, same as everywhere else on this card —
+                no formula, no annualizing a partial year, no reviving the
+                old rent-minus-expenses Net Cash Flow. netCashFlowMonthly
+                is a genuinely monthly figure (noiAnnual / 12 - monthly
+                debt service — see resolveNetCashFlow), so the existing
+                "/mo" label is honest, not a silent unit conversion.
+                Visually a step quieter than the primary/YTD grids above
+                (smaller type via .propertySnapshotPerformanceGrid) since
+                these are secondary to Value/Equity/Rent/Mortgage and to
+                this year's actual Income/Expenses/NOI. */}
+            <h3 className="propertySnapshotSubhead">Performance{priorYearPerformance && <> <span className="propertySnapshotYear">· {priorYearPerformance.period.taxYear}</span></>}</h3>
+            <div className="propertySnapshotSecondaryGrid propertySnapshotPerformanceGrid">
+              <div className="propertySnapshotMetric"><strong>{priorYearPerformance ? metricPercent(priorYearPerformance.capRatePercent) : '—'}</strong><span>Cap Rate</span></div>
+              <div className={`propertySnapshotMetric${priorYearPerformance?.netCashFlowMonthly.status === 'available' && Number(priorYearPerformance.netCashFlowMonthly.value) < 0 ? ' metricTone-bad' : ''}`}><strong>{priorYearPerformance ? metricMoney(priorYearPerformance.netCashFlowMonthly, '/mo') : '—'}</strong><span>Net Cash Flow</span></div>
+            </div>
+            {!priorYearPerformance && <p className="propertyPerformanceNote">Full-year data needed for annual performance.</p>}
 
             <hr className="propertySnapshotDivider" />
 
@@ -2618,32 +2652,24 @@ export default function Home() {
                 (Simplification + Maintenance Workspace V2, Phase E1) —
                 zero new JS, collapsed by default. Refined in Phase C.1 to
                 stop repeating what the primary/performance/secondary rows
-                above already show: YTD NOI (now in "YTD Performance") and
-                Mortgage Balance (now in the primary grid) were removed
-                from here — this disclosure now only holds figures that
-                aren't shown anywhere else on the card. Phase C.2: Cap
-                Rate and Net Cash Flow now read from priorYearPerformance
-                (the most recent qualifying COMPLETED year, selected by
-                lib/property-intelligence's selectPriorYearPerformance) —
-                never from `performance` (the current, still-in-progress
-                year), which is why these could practically never appear
-                before this phase. Current-year `performance` is still
-                used for Contract Annual Rent/the equity note below, since
-                neither is year-specific. */}
+                above already show (YTD NOI, Mortgage Balance), and again
+                in this Phase C.3 follow-up: Cap Rate and Net Cash Flow
+                moved OUT of here into the main card's visible Performance
+                section above, so they're no longer repeated here either
+                — this disclosure now only holds Annual NOI (the one
+                genuinely additional figure the visible Performance
+                section doesn't show) and Contract Annual Rent. When no
+                qualifying prior year exists, Annual NOI is omitted
+                entirely rather than repeating the same explanation the
+                Performance section's own note already gave. */}
             <details className="propertyPerformanceDetails">
               <summary className="propertyPerformanceSummary">View performance</summary>
               <div className="detailRows propertyPerformanceRows">
-                {priorYearPerformance ? (
+                {priorYearPerformance && (
                   <>
                     <h4 className="propertyPerformanceYearHead">Full-Year Performance <span className="propertySnapshotYear">{priorYearPerformance.period.taxYear}</span></h4>
                     <div className={priorYearPerformance.noiAnnual.status === 'available' && Number(priorYearPerformance.noiAnnual.value) < 0 ? 'metricTone-bad' : undefined}><span>Annual NOI</span><strong>{metricMoney(priorYearPerformance.noiAnnual)}</strong></div>
-                    <div><span>Cap Rate</span><strong>{metricPercent(priorYearPerformance.capRatePercent)}</strong></div>
-                    {priorYearPerformance.capRatePercent.status !== 'available' && <p className="propertyPerformanceNote">No estimated value on file to calculate Cap Rate against.</p>}
-                    <div className={priorYearPerformance.netCashFlowMonthly.status === 'available' && Number(priorYearPerformance.netCashFlowMonthly.value) < 0 ? 'metricTone-bad' : undefined}><span>Net Cash Flow</span><strong>{metricMoney(priorYearPerformance.netCashFlowMonthly, '/mo')}</strong></div>
-                    {priorYearPerformance.netCashFlowMonthly.status !== 'available' && <p className="propertyPerformanceNote">Available when complete annual performance and debt-service data are available.</p>}
                   </>
-                ) : (
-                  <p className="propertyPerformanceNote">No completed prior tax year has enough data on file yet for full-year performance.</p>
                 )}
                 <div><span>Contract Annual Rent</span><strong>{metricMoney(performance.contractAnnualRent)}</strong></div>
                 {performance.contractMonthlyRent.source === 'property_fallback' && <p className="propertyPerformanceNote">Based on the property's saved rent estimate — no active lease on file.</p>}

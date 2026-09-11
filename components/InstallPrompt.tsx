@@ -1,11 +1,21 @@
 'use client'
 
 // PropRoster — PWA/Mobile Installability V1: lightweight install guidance.
+// Property Intelligence V1, Phase C.3 follow-up (2nd real-device round):
+// this used to be a `position: fixed` bar, kept clear of page content and
+// the fixed bottom nav via a ResizeObserver-measured CSS custom property
+// (--install-hint-height) and a ResizeObserver on the bottom nav's own
+// height. Multiple real iPhone/Safari screenshots showed it STILL
+// covering product content (Dashboard cards, the Property Snapshot,
+// Expenses & tax) regardless — a fixed overlay computing its own
+// clearance is fundamentally fragile (Dynamic Type, viewport quirks,
+// timing). The fix is architectural, not a better offset: this is now a
+// normal, non-fixed block rendered in-flow at the end of <body> (see
+// app/layout.tsx) — it scrolls with the page like any other content and
+// can never cover anything, by construction, not by calculation.
 //
-// Deliberately NOT a popup/modal/overlay — a small dismissible bar
-// pinned near the bottom of the viewport (respecting the home-indicator
-// safe area), never blocking content, shown at most until dismissed once
-// (persisted in localStorage — it never nags on every visit) and never
+// Still a small dismissible bar (shown at most until dismissed once,
+// persisted in localStorage — it never nags on every visit) and never
 // shown at all once the app is already running standalone (installed).
 //
 // Two platforms, two different mechanisms, because there is no single
@@ -21,7 +31,7 @@
 // Never blocks sign-in, never appears over the auth screens' primary
 // actions, and reads/writes nothing except one localStorage flag.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const DISMISS_KEY = 'proproster-install-hint-dismissed'
 
@@ -54,7 +64,6 @@ export function InstallPrompt() {
   const [visible, setVisible] = useState(false)
   const [iosHint, setIosHint] = useState(false)
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
-  const hintRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (isStandalone() || wasDismissed()) return
@@ -73,33 +82,6 @@ export function InstallPrompt() {
     window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
     return () => window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt)
   }, [])
-
-  // Phase C.2 (real iPhone/Safari collision fix): while visible, mirror
-  // MobileBottomNav's own "toggle a body class only while mounted"
-  // pattern (hasInstallHint alongside its hasBottomNav) so app/globals.css
-  // can reserve real bottom clearance for THIS bar's actual content —
-  // never a fixed pixel guess, since Dynamic Type/font-size settings can
-  // wrap this text onto a second or third line taller than any constant
-  // assumes. Both the class and the measured height are removed the
-  // instant the hint is dismissed/hidden, so no clearance lingers behind
-  // it (no excessive blank space once it's gone).
-  useEffect(() => {
-    if (!visible) return
-    document.body.classList.add('hasInstallHint')
-    const el = hintRef.current
-    let observer: ResizeObserver | undefined
-    if (el && typeof ResizeObserver !== 'undefined') {
-      observer = new ResizeObserver(() => {
-        document.documentElement.style.setProperty('--install-hint-height', `${el.getBoundingClientRect().height}px`)
-      })
-      observer.observe(el)
-    }
-    return () => {
-      document.body.classList.remove('hasInstallHint')
-      observer?.disconnect()
-      document.documentElement.style.removeProperty('--install-hint-height')
-    }
-  }, [visible])
 
   function dismiss() {
     setVisible(false)
@@ -121,7 +103,7 @@ export function InstallPrompt() {
   if (!visible) return null
 
   return (
-    <div ref={hintRef} className="installHint" role="note">
+    <div className="installHint" role="note">
       {iosHint ? (
         <span>Install PropRoster: tap <strong>Share</strong> → <strong>Add to Home Screen</strong>.</span>
       ) : (
