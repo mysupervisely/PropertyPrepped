@@ -1,13 +1,34 @@
 'use client'
 
-// PropRoster: signed-out landing/sign-in experience (full-bleed hero +
-// inline auth card). Fully self-contained — owns its own auth form state
-// (authMode/email/password/error/authMessage/busy) since none of that is
-// used anywhere in the authenticated app; the parent (app/page.tsx) just
-// renders <LandingPage /> whenever there's no signed-in user.
+// PropRoster: signed-out landing/sign-in experience.
 //
-// Real Supabase auth only: signInWithPassword / signUp, unchanged from the
-// previous inline implementation. No mock data.
+// Public Homepage V2 (Product Story + Pricing Simplification, plus an
+// Organization + Automation positioning follow-up): the previous
+// homepage led with a permanently-embedded, half-the-hero sign-in card
+// and four/three separately-worded "why PropRoster" sections that
+// repeated the same few ideas. This version leads with the real product
+// story and moves sign-in/sign-up into an on-demand panel opened from
+// "Log In" / "Start Free" in the header, so it never competes with the
+// story for space.
+//
+// Positioning: PropRoster is not a property-management company and does
+// not compete with one on those terms - it is organization + automation
+// for a self-managing landlord who wants to keep control of their
+// properties, tenants and PropCrew without personally handling every
+// small coordination task. The three PILLARS below (Property
+// Organization + Data, Tenant Connect, Live Tax Center) are ordered
+// ORGANIZE -> AUTOMATE -> UNDERSTAND and are the actual homepage story;
+// there is no separate "mission" section duplicating the same idea right
+// after the hero - the "you stay in control" philosophy lives in Tenant
+// Connect's own subheading/closing line instead.
+//
+// Auth itself is UNCHANGED: same supabase.auth.signInWithPassword/signUp
+// calls, same submitAuth/switchMode functions, same IntendedRole choice.
+// Only WHEN the form is visible changed (opened by openAuth(), not
+// always-rendered) — no new route, no new session logic, no auth-risk
+// surface.
+//
+// Real Supabase auth only. No mock data.
 //
 // Deliberately OMITTED vs. the approved visual reference: a "Remember me"
 // checkbox and a "Forgot password?" link. Neither a persistent-session
@@ -16,10 +37,9 @@
 // lib/supabase.ts's persistSession:true, and there is no
 // resetPasswordForEmail call/route anywhere) — adding either control here
 // would be a checkbox with no effect or a link to a screen that doesn't
-// exist. Per this milestone's explicit instruction, faking either was
-// ruled out; they're left out rather than built as dead UI.
+// exist.
 
-import { useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../lib/supabase'
 import { Wordmark } from './Wordmark'
@@ -40,31 +60,36 @@ function IconBadge({ children }: { children: React.ReactNode }) {
   return <span className="landingIconBadge">{children}</span>
 }
 
-function DocumentIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
-      <path d="M6 2.5h6l4 4V16a1.2 1.2 0 01-1.2 1.2H6A1.2 1.2 0 014.8 16V3.7A1.2 1.2 0 016 2.5z" stroke="#204b3b" strokeWidth="1.5" strokeLinejoin="round" />
-      <path d="M12 2.5V6.3a.9.9 0 00.9.9H16" stroke="#204b3b" strokeWidth="1.5" strokeLinejoin="round" />
-      <path d="M7.3 10.6h5.4M7.3 13.4h5.4" stroke="#204b3b" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  )
-}
-
 function DollarIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
       <circle cx="10" cy="10" r="7.5" stroke="#204b3b" strokeWidth="1.5" />
       <path d="M10 5.8v8.4M12.4 7.9c0-1-1-1.7-2.4-1.7-1.5 0-2.6.8-2.6 1.9 0 2.7 5.2 1.3 5.2 4 0 1.1-1.2 1.9-2.6 1.9-1.4 0-2.4-.7-2.4-1.7" stroke="#204b3b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
 
-function ChecklistIcon() {
+// Property Organization + Data pillar icon: a simple document/folder
+// stand-in for "everything about the property, organized" — the
+// foundation pillar.
+function FolderIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
-      <rect x="3.5" y="3" width="13" height="14" rx="1.6" stroke="#204b3b" strokeWidth="1.5" />
-      <path d="M6.3 8.2l1.4 1.4 2.6-2.8" stroke="#204b3b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M11.8 8h2.2M6.3 13.4h7.7" stroke="#204b3b" strokeWidth="1.5" strokeLinecap="round" />
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
+      <path d="M2.5 5.3a1.3 1.3 0 011.3-1.3h3.4l1.4 1.6h6.1a1.3 1.3 0 011.3 1.3v7.4a1.3 1.3 0 01-1.3 1.3H3.8a1.3 1.3 0 01-1.3-1.3V5.3z" stroke="#204b3b" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+// Tenant Connect pillar icon: two people, a simple stand-in for "you and
+// your tenant, connected" — matches the stroke weight/color of every
+// other landing icon rather than introducing a new visual style.
+function PeopleIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
+      <circle cx="7.2" cy="6.5" r="2.6" stroke="#204b3b" strokeWidth="1.5" />
+      <path d="M2.8 16c.5-3 2.2-4.6 4.4-4.6s3.9 1.6 4.4 4.6" stroke="#204b3b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="14.3" cy="7.3" r="2.1" stroke="#204b3b" strokeWidth="1.5" />
+      <path d="M12.6 11.9c1.6-.5 3.6-.1 4.6 2.7" stroke="#204b3b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -74,15 +99,6 @@ function ShieldIcon() {
     <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
       <path d="M10 2l6.5 2.4v4.6c0 4.2-2.7 7.9-6.5 9-3.8-1.1-6.5-4.8-6.5-9V4.4L10 2z" stroke="#204b3b" strokeWidth="1.5" strokeLinejoin="round" />
       <path d="M7.2 10.1l1.9 1.9 3.7-3.9" stroke="#204b3b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-function CompassIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
-      <circle cx="10" cy="10" r="7.5" stroke="#204b3b" strokeWidth="1.5" />
-      <path d="M13.2 6.8l-2 4.4-4.4 2 2-4.4 4.4-2z" stroke="#204b3b" strokeWidth="1.5" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -131,25 +147,57 @@ function EyeIcon({ off }: { off: boolean }) {
   )
 }
 
-// Section 3: four clear benefit areas. STAY AHEAD deliberately uses "Built
-// to help you stay ahead of..." rather than a present-tense "Track" —
-// proactive deadline monitoring is still evolving and must never be
-// presented as a fully-live feature here (Section 3's explicit instruction).
-const VALUE_PROPS: { icon: React.ReactNode; heading: string; text: string }[] = [
-  { icon: <ChecklistIcon />, heading: 'Organize Your Portfolio', text: 'Keep properties, leases, documents, expenses, maintenance and records organized in one place.' },
-  { icon: <EvaluatorIcon />, heading: 'Analyze Opportunities', text: "Evaluate rental properties, understand home-purchase costs, and use PropRoster's investment tools when considering your next property." },
-  { icon: <CompassIcon />, heading: 'Stay Ahead', text: 'Built to help you stay ahead of lease renewals, insurance renewals, taxes and other upcoming deadlines.' },
-  { icon: <DocumentIcon />, heading: 'Understand Your Property Data', text: 'Use PropRoster AI to help organize and understand uploaded property documents where AI analysis is available.' },
+// Public Homepage V2 follow-up (Organization + Automation positioning):
+// the three current product pillars, reordered around ORGANIZE ->
+// AUTOMATE -> UNDERSTAND. Property Organization + Data is the
+// foundation pillar; Tenant Connect (now covering the maintenance/
+// coordination workflow that was previously its own separate pillar) is
+// where the automation/coordination value becomes concrete; Live Tax
+// Center closes the loop. Copy describes only what is actually live
+// today — no SMS outreach, no autonomous contractor hiring, no
+// automatic appointment confirmation, no tax preparation/filing/advice,
+// and no live Cap Rate/NOI/Net Cash Flow/equity (Property Intelligence
+// has not shipped past its Phase A architecture audit).
+const PILLARS: { icon: React.ReactNode; heading: string; subheading: string; body: string; closing: string; note?: string }[] = [
+  {
+    icon: <FolderIcon />,
+    heading: 'Your Property, Organized',
+    subheading: 'Everything about one of your biggest assets, in one place.',
+    body: 'Upload leases, insurance, mortgage information, receipts, expenses and important documents. PropRoster keeps it all organized around the property it belongs to, so your records and the numbers behind them stay together in one place.',
+    closing: 'Your property. Your documents. Your numbers. Organized.',
+  },
+  {
+    icon: <PeopleIcon />,
+    heading: 'Tenant Connect',
+    subheading: 'Keep control. Lose the coordination.',
+    body: 'A tenant reports a maintenance issue and shares their availability. You review the request and decide how to proceed, using someone from your own PropCrew, the providers and professionals you already know and trust. PropRoster helps move the request, availability and scheduling forward, so you are not personally coordinating every text, call and appointment.',
+    closing: 'Your tenant. Your PropCrew. Your approval. Less back-and-forth.',
+  },
+  {
+    icon: <DollarIcon />,
+    heading: 'Live Tax Center',
+    subheading: 'Stay organized all year, not just at tax time.',
+    body: 'Add expenses and upload receipts as they happen. PropRoster keeps your property financial records organized by property and by tax year, so you are not reconstructing an entire year the moment tax season arrives.',
+    closing: 'Add it as you go. PropRoster keeps it organized.',
+    note: 'PropRoster does not prepare or file taxes, and this is not tax advice.',
+  },
 ]
 
-// Section 6: "What is PropRoster?" — one short section below the hero, not a marketing site.
-const WHAT_IS_PROPROSTER: { icon: React.ReactNode; heading: string; text: string }[] = [
-  { icon: <DocumentIcon />, heading: 'Portfolio Management', text: 'Organize property information, documents, leases, maintenance and finances.' },
-  { icon: <EvaluatorIcon />, heading: 'Investment Tools', text: 'Evaluate rental properties, calculate home-purchase costs and prepare for property-value/comparable analysis.' },
-  { icon: <DollarIcon />, heading: 'Smarter Property Management', text: 'Use document intelligence and evolving monitoring tools to reduce missed deadlines and make property information easier to act on.' },
+const WORKFLOW_STEPS = [
+  { title: 'Add your property', text: 'Bring the important information together.' },
+  { title: 'Connect your tenant', text: 'Keep requests and communication organized.' },
+  { title: 'Let PropRoster help coordinate', text: 'PropRoster helps move requests, availability and provider communication forward. You stay in control of every decision.' },
+]
+
+// Section 9/14: secondary capabilities, deliberately a single quiet
+// section rather than another feature grid.
+const SECONDARY_FEATURES = [
+  'Property profiles', 'Rent Ledger', 'Leases', 'Documents', 'Smart Upload',
+  'PropCrew', 'Investment Tools', 'Insurance & mortgage records',
 ]
 
 export default function LandingPage() {
+  const [authOpen, setAuthOpen] = useState(false)
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -157,7 +205,6 @@ export default function LandingPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [authMessage, setAuthMessage] = useState('')
-  const signInCardRef = useRef<HTMLDivElement>(null)
   // Tenant-Facing Experience V1 — "How will you use PropRoster?" (signup
   // only; irrelevant once signing back in to an existing account, which
   // may already hold either or both contexts — see onboarding.ts's own
@@ -203,13 +250,31 @@ export default function LandingPage() {
     setAuthMessage('')
   }
 
-  // Section 4's primary CTA: puts the (already-existing) sign-in card into
-  // signup mode and brings it into view — no separate signup page/route
-  // exists or is created here, per Section 5 ("do not alter signup logic").
-  function startSignup() {
-    switchMode('signup')
-    signInCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  // Section 12: the previous full-time embedded sign-in card is now an
+  // on-demand panel — opened from "Log In" (signin) or any "Start Free"
+  // CTA (signup) in the header/hero/pricing. Same auth functions above,
+  // unchanged; only visibility moved out of the hero's permanent layout.
+  function openAuth(mode: 'signin' | 'signup') {
+    switchMode(mode)
+    setAuthOpen(true)
   }
+
+  function closeAuth() {
+    setAuthOpen(false)
+  }
+
+  // Accessibility (Section 24): Escape closes the auth panel, same as any
+  // other modal — this is a genuinely new interaction this milestone
+  // introduces (the form was never a dismissible overlay before), so it
+  // gets real keyboard support from the start rather than inheriting a gap.
+  useEffect(() => {
+    if (!authOpen) return
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') closeAuth()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [authOpen])
 
   return (
     <main className="landingPage">
@@ -223,168 +288,79 @@ export default function LandingPage() {
         </div>
         <nav className="landingNav" aria-label="Landing page">
           <Link href="/pricing" className="landingNavLink">Pricing</Link>
-          <button type="button" className="landingNavLink" onClick={() => switchMode('signup')}>
-            New to PropRoster? <span className="landingNavCta">Create an account</span>
-          </button>
+          <button type="button" className="landingNavLogin" onClick={() => openAuth('signin')}>Log In</button>
+          <button type="button" className="primary landingNavStartFree" onClick={() => openAuth('signup')}>Start Free</button>
         </nav>
       </header>
 
       <section className="landingHero">
-        {/*
-          Decorative background only (aria-hidden, no alt-worthy content).
-          No photograph is bundled in this repo — sourcing one would mean
-          either hotlinking an external URL that can break later or adding
-          a paid image-service dependency, both explicitly ruled out for
-          this pass. Renders a warm gradient today; drop a real, licensed
-          photo in at public/hero-property.jpg (any orientation, ~1600px+
-          wide recommended) and it takes over automatically via the CSS
-          background-image below — NO code change needed, the gradient is
-          just the fallback layer underneath it.
-        */}
-        <div className="landingHeroBg" aria-hidden="true">
-          <div className="landingHeroScrim" />
-        </div>
-
         <div className="landingHeroContent">
-          <div className="landingHeroHeadline">
-            <h1>Your real estate portfolio, all in one place.</h1>
-            <p className="landingHeroTagline">Organize it. Analyze it. Stay ahead of it.</p>
-            <p className="landingHeroSub">PropRoster helps property owners and real estate investors organize properties, track finances, analyze opportunities, manage documents, monitor important dates, and stay ahead of what needs attention.</p>
-            <div className="landingHeroCtas">
-              <button type="button" className="primary landingCtaPrimary" onClick={startSignup}>Start Free</button>
-              <Link href="/investment-tools/rental-analyzer" className="secondary landingCtaSecondary">Try Rental Property Analyzer</Link>
-            </div>
-            {/* Public Homepage Pricing + First Property Free: verified against
-                lib/billing/plans.ts (PLANS.free: priceMonthly 0, maxProperties 1)
-                and the real signup flow (components/LandingPage.tsx's own
-                submitAuth() below calls supabase.auth.signUp() only — no
-                Stripe/card collection anywhere in that path; Stripe Checkout is
-                a separate, later, authenticated-only action in
-                app/api/billing/checkout/route.ts). Kept visually secondary
-                (small, muted) — the CTA buttons above remain the primary
-                visual weight of the hero. */}
-            <p className="landingHeroFreeNote">Start with your first property free. No credit card required.</p>
+          <h1>Your properties. Organized.</h1>
+          <p className="landingHeroTagline">Keep control of your properties without managing every little detail.</p>
+          <p className="landingHeroSub">PropRoster helps organize the information and numbers behind your properties, simplify communication with tenants and your trusted PropCrew, and automate routine coordination.</p>
+          <div className="landingHeroCtas">
+            <button type="button" className="primary landingCtaPrimary" onClick={() => openAuth('signup')}>Start Free</button>
           </div>
-
-          <div className="landingValueProps">
-            <ul>
-              {VALUE_PROPS.map((item) => (
-                <li key={item.heading}>
-                  <IconBadge>{item.icon}</IconBadge>
-                  <span className="landingValuePropText">
-                    <strong>{item.heading}</strong>
-                    <span>{item.text}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <p className="landingTrustLine"><IconBadge><ShieldIcon /></IconBadge> Secure. Private. Built for investors.</p>
-          </div>
-
-          <div className="landingSignInCard" ref={signInCardRef}>
-            <p className="eyebrow">{authMode === 'signin' ? 'WELCOME BACK' : 'CREATE YOUR ACCOUNT'}</p>
-            <h2>{authMode === 'signin' ? 'Sign in to PropRoster' : 'Create your PropRoster account'}</h2>
-            <p className="landingCardSub">{authMode === 'signin' ? 'Access your properties, documents, financials and investment tools.' : 'Free to start — organize your first property in minutes.'}</p>
-
-            {authMode === 'signup' && (
-              <div className="landingRoleChoice">
-                <span className="landingRoleChoiceLabel">How will you use PropRoster?</span>
-                <div className="landingRoleChoiceOptions">
-                  <button type="button" className={intendedRole === 'owner' ? 'active' : ''} aria-pressed={intendedRole === 'owner'} onClick={() => setIntendedRole('owner')}>I manage properties</button>
-                  <button type="button" className={intendedRole === 'tenant' ? 'active' : ''} aria-pressed={intendedRole === 'tenant'} onClick={() => setIntendedRole('tenant')}>I&rsquo;m a tenant</button>
-                </div>
-              </div>
-            )}
-
-            <label htmlFor="landing-email">Email</label>
-            <div className="landingInputField">
-              <MailIcon />
-              <input
-                id="landing-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-                placeholder="Enter your email"
-              />
-            </div>
-
-            <label htmlFor="landing-password">Password</label>
-            <div className="landingInputField">
-              <LockIcon />
-              <input
-                id="landing-password"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete={authMode === 'signin' ? 'current-password' : 'new-password'}
-                onKeyDown={(e) => e.key === 'Enter' && void submitAuth()}
-                placeholder="Enter your password"
-              />
-              <button
-                type="button"
-                className="landingPasswordToggle"
-                onClick={() => setShowPassword((v) => !v)}
-                aria-pressed={showPassword}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-              >
-                <EyeIcon off={showPassword} />
-              </button>
-            </div>
-
-            {error && <div className="statusMessage errorMessage" role="alert">{error}</div>}
-            {authMessage && <div className="statusMessage successMessage" role="status">{authMessage}</div>}
-
-            <button className="primary landingSubmit" disabled={busy} onClick={() => void submitAuth()}>
-              {busy ? 'Working…' : authMode === 'signin' ? 'Sign in' : 'Create account'}
-            </button>
-            <button className="authSwitch" onClick={() => switchMode(authMode === 'signin' ? 'signup' : 'signin')}>
-              {authMode === 'signin' ? 'New to PropRoster? Create an account' : 'Already have an account? Sign in'}
-            </button>
-
-            <div className="landingDivider"><span>or</span></div>
-
-            <Link href="/investment-tools/rental-analyzer" className="landingEvaluatorCta">
-              <IconBadge><EvaluatorIcon /></IconBadge>
-              <span className="landingEvaluatorCtaText">
-                <strong>Just want to run the numbers?</strong>
-                <em>Try the free Rental Property Analyzer →</em>
-              </span>
-            </Link>
-          </div>
+          <p className="landingHeroFreeNote">Start with your first property free. No credit card required.</p>
         </div>
       </section>
 
-      {/* Section 6: one short "What is PropRoster?" section, three concise
-          cards — not a marketing site. */}
-      <section className="landingWhatIs">
-        <h2>Everything about your properties, organized around you.</h2>
-        <div className="landingWhatIsGrid">
-          {WHAT_IS_PROPROSTER.map((item) => (
-            <div className="landingWhatIsCard" key={item.heading}>
+      {/* Section 4: the three current product pillars, ORGANIZE -> AUTOMATE
+          -> UNDERSTAND. This also carries the "you stay in control"
+          philosophy the brief asked for (Tenant Connect's own subheading/
+          closing line) rather than a separate, largely-duplicative mission
+          section right after the hero. */}
+      <section className="landingPillars">
+        <div className="landingPillarsGrid">
+          {PILLARS.map((item) => (
+            <div className="landingPillarCard" key={item.heading}>
               <IconBadge>{item.icon}</IconBadge>
-              <h3>{item.heading}</h3>
-              <p>{item.text}</p>
+              <h2>{item.heading}</h2>
+              <p className="landingPillarSubhead">{item.subheading}</p>
+              <p>{item.body}</p>
+              <p className="landingPillarClosing">{item.closing}</p>
+              {item.note && <p className="landingPillarNote">{item.note}</p>}
             </div>
           ))}
         </div>
       </section>
 
-      {/* Public Homepage Pricing + First Property Free: a compact, public
-          pricing section so a visitor can understand cost before creating
-          an account, without duplicating the pricing data. Every price,
-          property limit, tagline, and feature bullet below is read
-          directly from lib/billing/plans.ts — the same canonical source
-          app/pricing/page.tsx renders from — so this section and the full
-          /pricing page can never drift into contradictory numbers. This
-          intentionally does NOT re-implement /pricing's own JSX (its
-          auth-aware "Current Plan"/"Upgrade to X" CTA logic is exercised
-          by existing tests keyed to that file's exact source) — only the
-          shared data is reused, and this section's own CTA is the single,
-          always-the-same "start signing up" action appropriate for a
-          signed-out marketing page. Deliberately omits the Coming Soon
-          (Automate) and 16+/Contact cards for a "compact" section — the
-          "View full pricing" link below covers those. */}
+      {/* Section 5: simple workflow. */}
+      <section className="landingWorkflow">
+        <h2>How it works</h2>
+        <div className="landingWorkflowSteps">
+          {WORKFLOW_STEPS.map((step, i) => (
+            <div className="landingWorkflowStep" key={step.title}>
+              <span className="landingWorkflowNumber">{i + 1}</span>
+              <div>
+                <h3>{step.title}</h3>
+                <p>{step.text}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Section 6/9: secondary capabilities — one quiet section, not a
+          second feature grid. Also where the free Rental Property
+          Analyzer stays reachable (Section 11 — no longer a competing
+          hero CTA, but still a real, findable link). */}
+      <section className="landingSecondary">
+        <h2>Everything else stays organized too.</h2>
+        <p className="landingSecondaryList">{SECONDARY_FEATURES.join(' · ')}</p>
+        <Link href="/investment-tools/rental-analyzer" className="landingEvaluatorLink">
+          <IconBadge><EvaluatorIcon /></IconBadge>
+          <span>Just want to run the numbers? Try the free Rental Property Analyzer &rarr;</span>
+        </Link>
+      </section>
+
+      {/* Section 7: pricing. Every price, property limit, tagline, and
+          feature bullet below is read directly from lib/billing/plans.ts
+          — the same canonical source app/pricing/page.tsx renders from —
+          so this section and the full /pricing page can never drift into
+          contradictory numbers. Deliberately omits the Coming Soon
+          (Automate) card for a compact section — "View full pricing"
+          covers it. */}
       <section className="landingPricing" id="pricing">
         <div className="landingPricingIntro">
           <p className="eyebrow">PRICING</p>
@@ -417,15 +393,20 @@ export default function LandingPage() {
           })}
         </div>
 
+        <p className="landingPricingContact">
+          More than 15 properties?{' '}
+          <a href="mailto:sales@proproster.com?subject=PropRoster%20%E2%80%94%2016%2B%20properties">Contact us</a>.
+        </p>
+
         <div className="landingPricingCta">
           <p className="landingPricingCtaLead">Start with your first property free.</p>
-          <button type="button" className="primary landingCtaPrimary" onClick={startSignup}>Get Started Free</button>
+          <button type="button" className="primary landingCtaPrimary" onClick={() => openAuth('signup')}>Get Started Free</button>
           <p className="landingPricingCtaNote">No credit card required.</p>
-          <Link href="/pricing" className="landingPricingFullLink">View full pricing details →</Link>
+          <Link href="/pricing" className="landingPricingFullLink">View full pricing details &rarr;</Link>
         </div>
       </section>
 
-      {/* Section 7: privacy/trust note. Accurate language only — no
+      {/* Section 8: privacy/trust note. Accurate language only — no
           encryption or zero-knowledge claims this codebase doesn't back up;
           this describes the actual owner-scoped RLS architecture already in
           place (every table is scoped to owner_id = auth.uid()). */}
@@ -436,6 +417,86 @@ export default function LandingPage() {
           <p>PropRoster is designed so your property, financial, tenant and document data remains tied to your account and is not displayed to other users.</p>
         </div>
       </section>
+
+      {/* Section 9: final CTA. */}
+      <section className="landingFinalCta">
+        <h2>Ready to get organized?</h2>
+        <p>Start free. Add your first property in minutes.</p>
+        <button type="button" className="primary landingCtaPrimary" onClick={() => openAuth('signup')}>Start Free</button>
+      </section>
+
+      {authOpen && (
+        <div className="overlay landingAuthOverlay" onMouseDown={(e) => e.target === e.currentTarget && closeAuth()}>
+          <div className="modal landingAuthModal" role="dialog" aria-modal="true" aria-labelledby="landing-auth-title">
+            <div className="landingSignInCard">
+              <div className="landingSignInCardTop">
+                <div>
+                  <p className="eyebrow">{authMode === 'signin' ? 'WELCOME BACK' : 'CREATE YOUR ACCOUNT'}</p>
+                  <h2 id="landing-auth-title">{authMode === 'signin' ? 'Sign in to PropRoster' : 'Create your PropRoster account'}</h2>
+                </div>
+                <button type="button" className="iconButton" aria-label="Close" onClick={closeAuth}>&times;</button>
+              </div>
+              <p className="landingCardSub">{authMode === 'signin' ? 'Access your properties, documents, financials and investment tools.' : 'Free to start. Organize your first property in minutes.'}</p>
+
+              {authMode === 'signup' && (
+                <div className="landingRoleChoice">
+                  <span className="landingRoleChoiceLabel">How will you use PropRoster?</span>
+                  <div className="landingRoleChoiceOptions">
+                    <button type="button" className={intendedRole === 'owner' ? 'active' : ''} aria-pressed={intendedRole === 'owner'} onClick={() => setIntendedRole('owner')}>I manage properties</button>
+                    <button type="button" className={intendedRole === 'tenant' ? 'active' : ''} aria-pressed={intendedRole === 'tenant'} onClick={() => setIntendedRole('tenant')}>I&rsquo;m a tenant</button>
+                  </div>
+                </div>
+              )}
+
+              <label htmlFor="landing-email">Email</label>
+              <div className="landingInputField">
+                <MailIcon />
+                <input
+                  id="landing-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                  placeholder="Enter your email"
+                />
+              </div>
+
+              <label htmlFor="landing-password">Password</label>
+              <div className="landingInputField">
+                <LockIcon />
+                <input
+                  id="landing-password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete={authMode === 'signin' ? 'current-password' : 'new-password'}
+                  onKeyDown={(e) => e.key === 'Enter' && void submitAuth()}
+                  placeholder="Enter your password"
+                />
+                <button
+                  type="button"
+                  className="landingPasswordToggle"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-pressed={showPassword}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  <EyeIcon off={showPassword} />
+                </button>
+              </div>
+
+              {error && <div className="statusMessage errorMessage" role="alert">{error}</div>}
+              {authMessage && <div className="statusMessage successMessage" role="status">{authMessage}</div>}
+
+              <button className="primary landingSubmit" disabled={busy} onClick={() => void submitAuth()}>
+                {busy ? 'Working…' : authMode === 'signin' ? 'Sign in' : 'Create account'}
+              </button>
+              <button className="authSwitch" onClick={() => switchMode(authMode === 'signin' ? 'signup' : 'signin')}>
+                {authMode === 'signin' ? 'New to PropRoster? Create an account' : 'Already have an account? Sign in'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

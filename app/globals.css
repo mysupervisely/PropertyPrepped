@@ -1108,93 +1108,132 @@ h2, h3, p { margin-top: 0; }
 .billingLinksSection { margin-bottom: 40px; }
 @media (max-width: 620px) { .pricingGrid { grid-template-columns: 1fr; } }
 
-/* Milestone 9 (design pass): signed-out landing / sign-in page */
+/* Public Homepage V2 (Product Story + Pricing Simplification): signed-out
+   landing page. Replaces the previous hero-photo + permanently-embedded
+   sign-in card + four/three overlapping "why PropRoster" sections with a
+   calmer, product-story-first layout — Apple-like restraint, not a dense
+   SaaS feature catalog (this milestone's explicit design direction). No
+   new colors: every color below is one of the existing tokens at the top
+   of this file (--bg/--surface/--text/--muted/--line/--brand/
+   --brand-soft/--warm). */
 .landingPage { background: var(--bg); }
 
-.landingHeader { max-width: 1320px; margin: 0 auto; padding: 22px 28px; display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; position: relative; z-index: 3; }
-.landingBrand { display: flex; align-items: center; gap: 10px; }
-.landingBrandText { display: flex; flex-direction: column; }
+.landingHeader { max-width: 1200px; margin: 0 auto; padding: 22px 28px; display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; position: relative; z-index: 3; }
+.landingBrand { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.landingBrandText { display: flex; flex-direction: column; min-width: 0; }
 .landingBrandText .brand { font-size: 22px; }
 .landingBrandText .tagline { margin-top: 0; }
-.landingNav { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.landingNav { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
 .landingNavLink { border: 0; background: transparent; color: var(--text); font-weight: 600; font-size: 14px; padding: 6px 2px; text-decoration: none; cursor: pointer; }
 .landingNavLink:hover { color: var(--brand); }
-.landingNavCta { color: var(--brand); font-weight: 700; }
-.landingNavLink:focus-visible, .landingEvaluatorCta:focus-visible, button.authSwitch:focus-visible, .landingPasswordToggle:focus-visible {
+.landingNavLogin { border: 0; background: transparent; color: var(--text); font-weight: 650; font-size: 14px; padding: 8px 4px; cursor: pointer; white-space: nowrap; }
+.landingNavLogin:hover { color: var(--brand); }
+.landingNavStartFree { white-space: nowrap; padding: 9px 16px; font-size: 14px; }
+.landingNavLink:focus-visible, .landingNavLogin:focus-visible, .landingEvaluatorLink:focus-visible, button.authSwitch:focus-visible, .landingPasswordToggle:focus-visible {
   outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px;
 }
 
-.landingHero { position: relative; overflow: hidden; min-height: 720px; display: flex; align-items: stretch; }
-
-/*
- * No photograph ships in this repo (see public/README.md — sourcing one
- * would mean hotlinking an external URL or a paid image API, both
- * explicitly out of scope here). This renders a warm gradient today.
- * Drop a real, licensed photo in at public/hero-property.jpg and it
- * takes over automatically: it's layered as the FIRST (topmost)
- * background-image below, with the gradient as the fallback layer
- * underneath — a missing file simply fails to paint that layer and the
- * gradient shows through, so no JS/component change is ever needed.
- */
-.landingHeroBg {
-  position: absolute; inset: 0; z-index: 0;
-  background:
-    url('/hero-property.jpg') center 38% / cover no-repeat,
-    radial-gradient(ellipse 900px 560px at 78% 30%, rgba(255, 224, 168, 0.75), transparent 70%),
-    linear-gradient(135deg, #f7ecd8 0%, #eeddc0 32%, #e4d2a8 55%, #cfe0d1 82%, #bdd6c4 100%);
+/* Hero: a calm brand-toned gradient, not a house photo — Section 16 of
+   this milestone's brief explicitly moves away from generic property
+   photography as PropRoster's primary visual identity. No product
+   screenshot is used here either: no current, up-to-date screenshot
+   exists in this repo, and this milestone does not fabricate one (see
+   the completion report for what to capture next). */
+.landingHero {
+  padding: 64px 28px 56px;
+  background: linear-gradient(180deg, var(--brand-soft) 0%, var(--bg) 72%);
 }
-.landingHeroScrim {
-  position: absolute; inset: 0;
-  background: linear-gradient(90deg, var(--bg) 0%, var(--bg) 33%, rgba(245,247,249,0.62) 42%, rgba(245,247,249,0.18) 52%, rgba(245,247,249,0.04) 62%, rgba(245,247,249,0) 72%);
-}
+.landingHeroContent { max-width: 720px; margin: 0 auto; text-align: center; }
+.landingHeroContent h1 { font-size: clamp(34px, 5vw, 54px); line-height: 1.1; letter-spacing: -0.025em; margin: 0 0 14px; }
+/* Organization + Automation positioning follow-up: a short brand-colored
+   sentence under the h1 (was an uppercase eyebrow ABOVE the h1 in the
+   previous pass, which read too much like a property-management pitch —
+   replaced along with the copy it labeled). */
+.landingHeroTagline { color: var(--brand); font-weight: 650; font-size: 18px; line-height: 1.4; margin: 0 0 14px; }
+.landingHeroSub { color: var(--text); opacity: .82; font-size: 17px; line-height: 1.6; margin: 0 auto; max-width: 560px; }
+.landingHeroCtas { display: flex; justify-content: center; margin-top: 26px; }
+.landingCtaPrimary { padding: 13px 26px; font-size: 15px; }
+.landingHeroFreeNote { color: var(--muted); font-size: 13.5px; margin: 12px 0 0; }
 
-.landingHeroContent {
-  position: relative; z-index: 2;
-  max-width: 1320px; margin: 0 auto; padding: 30px 28px 70px;
-  width: 100%;
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(340px, 460px);
-  grid-template-areas: "headline card" "values card";
-  column-gap: 56px;
-  row-gap: 30px;
-  align-content: center;
-  align-items: start;
-}
-.landingHeroHeadline { grid-area: headline; align-self: end; max-width: 460px; }
-/* Same em-relative fix as the base h1 rule above — was a flat -1.4px
-   (already loosened to a flat -1px under 560px below), neither of which
-   scales with this clamp()'s own font-size. -0.025em stays a touch
-   tighter than the base h1 rule (this is the marketing landing-page
-   hero, meant to read as the boldest headline in the app) without ever
-   hitting the same disproportionate mobile tightness. */
-.landingHeroHeadline h1 { font-size: clamp(34px, 4.4vw, 54px); line-height: 1.1; letter-spacing: -0.025em; margin: 0 0 12px; }
-.landingHeroTagline { color: var(--brand); font-weight: 700; font-size: 16px; margin: 0 0 14px; }
-.landingHeroSub { color: var(--text); opacity: .82; font-size: 17px; line-height: 1.6; margin: 0; }
-.landingHeroCtas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
-.landingCtaPrimary { padding: 13px 22px; font-size: 15px; }
-.landingCtaSecondary { display: inline-flex; align-items: center; padding: 13px 22px; font-size: 15px; text-decoration: none; background: white; }
+/* Section 4: the three current product pillars — the homepage's real
+   centerpiece, replacing the old four-item value-props list and the
+   three-item "What is PropRoster?" grid (both removed; their ideas
+   overlapped and none were as concrete as these three). Each card is
+   heading + subheading + body + a short bold closing line, and (Tax
+   Center only) a small disclaimer note — never a second competing
+   heading style, just typographic weight to separate the four roles. */
+.landingPillars { max-width: 1100px; margin: 0 auto; padding: 56px 28px 8px; }
+.landingPillarsGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.landingPillarCard { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 26px 24px; }
+.landingPillarCard h2 { font-size: 18px; margin: 16px 0 6px; letter-spacing: -.2px; }
+.landingPillarCard p { color: var(--muted); font-size: 14px; line-height: 1.6; margin: 0 0 12px; }
+.landingPillarCard p:last-child { margin-bottom: 0; }
+.landingPillarCard .landingPillarSubhead { color: var(--text); font-weight: 600; font-size: 13.5px; line-height: 1.4; }
+.landingPillarCard .landingPillarClosing { color: var(--text); font-weight: 650; font-size: 13.5px; }
+.landingPillarCard .landingPillarNote { color: var(--muted); font-size: 12px; }
 
-.landingValueProps { grid-area: values; align-self: start; max-width: 460px; }
-.landingValueProps ul { list-style: none; margin: 0 0 20px; padding: 0; display: grid; gap: 16px; }
-.landingValueProps li { display: flex; align-items: flex-start; gap: 13px; font-size: 15px; line-height: 1.5; }
-.landingValuePropText strong { display: block; font-size: 13px; letter-spacing: .2px; margin-bottom: 2px; }
-.landingValuePropText > span { display: block; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
-/* Nudges only the TEXT next to the icon down slightly, so its first line
-   lines up with the icon's visual center instead of its own top edge (the
-   li is align-items:flex-start since the text can wrap to 2 lines). Scoped
-   to this class alone — it used to be a bare "li span" selector, which
-   also matched .landingIconBadge (also a <span>) and pushed the icon's
-   own centered content down inside its circle. The icon's internal
-   centering (place-items:center, below) is untouched by this rule now. */
-.landingValuePropText { padding-top: 7px; }
-.landingIconBadge { flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: white; border: 1px solid var(--line); display: grid; place-items: center; box-shadow: 0 4px 10px -6px rgba(20,35,28,.3); }
-.landingTrustLine { display: flex; align-items: center; gap: 10px; color: var(--text); font-weight: 650; font-size: 13.5px; margin: 4px 0 0; }
+/* Section 5: three-step workflow. */
+.landingWorkflow { max-width: 1000px; margin: 0 auto; padding: 48px 28px; text-align: center; }
+.landingWorkflow h2 { font-size: clamp(22px, 2.6vw, 28px); letter-spacing: -.4px; margin: 0 0 30px; }
+.landingWorkflowSteps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; text-align: left; }
+.landingWorkflowStep { display: flex; align-items: flex-start; gap: 14px; }
+.landingWorkflowNumber { flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); font-weight: 700; font-size: 14px; display: grid; place-items: center; }
+.landingWorkflowStep h3 { font-size: 15px; margin: 4px 0 6px; }
+.landingWorkflowStep p { color: var(--muted); font-size: 13.5px; line-height: 1.55; margin: 0; }
 
-.landingSignInCard { grid-area: card; background: white; border: 1px solid var(--line); border-radius: 22px; padding: 32px 28px; box-shadow: 0 28px 64px -28px rgba(20, 35, 28, .5); align-self: start; }
-.landingSignInCard h2 { font-size: 23px; margin: 4px 0 8px; letter-spacing: -.4px; }
-.landingCardSub { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+/* Section 6/9: one quiet secondary-capabilities section — deliberately
+   not a second feature grid. */
+.landingSecondary { max-width: 760px; margin: 0 auto; padding: 40px 28px; text-align: center; }
+.landingSecondary h2 { font-size: clamp(20px, 2.2vw, 24px); letter-spacing: -.3px; margin: 0 0 14px; }
+.landingSecondaryList { color: var(--muted); font-size: 14px; line-height: 1.7; margin: 0 0 20px; }
+.landingEvaluatorLink { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; background: var(--surface); color: var(--text); font-size: 13.5px; font-weight: 600; }
+.landingEvaluatorLink:hover { border-color: var(--brand); color: var(--brand); }
+
+/* Section 7: compact pricing section. Reuses .pricingGrid/.pricingCard/
+   .pricingBadge/.pricingTagline/.pricingPrice/.pricingFeatureList/
+   .statusPill/.pricingEarlyAccess as-is (defined above, shared with
+   app/pricing/page.tsx) so the card look is identical everywhere pricing
+   is shown — only this section's own wrapper/intro/CTA classes are new. */
+.landingPricing { max-width: 1100px; margin: 10px auto 60px; padding: 0 28px; text-align: center; }
+.landingPricingIntro { max-width: 560px; margin: 0 auto 30px; }
+.landingPricingIntro h2 { font-size: clamp(22px, 2.6vw, 30px); letter-spacing: -.5px; margin: 0 0 10px; }
+.landingPricingSub { color: var(--muted); font-size: 15px; line-height: 1.5; margin: 0; }
+.landingPricingGrid { text-align: left; margin: 0 0 20px; }
+.landingPricingLimit { font-weight: 700; font-size: 14px; margin: 0; }
+.landingPricingContact { color: var(--muted); font-size: 13.5px; margin: 0 0 32px; }
+.landingPricingContact a { color: var(--brand); font-weight: 650; }
+.landingPricingCta { max-width: 420px; margin: 0 auto; }
+.landingPricingCtaLead { font-weight: 700; font-size: 16px; margin: 0 0 14px; }
+.landingPricingCta .landingCtaPrimary { width: 100%; }
+.landingPricingCtaNote { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+.landingPricingFullLink { display: inline-block; margin-top: 16px; color: var(--brand); font-weight: 650; font-size: 14px; text-decoration: none; }
+.landingPricingFullLink:hover { text-decoration: underline; }
+
+/* Section 8: privacy/trust note. */
+.landingPrivacyNote { max-width: 760px; margin: 0 auto 56px; padding: 0 28px; display: flex; align-items: flex-start; gap: 14px; }
+.landingPrivacyNote h3 { font-size: 15px; margin: 0 0 4px; }
+.landingPrivacyNote p { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin: 0; }
+
+/* Section 9: final CTA. */
+.landingFinalCta { max-width: 560px; margin: 0 auto; padding: 8px 28px 72px; text-align: center; }
+.landingFinalCta h2 { font-size: clamp(22px, 2.6vw, 28px); letter-spacing: -.4px; margin: 0 0 10px; }
+.landingFinalCta p { color: var(--muted); font-size: 15px; margin: 0 0 22px; }
+
+/* Shared icon badge (pillar cards, privacy note, secondary-features link). */
+.landingIconBadge { flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); display: grid; place-items: center; box-shadow: 0 4px 10px -6px rgba(20,35,28,.3); }
+
+/* Section 12: sign-in/sign-up moved out of the hero into an on-demand
+   overlay, opened by "Log In" / "Start Free" — reuses the existing
+   .overlay/.modal pattern (app/globals.css, shared with every other
+   modal in the app) rather than a new one. */
+.landingAuthOverlay { z-index: 20; }
+.landingAuthModal { width: min(440px, 100%); padding: 0; background: transparent; }
+.landingSignInCard { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 32px 28px; box-shadow: 0 28px 64px -28px rgba(20, 35, 28, .5); }
+.landingSignInCardTop { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.landingSignInCard h2 { font-size: 22px; margin: 4px 0 0; letter-spacing: -.4px; }
+.landingCardSub { color: var(--muted); font-size: 14px; margin: 10px 0 20px; }
 .landingSignInCard label { display: block; font-size: 13px; font-weight: 650; margin-top: 14px; margin-bottom: 7px; }
-.landingInputField { position: relative; display: flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; background: white; }
+.landingInputField { position: relative; display: flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; background: var(--surface); }
 .landingInputField:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
 .landingInputField svg { flex-shrink: 0; }
 .landingInputField input { flex: 1; border: 0; outline: none; padding: 12px 10px; font-size: 15px; background: transparent; color: var(--text); min-width: 0; }
@@ -1206,82 +1245,29 @@ h2, h3, p { margin-top: 0; }
 .landingRoleChoice { margin-top: 4px; }
 .landingRoleChoiceLabel { display: block; font-size: 13px; font-weight: 650; margin-bottom: 8px; }
 .landingRoleChoiceOptions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.landingRoleChoiceOptions button { border: 1px solid var(--line); background: white; border-radius: 10px; padding: 11px 8px; font-weight: 650; font-size: 13.5px; color: var(--text); }
+.landingRoleChoiceOptions button { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 11px 8px; font-weight: 650; font-size: 13.5px; color: var(--text); }
 .landingRoleChoiceOptions button.active { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
 .landingSignInCard .authSwitch { width: 100%; border: 0; background: transparent; color: var(--brand); font-weight: 650; padding: 14px 6px 0; cursor: pointer; }
-.landingDivider { display: flex; align-items: center; gap: 12px; margin: 20px 0 16px; color: var(--muted); font-size: 12px; }
-.landingDivider::before, .landingDivider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
-.landingEvaluatorCta { display: flex; align-items: center; gap: 12px; text-decoration: none; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--brand-soft); }
-.landingEvaluatorCta:hover { border-color: var(--brand); }
-.landingEvaluatorCtaText { display: flex; flex-direction: column; }
-.landingEvaluatorCtaText strong { color: var(--text); font-size: 13.5px; font-style: normal; }
-.landingEvaluatorCtaText em { color: var(--brand); font-weight: 700; font-size: 13.5px; font-style: normal; margin-top: 2px; }
-
-/* Section 6: "What is PropRoster?" — lightweight, three cards, one screen's worth. */
-.landingWhatIs { max-width: 1320px; margin: 0 auto; padding: 54px 28px 10px; text-align: center; }
-.landingWhatIs h2 { font-size: clamp(22px, 2.6vw, 30px); letter-spacing: -.5px; margin: 0 0 30px; }
-.landingWhatIsGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; text-align: left; }
-.landingWhatIsCard { background: white; border: 1px solid var(--line); border-radius: 16px; padding: 22px; }
-.landingWhatIsCard h3 { font-size: 15px; margin: 14px 0 8px; }
-.landingWhatIsCard p { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin: 0; }
-
-/* Public Homepage Pricing + First Property Free: small, muted supporting
-   line under the hero CTAs — deliberately secondary to the h1/CTA
-   buttons, never competing with them for attention. */
-.landingHeroFreeNote { color: var(--muted); font-size: 13.5px; margin: 12px 0 0; }
-
-/* Public Homepage Pricing + First Property Free: compact pricing section.
-   Reuses .pricingGrid/.pricingCard/.pricingBadge/.pricingTagline/
-   .pricingPrice/.pricingFeatureList/.statusPill/.pricingEarlyAccess as-is
-   (defined above, shared with app/pricing/page.tsx) so the card look is
-   identical everywhere pricing is shown — only this section's own
-   wrapper/intro/CTA classes are new. */
-.landingPricing { max-width: 1100px; margin: 10px auto 60px; padding: 0 28px; text-align: center; }
-.landingPricingIntro { max-width: 560px; margin: 0 auto 30px; }
-.landingPricingIntro h2 { font-size: clamp(22px, 2.6vw, 30px); letter-spacing: -.5px; margin: 0 0 10px; }
-.landingPricingSub { color: var(--muted); font-size: 15px; line-height: 1.5; margin: 0; }
-.landingPricingGrid { text-align: left; margin: 0 0 32px; }
-.landingPricingLimit { font-weight: 700; font-size: 14px; margin: 0; }
-.landingPricingCta { max-width: 420px; margin: 0 auto; }
-.landingPricingCtaLead { font-weight: 700; font-size: 16px; margin: 0 0 14px; }
-.landingPricingCta .landingCtaPrimary { width: 100%; }
-.landingPricingCtaNote { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
-.landingPricingFullLink { display: inline-block; margin-top: 16px; color: var(--brand); font-weight: 650; font-size: 14px; text-decoration: none; }
-.landingPricingFullLink:hover { text-decoration: underline; }
-
-/* Section 7: privacy/trust note. */
-.landingPrivacyNote { max-width: 1320px; margin: 30px auto 60px; padding: 0 28px; display: flex; align-items: flex-start; gap: 14px; }
-.landingPrivacyNote h3 { font-size: 15px; margin: 0 0 4px; }
-.landingPrivacyNote p { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin: 0; max-width: 640px; }
 
 @media (max-width: 980px) {
-  .landingHero { min-height: 0; }
-  .landingHeroScrim { background: linear-gradient(180deg, var(--bg) 0%, var(--bg) 62%, rgba(245,247,249,0.75) 78%, rgba(245,247,249,0.35) 100%); }
-  .landingHeroContent {
-    grid-template-columns: 1fr;
-    grid-template-areas: "headline" "card" "values";
-    row-gap: 26px;
-    padding: 26px 22px 300px;
-    align-content: start;
-  }
-  .landingHeroHeadline { align-self: auto; }
-  .landingSignInCard { padding: 28px 22px; }
-  .landingWhatIsGrid { grid-template-columns: 1fr 1fr; }
+  .landingPillarsGrid { grid-template-columns: 1fr; }
+  .landingWorkflowSteps { grid-template-columns: 1fr; gap: 22px; }
   .landingPricing { padding: 0 22px; }
 }
 
 @media (max-width: 560px) {
   .landingHeader { padding: 16px 16px; }
-  .landingHeroContent { padding: 22px 16px 260px; }
-  .landingHeroHeadline h1 { letter-spacing: -0.02em; }
-  .landingHeroCtas { flex-direction: column; }
-  .landingCtaPrimary, .landingCtaSecondary { width: 100%; justify-content: center; text-align: center; }
-  .landingSignInCard { padding: 24px 18px; border-radius: 18px; }
-  .landingWhatIs { padding: 40px 18px 6px; }
-  .landingWhatIsGrid { grid-template-columns: 1fr; }
-  .landingPrivacyNote { padding: 0 18px; }
-  .landingNav { gap: 14px; }
+  .landingNav { gap: 10px; }
+  .landingNavLink { display: none; }
+  .landingHero { padding: 44px 16px 40px; }
+  .landingHeroContent h1 { letter-spacing: -0.02em; }
+  .landingPillars { padding: 40px 16px 4px; }
+  .landingWorkflow { padding: 40px 16px; }
+  .landingSecondary { padding: 32px 16px; }
+  .landingPrivacyNote { padding: 0 16px; }
+  .landingFinalCta { padding: 4px 16px 56px; }
   .landingPricing { padding: 0 16px; margin: 6px auto 44px; }
+  .landingSignInCard { padding: 24px 18px; border-radius: 18px; }
 }
 
 /* Bugfix (found while diagnosing the mobile Document Intelligence modal
