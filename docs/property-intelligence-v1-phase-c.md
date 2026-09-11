@@ -233,6 +233,14 @@ Four scenarios (A: Paid Off, reproducing the exact production data the user revi
 
 None identified. This was a presentation-only pass; every data/calculation limitation already documented in Phase C.1/C.2 is unchanged.
 
+### Follow-up refinement — quiet metric tiles (PR #64, second real-device pass)
+
+The fully borderless version above was reviewed on the deploy preview on a real iPhone/Safari and read as "everything running together" — better than the original oversized bordered cards, but under-grouped. Landed in between: small, quiet, roughly-equal-height **tiles** (still `.propertySnapshotMetric` — no class/JSX renamed) with a light neutral fill (`var(--bg)`, one step off the white card), softly rounded corners, no border, no shadow, no per-metric color. The outer `.overviewPanel.propertySnapshotCard` remains the only real bordered container; the tiles are internal grouping, not a second card layer. Primary tiles land at `min-height: 84px` (the requested ~80-100px range) at normal sizes; YTD tiles are a deliberate step down (smaller min-height/padding/type) so the hierarchy still reads primary → performance at a glance. `min-height`, not `height`, throughout — a tile grows rather than clips if its content ever wraps.
+
+**A real bug found and fixed during this pass**: adding tile padding at the already-tuned 360px-narrow breakpoint left too little width for the longest realistic strings ("$2,350/mo", "$14,100") — canvas-measured text width exceeded the tile's own content width, so both wrapped mid-word ("$2,350/m" + "o"). Fixed by measuring actual rendered text width (not guessing) and re-tuning the narrow breakpoint's padding and font-size together until every representative string fits on one line with margin, verified with real screenshots at 320px across all QA scenarios afterward.
+
+Tests: `lib/dashboard/property-snapshot-compact-v1-wiring.test.ts` gained a dedicated describe block (6 new tests) locking in the tile requirements — light fill, no border/shadow, `min-height` in the 80-100px range, the primary/secondary size step-down, compact gap, and that `.overviewPanel` stays the only bordered container. Full suite: 2147/2147 passing. `tsc`/`build` clean.
+
 ## Recommended Phase D scope
 
 Per Phase A Section 9/18: add Net Cash Flow to the dashboard's Portfolio Snapshot (`Properties · Estimated Value · Monthly Income · Monthly Expenses · Net Cash Flow`), aggregating each property's already-computed `PropertyPerformance` — summing only `available` values, never averaging Cap Rate across properties (portfolio Cap Rate, if ever built, is `total portfolio NOI / total portfolio value`, not an average — and is explicitly not required for V1 per Phase A). No new per-property calculation work; Phase C already produces the numbers to sum.

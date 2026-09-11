@@ -76,7 +76,7 @@ describe('Phase C.3: compact YTD Performance grid', () => {
     expect(grid).toContain('<span>Income</span>')
     expect(grid).toContain('<span>Expenses</span>')
     expect(grid).toContain('<span>NOI</span>')
-    expect(cssSource).toContain('.propertySnapshotSecondaryGrid .propertySnapshotMetric strong { font-size: 18px; }')
+    expect(cssSource).toContain('.propertySnapshotSecondaryGrid .propertySnapshotMetric strong { font-size: 16px; }')
   })
 
   it('negative NOI keeps the existing subtle metricTone-bad treatment, never a new alarming style', () => {
@@ -173,6 +173,53 @@ describe('Phase C.3: hero, tabs, and Investment Analysis remain exactly as Phase
 
   it('exactly one Property Snapshot card exists on the page', () => {
     expect((pageSource.match(/className="overviewPanel propertySnapshotCard"/g) || []).length).toBe(1)
+  })
+})
+
+describe('Phase C.3 follow-up: quiet metric tiles (second real-device pass)', () => {
+  // The fully borderless first pass (typography/spacing/dividers only)
+  // read as "everything running together" on a real iPhone — this
+  // reintroduces containment, but as small, subtle internal tiles, not
+  // a return to the original oversized bordered .financialStat cards.
+  const primaryRule = cssSource.match(/\.propertySnapshotMetric \{[^}]*\}/)?.[0] || ''
+  const secondaryOverrideRule = cssSource.match(/\.propertySnapshotSecondaryGrid \.propertySnapshotMetric \{[^}]*\}/)?.[0] || ''
+
+  it('tiles have a light neutral fill and rounded corners — no dark border, no box-shadow, no per-metric color', () => {
+    expect(primaryRule).toContain('background: var(--bg)')
+    expect(primaryRule).toContain('border-radius: 12px')
+    expect(primaryRule).not.toMatch(/border:\s*1px solid/)
+    expect(primaryRule).not.toContain('box-shadow')
+    expect(cssSource).not.toMatch(/\.propertySnapshotMetric\s*\{[^}]*box-shadow/)
+  })
+
+  it('primary tiles use min-height (never a fixed height that could clip wrapped content), landing in the requested ~80-100px range at normal type sizes', () => {
+    expect(primaryRule).toMatch(/min-height:\s*\d+px/)
+    expect(primaryRule).not.toMatch(/(?<!min-)height:\s*\d+px/)
+    const minHeight = Number(primaryRule.match(/min-height:\s*(\d+)px/)?.[1])
+    expect(minHeight).toBeGreaterThanOrEqual(80)
+    expect(minHeight).toBeLessThanOrEqual(100)
+  })
+
+  it('YTD (secondary) tiles are a smaller step down from primary tiles — less min-height, less padding, smaller type — not the same size repeated', () => {
+    const primaryMinHeight = Number(primaryRule.match(/min-height:\s*(\d+)px/)?.[1])
+    const secondaryMinHeight = Number(secondaryOverrideRule.match(/min-height:\s*(\d+)px/)?.[1])
+    expect(secondaryMinHeight).toBeLessThan(primaryMinHeight)
+    expect(cssSource).toContain('.propertySnapshotSecondaryGrid .propertySnapshotMetric strong { font-size: 16px; }')
+  })
+
+  it('grid gap is compact (single-digit-to-low-double-digit px), not the old generous whitespace-only spacing — the tiles themselves now do the separating', () => {
+    const primaryGridRule = cssSource.match(/\.propertySnapshotPrimaryGrid \{[^}]*\}/)?.[0] || ''
+    expect(primaryGridRule).toMatch(/gap:\s*\d{1,2}px/)
+  })
+
+  it('the outer .overviewPanel.propertySnapshotCard remains the only real bordered container — tiles are internal grouping, not a second nested card style', () => {
+    expect(cssSource).toContain('.overviewPanel { background: white; border: 1px solid var(--line); border-radius: 16px;')
+    // The tile rule itself must not redeclare a competing card border.
+    expect(primaryRule).not.toContain('border: 1px solid var(--line)')
+  })
+
+  it('still exactly one .financialStat-style oversized card pattern was NOT reintroduced', () => {
+    expect(snapshotSlice).not.toContain('financialStat')
   })
 })
 
