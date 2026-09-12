@@ -236,33 +236,41 @@ export const NEXT_PLAN: Record<PlanId, PurchasablePlanId | null> = {
   owner: null,
 }
 
-// Launch Pricing: public /pricing display copy only — mirrors, never
-// substitutes for, lib/billing/entitlements.ts's real enforcement.
-// Capability-first, deliberately never leads with a property count
-// ("the primary reason to upgrade should be capabilities, NOT simply the
-// number of properties"). Only plans actually rendered on /pricing
-// (PUBLIC_PLAN_ORDER + COMING_SOON_PLAN_ORDER) need an entry.
-// Property-First Simplification V2 ("Simplify Pricing"): shorter,
-// truthful to what each plan actually grants today
-// (lib/billing/entitlements.ts) — Smart Upload/PropWatch/rent-ledger
-// status stay Manage-only bullets since Organize doesn't actually have
-// them yet; Global Search is no longer a headline bullet on any plan
-// (every plan already gets it — not a meaningful differentiator).
-// "Tenant & Lease Management" is renamed "Rent & lease tracking" —
-// narrower, organize-and-track language rather than sounding like a
-// full-service property-management/payment product.
+// Property Overview + Pricing Polish V1: PropRoster's core property-
+// management experience is the SAME on Free, Organize and Manage —
+// verified directly against lib/billing/entitlements.ts, which gates
+// NONE of these by plan (only maxProperties, Tenant Connect, and the
+// Manage-only automation/AI capabilities in PLAN_FEATURE_HIGHLIGHTS
+// below actually differ — see CAPABILITIES_BY_PLAN and
+// TENANT_CONNECT_ENABLED there). Rendered once on /pricing instead of
+// being repeated as identical bullets on all three cards — "the primary
+// reason to choose a plan is portfolio size, not a stripped-down
+// product at lower tiers."
+export const CORE_FEATURES_STATEMENT = "Every plan includes PropRoster's core features. Choose the plan that fits your portfolio size."
+export const CORE_FEATURES: string[] = [
+  'Property organization & profiles',
+  'Documents',
+  'PropCrew',
+  'Maintenance coordination',
+  'Tax Center',
+  'Property Intelligence',
+]
+
+// Public /pricing display copy only — mirrors, never substitutes for,
+// lib/billing/entitlements.ts's real enforcement. Only plans actually
+// rendered on /pricing (PUBLIC_PLAN_ORDER + COMING_SOON_PLAN_ORDER) need
+// an entry. Property Overview + Pricing Polish V1: property count moved
+// out of this list — it's now its own prominent line under each card's
+// price (app/pricing/page.tsx's .pricingLimit) — and the shared core
+// capabilities above (Documents/PropCrew/Maintenance/Tax Center/
+// Property Intelligence) moved into CORE_FEATURES, stated once rather
+// than repeated per plan. What's left here is only what genuinely
+// differs by plan: Free and Organize have no plan-specific capability
+// beyond portfolio size, so they have no entry at all; Manage keeps its
+// real, currently-enforced extras (Tenant Connect and the AI/automation
+// capabilities — CAPABILITIES_BY_PLAN in entitlements.ts).
 export const PLAN_FEATURE_HIGHLIGHTS: Partial<Record<PlanId, string[]>> = {
-  free: ['1 property', 'Property profile', 'Documents', 'Basic portfolio organization'],
-  organize: [
-    'Up to 5 properties',
-    'Documents & PropCrew',
-    'Tax Center',
-    'Rent & lease tracking',
-    'Investment Tools',
-  ],
   manage: [
-    'Everything in Organize',
-    'Up to 15 properties',
     'Tenant Connect',
     'Smart Upload & Portfolio Import (AI)',
     'Rent Ledger & PropWatch',

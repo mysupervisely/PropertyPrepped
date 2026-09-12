@@ -2,37 +2,37 @@
 
 // PropRoster — Simplification + Maintenance Workspace V2, Phase D.2:
 // Profile entry point. Phase E1.1 gave it a second, mobile-only job.
+// Property Overview + Pricing Polish V1: that mobile-only job is now its
+// ONLY job, at every breakpoint.
 //
-// Conceptually distinct from the other two navigation surfaces this
+// Conceptually distinct from the other navigation surfaces this
 // header/shell now carries:
-//   - Profile avatar (this component)  = ME — the landlord's own
-//     identity, one tap away everywhere AuthHeader renders.
+//   - Profile avatar (this component)  = the landlord's own identity AND
+//     the single trigger for the account/tools menu (AuthNavMenu).
 //   - AuthNavMenu                      = PROPROSTER TOOLS — Documents/
-//     Maintenance/Tax Center/PropCrew/Investment Tools/Pricing.
+//     Maintenance/Tax Center/PropCrew/Investment Tools, plus the account
+//     links (Profile/Pricing) and Log out.
 //   - MobileBottomNav                  = PRIMARY EVERYDAY DESTINATIONS.
 //
-// Phase E1.1: the mobile header's separate hamburger trigger was
-// removed to win back a full row at 390-393px (see globals.css's own
-// "Phase E1.1" header-row comment) now that the bottom nav carries the
-// four primary destinations. On mobile there is no longer a hamburger
-// at all, so the avatar becomes that entry point too — tapping it
-// OPENS the exact same AuthNavMenu panel a desktop hamburger still
-// opens (no duplicated menu definition, no new component; onOpenMenu
-// is the identical setNavMenuOpen already lifted into AuthHeader for
-// that panel). Desktop is unchanged: the hamburger is still there, and
-// the avatar still routes straight to /profile, exactly as Phase D.2
-// shipped it.
+// Phase E1.1 made the mobile avatar open AuthNavMenu instead of linking
+// straight to /profile, because the mobile header's own hamburger had
+// just been removed. Desktop never got the same treatment — it kept
+// BOTH a plain "/profile" avatar link AND a separate visible hamburger
+// button (AuthNavMenu's own internal trigger), which read as two
+// competing menu controls for the same panel. This pass removes that
+// redundancy by giving desktop the exact same behavior mobile already
+// had: one avatar, one button, one trigger, at every width. Profile
+// itself isn't lost — it's still one of AuthNavMenu's own account links,
+// exactly like it already is on mobile today. AuthNavMenu's own internal
+// hamburger trigger is removed alongside this (see AuthNavMenu.tsx) —
+// this button is now the ONLY way to open that panel, everywhere.
 //
-// Two real elements, CSS-toggled by the same mobile breakpoint the
-// bottom nav itself uses (matching MobileBottomNav's own display:none/
-// @media pattern) rather than a resize listener or other viewport-
-// detection JS — only one is ever in the layout/tab order at a time.
+// Single real element, no breakpoint split, no resize listener.
 //
 // Architecture still leaves a clean path for the future Profile/My
 // Card surface (Show QR Code/Share My Card/Edit Card/Account &
 // Settings) to live behind this SAME button later — not built here.
 
-import Link from 'next/link'
 import { PersonIcon } from './icons/NavIcons'
 import { useProfileAvatarUrl } from '../lib/user-profile/use-profile-avatar'
 
@@ -49,13 +49,10 @@ export function ProfileEntryButton({ menuOpen, onOpenMenu }: { menuOpen: boolean
 
   return (
     <div className="profileEntry">
-      <Link href="/profile" className="profileEntryButton profileEntryButtonDesktop" aria-label="Profile">
-        {avatarContent}
-      </Link>
       <button
         type="button"
-        className="profileEntryButton profileEntryButtonMobile"
-        aria-label="Account menu"
+        className="profileEntryButton"
+        aria-label="Open account menu"
         aria-haspopup="true"
         aria-expanded={menuOpen}
         onClick={onOpenMenu}

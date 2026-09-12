@@ -27,7 +27,7 @@ function readFile(relativePath: string): string {
 
 const pageSource = readFile('app/page.tsx')
 const cardIndex = pageSource.indexOf('financialDetailsCard')
-const cardSlice = pageSource.slice(cardIndex, pageSource.indexOf('overviewPanel"><h3>Property facts'))
+const cardSlice = pageSource.slice(cardIndex, pageSource.indexOf('<h3 className="overviewInfoGroupLabel">Property facts'))
 
 describe('The redundant bottom CTA is removed from the "Expenses & tax" card (formerly Financial Details)', () => {
   it('the card no longer contains "View full Investment Analysis" text or a link to the evaluator', () => {

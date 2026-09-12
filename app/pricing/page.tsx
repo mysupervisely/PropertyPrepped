@@ -8,9 +8,18 @@
 // regardless of plan (Section 16); this page's CTAs are only about the
 // property-management side of the product.
 //
-// Positioned by CAPABILITY, not property count (Launch Pricing's explicit
-// goal) — PLAN_FEATURE_HIGHLIGHTS leads with what each plan DOES, property
-// count is one bullet among several, never the headline. Legacy plans
+// Property Overview + Pricing Polish V1 replaced Launch Pricing's
+// "capability-first, property count is one bullet among several, never
+// the headline" stance with the opposite, more honest framing: every
+// plan gives the same core PropRoster experience (CORE_FEATURES_STATEMENT/
+// CORE_FEATURES, stated once above the cards — see lib/billing/plans.ts),
+// so property count — shown prominently right under each card's price,
+// not buried in a bullet list — is what actually and legitimately
+// differs between Free/Organize/Manage for most of the product. Manage's
+// own real, currently-enforced extras (Tenant Connect, Smart Upload,
+// etc. — PLAN_FEATURE_HIGHLIGHTS) are still called out on its own card;
+// this isn't "everything is identical," it's "the core is shared, and
+// here's the one plan that adds more on top." Legacy plans
 // (investor/portfolio/portfolio_pro) are intentionally absent from
 // PUBLIC_PLAN_ORDER — never offered to new customers — but an existing
 // legacy subscriber visiting this page still sees an accurate note about
@@ -23,7 +32,8 @@ import { useAuthUser } from '../../lib/useAuthUser'
 import { useSubscription } from '../../lib/useSubscription'
 import {
   CONTACT_TIER, EARLY_ACCESS_PRICING, PLANS, PUBLIC_PLAN_ORDER, COMING_SOON_PLAN_ORDER,
-  TENANT_CONNECT_PRICING_NOTE, PLAN_FEATURE_HIGHLIGHTS, type PurchasablePlanId,
+  TENANT_CONNECT_PRICING_NOTE, PLAN_FEATURE_HIGHLIGHTS, CORE_FEATURES_STATEMENT, CORE_FEATURES,
+  type PurchasablePlanId,
 } from '../../lib/billing/plans'
 import { startCheckout } from '../../lib/billing/client'
 import { PricingNavLink } from '../../components/PricingNavLink'
@@ -80,6 +90,18 @@ export default function PricingPage() {
         <p>Start free with one property. Upgrade when your portfolio grows.</p>
       </section>
 
+      {/* Property Overview + Pricing Polish V1: stated once, above the
+          cards, instead of repeating the same bullets on Free/Organize/
+          Manage — see CORE_FEATURES_STATEMENT/CORE_FEATURES's own
+          comment in lib/billing/plans.ts for why every item listed here
+          is verified to apply on every plan today. */}
+      <section className="pricingCoreFeatures">
+        <p className="pricingCoreFeaturesStatement">{CORE_FEATURES_STATEMENT}</p>
+        <ul className="pricingFeatureList pricingCoreFeaturesList">
+          {CORE_FEATURES.map((feature) => <li key={feature}>{feature}</li>)}
+        </ul>
+      </section>
+
       {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
 
       {/* Legacy subscribers are never shown a public card for their own
@@ -113,6 +135,11 @@ export default function PricingPage() {
                 <strong>${def.priceMonthly.toFixed(2)}</strong>
                 <span>/month</span>
               </div>
+              {/* Property Overview + Pricing Polish V1: property count is
+                  now the clear, immediate differentiator between the
+                  three cards — right under the price, not buried as one
+                  bullet among several further down. */}
+              <p className="pricingLimit pricingPropertyLimit"><strong>{def.maxProperties === 1 ? '1 property' : `Up to ${def.maxProperties} properties`}</strong></p>
               {isPaid && EARLY_ACCESS_PRICING && <span className="statusPill pricingEarlyAccess">Early Access Pricing</span>}
               {PLAN_FEATURE_HIGHLIGHTS[planId] && (
                 <ul className="pricingFeatureList">

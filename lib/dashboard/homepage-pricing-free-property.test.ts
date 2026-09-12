@@ -164,7 +164,12 @@ describe('Homepage pricing section reads from the canonical source — never a s
     const sectionEnd = landingSource.indexOf('</section>', sectionIdx)
     const section = landingSource.slice(sectionIdx, sectionEnd)
     expect(section).toContain('{PLAN_FEATURE_HIGHLIGHTS[planId]')
-    for (const feature of PLAN_FEATURE_HIGHLIGHTS.free!) {
+    // Property Overview + Pricing Polish V1 trimmed Free/Organize down to
+    // no plan-specific entry at all (their core features are now stated
+    // once, shared, on /pricing — see lib/billing/plans.ts's own
+    // CORE_FEATURES comment); Manage still has real, plan-specific
+    // entries, so it's the one sampled here.
+    for (const feature of PLAN_FEATURE_HIGHLIGHTS.manage!) {
       expect(section).not.toContain(`>${feature}<`) // not literally duplicated as static JSX text
     }
   })

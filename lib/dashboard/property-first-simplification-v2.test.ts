@@ -147,22 +147,28 @@ describe('Pricing feature copy stays truthful to real entitlements', () => {
     expect(highlightsMatch).not.toBeNull()
     return highlightsMatch![1]
   })()
+  const coreMatch = source.match(/export const CORE_FEATURES: string\[\] = \[([\s\S]*?)\]/)
+  const coreBlock = (() => {
+    expect(coreMatch).not.toBeNull()
+    return coreMatch![1]
+  })()
 
-  it('Organize\'s highlighted features never claim Manage-only capabilities (Smart Upload / PropWatch / AI)', () => {
-    const organizeMatch = highlightsBlock.match(/organize: \[([\s\S]*?)\],/)
-    expect(organizeMatch).not.toBeNull()
-    const organizeBlock = organizeMatch![1]
-    expect(organizeBlock).not.toMatch(/Smart Upload/)
-    expect(organizeBlock).not.toMatch(/PropWatch/)
-  })
-
-  it('"Tenant & Lease Management" is renamed to narrower "Rent & lease tracking" language in the actual bullet content', () => {
-    expect(highlightsBlock).not.toContain('Tenant & Lease Management')
-    expect(highlightsBlock).toContain('Rent & lease tracking')
+  // Property Overview + Pricing Polish V1: Organize no longer has its own
+  // PLAN_FEATURE_HIGHLIGHTS entry at all (its core features are now
+  // stated once, shared, via CORE_FEATURES — see that constant's own
+  // comment in lib/billing/plans.ts) — trivially true that an absent
+  // entry can't claim a Manage-only capability, but the shared
+  // CORE_FEATURES list itself must stay just as honest.
+  it('Organize has no PLAN_FEATURE_HIGHLIGHTS entry of its own, and the shared CORE_FEATURES list never claims a Manage-only capability (Tenant Connect / Smart Upload / PropWatch / Rent Ledger / AI)', () => {
+    expect(highlightsBlock).not.toMatch(/organize:\s*\[/)
+    for (const manageOnly of ['Tenant Connect', 'Smart Upload', 'PropWatch', 'Rent Ledger', /AI/]) {
+      expect(coreBlock).not.toMatch(manageOnly)
+    }
   })
 
   it('Global Search is no longer a headline pricing bullet on any plan', () => {
     expect(highlightsBlock).not.toMatch(/Global Search/)
+    expect(coreBlock).not.toMatch(/Global Search/)
   })
 })
 

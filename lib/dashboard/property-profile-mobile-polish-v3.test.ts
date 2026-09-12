@@ -80,7 +80,7 @@ describe('Section 5: the primary tab nav reflects Phase D\'s Maintenance promoti
 // current, authoritative assertions on all of this.
 describe('Section 3: "Expenses & tax" (formerly Financial Details) no longer duplicates or competes with the Property Snapshot (superseded by Phase C.1)', () => {
   const cardIndex = pageSource.indexOf('financialDetailsCard')
-  const cardSlice = pageSource.slice(cardIndex, pageSource.indexOf('overviewPanel"><h3>Property facts'))
+  const cardSlice = pageSource.slice(cardIndex, pageSource.indexOf('<h3 className="overviewInfoGroupLabel">Property facts'))
 
   it('does not repeat Value / Mortgage / Equity / Rent / Tax, and no longer shows Estimated cash flow, Purchase price, or Appreciation', () => {
     expect(cardSlice).not.toContain('<span>Value</span><strong>{money(selected.estimated_value)}</strong>')
@@ -92,7 +92,7 @@ describe('Section 3: "Expenses & tax" (formerly Financial Details) no longer dup
   })
 
   it('keeps only Monthly property expenses, Annual property tax, and HOA — editable inputs, not performance figures', () => {
-    expect(cardSlice).toContain('<h3>Expenses &amp; tax</h3>')
+    expect(cardSlice).toContain('<h3 className="overviewInfoGroupLabel">Expenses &amp; tax</h3>')
     expect(cardSlice).toContain('<span>Monthly property expenses</span><strong>{money(selected.monthly_expenses)}</strong>')
     expect(cardSlice).toContain('<span>Annual property tax</span>')
     expect(cardSlice).toContain('selected.hoa_monthly')

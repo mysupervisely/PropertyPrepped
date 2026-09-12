@@ -79,13 +79,14 @@ describe('AuthHeader no longer threads bottom-nav-specific props into MobileBott
 // the hamburger reachable on mobile again (since "More" left the
 // bottom bar); E1.1 then removed the mobile hamburger a second time,
 // this time for real, in favor of the profile avatar as the mobile
-// menu opener (see lib/user-profile/profile-entry-point-wiring.test.ts
-// for that side of the invariant). Documents/Investment Tools/Pricing/
-// +Add Property/Log out are still reachable on mobile — just via the
-// avatar now, not a hamburger.
-describe('Phase E1.1: the mobile hamburger is hidden again, this time in favor of the avatar', () => {
-  it('the CSS hides the hamburger trigger on mobile (desktop-only again)', () => {
-    expect(globalsCss).toMatch(/@media \(max-width: 760px\) \{\s*\.authHeaderWithBottomNav \.authNavMenuButton \{ display: none; \}\s*\}/)
+// menu opener. Property Overview + Pricing Polish V1 went one step
+// further and removed the hamburger ENTIRELY, from every breakpoint —
+// see lib/user-profile/profile-entry-point-wiring.test.ts for that side
+// of the invariant. Documents/Investment Tools/Pricing/+Add Property/
+// Log out are still reachable on every width — just via the avatar.
+describe('The hamburger trigger is gone at every breakpoint, in favor of the avatar', () => {
+  it('no hamburger-hiding media query remains — there is no hamburger left to hide', () => {
+    expect(globalsCss).not.toMatch(/\.authNavMenuButton\s*\{/)
   })
 })
 
@@ -108,13 +109,14 @@ describe('Removed destinations are mobile-primary-nav-only — the routes/featur
   })
 })
 
-describe('Profile avatar remains a distinct, always-present entry point (Phase D.2; Phase E1.1 gave its mobile element a second job — see profile-entry-point-wiring.test.ts)', () => {
+describe('Profile avatar remains a distinct, always-present entry point (Phase D.2; Property Overview + Pricing Polish V1 made it the single menu trigger at every breakpoint — see profile-entry-point-wiring.test.ts)', () => {
   it('AuthHeader still renders ProfileEntryButton unconditionally', () => {
     expect(headerSource).toContain('<ProfileEntryButton menuOpen={navMenuOpen} onOpenMenu={() => setNavMenuOpen((o) => !o)} />')
   })
 
-  it('the desktop element still links straight to the existing Profile page, not the tools menu', () => {
-    expect(profileButtonSource).toContain('href="/profile"')
+  it('the avatar opens the shared tools/account menu at every breakpoint — Profile itself is still reachable, as one of that menu\'s account links', () => {
+    expect(profileButtonSource).toContain('onClick={onOpenMenu}')
+    expect(profileButtonSource).not.toContain('href="/profile"')
   })
 })
 

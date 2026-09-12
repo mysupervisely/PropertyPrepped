@@ -2,12 +2,20 @@
 
 // PropRoster — authenticated navigation foundation, now the PRIMARY
 // navigation mechanism for the whole app (Authenticated Header
-// Simplification): the header itself only shows a hamburger, the
+// Simplification): the header itself only shows the profile avatar, the
 // wordmark and Smart Upload (see components/AuthHeader.tsx) — every
 // other destination, plus the account-level actions that used to be
 // boxed buttons scattered across two hand-built topbars, live here
 // instead. Additive only (nothing existing is removed, only relocated)
 // and deliberately small — do not overbuild.
+//
+// Property Overview + Pricing Polish V1: this panel no longer has its
+// own visible trigger button. It used to render a hamburger
+// (.authNavMenuButton) alongside the profile avatar — two buttons that
+// opened the same panel. The avatar (ProfileEntryButton, a sibling of
+// this component in AuthHeader) is now the ONLY trigger, at every
+// breakpoint; this component is purely externally controlled via the
+// open/onOpenChange props below, exactly as it already was.
 //
 // Only real, live destinations are listed (do not create dead links to
 // unfinished features) — no Tax Center, Savings Center, Smart Upload,
@@ -29,8 +37,8 @@ import { useAuthUser } from '../lib/useAuthUser'
 // Simplification + Maintenance Workspace V2, Phase D.2: the profile
 // photo moved out to its own, separate ProfileEntryButton — see that
 // component's header comment for why "me" and "PropRoster tools" are
-// now two different buttons instead of one doing both jobs. This
-// menu's own trigger goes back to being a plain glyph.
+// still two different concepts (identity vs. tools/account) even though
+// ProfileEntryButton is now this menu's only trigger.
 
 // Property-First Simplification V2: pared down further to the
 // hierarchy the milestone specifies — Dashboard/Documents/Tax
@@ -122,9 +130,6 @@ export function AuthNavMenu({ onDashboardNavigate, open, onOpenChange }: { onDas
 
   return (
     <div className="authNavMenu" ref={containerRef}>
-      <button type="button" className="authNavMenuButton" aria-label="Open navigation menu" aria-haspopup="true" aria-expanded={open} onClick={() => onOpenChange(!open)}>
-        <span aria-hidden="true">☰</span>
-      </button>
       {/* Phase D.1: a backdrop behind the panel — only visually present
           at mobile widths (see globals.css), where the panel becomes a
           bottom sheet the "More" bottom-nav button can also open. Tap

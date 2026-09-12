@@ -339,7 +339,6 @@ h2, h3, p { margin-top: 0; }
    tab's heading spacing is untouched. */
 .workspaceContentTight { padding-top: 20px; }
 .workspaceHeadingTight { margin-bottom: 14px; }
-.overviewGrid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 20px; }
 .overviewPanel { background: white; border: 1px solid var(--line); border-radius: 16px; padding: 22px; }
 .overviewPanel h3 { margin-bottom: 18px; }
 .detailRows { display: grid; }
@@ -349,6 +348,37 @@ h2, h3, p { margin-top: 0; }
 .detailRows strong { font-size: 14px; }
 .detailRows .highlightRow { margin-top: 4px; padding: 14px 12px; border: 0; border-radius: 10px; background: var(--brand-soft); color: var(--brand); }
 .detailRows .highlightRow span { color: var(--brand); }
+
+/* Property Overview simplification (Property Overview + Pricing Polish
+   V1): the run of information below Property Snapshot — Expenses & tax,
+   Property facts, Rent & tenant, Notes, Timeline — used to be five
+   separate, equally-weighted bordered .overviewPanel cards, reading as a
+   stack of admin cards rather than one coherent property page. This pass
+   is presentation-only: every field, edit path, and piece of content is
+   unchanged (still the exact same JSX values/props, only the wrapper
+   markup/CSS changed) — Property Snapshot itself (.overviewPanel
+   .propertySnapshotCard) is untouched and still uses the base
+   .overviewPanel rule above, as do the unrelated Rent-tab and Tax-tab
+   sections that also render a plain .overviewPanel card elsewhere on
+   this page.
+   .overviewInfoSection replaces the old bordered-card treatment with a
+   plain section: no border, no background, no shadow — just a subtle
+   top hairline and generous whitespace to separate one section from the
+   next, echoing Property Snapshot's own internal .propertySnapshotDivider
+   pattern one level up (between whole sections instead of between rows
+   inside one card). */
+.overviewInfoSection { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line); }
+.overviewSectionHeading { font-size: var(--text-section); font-weight: var(--weight-semibold); margin: 0 0 16px; }
+/* Two related groups under one heading (Expenses & tax / Property facts,
+   and Notes / Timeline) — same 1.1fr/.9fr column ratio the old
+   .overviewGrid used, so the desktop proportions read the same as
+   before; only the per-group border is gone. */
+.overviewInfoGrid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 28px; }
+.overviewInfoGroupLabel { font-size: 12.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 10px; }
+.overviewSectionAction { margin-top: 16px; }
+@media (max-width: 900px) {
+  .overviewInfoGrid { grid-template-columns: 1fr; gap: 22px; }
+}
 
 /* Property Intelligence V1, Phase C (restyled in Phase C.3, refined
    after a second round of real-device feedback): property Overview
@@ -493,17 +523,25 @@ h2, h3, p { margin-top: 0; }
 .fileSummary button > strong { grid-row: span 2; font-size: 27px; color: var(--brand); }
 .fileSummary button > span { font-weight: 700; }
 .fileSummary button > small { color: var(--muted); margin-top: 2px; }
-.quickActions { margin-top: 20px; background: var(--brand); color: white; border-radius: 16px; padding: 22px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-.quickActions .eyebrow { color: #cfe1d9; }
-.quickActions h3 { margin-bottom: 0; }
-.quickActionButtons { display: flex; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }
-.quickActionButtons button { border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.1); color: white; border-radius: 9px; padding: 10px 12px; font-size: 13px; display: inline-flex; align-items: center; gap: 7px; }
+/* Property Overview + Pricing Polish V1: Quick Actions used to be a
+   solid dark-green banner (background: var(--brand), white text) — the
+   single heaviest thing on the whole Overview tab, competing with (and
+   usually beating) Property Snapshot for attention. Same actions, same
+   count badges, same handlers — only the container is quieter now: no
+   fill, no color inversion, just the section's own top hairline (shared
+   with .overviewInfoSection) and plain buttons in the existing neutral
+   button language used elsewhere on this page (compare .detailRows'
+   surrounding secondary buttons). */
+.quickActions .eyebrow { margin-bottom: 12px; }
+.quickActionButtons { display: flex; gap: 9px; flex-wrap: wrap; }
+.quickActionButtons button { border: 1px solid var(--line); background: #fff; color: var(--text); border-radius: 9px; padding: 10px 12px; font-size: 13px; display: inline-flex; align-items: center; gap: 7px; }
+.quickActionButtons button:hover { border-color: var(--brand); color: var(--brand); }
 /* Property-First Simplification and Visual Cleanup: inline count badge
    for the merged Documents/Photos/Maintenance quick-action buttons
    (previously separate "Property file" count-buttons) — a small pill,
    not a second color, so it reads as a detail of the button rather than
    a competing call to action. */
-.quickActionCount { background: rgba(255,255,255,.22); border-radius: 999px; padding: 1px 8px; font-size: 12px; font-weight: 700; }
+.quickActionCount { background: var(--brand-soft); color: var(--brand); border-radius: 999px; padding: 1px 8px; font-size: 12px; font-weight: 700; }
 .documentLayout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 20px; align-items: start; }
 .categoryPanel { background: white; border: 1px solid var(--line); border-radius: 14px; padding: 10px; position: sticky; top: 12px; }
 .categoryPanel h3 { font-size: 14px; padding: 8px 9px 11px; margin-bottom: 0; }
@@ -589,7 +627,6 @@ h2, h3, p { margin-top: 0; }
 @media (max-width: 900px) {
   .propertyHero { grid-template-columns: 1fr; gap: 22px; }
   .heroPhoto { height: 340px; }
-  .overviewGrid { grid-template-columns: 1fr; }
   .documentLayout { grid-template-columns: 1fr; }
   .categoryPanel { position: static; display: flex; overflow-x: auto; gap: 5px; }
   .categoryPanel h3 { display: none; }
@@ -624,8 +661,6 @@ h2, h3, p { margin-top: 0; }
   .tabs { display: flex; grid-template-columns: none; gap: 6px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding: 8px 2px; margin: 0 -2px; border-bottom: 0; }
   .tabs::-webkit-scrollbar { display: none; }
   .tabs button { flex: 0 0 auto; padding: 10px 14px; font-size: 13px; }
-  .quickActions { align-items: flex-start; flex-direction: column; }
-  .quickActionButtons { justify-content: flex-start; }
   .uploadControls { grid-template-columns: 1fr; }
   .documentRow { grid-template-columns: 42px minmax(0, 1fr); }
   .rowActions { grid-column: 2; }
@@ -1206,15 +1241,37 @@ h2, h3, p { margin-top: 0; }
 .pricingCard .primary, .pricingCard .secondary { width: 100%; text-align: center; text-decoration: none; }
 .pricingFooterNote { max-width: 720px; margin: 8px 0 40px; }
 
-/* Launch Pricing (capability-based relaunch): feature-first cards — the
-   list below the price is the actual pitch, property count is just one
-   line inside it, never the headline (see PLAN_FEATURE_HIGHLIGHTS). */
 .pricingFeatureList { list-style: none; margin: 2px 0 10px; padding: 0; display: grid; gap: 6px; font-size: 13.5px; }
 .pricingFeatureList li { padding-left: 20px; position: relative; }
 .pricingFeatureList li::before { content: '✓'; position: absolute; left: 0; color: var(--brand); font-weight: 800; }
 .pricingCardComingSoon { opacity: .85; }
 .pricingBadgeComingSoon { background: var(--muted); }
 .pricingLegacyNote { margin: 0 0 18px; }
+
+/* Property Overview + Pricing Polish V1: the shared "every plan
+   includes the same core" statement + feature list, rendered once above
+   the three cards instead of being repeated as identical bullets on
+   each one — see CORE_FEATURES_STATEMENT/CORE_FEATURES's own comment in
+   lib/billing/plans.ts. A plain, quiet section (no card/border/shadow)
+   consistent with this page's existing calm presentation; the feature
+   list reuses .pricingFeatureList's own checkmark styling but flows
+   horizontally (a wrapping row reads as "here's what's shared" more than
+   a vertical checklist would, and keeps this section compact above three
+   cards that already each have their own vertical list). Property count
+   itself is deliberately NOT one of these items — it's each card's own
+   prominent .pricingPropertyLimit line instead, since that's the one
+   thing that genuinely differs between Free/Organize/Manage for most of
+   the product. */
+.pricingCoreFeatures { margin: 0 0 24px; }
+.pricingCoreFeaturesStatement { font-size: 15px; margin: 0 0 10px; }
+.pricingCoreFeaturesList { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+/* Property count is now the headline differentiator between cards (a
+   deliberate reversal of Launch Pricing's earlier "property count is one
+   bullet among several, never the headline" stance — see this page's own
+   top-of-file comment) — placed right under the price, bold, using the
+   same .pricingLimit base size the Contact card's own supporting line
+   already established. */
+.pricingPropertyLimit { font-weight: var(--weight-semibold); }
 
 .upgradeModal { width: min(480px, calc(100% - 30px)); }
 .upgradeLead { font-weight: 700; font-size: 16px; margin-bottom: 6px; }
@@ -1730,29 +1787,24 @@ h2, h3, p { margin-top: 0; }
 .headerSearchButton { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 999px; border: 1px solid var(--line); background: white; font-size: 16px; text-decoration: none; flex-shrink: 0; }
 .headerSearchButton:hover { border-color: #c9d2cd; }
 .authNavMenu { position: relative; }
-.authNavMenuButton { border: 1px solid var(--line); background: white; color: var(--text); width: 40px; height: 40px; border-radius: var(--radius-control); font-size: 17px; display: grid; place-items: center; }
-.authNavMenuButton:hover { border-color: var(--brand); color: var(--brand); }
 /* Simplification + Maintenance Workspace V2, Phase D.2: the profile
-   avatar is now its own control (components/ProfileEntryButton.tsx),
-   not merged into the hamburger button above — see that component's
-   header comment. Same ~34px circle inside a 40px touch target the
-   avatar used to occupy; a soft brand-tinted circle with the neutral
-   PersonIcon fills the fallback (no-photo) state, never a bare glyph
-   or a broken image. */
+   avatar is its own control (components/ProfileEntryButton.tsx) — see
+   that component's header comment. Same ~34px circle inside a 40px
+   touch target the avatar used to occupy; a soft brand-tinted circle
+   with the neutral PersonIcon fills the fallback (no-photo) state,
+   never a bare glyph or a broken image. */
 .profileEntry { position: relative; flex-shrink: 0; }
-.profileEntryButton { display: block; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; }
+/* Property Overview + Pricing Polish V1: one real button, at every
+   breakpoint — no border/background of its own so the avatar image or
+   fallback circle reads as the control (previously two elements,
+   .profileEntryButtonDesktop and .profileEntryButtonMobile, CSS-toggled
+   by breakpoint; the old separate .authNavMenuButton hamburger this
+   button replaces stood right next to the desktop one). */
+.profileEntryButton { display: block; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; border: 0; padding: 0; cursor: pointer; background: transparent; }
+.profileEntryButton:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .profileEntryAvatarImg { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
 .profileEntryFallback { width: 100%; height: 100%; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); border: 1px solid var(--line); box-sizing: border-box; }
 .profileEntryFallback svg { width: 20px; height: 20px; }
-/* Phase E1.1: two real elements (see ProfileEntryButton.tsx's own
-   header comment) — a plain Link to /profile for desktop, and a menu-
-   opening button for mobile, CSS-toggled by the same breakpoint the
-   bottom nav itself uses. Only one is ever in the layout/tab order. */
-.profileEntryButtonMobile { display: none; border: 0; padding: 0; cursor: pointer; }
-@media (max-width: 760px) {
-  .profileEntryButtonDesktop { display: none; }
-  .profileEntryButtonMobile { display: block; }
-}
 .authNavMenuPanel { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; min-width: 200px; background: white; border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 12px 28px rgba(15, 30, 24, .12); display: grid; }
 .authNavMenuPanel a { display: block; padding: 10px 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 14px; font-weight: var(--weight-medium); white-space: nowrap; }
 .authNavMenuPanel a:hover { background: var(--brand-soft); color: var(--brand); }
@@ -1777,17 +1829,13 @@ h2, h3, p { margin-top: 0; }
 }
 /* Phase E1 removed the bottom nav's own "More" item (Dashboard/
    Maintenance/PropCrew/Tax Center only now — see MobileBottomNav.tsx's
-   own header comment), making the header's hamburger trigger the only
-   way to reach this panel on every width, mobile included.
-   Phase E1.1 went one step further: the mobile header itself no longer
-   has room (or need) for a separate hamburger — the profile avatar
-   (ProfileEntryButton) is the mobile opener now, so the hamburger
-   trigger below is hidden on mobile and desktop-only again. Documents/
-   Investment Tools/Pricing/+Add Property/Log out are still reachable
-   on mobile, just via the avatar instead. */
-@media (max-width: 760px) {
-  .authHeaderWithBottomNav .authNavMenuButton { display: none; }
-}
+   own header comment), making the header's own trigger the only way to
+   reach this panel on every width, mobile included. Phase E1.1 made the
+   profile avatar (ProfileEntryButton) that trigger on mobile; Property
+   Overview + Pricing Polish V1 made it the trigger on desktop too,
+   removing the separate hamburger button that used to sit next to it
+   there. Documents/Investment Tools/Pricing/+Add Property/Log out are
+   reachable on every width via the avatar. */
 
 /* Simplification + Maintenance Workspace V2, Phase D.1 — persistent
    mobile GLOBAL navigation (components/MobileBottomNav.tsx). Hidden
