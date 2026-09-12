@@ -212,39 +212,50 @@ describe('Homepage pricing section reads from the canonical source — never a s
   })
 })
 
+// Dynamic Homepage V1 (CTA cleanup): the old post-grid CTA block ("Start
+// with your first property free." / "Get Started Free" / "No credit
+// card required.") duplicated BOTH the hero's own CTA above it and the
+// page's final-close CTA right after it, with no product story between
+// them — exactly the "too many Start Free" pattern flagged on a real
+// iPhone. It's gone; "View full pricing details" is pricing's only next
+// action on this compact teaser now, and the page's real final CTA
+// (asserted separately below) is the sole remaining close.
 describe('CTA after the pricing section', () => {
-  it('uses the exact verified copy and routes into the real, existing signup flow (openAuth — no new signup page/route)', () => {
+  it('the redundant post-grid CTA block is gone — no second "Get Started Free" button between pricing and the final close', () => {
     const sectionIdx = landingSource.indexOf('landingPricing" id="pricing"')
     const sectionEnd = landingSource.indexOf('</section>', sectionIdx)
     const block = landingSource.slice(sectionIdx, sectionEnd)
-    expect(block).toContain('Start with your first property free.')
-    expect(block).toContain("onClick={() => openAuth('signup')}>Get Started Free</button>")
-    expect(block).toContain('No credit card required.')
+    expect(block).not.toContain('Get Started Free')
+    expect(block).not.toContain('landingPricingCta')
+    expect((block.match(/landingCtaPrimary/g) || []).length).toBe(0)
   })
 
-  it('the pricing section also links to the full /pricing page (Coming Soon + 16+ tiers live there, not duplicated here)', () => {
+  it('the pricing section links to the full /pricing page (Coming Soon + 16+ tiers live there, not duplicated here)', () => {
     expect(landingSource).toContain('<Link href="/pricing" className="landingPricingFullLink">View full pricing details &rarr;</Link>')
   })
 })
 
-describe('Public Homepage V2/V3: the product pillars are accurately scoped', () => {
-  it('Public Homepage V3 (real-iPhone follow-up) restructured the three elaborate pillars into four short ones — Organize/Coordinate/Automate/Understand — still prominently above the quiet secondary-features section', () => {
-    expect(landingSource).toContain("heading: 'Organize'")
-    expect(landingSource).toContain("heading: 'Coordinate'")
-    expect(landingSource).toContain("heading: 'Automate'")
-    expect(landingSource).toContain("heading: 'Understand'")
-    const pillarsIdx = landingSource.indexOf('landingPillars')
+describe('Public Homepage V2/V3/Dynamic Homepage V1: the product story is accurately scoped', () => {
+  it('the four Organize/Coordinate/Automate/Understand scenes are still prominently above the quiet secondary-features section', () => {
+    expect(landingSource).toContain('<h2 className="landingSceneHeadline">Organize.</h2>')
+    expect(landingSource).toContain('<h2 className="landingSceneHeadline">Coordinate.</h2>')
+    expect(landingSource).toContain('<h2 className="landingSceneHeadline">Automate.</h2>')
+    expect(landingSource).toContain('<h2 className="landingSceneHeadline">Understand.</h2>')
+    const scenesIdx = landingSource.indexOf('landingScenes')
     const secondaryIdx = landingSource.indexOf('landingSecondary')
-    expect(pillarsIdx).toBeGreaterThan(-1)
-    expect(secondaryIdx).toBeGreaterThan(pillarsIdx)
+    expect(scenesIdx).toBeGreaterThan(-1)
+    expect(secondaryIdx).toBeGreaterThan(scenesIdx)
   })
 
   it('never claims SMS provider outreach, autonomous contractor hiring, or automatic appointment confirmation', () => {
-    // Scoped to the actual copy strings this milestone wrote (the PILLARS/
-    // WORKFLOW_STEPS/SECONDARY_FEATURES arrays and the JSX text below
-    // them) rather than the whole file, which also contains developer
-    // comments referencing "sms"-adjacent words like "signInWithPassword".
-    const copyIdx = landingSource.indexOf('const PILLARS')
+    // Scoped to the actual rendered copy inside the LandingPage component
+    // itself (its own return JSX — scene headlines/body/note text, hero,
+    // pricing, etc.) rather than the whole file, which also contains
+    // developer comments discussing what's NOT implied (necessarily
+    // using some of these same words IN A NEGATION, e.g. "nothing
+    // implies PropRoster hires anyone on its own") and words like
+    // "signInWithPassword" that are "sms"-adjacent as plain substrings.
+    const copyIdx = landingSource.indexOf('export default function LandingPage')
     const copy = landingSource.slice(copyIdx).toLowerCase()
     expect(copy).not.toMatch(/text message.{0,20}provider|\bsms\b/)
     expect(copy).not.toContain('hires')
@@ -255,7 +266,7 @@ describe('Public Homepage V2/V3: the product pillars are accurately scoped', () 
   })
 
   it('Organization + Automation positioning follow-up: PropRoster is never framed as a property-management company, and does not attack property managers', () => {
-    const copyIdx = landingSource.indexOf('const PILLARS')
+    const copyIdx = landingSource.indexOf('export default function LandingPage')
     const copy = landingSource.slice(copyIdx).toLowerCase()
     expect(copy).not.toContain('property management company')
     expect(copy).not.toContain('property manager')
@@ -267,13 +278,21 @@ describe('Public Homepage V2/V3: the product pillars are accurately scoped', () 
     expect(landingSource).toContain('<h1>Your properties. Organized.</h1>')
   })
 
-  it('never claims PropCrew is a marketplace or a PropRoster-supplied provider network', () => {
-    const lower = landingSource.toLowerCase()
-    expect(lower).not.toContain('marketplace')
-    expect(lower).not.toContain('provider network')
+  // Dynamic Homepage V1's Coordinate scene explicitly REASSURES that
+  // PropCrew is not a marketplace ("PropCrew is your own private
+  // directory, not a marketplace") — a truthful disclaiming use of the
+  // word, not an affirmative claim. This is the same "negated mention is
+  // fine, affirmative claim is not" pattern the tax-prep check right
+  // below already uses; rescoped here the same way rather than banning
+  // the word outright.
+  it('never claims PropCrew IS a marketplace or a PropRoster-supplied provider network — only ever disclaims it', () => {
+    const affirmativeMarketplace = [...landingSource.matchAll(/marketplace/gi)]
+      .filter((m) => !landingSource.slice(Math.max(0, m.index! - 20), m.index! + 15).toLowerCase().includes('not a marketplace'))
+    expect(affirmativeMarketplace).toEqual([])
+    expect(landingSource.toLowerCase()).not.toContain('provider network')
   })
 
-  it('never claims tax preparation, filing, or tax advice — Public Homepage V3\'s short "Understand" pillar copy ("See the financial picture...") makes no tax-prep claim at all, so no disclaimer is needed on this page (the app\'s real tax-prep disclaimer still lives where an actual claim/tool exists — components/SmartUpload/ReceiptReview.tsx)', () => {
+  it('never claims tax preparation, filing, or tax advice — the "Understand" scene copy ("See the financial picture...") makes no tax-prep claim at all, so no disclaimer is needed on this page (the app\'s real tax-prep disclaimer still lives where an actual claim/tool exists — components/SmartUpload/ReceiptReview.tsx)', () => {
     // No affirmative "PropRoster prepares/files your taxes" claim anywhere
     // in the landing page, disclaimed or not.
     const affirmative = [...landingSource.matchAll(/(?:prepares?|files?) (?:your )?tax(?:es)?/gi)]
@@ -283,12 +302,29 @@ describe('Public Homepage V2/V3: the product pillars are accurately scoped', () 
     expect(smartUploadTaxNote).toContain('not tax advice')
   })
 
-  it('never claims live Cap Rate, NOI, Net Cash Flow or automated equity tracking as currently available (Property Intelligence has not shipped)', () => {
-    // Scoped to the actual copy strings (PILLARS onward), not developer
-    // comments earlier in the file that name these metrics specifically
-    // to document that they must NOT be claimed live.
-    const copyIdx = landingSource.indexOf('const PILLARS')
-    const copy = landingSource.slice(copyIdx).toLowerCase()
+  it('never claims PropRoster collects, processes, or moves rent money — Rent Ledger only ever records what already happened', () => {
+    const lower = landingSource.toLowerCase()
+    expect(lower).not.toMatch(/collect(s|ing)? rent|process(es|ing)? (rent )?payments?|we collect/)
+  })
+
+  it('the Understand scene never annualizes YTD data or shows a fabricated/unsupported metric — same canonical fields the real, authenticated Property/Portfolio Snapshot use (Est. Value/Monthly Rent for a property; Properties/Portfolio Value/Monthly Rent/YTD NOI for a portfolio)', () => {
+    const understandIdx = landingSource.indexOf('function UnderstandStage')
+    const understandBlock = landingSource.slice(understandIdx, landingSource.indexOf('function LandingPage', understandIdx))
+    for (const field of ['Est. Value', 'Monthly Rent', 'Properties</span>', 'Portfolio Value', 'YTD NOI']) {
+      expect(understandBlock).toContain(field)
+    }
+    expect(understandBlock.toLowerCase()).not.toMatch(/annual(ized)? (noi|income|rent)|projected|forecast/)
+  })
+
+  it('never claims live Cap Rate, NOI (outside the real Portfolio Snapshot field name), Net Cash Flow or automated equity tracking as a homepage-level marketing claim', () => {
+    // Scoped to the actual copy strings (scene stage components onward),
+    // not developer comments earlier in the file. "YTD NOI" itself is
+    // the real, canonical Portfolio Snapshot field label (see
+    // UnderstandStage) — not a new claim invented for this page — so
+    // it's excluded from this ban rather than triggering a false
+    // positive on the one metric this page is explicitly allowed to show.
+    const copyIdx = landingSource.indexOf('function OrganizeStage')
+    const copy = landingSource.slice(copyIdx).toLowerCase().replace(/ytd noi/g, '')
     expect(copy).not.toContain('cap rate')
     expect(copy).not.toContain('net operating income')
     expect(copy).not.toMatch(/\bnoi\b/)
@@ -316,8 +352,11 @@ describe('No unsupported claims are introduced', () => {
   })
 
   it('"No credit card required" appears only alongside the verified free-property message — never as a standalone, unqualified claim elsewhere in the file', () => {
+    // Dynamic Homepage V1 removed the redundant post-pricing CTA block
+    // that used to repeat this line a second time — the hero's own note
+    // is now the only occurrence (still verified above).
     const occurrences = [...landingSource.matchAll(/No credit card required\./g)]
-    expect(occurrences.length).toBe(2) // hero note + pricing-section CTA note, both audited above
+    expect(occurrences.length).toBe(1)
   })
 })
 
@@ -333,15 +372,23 @@ describe('Mobile pricing layout — no horizontal scroll at iPhone widths (360/3
     expect(css).toMatch(/@media \(max-width: 560px\) \{[\s\S]*?\.landingPricing \{ padding: 0 16px; margin: 6px auto 44px; \}[\s\S]*?\}/)
   })
 
-  it('the CTA button below the pricing cards is full-width on mobile (same treatment as the hero CTA), so it stays easy to tap without causing overflow', () => {
-    expect(css).toContain('.landingPricingCta .landingCtaPrimary { width: 100%; }')
+  // Dynamic Homepage V1 removed the post-grid CTA block (.landingPricingCta)
+  // entirely — there is no button below the pricing cards anymore, only
+  // the "View full pricing details" link, so there is no full-width
+  // mobile button rule left to protect here.
+  it('no dangling .landingPricingCta rule was left behind after the block\'s removal', () => {
+    expect(css).not.toMatch(/\.landingPricingCta\b/)
   })
 
   it('nothing in the landing-page CSS sets a fixed pixel width wide enough to force horizontal scroll on a 360px viewport', () => {
     const blockMatch = css.match(/\/\* Public Homepage V2[\s\S]*?\.landingSignInCard \{ padding: 24px 18px; border-radius: 18px; \}\n\}/)
     expect(blockMatch).not.toBeNull()
     const block = blockMatch![0]
-    const fixedWidths = [...block.matchAll(/(?<!max-)width:\s*(\d+)px/g)].map((m) => Number(m[1]))
+    // Excludes both max-width and min-width — those are constraints/media
+    // features (including Dynamic Homepage V1's own
+    // `@media (min-width: 901px)` desktop-sticky block), never a fixed
+    // box width that could force horizontal scroll on its own.
+    const fixedWidths = [...block.matchAll(/(?<!min-)(?<!max-)width:\s*(\d+)px/g)].map((m) => Number(m[1]))
     for (const w of fixedWidths) expect(w).toBeLessThan(360)
   })
 })
