@@ -17,9 +17,23 @@
 -- (Section 5), immutability of the new link column (Section 6), the
 -- ON DELETE RESTRICT protection (Section 7), cross-tenant/cross-owner
 -- isolation re-verified for the new surfaces (Section 8), anon/
--- unrelated-user denial (Section 9), and a hands-on entitlement
--- negative case — a Free-plan owner (no user_subscriptions row at all)
--- cannot have a tenant create a request in the first place (Section 10).
+-- unrelated-user denial (Section 9), and a hands-on entitlement case
+-- — a Free-plan owner (no user_subscriptions row at all) CAN have a
+-- tenant create a request (Section 10).
+--
+-- Section 10 UPDATED for Property Overview + Pricing Polish V1, Stage 1
+-- (FINAL pricing decision): this originally asserted the OPPOSITE —
+-- that a Free-plan owner's tenant was BLOCKED, matching Launch
+-- Pricing's Manage-only Tenant Connect gate. Stage 1 made Tenant
+-- Connect core on every real plan (see
+-- supabase/milestone-30-property-overview-pricing-polish-v1-stage1.sql
+-- and lib/billing/entitlements.ts's TENANT_CONNECT_ENABLED), so the
+-- correct, current behavior is the reverse: a Free-plan owner with no
+-- subscription row at all (resolving to 'free', same as
+-- resolveEffectivePlan()) now correctly ALLOWS their tenant to create a
+-- request — proven here with a real fixture end to end through the
+-- actual RLS policy, not just owner_has_tenant_connect() in isolation
+-- (see milestone-30-rls.test.sql for that unit-level coverage).
 --
 -- Fixture shape (id prefix 261/262/263, distinct from milestone-25's
 -- 251/252 and milestone-24's 241, so all three files can run in the
@@ -295,20 +309,17 @@ begin
   raise notice 'PASS 9b: a signed-in user with no ownership/tenancy relationship reads no maintenance_requests rows at all';
 end $$;
 
--- ===== 10. Entitlement, verified hands-on: a Free-plan owner (no user_subscriptions row at all) cannot have a tenant create a request =====
+-- ===== 10. Entitlement, verified hands-on: a Free-plan owner (no user_subscriptions row at all) CAN have a tenant create a request (Stage 1) =====
 select set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000269', true);
 select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-000000000269","email":"tenant-d@example.com"}', true);
 do $$
 begin
-  begin
-    insert into public.property_conversations (property_id, owner_id, tenant_access_id, subject, conversation_type)
-    values ('b0000000-0000-0000-0000-000000000264', 'a0000000-0000-0000-0000-000000000268', 'c0000000-0000-0000-0000-000000000265', 'Broken window', 'Maintenance');
-    raise exception 'REGRESSION: a tenant of a Free-plan (no Tenant Connect entitlement) owner was able to start a conversation at all';
-  exception
-    when others then
-      if SQLERRM like 'REGRESSION%' then raise; end if;
-      raise notice 'PASS 10: a Free-plan owner with no user_subscriptions row (lib/billing/entitlements.ts''s documented brand-new-account case) correctly blocks their tenant from creating a request — owner_has_tenant_connect() and the TS entitlement map agree';
-  end;
+  insert into public.property_conversations (property_id, owner_id, tenant_access_id, subject, conversation_type)
+  values ('b0000000-0000-0000-0000-000000000264', 'a0000000-0000-0000-0000-000000000268', 'c0000000-0000-0000-0000-000000000265', 'Broken window', 'Maintenance');
+  raise notice 'PASS 10: a Free-plan owner with no user_subscriptions row (lib/billing/entitlements.ts''s documented brand-new-account case) correctly ALLOWS their tenant to create a request — owner_has_tenant_connect() and the TS entitlement map agree (Stage 1: Tenant Connect is core on every real plan)';
+exception
+  when others then
+    raise exception 'REGRESSION: a tenant of a Free-plan owner was blocked from starting a conversation — Tenant Connect should be core on every real plan as of Stage 1 (%)', SQLERRM;
 end $$;
 
 rollback;
