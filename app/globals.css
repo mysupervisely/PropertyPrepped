@@ -2136,14 +2136,49 @@ h2, h3, p { margin-top: 0; }
 .reuse-weak { background: #fdeceb; color: #8a3d35; }
 .reuse-unknown { background: #eef2ef; color: var(--muted); }
 .propCrewProperties, .propCrewHistory { font-size: 11.5px; margin: 8px 0 0; overflow-wrap: anywhere; }
-.propCrewToggle { border: 0; background: transparent; color: var(--brand); font-weight: 700; font-size: 12px; padding: 8px 0 0; text-decoration: underline; text-underline-offset: 2px; }
+.propCrewToggle { border: 0; background: transparent; color: var(--brand); font-weight: 700; font-size: 12px; padding: 8px 4px; text-decoration: underline; text-underline-offset: 2px; }
 .propCrewDetails { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; display: grid; gap: 10px; }
 .propCrewExperienceNote { background: var(--brand-soft); border-radius: 10px; padding: 10px 12px; }
 .propCrewExperienceNote span { display: block; color: var(--brand); font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .03em; margin-bottom: 4px; }
 .propCrewExperienceNote p { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
 
+/* PropCrew Mobile Cleanup V1: a more compact directory-ENTRY treatment
+   — "directory row" rather than "dashboard feature card." Everything
+   here is scoped to .propCrewCard-prefixed classes (or .propCrewCard
+   itself), never the bare .recordCard/.contactCard rules Leases/
+   Insurance/Maintenance/etc. also use elsewhere on this page, so none
+   of this can leak into those unrelated modules. Same field content,
+   same handlers as before — only the container/typography/spacing. */
+.propCrewCard { padding: 16px; border-radius: 13px; }
+.contactGrid { gap: 12px; }
+/* The old .recordTop treatment (16px bottom padding + a full-width
+   divider) suited a taller card with more content below it; here the
+   card's own outer border already separates one crew member from the
+   next, so an internal divider between identity and contact info was
+   just more visual weight for no scanability benefit. */
+.propCrewCardTop { border-bottom: 0; padding-bottom: 0; align-items: flex-start; }
+.propCrewCardTop h3 { margin: 0; font-size: 16px; }
+.propCrewCardIdentity { min-width: 0; }
+.propCrewCardIdentity p { margin: 2px 0 0; }
+.propCrewCardTopRight { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.propCrewCardTopRight .recordDelete { font-size: 18px; padding: 2px 4px; }
+.propCrewCard .contactLinks { padding: 8px 0 0; gap: 3px; }
+.propCrewPhoneLink { font-weight: 700; }
+/* Footer: the quieter home for "Would use again" (moved off the
+   card's top, where it competed with the provider's own identity) and
+   View details, side by side — margin-left: auto on the toggle keeps
+   it pinned right whether or not a reuse pill is present this time. */
+.propCrewCardFooter { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.propCrewCardFooter .propCrewToggle { margin-left: auto; }
+.propCrewReuseQuiet { margin-left: 0; font-size: 10px; }
+
 /* PropCrew Mobile Contact Import V1 */
-.propCrewHeaderActions { display: flex; gap: 10px; flex-wrap: wrap; }
+.propCrewHeaderActions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+/* PropCrew Mobile Cleanup V1: "+ Add to PropCrew" shortens to "+ Add"
+   below 761px (same breakpoint the mobile Property section selector
+   already uses) — same button, same handler, only the label swaps via
+   plain CSS show/hide, so nothing here needs its own JS/state. */
+.propCrewAddButtonShort { display: none; }
 /* UX polish pass: the iPhone fallback's compact numbered instructions —
    small, quiet, comfortable mobile spacing, no wall of text. */
 .propCrewImportSteps { margin: 2px 0 4px; }
@@ -2159,7 +2194,20 @@ h2, h3, p { margin-top: 0; }
 .propCrewLinkRow strong { font-size: 13.5px; overflow-wrap: anywhere; }
 .propCrewLinkRow span { font-size: 11.5px; }
 .propCrewLinkRow button { flex-shrink: 0; }
-@media (max-width: 480px) { .propCrewHeaderActions { width: 100%; } .propCrewHeaderActions button { flex: 1; } }
+/* PropCrew Mobile Cleanup V1: this used to stretch both header buttons
+   to equal-width, full-bleed blocks below 480px — exactly the "large
+   full-width green + Add to PropCrew button" real-iPhone review
+   flagged (iPhone widths are always under 480px). Buttons now keep
+   their natural compact size at every width; only the intro's own
+   vertical spacing tightens and the primary button's label shortens
+   (.propCrewAddButtonFull/Short above). */
+@media (max-width: 760px) {
+  .propCrewHeader { margin-bottom: 14px; }
+  .propCrewHeader p { margin: 4px 0 0; font-size: 13px; line-height: 1.45; }
+  .propCrewHeaderActions button { padding: 9px 14px; font-size: 13px; }
+  .propCrewAddButtonFull { display: none; }
+  .propCrewAddButtonShort { display: inline; }
+}
 .propertyCheckList { display: grid; gap: 8px; max-height: 160px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-top: 6px; }
 .propertyCheckItem { display: flex !important; align-items: center; gap: 8px; font-weight: 500 !important; font-size: 13px !important; }
 .propertyCheckItem input { width: 16px; height: 16px; margin: 0; }
