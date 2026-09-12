@@ -380,6 +380,38 @@ h2, h3, p { margin-top: 0; }
   .overviewInfoGrid { grid-template-columns: 1fr; gap: 22px; }
 }
 
+/* Desktop Property Page Quiet Layout V1: two more presentation-only
+   refinements on top of the same Overview markup above — no field,
+   value, handler, or breakpoint anyone already depends on below 901px
+   is touched.
+   1. .overviewInfoGrid's two columns (Expenses & tax / Property facts,
+      and Notes / Timeline) already dropped their per-group border in
+      favor of whitespace alone; at desktop widths a subtle vertical
+      hairline now marks the column boundary explicitly too, centered
+      in the existing 28px gap via the standard negative-margin/padding
+      trick (marginLeft: -half the gap, paddingLeft: the same amount —
+      the divider sits at the border edge, the content position is
+      unchanged) so the columns keep their exact current width/rhythm.
+   2. Tenancy's .detailRows (Occupancy/Tenant/Lease term/Rent, each a
+      full-width row with its own horizontal divider — a fine treatment
+      for Expenses & tax's longer list, but Tenancy is only 2-4 fields
+      and read as another stack of bordered rows) becomes a quiet
+      horizontal band on desktop instead: the same fields, in the same
+      order, with the same rent-status pill, now divided by the same
+      vertical hairline as (1) rather than stacked full-width rows. */
+@media (min-width: 901px) {
+  .overviewInfoGrid > .overviewInfoGroup:not(:first-child) {
+    border-left: 1px solid var(--line);
+    margin-left: -14px;
+    padding-left: 14px;
+  }
+
+  .tenancyGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0; }
+  .tenancyGrid > div { border-top: 0; padding: 0 20px; }
+  .tenancyGrid > div:first-child { padding-left: 0; }
+  .tenancyGrid > div:not(:first-child) { border-left: 1px solid var(--line); }
+}
+
 /* Property Intelligence V1, Phase C (restyled in Phase C.3, refined
    after a second round of real-device feedback): property Overview
    snapshot. Phase C originally reused .financialStats/.financialStat
