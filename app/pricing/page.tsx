@@ -14,16 +14,23 @@
 // plan gives the same core PropRoster experience (CORE_FEATURES_STATEMENT/
 // CORE_FEATURES, stated once above the cards — see lib/billing/plans.ts),
 // so property count — shown prominently right under each card's price,
-// not buried in a bullet list — is what actually and legitimately
-// differs between Free/Organize/Manage for most of the product. Manage's
-// own real, currently-enforced extras (Tenant Connect, Smart Upload,
-// etc. — PLAN_FEATURE_HIGHLIGHTS) are still called out on its own card;
-// this isn't "everything is identical," it's "the core is shared, and
-// here's the one plan that adds more on top." Legacy plans
-// (investor/portfolio/portfolio_pro) are intentionally absent from
-// PUBLIC_PLAN_ORDER — never offered to new customers — but an existing
-// legacy subscriber visiting this page still sees an accurate note about
-// their current plan rather than the page looking like it forgot them.
+// not buried in a bullet list — is what actually differs between
+// Free/Organize/Manage.
+//
+// Stage 1 (final product decision) went further: Tenant Connect, Smart
+// Upload, Portfolio Import, Document Intelligence, Rent Ledger and
+// PropWatch — previously Manage-only extras called out on its own card
+// (PLAN_FEATURE_HIGHLIGHTS.manage) — are now core capabilities, folded
+// into the shared CORE_FEATURES list above the cards. Free, Organize and
+// Manage now have NOTHING plan-specific left to list — PLAN_FEATURE_HIGHLIGHTS
+// has no entry for any of them (see that constant's own comment). This
+// really is "the same core PropRoster experience, different portfolio
+// capacity" now, not merely "the core is shared, Manage adds more."
+// Legacy plans (investor/portfolio/portfolio_pro) are intentionally
+// absent from PUBLIC_PLAN_ORDER — never offered to new customers — but
+// an existing legacy subscriber visiting this page still sees an
+// accurate note about their current plan rather than the page looking
+// like it forgot them.
 
 import { useState } from 'react'
 import Link from 'next/link'
@@ -209,7 +216,13 @@ export default function PricingPage() {
       <section className="pricingFooterNote">
         <p className="muted">
           The Property Evaluator investment-analysis tool is always free to use, on every plan — including before you create an account.
-          Manage includes 50 AI-powered document analyses per month (Smart Upload, Portfolio Import, and Document Intelligence draw from the same monthly allowance).
+          {/* Property Overview + Pricing Polish V1, Stage 1: this line
+              used to name only the top tier as getting a monthly AI
+              allowance — Smart Upload/Portfolio Import/Document
+              Intelligence are core on every plan now, so the number
+              below is a shared platform fair-use safeguard, not a
+              top-tier-only perk (see lib/billing/entitlements.ts). */}
+          {' '}AI-powered document analysis (Smart Upload, Portfolio Import, and Document Intelligence) is included on every plan, with a shared 50-analysis monthly limit to keep the service reliable for everyone.
         </p>
       </section>
     </main>

@@ -77,21 +77,21 @@ export function canCreateProperty(plan: PlanId, currentPropertyCount: number): b
   return currentPropertyCount < maxPropertiesFor(plan)
 }
 
-// Milestone 10: Tenant Connect launch intent. Unlike the other stub
-// fields below (tenantPortal, etc. — deliberately unmeasured/false for
-// every plan because no real limit exists yet), tenantConnect IS a
-// real, currently-enforced value per plan: Manage and above get it
-// today, Free/Organize do not, and Owner (internal, unlimited) always
-// does. Legacy Investor is the deliberate exception — the long-term
-// intent is an optional paid add-on, but since no Stripe add-on product
-// exists yet and nothing may be sold that isn't live, legacy Investor
-// stays `false` here exactly like Free until that billing path is
-// built (unchanged from before Launch Pricing). This map is the ONLY
-// place that distinction is made; entitlementsFor below just reads it,
-// same as every other field in this file.
+// Property Overview + Pricing Polish V1, Stage 1 — FINAL product
+// decision, superseding Launch Pricing's capability-based tiering below:
+// PropRoster scales by PORTFOLIO SIZE (maxProperties), not by feature.
+// Tenant Connect is now real, currently-enforced, and identical across
+// every real plan — Free, Organize, Manage, and (if ever assigned)
+// Automate all get it. The ONLY carve-out is legacy Investor, kept
+// `false` exactly as before this milestone — the long-term intent there
+// is a genuinely separate, optional paid add-on, and since no Stripe
+// add-on product exists yet, changing it would require inventing new
+// billing rather than correcting a contradiction (explicitly out of
+// scope — see this file's own AI-allowance comment below for the same
+// reasoning applied to the AI capabilities).
 const TENANT_CONNECT_ENABLED: Record<PlanId, boolean> = {
-  free: false,
-  organize: false,
+  free: true,
+  organize: true,
   manage: true,
   automate: true,
   investor: false,
@@ -100,28 +100,32 @@ const TENANT_CONNECT_ENABLED: Record<PlanId, boolean> = {
   owner: true,
 }
 
-// Launch Pricing (capability-based relaunch): the real, currently-
-// enforced capability set for each plan. Free/Organize get none of
-// these — Organize is documents/organization/tracking, not AI ingestion
-// or recurring-operations tooling. Manage gets all of them, with a
-// metered monthly AI allowance (Section: AI Enforcement).
+// Property Overview + Pricing Polish V1, Stage 1 — FINAL product
+// decision: Smart Upload, Portfolio Import, AI Document Intelligence,
+// Rent Ledger and PropWatch are core PropRoster functionality, not a
+// higher tier's "automation product." Every real plan (Free/Organize/
+// Manage/Automate) now gets the full capability set — what used to be
+// Launch Pricing's Manage-only MANAGE_TIER_CAPABILITIES is simply
+// CORE_CAPABILITIES now, applied uniformly. Legacy paid subscribers
+// (investor/portfolio/portfolio_pro) and the internal owner plan keep
+// their own pre-existing UNLIMITED_CAPABILITIES, unchanged by this
+// milestone.
 //
-// Legacy paid subscribers (investor/portfolio/portfolio_pro) get the
-// SAME full capability set as Manage, with an UNLIMITED AI allowance
-// (monthlyAIAnalyses: null) — a deliberate, conservative choice per the
-// launch spec ("Choose conservative backward-compatible AI entitlements
-// for legacy subscribers rather than accidentally blocking them during
-// launch"). Before this launch, EVERY signed-in user on ANY plan had
-// unlimited AI analysis calls (see the billing audit, Section 11) — a
-// legacy paying subscriber suddenly hitting a new 50/month cap they were
-// never told about, on launch day, would be a broken-feeling regression
-// for someone already paying. The new 50/month allowance applies only to
-// the NEW 'manage' plan, which is being marketed with that number from
-// day one. This same reasoning is extended uniformly to the other new
-// capability flags (canUseSmartUpload/canUseSmartImport/
-// canUseDocumentIntelligence/canUseRentLedger/canUsePropWatch) — none of
-// these were ever gated before Launch Pricing, so a legacy subscriber
-// loses nothing they already had access to.
+// The one thing that remains genuinely tiered by cost, not by feature:
+// monthlyAIAnalyses. This is an infrastructure/fair-use SAFEGUARD against
+// unbounded Anthropic API cost, not a marketed capability — every real
+// plan gets the SAME numeric allowance (50/month, the same number
+// Manage was already launched with, so no existing paying subscriber's
+// allowance shrinks). "Do not confuse feature entitlement with
+// infrastructure safeguards": the boolean capability flags below answer
+// "can this account use the feature at all" (now always yes, for every
+// real plan); monthlyAIAnalyses alone answers "how much of the paid AI
+// pipeline can this account run this month," and is enforced the exact
+// same way it always was (see app/api/document-intelligence/analyze/
+// route.ts's checkAiAllowance) — nothing about the enforcement mechanism
+// changed, only the number assigned to Free/Organize went from 0 to 50.
+// This is deliberately NOT usage-based billing: exceeding the allowance
+// blocks further AI calls for the month, it never charges anything.
 export type ManageCapabilities = {
   /** `null` = unlimited (no allowance check performed). A real number is enforced server-side in the analyze route — never just hidden client-side (Section: AI Enforcement). */
   monthlyAIAnalyses: number | null
@@ -132,15 +136,8 @@ export type ManageCapabilities = {
   canUsePropWatch: boolean
 }
 
-const NO_MANAGE_CAPABILITIES: ManageCapabilities = {
-  monthlyAIAnalyses: 0,
-  canUseSmartUpload: false,
-  canUseSmartImport: false,
-  canUseDocumentIntelligence: false,
-  canUseRentLedger: false,
-  canUsePropWatch: false,
-}
-const MANAGE_TIER_CAPABILITIES: ManageCapabilities = {
+/** The full PropRoster capability set, with the shared platform-level AI fair-use allowance — Free, Organize, Manage and Automate all get exactly this. */
+const CORE_CAPABILITIES: ManageCapabilities = {
   monthlyAIAnalyses: 50,
   canUseSmartUpload: true,
   canUseSmartImport: true,
@@ -148,7 +145,7 @@ const MANAGE_TIER_CAPABILITIES: ManageCapabilities = {
   canUseRentLedger: true,
   canUsePropWatch: true,
 }
-/** Full capability set, unlimited AI — legacy paid plans and the internal owner plan (see the module doc comment above for why). */
+/** Full capability set, unlimited AI — legacy paid plans and the internal owner plan (see the module doc comment above for why). Unchanged by this milestone. */
 const UNLIMITED_CAPABILITIES: ManageCapabilities = {
   monthlyAIAnalyses: null,
   canUseSmartUpload: true,
@@ -159,12 +156,12 @@ const UNLIMITED_CAPABILITIES: ManageCapabilities = {
 }
 
 const CAPABILITIES_BY_PLAN: Record<PlanId, ManageCapabilities> = {
-  free: NO_MANAGE_CAPABILITIES,
-  organize: NO_MANAGE_CAPABILITIES,
-  manage: MANAGE_TIER_CAPABILITIES,
-  // Not purchasable yet — if ever internally assigned, at least
-  // Manage-equivalent rather than under-provisioning a "premium" tier.
-  automate: MANAGE_TIER_CAPABILITIES,
+  free: CORE_CAPABILITIES,
+  organize: CORE_CAPABILITIES,
+  manage: CORE_CAPABILITIES,
+  // Not purchasable yet — if ever internally assigned, the same core set
+  // every other real plan gets (never under-provisioned).
+  automate: CORE_CAPABILITIES,
   investor: UNLIMITED_CAPABILITIES,
   portfolio: UNLIMITED_CAPABILITIES,
   portfolio_pro: UNLIMITED_CAPABILITIES,

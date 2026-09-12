@@ -38,11 +38,6 @@ import { ProfileEntryButton } from './ProfileEntryButton'
 import { MobileBottomNav } from './MobileBottomNav'
 import { SmartUploadButton } from './SmartUploadButton'
 import { SmartUploadModal } from './SmartUpload/SmartUploadModal'
-import { UpgradePrompt } from './UpgradePrompt'
-import { supabase } from '../lib/supabase'
-import { useAuthUser } from '../lib/useAuthUser'
-import { useSubscription } from '../lib/useSubscription'
-import { entitlementsFor } from '../lib/billing/entitlements'
 
 export function AuthHeader({
   onBrandClick, onSmartUploadCompleted, registerSmartUploadTrigger, hideMobileNav,
@@ -67,28 +62,23 @@ export function AuthHeader({
   // — the avatar is now the ONLY opener at every breakpoint, still
   // driving this SAME lifted state, never a second menu instance.
   const [navMenuOpen, setNavMenuOpen] = useState(false)
-  // Launch Pricing: Smart Upload's entry point is global (this header
-  // renders on every authenticated page), so the gate lives here rather
-  // than being threaded through every page that renders AuthHeader.
-  // UI-only — the real cost boundary is the analyze route's server-side
-  // AI-allowance check (Section: AI Enforcement); this just avoids
-  // opening a workflow the plan can't complete.
-  const [showUpgrade, setShowUpgrade] = useState(false)
-  const { user } = useAuthUser()
-  const { plan } = useSubscription(user)
-  const canUseSmartUpload = entitlementsFor(plan).canUseSmartUpload
+  // Property Overview + Pricing Polish V1, Stage 1: Smart Upload is now
+  // core PropRoster functionality on every plan (Free/Organize/Manage) —
+  // the old Manage-only entitlement gate and its upgrade-prompt this
+  // header used to show here were removed. The AI pipeline's own
+  // platform-level fair-use safeguard is still enforced server-side by
+  // the analyze route regardless of this button — see
+  // lib/billing/entitlements.ts's own comment.
 
   // Property-First UX Cleanup: exposes an external trigger for opening
   // THIS SAME Smart Upload modal — no second implementation, no rebuilt
   // AI pipeline — so a property's Documents tab can offer "Smart Upload"
   // as one path inside its own "+ Add Document" flow (the spec's "not a
   // completely separate top-level product") while every other page keeps
-  // using the header button exactly as before. Re-registers whenever the
-  // plan-gated behavior it wraps changes, so the exposed function is
-  // never stale.
+  // using the header button exactly as before.
   useEffect(() => {
-    registerSmartUploadTrigger?.(() => (canUseSmartUpload ? setSmartUploadOpen(true) : setShowUpgrade(true)))
-  }, [registerSmartUploadTrigger, canUseSmartUpload])
+    registerSmartUploadTrigger?.(() => setSmartUploadOpen(true))
+  }, [registerSmartUploadTrigger])
 
   const brandContent = (
     <>
@@ -124,7 +114,7 @@ export function AuthHeader({
               a search action/icon rather than a large primary navigation
               destination." Same /search route and page, unchanged. */}
           <Link href="/search" className="headerSearchButton" aria-label="Search">🔍</Link>
-          <SmartUploadButton onClick={() => (canUseSmartUpload ? setSmartUploadOpen(true) : setShowUpgrade(true))} />
+          <SmartUploadButton onClick={() => setSmartUploadOpen(true)} />
         </div>
       </header>
       {/* Simplification + Maintenance Workspace V2, Phase D.1: GLOBAL
@@ -137,16 +127,6 @@ export function AuthHeader({
           every width. */}
       {!hideMobileNav && <MobileBottomNav onDashboardNavigate={onBrandClick} />}
       <SmartUploadModal open={smartUploadOpen} onClose={() => setSmartUploadOpen(false)} onCompleted={onSmartUploadCompleted} />
-      {showUpgrade && supabase && (
-        <UpgradePrompt
-          supabase={supabase}
-          currentPlan={plan}
-          onClose={() => setShowUpgrade(false)}
-          headline="Smart Upload is included with Manage."
-          targetPlanId="manage"
-          description="Manage includes Smart Upload, Portfolio Import, AI Document Intelligence, Rent Ledger and PropWatch."
-        />
-      )}
     </>
   )
 }

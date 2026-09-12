@@ -78,18 +78,19 @@ export async function POST(req: NextRequest) {
 
     const result = await handleAnalyzeRequest(payload, {
       isAiConfigured: () => configured,
-      // Launch Pricing (capability-based relaunch): the actual security
-      // boundary for AI cost control (Section: AI Enforcement —
-      // "Hiding a button is not sufficient protection for Anthropic
-      // usage"). A plan without canUseDocumentIntelligence never reaches
-      // Anthropic regardless of what the client sent. A plan WITH the
-      // capability but a metered allowance (monthlyAIAnalyses a real
-      // number, currently only 'manage') gets a fresh count of this
-      // calendar month's ai_usage_events — which only ever contains rows
-      // for SUCCESSFUL analyses (recordUsage is only ever called after a
-      // successful deps.analyze() — see analyze-request.ts), so a failed
-      // attempt never consumes the allowance. Unlimited plans
-      // (monthlyAIAnalyses === null) skip the count query entirely.
+      // The actual security boundary for AI cost control (Section: AI
+      // Enforcement — "Hiding a button is not sufficient protection for
+      // Anthropic usage"). Property Overview + Pricing Polish V1, Stage 1:
+      // canUseDocumentIntelligence is now true for every real plan (this
+      // is a platform-wide fair-use safeguard, not a feature gate), so a
+      // metered allowance (monthlyAIAnalyses a real number — every real
+      // plan today) gets a fresh count of this calendar month's
+      // ai_usage_events — which only ever contains rows for SUCCESSFUL
+      // analyses (recordUsage is only ever called after a successful
+      // deps.analyze() — see analyze-request.ts), so a failed attempt
+      // never consumes the allowance. Unlimited plans (monthlyAIAnalyses
+      // === null — legacy subscribers and the internal owner plan) skip
+      // the count query entirely.
       checkAiAllowance: async () => {
         if (!entitlements.canUseDocumentIntelligence) return { allowed: false, limit: 0, used: 0 }
         const limit = entitlements.monthlyAIAnalyses

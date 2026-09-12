@@ -63,7 +63,12 @@ describe('Avatar menu simplification — AuthNavMenu', () => {
 describe('Rent Ledger becomes a compatibility route, not deleted', () => {
   it('/rent-ledger still exists and still uses the existing source of truth (no duplicated payment-mutation logic)', () => {
     const source = readFile('app/rent-ledger/page.tsx')
-    expect(source).toContain('canUseRentLedger')
+    // Property Overview + Pricing Polish V1, Stage 1: canUseRentLedger
+    // (and the "included with Manage" upgrade prompt it gated) was
+    // removed from this page — Rent Ledger is now core functionality on
+    // every plan, so there is nothing left to gate here. The underlying
+    // ledger/payment source of truth is unchanged.
+    expect(source).not.toContain('canUseRentLedger')
     expect(source).toContain("supabase.from('rent_payments')")
   })
 })
@@ -153,16 +158,22 @@ describe('Pricing feature copy stays truthful to real entitlements', () => {
     return coreMatch![1]
   })()
 
-  // Property Overview + Pricing Polish V1: Organize no longer has its own
-  // PLAN_FEATURE_HIGHLIGHTS entry at all (its core features are now
-  // stated once, shared, via CORE_FEATURES — see that constant's own
-  // comment in lib/billing/plans.ts) — trivially true that an absent
-  // entry can't claim a Manage-only capability, but the shared
-  // CORE_FEATURES list itself must stay just as honest.
-  it('Organize has no PLAN_FEATURE_HIGHLIGHTS entry of its own, and the shared CORE_FEATURES list never claims a Manage-only capability (Tenant Connect / Smart Upload / PropWatch / Rent Ledger / AI)', () => {
+  // Property Overview + Pricing Polish V1, Stage 1 (FINAL product
+  // decision): Tenant Connect/Smart Upload/Portfolio Import/Rent Ledger/
+  // PropWatch are no longer Manage-only — they are core PropRoster
+  // capabilities on every real plan (see lib/billing/entitlements.ts's
+  // CORE_CAPABILITIES/TENANT_CONNECT_ENABLED). This SUPERSEDES the
+  // earlier, now-incorrect invariant this test used to protect ("CORE_FEATURES
+  // must never claim a Manage-only capability") — the correct invariant
+  // now is the opposite: these capabilities live in the SHARED
+  // CORE_FEATURES list, not as a plan-specific PLAN_FEATURE_HIGHLIGHTS
+  // bullet repeated only on Manage's own card.
+  it('Free, Organize and Manage have no PLAN_FEATURE_HIGHLIGHTS entry of their own — every real capability (including what used to be Manage-only) lives once in the shared CORE_FEATURES list', () => {
     expect(highlightsBlock).not.toMatch(/organize:\s*\[/)
-    for (const manageOnly of ['Tenant Connect', 'Smart Upload', 'PropWatch', 'Rent Ledger', /AI/]) {
-      expect(coreBlock).not.toMatch(manageOnly)
+    expect(highlightsBlock).not.toMatch(/\bmanage:\s*\[/)
+    expect(highlightsBlock).not.toMatch(/\bfree:\s*\[/)
+    for (const nowCore of ['Tenant Connect', 'Smart Upload', 'PropWatch', 'Rent Ledger']) {
+      expect(coreBlock).toMatch(nowCore)
     }
   })
 

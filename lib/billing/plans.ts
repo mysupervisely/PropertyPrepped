@@ -236,22 +236,29 @@ export const NEXT_PLAN: Record<PlanId, PurchasablePlanId | null> = {
   owner: null,
 }
 
-// Property Overview + Pricing Polish V1: PropRoster's core property-
-// management experience is the SAME on Free, Organize and Manage —
-// verified directly against lib/billing/entitlements.ts, which gates
-// NONE of these by plan (only maxProperties, Tenant Connect, and the
-// Manage-only automation/AI capabilities in PLAN_FEATURE_HIGHLIGHTS
-// below actually differ — see CAPABILITIES_BY_PLAN and
-// TENANT_CONNECT_ENABLED there). Rendered once on /pricing instead of
-// being repeated as identical bullets on all three cards — "the primary
-// reason to choose a plan is portfolio size, not a stripped-down
-// product at lower tiers."
+// Property Overview + Pricing Polish V1, Stage 1 — FINAL product
+// decision: PropRoster's core product experience is now IDENTICAL on
+// Free, Organize and Manage — verified directly against
+// lib/billing/entitlements.ts, which no longer gates any of these by
+// plan (CAPABILITIES_BY_PLAN.free/.organize/.manage are now the exact
+// same CORE_CAPABILITIES object, and TENANT_CONNECT_ENABLED is true for
+// all three). Only maxProperties differs between the three real plans;
+// separately, a platform-level AI fair-use safeguard (the same
+// monthlyAIAnalyses number for every plan — an infrastructure cost
+// control, not a marketed feature) is documented in
+// lib/billing/entitlements.ts, not listed here as a bullet. Rendered
+// once on /pricing instead of being repeated as identical bullets on
+// all three cards — "the primary reason to choose a plan is portfolio
+// size, not a stripped-down product at lower tiers."
 export const CORE_FEATURES_STATEMENT = "Every plan includes PropRoster's core features. Choose the plan that fits your portfolio size."
 export const CORE_FEATURES: string[] = [
   'Property organization & profiles',
   'Documents',
   'PropCrew',
   'Maintenance coordination',
+  'Tenant Connect',
+  'Smart Upload & Portfolio Import (AI)',
+  'Rent Ledger & PropWatch',
   'Tax Center',
   'Property Intelligence',
 ]
@@ -261,21 +268,13 @@ export const CORE_FEATURES: string[] = [
 // rendered on /pricing (PUBLIC_PLAN_ORDER + COMING_SOON_PLAN_ORDER) need
 // an entry. Property Overview + Pricing Polish V1: property count moved
 // out of this list — it's now its own prominent line under each card's
-// price (app/pricing/page.tsx's .pricingLimit) — and the shared core
-// capabilities above (Documents/PropCrew/Maintenance/Tax Center/
-// Property Intelligence) moved into CORE_FEATURES, stated once rather
-// than repeated per plan. What's left here is only what genuinely
-// differs by plan: Free and Organize have no plan-specific capability
-// beyond portfolio size, so they have no entry at all; Manage keeps its
-// real, currently-enforced extras (Tenant Connect and the AI/automation
-// capabilities — CAPABILITIES_BY_PLAN in entitlements.ts).
+// price (app/pricing/page.tsx's .pricingLimit). Stage 1 removed Manage's
+// own entry entirely: Tenant Connect/Smart Upload/Portfolio Import/Rent
+// Ledger/PropWatch are now core capabilities (moved into CORE_FEATURES
+// above) rather than a Manage-exclusive upsell — Free, Organize and
+// Manage now have NOTHING plan-specific left to list, only 'automate'
+// (still not purchasable — PLANS.automate.comingSoon) keeps an entry.
 export const PLAN_FEATURE_HIGHLIGHTS: Partial<Record<PlanId, string[]>> = {
-  manage: [
-    'Tenant Connect',
-    'Smart Upload & Portfolio Import (AI)',
-    'Rent Ledger & PropWatch',
-    '50 AI document analyses / month',
-  ],
   automate: ['Up to 15 properties', 'Automation and coordination for growing portfolios', 'Details coming soon'],
 }
 

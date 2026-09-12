@@ -150,12 +150,14 @@ export async function handleAnalyzeRequest(
     return { status: 503, body: { error: 'AI document analysis has not been configured yet.' } }
   }
 
-  // Launch Pricing: the monthly AI allowance is checked BEFORE any file
-  // work or Anthropic call — never after. A plan without
-  // canUseDocumentIntelligence at all is represented by the route
-  // passing a check that's already `allowed: false, limit: 0` (see
-  // route.ts), so this single gate covers both "no AI on this plan" and
-  // "AI included, but this month's allowance is used up."
+  // The monthly AI allowance is checked BEFORE any file work or Anthropic
+  // call — never after. Property Overview + Pricing Polish V1, Stage 1:
+  // canUseDocumentIntelligence is now true for every real plan (Smart
+  // Upload/Document Intelligence are core PropRoster functionality, not
+  // a Manage-only capability), so in practice `limit` is a real number
+  // (the shared platform-level fair-use allowance) for every caller that
+  // reaches this function — `limit === 0` is kept only as a defensive
+  // fallback message, never expected in normal operation.
   const allowance = await deps.checkAiAllowance()
   if (!allowance.allowed) {
     return {
@@ -163,7 +165,7 @@ export async function handleAnalyzeRequest(
       body: {
         error: 'AI_LIMIT_REACHED',
         message: allowance.limit === 0
-          ? 'AI document analysis is included with the Manage plan.'
+          ? 'AI document analysis is not available on this account.'
           : `You've used your ${allowance.limit} document analyses for this month.`,
         limit: allowance.limit,
         used: allowance.used,

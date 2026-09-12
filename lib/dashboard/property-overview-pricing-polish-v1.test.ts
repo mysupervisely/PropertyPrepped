@@ -4,20 +4,28 @@ import { join } from 'node:path'
 import { PLANS, PLAN_FEATURE_HIGHLIGHTS, CORE_FEATURES, CORE_FEATURES_STATEMENT } from '../billing/plans'
 import { entitlementsFor } from '../billing/entitlements'
 
-// Property Overview + Pricing Polish V1 — a focused presentation/UX
-// polish milestone across three areas: (A) the authenticated header's
-// redundant avatar+hamburger menu triggers, (B) the Property Overview
-// tab's uniform bordered-card presentation, and (C) Pricing's messaging.
-// Explicitly NOT a redesign — no visual identity, palette, logo, Stripe,
-// entitlement, schema, or Property Intelligence calculation change. Most
-// of Part A/B's own regression coverage lives in the rescoped
+// Property Overview + Pricing Polish V1 — a two-stage milestone.
+//
+// Stage 0 (original PR #67) was presentation/UX polish across three
+// areas: (A) the authenticated header's redundant avatar+hamburger menu
+// triggers, (B) the Property Overview tab's uniform bordered-card
+// presentation, and (C) Pricing's messaging — no entitlement change.
+//
+// Stage 1 (this file's Part C section, updated in place) made the FINAL
+// product decision that superseded Launch Pricing's capability tiering:
+// PropRoster scales by property count only. Tenant Connect, Smart
+// Upload, Portfolio Import, AI Document Intelligence, Rent Ledger and
+// PropWatch — previously Manage-only — are now core capabilities on
+// every real plan (Free/Organize/Manage). The one thing that stays
+// numeric rather than uniform-by-policy is monthlyAIAnalyses, kept as a
+// platform-level fair-use safeguard (same number for every real plan,
+// not a marketed feature, not usage-based billing).
+//
+// Most of Part A/B's own regression coverage lives in the rescoped
 // lib/user-profile/profile-entry-point-wiring.test.ts and the several
 // property-intelligence-v1-phase-c*/property-profile-mobile-* wiring
 // files (this repo's established convention: protect the same
 // invariant in place with updated literals, never leave a test broken).
-// This file adds the invariants that didn't already have a home,
-// especially the new Pricing page wiring, which had no dedicated test
-// file before this milestone.
 
 const ROOT = join(__dirname, '..', '..')
 function readFile(relativePath: string): string {
@@ -26,6 +34,7 @@ function readFile(relativePath: string): string {
 
 const pricingPageSource = readFile('app/pricing/page.tsx')
 const plansSource = readFile('lib/billing/plans.ts')
+const entitlementsSource = readFile('lib/billing/entitlements.ts')
 const pageSource = readFile('app/page.tsx')
 const cssSource = readFile('app/globals.css')
 
@@ -40,14 +49,54 @@ describe('Part C — Pricing prices and property limits are exactly unchanged', 
   })
 
   it('no Stripe file, price ID, checkout amount, or webhook handler was touched by this milestone', () => {
-    // This milestone's diff is presentation/copy only — plans.ts changed
-    // (CORE_FEATURES/CORE_FEATURES_STATEMENT/PLAN_FEATURE_HIGHLIGHTS,
-    // display copy all three), never lib/billing/stripe.ts,
-    // lib/billing/client.ts, lib/billing/checkout-sync.ts,
-    // lib/billing/webhook-handlers.ts, or any Stripe price/env var.
+    // Stage 1 touched lib/billing/entitlements.ts (feature gating) and
+    // lib/billing/plans.ts (display copy) — deliberately never
+    // lib/billing/stripe.ts, lib/billing/client.ts,
+    // lib/billing/checkout-sync.ts, lib/billing/webhook-handlers.ts, or
+    // any Stripe price/env var. Equalizing what a plan's features ARE is
+    // not the same as touching what Stripe charges for it.
     expect(plansSource).not.toMatch(/price_[A-Za-z0-9]/)
+    expect(entitlementsSource).not.toMatch(/price_[A-Za-z0-9]/)
     expect(pricingPageSource).not.toMatch(/price_[A-Za-z0-9]/)
     expect(pricingPageSource).toContain("import { startCheckout } from '../../lib/billing/client'")
+  })
+})
+
+describe('Part C, Stage 1 (FINAL decision) — capabilities are uniform across every real plan; only property count and the AI safeguard differ', () => {
+  it('Tenant Connect and every ManageCapabilities flag are now identical for free/organize/manage — no more Manage-only feature gate', () => {
+    const free = entitlementsFor('free')
+    const organize = entitlementsFor('organize')
+    const manage = entitlementsFor('manage')
+    for (const field of ['tenantConnect', 'canUseSmartUpload', 'canUseSmartImport', 'canUseDocumentIntelligence', 'canUseRentLedger', 'canUsePropWatch'] as const) {
+      expect(free[field]).toBe(true)
+      expect(organize[field]).toBe(true)
+      expect(manage[field]).toBe(true)
+    }
+  })
+
+  it('the AI monthly allowance is a uniform platform-level safeguard, not a Manage-only marketing number — same limit for every real plan, never usage-based billing', () => {
+    const free = entitlementsFor('free')
+    const organize = entitlementsFor('organize')
+    const manage = entitlementsFor('manage')
+    expect(free.monthlyAIAnalyses).toBe(manage.monthlyAIAnalyses)
+    expect(organize.monthlyAIAnalyses).toBe(manage.monthlyAIAnalyses)
+    expect(typeof free.monthlyAIAnalyses).toBe('number')
+    // No new billing/pricing mechanism was invented for this — just the
+    // pre-existing aiAllowanceRemaining(limit, used) check, still the
+    // only place a monthlyAIAnalyses number is enforced.
+    expect(entitlementsSource).not.toMatch(/price_per_analysis|stripe.*overage/i)
+    expect((entitlementsSource.match(/export function aiAllowanceRemaining/g) || []).length).toBe(1)
+  })
+
+  it('legacy Investor is the one deliberate, documented carve-out for Tenant Connect (unchanged by this milestone, not a new contradiction introduced)', () => {
+    expect(entitlementsFor('investor').tenantConnect).toBe(false)
+  })
+
+  it('every dead "included with Manage" upgrade-prompt path was removed, not left as stale/unreachable false marketing copy', () => {
+    for (const file of ['components/AuthHeader.tsx', 'app/page.tsx', 'app/smart-import/page.tsx', 'app/rent-ledger/page.tsx', 'components/DocumentIntelligencePanel.tsx']) {
+      const source = readFile(file)
+      expect(source.toLowerCase()).not.toContain('included with manage')
+    }
   })
 })
 
@@ -68,32 +117,27 @@ describe('Part C — shared "same core, scale by portfolio size" messaging', () 
     expect(CORE_FEATURES_STATEMENT.toLowerCase()).not.toContain('automate')
   })
 
-  it('every CORE_FEATURES item is verified against real entitlements — none of them is actually gated by plan today', () => {
-    const free = entitlementsFor('free')
+  it('Stage 1: CORE_FEATURES now includes what used to be Manage-only (Tenant Connect, Smart Upload, Rent Ledger, PropWatch) — verified true for every real plan via entitlementsFor, not asserted blindly', () => {
     const manage = entitlementsFor('manage')
-    // The only things that differ between Free and Manage are maxProperties,
-    // tenantConnect, and the ManageCapabilities fields (Smart Upload/Import/
-    // Document Intelligence/Rent Ledger/PropWatch/AI allowance) — none of
-    // which CORE_FEATURES claims. Confirms CORE_FEATURES is not itself one
-    // of the fields that actually differs by plan.
-    const manageOnlyFields = ['tenantConnect', 'canUseSmartUpload', 'canUseSmartImport', 'canUseDocumentIntelligence', 'canUseRentLedger', 'canUsePropWatch'] as const
-    for (const field of manageOnlyFields) {
-      expect(free[field]).not.toBe(manage[field]) // confirms these genuinely DO differ (sanity check on the entitlements module itself)
-    }
-    for (const feature of CORE_FEATURES) {
-      expect(feature).not.toMatch(/Tenant Connect|Smart Upload|Smart Import|Document Intelligence|Rent Ledger|PropWatch/)
+    const free = entitlementsFor('free')
+    expect(manage.tenantConnect && free.tenantConnect).toBe(true)
+    expect(manage.canUseSmartUpload && free.canUseSmartUpload).toBe(true)
+    expect(manage.canUseRentLedger && free.canUseRentLedger).toBe(true)
+    expect(manage.canUsePropWatch && free.canUsePropWatch).toBe(true)
+    for (const nowCore of ['Tenant Connect', 'Smart Upload & Portfolio Import (AI)', 'Rent Ledger & PropWatch']) {
+      expect(CORE_FEATURES).toContain(nowCore)
     }
   })
 
-  it('Manage still lists its own real, currently-enforced extras — this is "shared core + Manage adds more," never "everything is identical"', () => {
-    expect(PLAN_FEATURE_HIGHLIGHTS.manage).toContain('Tenant Connect')
-    expect(PLAN_FEATURE_HIGHLIGHTS.manage).toContain('Smart Upload & Portfolio Import (AI)')
-    expect(PLAN_FEATURE_HIGHLIGHTS.manage).toContain('Rent Ledger & PropWatch')
-  })
-
-  it('Free and Organize have no plan-specific PLAN_FEATURE_HIGHLIGHTS entry — their pitch is the shared core statement plus property count, not a duplicated bullet list', () => {
+  it('Stage 1: Free, Organize and Manage have NO plan-specific PLAN_FEATURE_HIGHLIGHTS entry left — nothing differs between them except property count', () => {
     expect(PLAN_FEATURE_HIGHLIGHTS.free).toBeUndefined()
     expect(PLAN_FEATURE_HIGHLIGHTS.organize).toBeUndefined()
+    expect(PLAN_FEATURE_HIGHLIGHTS.manage).toBeUndefined()
+  })
+
+  it('the pricing footer note describes the AI allowance as a shared, every-plan safeguard, never a Manage-exclusive perk', () => {
+    expect(pricingPageSource).not.toMatch(/Manage includes \d+ AI-powered/i)
+    expect(pricingPageSource).toMatch(/included on every plan/i)
   })
 })
 
@@ -158,14 +202,20 @@ describe('Part B — Property Overview reads as sections, not a stack of equally
   })
 })
 
-describe('Guardrails: no Property Intelligence calculation, homepage V3, database schema, or entitlement logic was touched', () => {
-  it('no formula function or entitlement-resolution logic appears in the diffed files\' new sections (spot-checked via absence of raw calculation imports/schema statements)', () => {
+describe('Guardrails: no Property Intelligence calculation, homepage V3, Stripe, or database schema was touched', () => {
+  it('no schema/migration statement appears in any file this milestone touched', () => {
     expect(pageSource).not.toMatch(/create table|alter table|create policy/i)
     expect(pricingPageSource).not.toMatch(/create table|alter table|create policy/i)
+    expect(entitlementsSource).not.toMatch(/create table|alter table|create policy/i)
   })
 
   it('components/LandingPage.tsx (Public Homepage V3) was not modified by this milestone — still reads pricing from the same canonical module', () => {
     const landingSource = readFile('components/LandingPage.tsx')
     expect(landingSource).toContain("import { PLANS, PUBLIC_PLAN_ORDER, PLAN_FEATURE_HIGHLIGHTS, EARLY_ACCESS_PRICING } from '../lib/billing/plans'")
+  })
+
+  it('the database-level property limit trigger (the real security boundary) is untouched — entitlements.ts is a display/UI mirror of it, never a substitute', () => {
+    const schemaSource = readFile('supabase/milestone-9-subscriptions.sql')
+    expect(schemaSource).toContain('enforce_property_limit')
   })
 })

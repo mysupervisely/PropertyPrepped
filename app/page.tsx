@@ -646,14 +646,14 @@ export default function Home() {
 
   const { plan } = useSubscription(user)
   const entitlements = useMemo(() => entitlementsFor(plan), [plan])
-  // Launch Pricing: one shared UpgradePrompt instance, distinguished by
-  // WHY it was opened — 'propertyLimit' keeps the original property-count
-  // framing (REACHED_LIMIT_COPY/NEXT_PLAN), 'documentIntelligence' shows
-  // the AI-capability framing (targets Manage specifically, since
-  // NEXT_PLAN's "next rung" may still be Organize, which doesn't include
-  // it). Both reuse the same modal/checkout plumbing — no second prompt
-  // component.
-  const [showUpgrade, setShowUpgrade] = useState<null | 'propertyLimit' | 'documentIntelligence'>(null)
+  // Launch Pricing: the shared UpgradePrompt instance, shown when a
+  // property-count limit is reached (REACHED_LIMIT_COPY/NEXT_PLAN).
+  // Property Overview + Pricing Polish V1, Stage 1: the 'documentIntelligence'
+  // feature-gate variant this used to also cover was removed — AI
+  // Document Intelligence is now core functionality on every plan (see
+  // lib/billing/entitlements.ts), so there is nothing left to upsell it
+  // into.
+  const [showUpgrade, setShowUpgrade] = useState<null | 'propertyLimit'>(null)
   // Portfolio Snapshot expand/collapse (Section 3/4) — defaults expanded;
   // corrected from localStorage on mount (client-only, so this can't run
   // during server rendering). Presentation preference only, never sent to
@@ -3269,8 +3269,6 @@ export default function Home() {
               currentMortgageBalance={latestMortgage ? Number(latestMortgage.current_balance) : null}
               currentMonthlyRent={latestLease ? Number(latestLease.monthly_rent) : Number(selected.monthly_rent)}
               currentEstimatedValue={Number(selected.estimated_value)}
-              canUseDocumentIntelligence={entitlements.canUseDocumentIntelligence}
-              onUpgradeClick={() => setShowUpgrade('documentIntelligence')}
               onClose={() => setShowDocIntelId(null)}
               onOpenDocument={() => void openDocument(activeDoc)}
               onRefresh={() => void loadPortfolio()}
@@ -3565,16 +3563,6 @@ export default function Home() {
 
       {showUpgrade === 'propertyLimit' && supabase && (
         <UpgradePrompt supabase={supabase} currentPlan={plan} onClose={() => setShowUpgrade(null)} />
-      )}
-      {showUpgrade === 'documentIntelligence' && supabase && (
-        <UpgradePrompt
-          supabase={supabase}
-          currentPlan={plan}
-          onClose={() => setShowUpgrade(null)}
-          headline="AI Document Intelligence is included with Manage."
-          targetPlanId="manage"
-          description="Manage includes Smart Upload, Portfolio Import, AI Document Intelligence, Rent Ledger and PropWatch."
-        />
       )}
     </main>
   )
