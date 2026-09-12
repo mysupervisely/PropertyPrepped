@@ -47,6 +47,12 @@ import {
 import { buildPropertyPerformanceInput } from '../lib/property-intelligence/resolve'
 import { computePropertyPerformance, selectPriorYearPerformance } from '../lib/property-intelligence/calculate'
 import type { Metric as PropertyPerformanceMetric } from '../lib/property-intelligence/types'
+// Property Intelligence V1, Phase D (Portfolio Snapshot V1): the ONE
+// aggregation function the Dashboard's Portfolio Snapshot consumes — no
+// financial formula lives in this file. See lib/property-intelligence/
+// portfolio.ts's own header comment for why this is not a second
+// calculation system.
+import { computePortfolioPerformance, type PortfolioMetric } from '../lib/property-intelligence/portfolio'
 import { periodFromDate, formatPeriodLabel, type RentStatus } from '../lib/rent-ledger/status'
 import {
   buildRentLedgerRows, buildRentDateItems, buildVacancyItems, buildSystemWarrantyDateItems, type VacancyItem,
@@ -349,6 +355,20 @@ function metricCompactMoney(metric: PropertyPerformanceMetric): string {
 }
 function signedCompactMoney(n: number): string {
   return n >= 0 ? `+${compactMoney(n)}` : compactMoney(n)
+}
+
+// Property Intelligence V1, Phase D: the ONLY new presentation helper
+// this milestone adds — a tiny, quiet coverage note ("2 of 3 valued"),
+// shown ONLY when a portfolio aggregate is genuinely partial (some but
+// not all properties contributed). Complete coverage (every property
+// contributed) and fully unavailable (zero properties contributed, the
+// tile itself already reads "—" via metricMoney/metricCompactMoney)
+// both render nothing extra here — coverage language appears exactly
+// when it's useful, never as clutter on an already-clean number.
+function portfolioCoverageNote(metric: PortfolioMetric, label: string): string | null {
+  const { included, total } = metric.coverage
+  if (included === 0 || included === total) return null
+  return `${included} of ${total} ${label}`
 }
 
 // Appreciation = estimated/current value - purchase price (what the
@@ -977,21 +997,51 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, photos])
 
-  const totals = useMemo(() => {
-    const value = properties.reduce((sum, p) => sum + Number(p.estimated_value), 0)
-    const debt = properties.reduce((sum, p) => sum + Number(p.mortgage_balance), 0)
-    const rent = properties.reduce((sum, p) => sum + Number(p.monthly_rent), 0)
-    // Homepage snapshot cleanup: same reduce pattern as `rent` directly
-    // above, over the same already-loaded property field
-    // (property.monthly_expenses) — a display aggregate only, not a new
-    // calculation used anywhere else.
-    const monthlyExpenses = properties.reduce((sum, p) => sum + Number(p.monthly_expenses), 0)
-    const year = String(new Date().getFullYear())
-    const ytd = transactions.filter((tx) => tx.transaction_date.startsWith(year))
-    const income = ytd.filter((tx) => tx.transaction_type === 'Income').reduce((sum, tx) => sum + Number(tx.amount), 0)
-    const expenses = ytd.filter((tx) => tx.transaction_type === 'Expense').reduce((sum, tx) => sum + Number(tx.amount), 0)
-    return { value, debt, equity: value - debt, rent, monthlyExpenses, income, expenses, cashFlow: income - expenses }
-  }, [properties, transactions])
+  // Property Intelligence V1, Phase D (Portfolio Snapshot V1): replaces
+  // the old naive `totals` (raw properties.estimated_value/monthly_rent/
+  // monthly_expenses reduces, plus a hand-filtered transactions.reduce
+  // for "YTD income/expenses" — a second, competing calculation system
+  // that never used contract-rent priority, active-lease resolution,
+  // Tax Center's manual-override rules, or the missing-vs-known-zero
+  // distinction the individual Property Snapshot already gets right).
+  //
+  // This computes the EXACT SAME canonical PropertyPerformance the
+  // per-property Overview tab already builds (buildPropertyPerformanceInput
+  // + computePropertyPerformance) — once per property in the landlord's
+  // own scoped `properties` collection, for the current calendar year —
+  // and hands the array to computePortfolioPerformance() (lib/property-
+  // intelligence/portfolio.ts), which is the ONLY place any summing
+  // happens. No new Supabase query: transactions/leases/mortgages/
+  // maintenanceRecords/taxRecords/taxCustomItems are already loaded
+  // portfolio-wide by loadPortfolio() for other sections; this only
+  // filters them per property, exactly like the selected-property
+  // Overview tab already does for `selected` alone.
+  const portfolioPerformance = useMemo(() => {
+    const performanceYear = String(new Date().getFullYear())
+    const propertyPerformances = properties.map((property) => {
+      const propertyTransactions = transactions.filter((tx) => tx.property_id === property.id)
+      const propertyLeases = leases.filter((row) => row.property_id === property.id)
+      const propertyMortgages = mortgages.filter((row) => row.property_id === property.id)
+      const propertyMaintenance = maintenanceRecords.filter((row) => row.property_id === property.id)
+      const propertyTaxRecords = taxRecords.filter((row) => row.property_id === property.id)
+      const propertyTaxCustomItems = taxCustomItems.filter((row) => row.property_id === property.id)
+      const yearTaxRecord = propertyTaxRecords.find((r) => String(r.tax_year) === performanceYear) || null
+      const yearCustomItems = propertyTaxCustomItems
+        .filter((r) => String(r.tax_year) === performanceYear)
+        .map((r) => ({ id: r.id, propertyId: r.property_id, taxYear: r.tax_year, description: r.description, amount: Number(r.amount), group: r.category_group, notes: r.notes, documentId: r.document_id }))
+      return computePropertyPerformance(buildPropertyPerformanceInput({
+        property,
+        leases: propertyLeases,
+        currentMortgage: propertyMortgages[0] || null,
+        yearTransactions: propertyTransactions.filter((tx) => tx.transaction_date.startsWith(performanceYear)),
+        yearMaintenanceRecords: propertyMaintenance.filter((m) => m.service_date.startsWith(performanceYear)),
+        taxRecord: yearTaxRecord,
+        yearCustomItems,
+        year: performanceYear,
+      }))
+    })
+    return computePortfolioPerformance(propertyPerformances)
+  }, [properties, transactions, leases, mortgages, maintenanceRecords, taxRecords, taxCustomItems])
 
   // Milestone 16: Landlord Command Center. Every input here is data
   // app/page.tsx already loads for the property workspace (loadPortfolio()
@@ -3277,17 +3327,46 @@ export default function Home() {
       {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
       <section className="intro welcomeIntro"><h1>Good {greetingTimeOfDay()}{profileReady ? `, ${resolveGreetingName(userProfile, user.email)}` : ''}.</h1><p>Here&apos;s your portfolio at a glance.</p></section>
 
+      {/* Property Intelligence V1, Phase D (Portfolio Snapshot V1): the
+          Dashboard's own "how is my portfolio doing?" answer, in the
+          same quiet tile language the individual Property Snapshot
+          already uses (light neutral fill, rounded, no border/shadow) —
+          not a second, heavier design. Properties / Portfolio Value /
+          Monthly Rent / YTD NOI, in that order: what am I managing, what
+          is it worth, what's the current contractual rent picture, how
+          is this year actually going. Every value is portfolioPerformance
+          (computed above via computePortfolioPerformance) — no arithmetic
+          written in this JSX. A quiet coverage note appears only when a
+          tile is genuinely partial; complete coverage and "—" (fully
+          unavailable) both render cleanly with no extra line. No charts,
+          no gauges, no trend arrows, no portfolio score — Phase D is
+          glanceable, not an analytics panel. */}
       <section className="portfolioSnapshot">
         <div className="portfolioSnapshotHead">
           <h2>Portfolio Snapshot</h2>
           <button className="snapshotToggle" onClick={toggleSnapshotExpanded} aria-expanded={snapshotExpanded}>{snapshotExpanded ? 'Hide' : 'Show'}</button>
         </div>
         {snapshotExpanded ? (
-          <div className="snapshotMetrics">
-            <div className="snapshotMetric"><strong>{properties.length}</strong><span>{properties.length === 1 ? 'Property' : 'Properties'}</span></div>
-            <div className="snapshotMetric"><strong>{compactMoney(totals.value)}</strong><span>Est. Value</span></div>
-            <div className="snapshotMetric"><strong>{compactMoney(totals.rent)}</strong><span>Monthly Income</span></div>
-            <div className="snapshotMetric"><strong>{compactMoney(totals.monthlyExpenses)}</strong><span>Monthly Expenses</span></div>
+          <div className="portfolioSnapshotGrid">
+            <div className="portfolioSnapshotMetric">
+              <strong>{portfolioPerformance.propertyCount}</strong>
+              <span>{portfolioPerformance.propertyCount === 1 ? 'Property' : 'Properties'}</span>
+            </div>
+            <div className="portfolioSnapshotMetric">
+              <strong>{metricCompactMoney(portfolioPerformance.portfolioValue)}</strong>
+              <span>Portfolio Value</span>
+              {portfolioCoverageNote(portfolioPerformance.portfolioValue, 'valued') && <span className="portfolioSnapshotCoverageNote">{portfolioCoverageNote(portfolioPerformance.portfolioValue, 'valued')}</span>}
+            </div>
+            <div className="portfolioSnapshotMetric">
+              <strong>{metricMoney(portfolioPerformance.monthlyRent, '/mo')}</strong>
+              <span>Monthly Rent</span>
+              {portfolioCoverageNote(portfolioPerformance.monthlyRent, 'with rent') && <span className="portfolioSnapshotCoverageNote">{portfolioCoverageNote(portfolioPerformance.monthlyRent, 'with rent')}</span>}
+            </div>
+            <div className="portfolioSnapshotMetric">
+              <strong>{metricMoney(portfolioPerformance.noiYtd)}</strong>
+              <span>{new Date().getFullYear()} YTD NOI</span>
+              {portfolioCoverageNote(portfolioPerformance.noiYtd, 'with YTD data') && <span className="portfolioSnapshotCoverageNote">{portfolioCoverageNote(portfolioPerformance.noiYtd, 'with YTD data')}</span>}
+            </div>
           </div>
         ) : (
           <p className="snapshotCollapsedSummary">{properties.length} propert{properties.length === 1 ? 'y' : 'ies'}</p>
