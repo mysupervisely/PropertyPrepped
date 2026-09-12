@@ -180,39 +180,49 @@ describe('Public Homepage V3: hero fills the full viewport width — no leftover
   })
 })
 
+// Dynamic Homepage V1 superseded the four-icon .landingPillars grid this
+// describe block used to protect — the same four concepts (Organize/
+// Coordinate/Automate/Understand) and their exact approved one-line
+// descriptions are still on the page, verbatim, now as the body copy of
+// four cinematic "scenes" (see lib/dashboard/dynamic-homepage-v1-wiring.test.ts
+// for the full scene-structure coverage) rather than a four-icon grid.
+// This block is rescoped in place to the same underlying invariant —
+// "the exact approved copy still exists, calm/lightweight, no giant
+// bordered cards" — against the new structure.
 describe('8. Public Homepage V3: four pillars remain (Organize / Coordinate / Automate / Understand)', () => {
-  it('all four headings and their exact approved one-line copy are present', () => {
-    expect(landingSource).toContain("heading: 'Organize', body: 'Property information, documents, leases and numbers in one place.'")
-    expect(landingSource).toContain("heading: 'Coordinate', body: 'Connect tenants with your trusted PropCrew without all the back-and-forth.'")
-    expect(landingSource).toContain("heading: 'Automate', body: 'Simplify routine follow-ups and coordination while you stay in control.'")
-    expect(landingSource).toContain("heading: 'Understand', body: 'See the financial picture of each property and your portfolio more clearly.'")
+  it('all four headings and their exact approved one-line copy are present as scene body copy', () => {
+    expect(landingSource).toContain('Property information, documents, leases and numbers — all in one place.')
+    expect(landingSource).toContain('Connect tenants with your trusted PropCrew — without all the back-and-forth.')
+    expect(landingSource).toContain('See the financial picture of each property — and your whole portfolio — more clearly.')
+    expect(landingSource).toContain('<h2 className="landingSceneHeadline">Organize.</h2>')
+    expect(landingSource).toContain('<h2 className="landingSceneHeadline">Coordinate.</h2>')
+    expect(landingSource).toContain('<h2 className="landingSceneHeadline">Automate.</h2>')
+    expect(landingSource).toContain('<h2 className="landingSceneHeadline">Understand.</h2>')
   })
 
-  it('exactly four pillar entries render, each still using the shared calm icon-badge pattern — no giant bordered cards reintroduced', () => {
-    expect((landingSource.match(/icon: <(?:Folder|People|Automate|Dollar)Icon \/>/g) || []).length).toBe(4)
-    expect(landingSource).toContain('<IconBadge>{item.icon}</IconBadge>')
+  it('exactly four scenes render, one per concept, each its own real-UI-concept stage — no giant bordered feature cards, no icon grid reintroduced', () => {
+    expect((landingSource.match(/className="landingScene(?:"| landingSceneTall")/g) || []).length).toBe(4)
+    expect(landingSource).not.toMatch(/landingPillarsGrid|landingPillarCard/)
+    expect(cssSource).not.toMatch(/\.landingPillarsGrid|\.landingPillarCard/)
   })
 
-  it('desktop renders all four in one row; the pillar cards carry no border/shadow/background — calm and lightweight, not a second feature-card grid', () => {
-    const gridRule = cssSource.match(/\.landingPillarsGrid \{[^}]*\}/)?.[0] || ''
-    expect(gridRule).toMatch(/grid-template-columns:\s*repeat\(4,/)
-    const cardRuleStart = cssSource.indexOf('.landingPillarCard h2')
-    const cardBlock = cssSource.slice(cssSource.indexOf('.landingPillarsGrid'), cardRuleStart + 300)
-    expect(cardBlock).not.toMatch(/\.landingPillarCard \{[^}]*border:/)
-    expect(cardBlock).not.toMatch(/\.landingPillarCard \{[^}]*box-shadow/)
+  it('the shared stage card carries a light, restrained treatment (surface fill, one hairline border, soft shadow) — not a heavy bordered box', () => {
+    const stageRule = cssSource.match(/\.sceneStage \{[^}]*\}/)?.[0] || ''
+    expect(stageRule).toContain('background: var(--surface)')
+    expect(stageRule).toContain('border: 1px solid var(--line)')
   })
 })
 
-describe('9. Public Homepage V3: mobile pillar copy remains readable without hover', () => {
-  it('the ≤980px breakpoint collapses four columns to an elegant 2x2, not four cramped slivers or a hover-dependent layout', () => {
-    const bp980Start = cssSource.indexOf('@media (max-width: 980px)')
-    const bp980 = cssSource.slice(bp980Start, cssSource.indexOf('@media (max-width: 560px)', bp980Start))
-    expect(bp980).toMatch(/\.landingPillarsGrid \{ grid-template-columns:\s*repeat\(2,/)
+describe('9. Public Homepage V3: mobile scene copy remains readable without hover', () => {
+  it('at tablet/mobile widths every scene stacks to a single column — never a cramped multi-column layout, never a hover-dependent reveal', () => {
+    const bp900Start = cssSource.indexOf('@media (max-width: 900px)')
+    const bp900 = cssSource.slice(bp900Start, cssSource.indexOf('@media (max-width: 980px)', bp900Start))
+    expect(bp900).toMatch(/\.landingSceneInner, \.landingSceneInner--reverse \{ grid-template-columns: 1fr/)
   })
 
-  it('no :hover-only rule reveals pillar body text — it is always in the DOM and always visible', () => {
-    expect(cssSource).not.toMatch(/\.landingPillarCard[^{]*:hover[^{]*\{[^}]*display:\s*none/)
-    expect(cssSource).not.toMatch(/\.landingPillarCard p \{[^}]*opacity:\s*0/)
+  it('no :hover-only rule reveals scene body text — it is always in the DOM; useScrollReveal only ever adds a visible class, it never keeps content in the DOM but hidden behind a hover requirement', () => {
+    expect(cssSource).not.toMatch(/\.landingScene[A-Za-z]*[^{]*:hover[^{]*\{[^}]*display:\s*none/)
+    expect(cssSource).not.toMatch(/\.landingSceneBody \{[^}]*opacity:\s*0/)
   })
 })
 
@@ -235,9 +245,19 @@ describe('Public Homepage V3: everything else on the page is untouched (out of s
     expect(landingSource).toContain("function openAuth(mode: 'signin' | 'signup')")
   })
 
-  it('the workflow ("How it works") section is untouched', () => {
-    expect(landingSource).toContain('const WORKFLOW_STEPS')
-    expect(landingSource).toContain('Let PropRoster help coordinate')
+  // Dynamic Homepage V1 removed the separate "How it works" three-step
+  // section — its content is now absorbed into the Organize/Coordinate/
+  // Automate scenes above (Scene 2's "Coordinate" narrative covers the
+  // same "connect your tenant" ground; Scene 3's "Automate" body copy is
+  // the exact same sentence WORKFLOW_STEPS' third step used to carry).
+  // This is a deliberate consolidation ("fewer boxes," one continuous
+  // story), not an accidental content loss — the still-true underlying
+  // claim (PropRoster moves coordination forward, the landlord stays in
+  // control) is verified below instead of gating on the removed section.
+  it('the "How it works" section is gone (consolidated into the scene sequence); its key claim survives verbatim in the Automate scene', () => {
+    expect(landingSource).not.toContain('const WORKFLOW_STEPS')
+    expect(landingSource).not.toContain('landingWorkflow')
+    expect(landingSource).toContain('PropRoster helps move requests, availability and provider communication forward. You stay in control of every decision.')
   })
 })
 
@@ -326,20 +346,12 @@ describe('7. Public Homepage V3: the background-photo architecture from the prev
   })
 })
 
-describe('9. Public Homepage V3: four-pillar structure remains unchanged by this round', () => {
-  it('still exactly four pillars, exact same headings/copy as the previous round', () => {
-    expect(landingSource).toContain("heading: 'Organize', body: 'Property information, documents, leases and numbers in one place.'")
-    expect(landingSource).toContain("heading: 'Coordinate', body: 'Connect tenants with your trusted PropCrew without all the back-and-forth.'")
-    expect(landingSource).toContain("heading: 'Automate', body: 'Simplify routine follow-ups and coordination while you stay in control.'")
-    expect(landingSource).toContain("heading: 'Understand', body: 'See the financial picture of each property and your portfolio more clearly.'")
-  })
-
-  it('still collapses to 2x2 at the ≤980px breakpoint — unchanged from the previous round', () => {
-    const bp980Start = cssSource.indexOf('@media (max-width: 980px)')
-    const bp980 = cssSource.slice(bp980Start, cssSource.indexOf('@media (max-width: 560px)', bp980Start))
-    expect(bp980).toMatch(/\.landingPillarsGrid \{ grid-template-columns:\s*repeat\(2,/)
-  })
-})
+// Rescoped for Dynamic Homepage V1 — see the "8./9. Public Homepage V3"
+// describe blocks above for the current, authoritative assertions on
+// the four Organize/Coordinate/Automate/Understand concepts and their
+// mobile layout; this block's own literal checks were superseded by
+// those (duplicating them here would just be the same two checks
+// twice).
 
 describe('10. Public Homepage V3: hero copy, height, and CTA note are unaffected by this round\'s two small tweaks', () => {
   it('H1/tagline/sub/free-note text is still byte-for-byte the same', () => {

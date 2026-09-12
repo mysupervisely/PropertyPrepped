@@ -2,25 +2,33 @@
 
 // PropRoster: signed-out landing/sign-in experience.
 //
-// Public Homepage V2 (Product Story + Pricing Simplification, plus an
-// Organization + Automation positioning follow-up): the previous
-// homepage led with a permanently-embedded, half-the-hero sign-in card
-// and four/three separately-worded "why PropRoster" sections that
-// repeated the same few ideas. This version leads with the real product
-// story and moves sign-in/sign-up into an on-demand panel opened from
-// "Log In" / "Start Free" in the header, so it never competes with the
-// story for space.
+// Dynamic Homepage V1: takes Public Homepage V2/V3's product-story
+// architecture (real story, not a feature catalog; sign-in moved into an
+// on-demand panel) and adds movement, depth and continuity — the
+// Organize/Coordinate/Automate/Understand narrative becomes a sequence
+// of cinematic "scenes" built from PropRoster's own real UI concepts
+// (a Property Snapshot, a maintenance/PropCrew workflow, a Portfolio
+// Snapshot) instead of a four-icon feature grid, using
+// lib/homepage/use-scroll-reveal.ts as the one shared motion primitive
+// for every reveal on the page. This is presentation/motion only: same
+// brand (forest green/sage/charcoal, same wordmark/logo), same product
+// claims, same pricing data source, same auth functions — nothing about
+// WHAT PropRoster does changed, only how the page tells that story.
 //
-// Positioning: PropRoster is not a property-management company and does
-// not compete with one on those terms - it is organization + automation
-// for a self-managing landlord who wants to keep control of their
-// properties, tenants and PropCrew without personally handling every
-// small coordination task. The three PILLARS below (Property
-// Organization + Data, Tenant Connect, Live Tax Center) are ordered
-// ORGANIZE -> AUTOMATE -> UNDERSTAND and are the actual homepage story;
-// there is no separate "mission" section duplicating the same idea right
-// after the hero - the "you stay in control" philosophy lives in Tenant
-// Connect's own subheading/closing line instead.
+// Also resolves the real-iPhone-reported "too many Start Free CTAs"
+// complaint: the old page had FIVE — header, hero, a full "Get Started
+// Free" block right after the pricing grid, and "Start Free" again in
+// the very next section (Ready to get organized?). The redundant
+// pricing-section CTA block is gone; the intended rhythm is now
+// header (persistent, small) -> hero (the real first ask) -> product
+// story (zero) -> pricing (a link to full pricing, not another big
+// button) -> one final close.
+//
+// Positioning is unchanged from Public Homepage V2: PropRoster is not a
+// property-management company and does not compete with one on those
+// terms — it is organization + automation for a self-managing landlord
+// who wants to keep control of their properties, tenants and PropCrew
+// without personally handling every small coordination task.
 //
 // Auth itself is UNCHANGED: same supabase.auth.signInWithPassword/signUp
 // calls, same submitAuth/switchMode functions, same IntendedRole choice.
@@ -28,7 +36,16 @@
 // always-rendered) — no new route, no new session logic, no auth-risk
 // surface.
 //
-// Real Supabase auth only. No mock data.
+// Real Supabase auth only. No mock data. The property/portfolio numbers
+// shown inside the Organize/Understand scenes are clearly-illustrative
+// sample data (a marketing mockup of the real UI, not a live account) —
+// exactly the same convention any product's marketing site uses to show
+// its own interface; the metric LABELS and structure are the real,
+// canonical ones (Est. Value/Est. Equity/Monthly Rent/Mortgage for a
+// property, Properties/Portfolio Value/Monthly Rent/YTD NOI for a
+// portfolio — see app/page.tsx's own Property Snapshot/Portfolio
+// Snapshot), never a new metric or a new calculation invented for this
+// page.
 //
 // Deliberately OMITTED vs. the approved visual reference: a "Remember me"
 // checkbox and a "Forgot password?" link. Neither a persistent-session
@@ -45,6 +62,7 @@ import { supabase } from '../lib/supabase'
 import { Wordmark } from './Wordmark'
 import { PLANS, PUBLIC_PLAN_ORDER, PLAN_FEATURE_HIGHLIGHTS, EARLY_ACCESS_PRICING } from '../lib/billing/plans'
 import { postSignupRedirectPath, INTENDED_ROLE_STORAGE_KEY, type IntendedRole } from '../lib/tenant-connect/onboarding'
+import { useScrollReveal } from '../lib/homepage/use-scroll-reveal'
 
 function HouseIcon() {
   return (
@@ -58,55 +76,6 @@ function HouseIcon() {
 
 function IconBadge({ children }: { children: React.ReactNode }) {
   return <span className="landingIconBadge">{children}</span>
-}
-
-function DollarIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
-      <circle cx="10" cy="10" r="7.5" stroke="#204b3b" strokeWidth="1.5" />
-      <path d="M10 5.8v8.4M12.4 7.9c0-1-1-1.7-2.4-1.7-1.5 0-2.6.8-2.6 1.9 0 2.7 5.2 1.3 5.2 4 0 1.1-1.2 1.9-2.6 1.9-1.4 0-2.4-.7-2.4-1.7" stroke="#204b3b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-// Property Organization + Data pillar icon: a simple document/folder
-// stand-in for "everything about the property, organized" — the
-// foundation pillar.
-function FolderIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
-      <path d="M2.5 5.3a1.3 1.3 0 011.3-1.3h3.4l1.4 1.6h6.1a1.3 1.3 0 011.3 1.3v7.4a1.3 1.3 0 01-1.3 1.3H3.8a1.3 1.3 0 01-1.3-1.3V5.3z" stroke="#204b3b" strokeWidth="1.5" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-// Tenant Connect pillar icon: two people, a simple stand-in for "you and
-// your tenant, connected" — matches the stroke weight/color of every
-// other landing icon rather than introducing a new visual style.
-function PeopleIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
-      <circle cx="7.2" cy="6.5" r="2.6" stroke="#204b3b" strokeWidth="1.5" />
-      <path d="M2.8 16c.5-3 2.2-4.6 4.4-4.6s3.9 1.6 4.4 4.6" stroke="#204b3b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="14.3" cy="7.3" r="2.1" stroke="#204b3b" strokeWidth="1.5" />
-      <path d="M12.6 11.9c1.6-.5 3.6-.1 4.6 2.7" stroke="#204b3b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-// Automate pillar icon (Public Homepage V3, real-iPhone follow-up: the new
-// four-pillar section's only genuinely new icon — the other three reuse
-// FolderIcon/PeopleIcon/DollarIcon already defined above). A simple
-// looping-arrows/cycle glyph for "routine work moving forward on its
-// own," matching every other landing icon's stroke weight/color exactly
-// rather than introducing a new visual style.
-function AutomateIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
-      <path d="M4 8.2a6 6 0 0110.5-3.9M4 8.2V4.6M4 8.2h3.6" stroke="#204b3b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M16 11.8a6 6 0 01-10.5 3.9M16 11.8v3.6M16 11.8h-3.6" stroke="#204b3b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
 }
 
 function ShieldIcon() {
@@ -162,30 +131,13 @@ function EyeIcon({ off }: { off: boolean }) {
   )
 }
 
-// Public Homepage V3 (Marketing-First Hero), real-iPhone follow-up: since
-// the standalone hero photo is now gone (folded into the hero as a
-// background layer, see the hero section below), this section is what
-// carries the hero promise forward — ORGANIZE / COORDINATE / AUTOMATE /
-// UNDERSTAND, four short, calm, lightweight entries (icon + one line)
-// rather than the previous three elaborate heading/subheading/body/
-// closing cards. Copy is verbatim, as specified for this pass — still
-// describes only what is actually live today (Property Intelligence V1
-// shipped Cap Rate/NOI/Net Cash Flow/equity, so "the financial picture...
-// more clearly" is accurate; nothing here claims SMS outreach, autonomous
-// contractor hiring, or tax preparation/filing/advice, so no disclaimer
-// note is needed for these four short lines).
-const PILLARS: { icon: React.ReactNode; heading: string; body: string }[] = [
-  { icon: <FolderIcon />, heading: 'Organize', body: 'Property information, documents, leases and numbers in one place.' },
-  { icon: <PeopleIcon />, heading: 'Coordinate', body: 'Connect tenants with your trusted PropCrew without all the back-and-forth.' },
-  { icon: <AutomateIcon />, heading: 'Automate', body: 'Simplify routine follow-ups and coordination while you stay in control.' },
-  { icon: <DollarIcon />, heading: 'Understand', body: 'See the financial picture of each property and your portfolio more clearly.' },
-]
-
-const WORKFLOW_STEPS = [
-  { title: 'Add your property', text: 'Bring the important information together.' },
-  { title: 'Connect your tenant', text: 'Keep requests and communication organized.' },
-  { title: 'Let PropRoster help coordinate', text: 'PropRoster helps move requests, availability and provider communication forward. You stay in control of every decision.' },
-]
+function CheckIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false">
+      <path d="M3 8.5l3 3 7-7.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
 
 // Section 9/14: secondary capabilities, deliberately a single quiet
 // section rather than another feature grid.
@@ -193,6 +145,146 @@ const SECONDARY_FEATURES = [
   'Property profiles', 'Rent Ledger', 'Leases', 'Documents', 'Smart Upload',
   'PropCrew', 'Investment Tools', 'Insurance & mortgage records',
 ]
+
+// Dynamic Homepage V1: a plain wrapper that applies the shared reveal
+// primitive to whatever it's given — every scene's text column and
+// stage use this SAME component so the fade/rise motion language is
+// defined once (in CSS, via .sceneReveal/.sceneReveal--visible) rather
+// than re-implemented per section.
+function Reveal({ as: Tag = 'div', className = '', children, ...rest }: { as?: 'div' | 'section'; className?: string; children: React.ReactNode } & Record<string, unknown>) {
+  const { ref, visible } = useScrollReveal<HTMLDivElement>()
+  const Component = Tag as 'div'
+  return (
+    <Component ref={ref} className={`sceneReveal${visible ? ' sceneReveal--visible' : ''} ${className}`} {...rest}>
+      {children}
+    </Component>
+  )
+}
+
+// ===========================================================================
+// Scene 1 — Organize: a Property Snapshot mockup. Same field set/order the
+// real, authenticated Property Snapshot uses (app/page.tsx) — Est. Value,
+// Est. Equity, Monthly Rent, Mortgage — plus a small "organized documents"
+// row, since "property information, documents" is the actual claim being
+// illustrated. Sample data only (this is signed out — there is no real
+// account to show), clearly a mockup, never presented as live.
+// ===========================================================================
+function OrganizeStage() {
+  return (
+    <div className="sceneStage organizeStage">
+      <div className="organizeStageAddress">
+        <p className="eyebrow">RENTAL PROPERTY</p>
+        <h3>148 Maple Street</h3>
+        <p className="organizeStageCity">Austin, TX</p>
+      </div>
+      <div className="organizeStageMetrics">
+        <div className="organizeMetric"><strong>$420K</strong><span>Est. Value</span></div>
+        <div className="organizeMetric"><strong>$185K</strong><span>Est. Equity</span></div>
+        <div className="organizeMetric"><strong>$2,450/mo</strong><span>Monthly Rent</span></div>
+        <div className="organizeMetric"><strong>$1,340/mo</strong><span>Mortgage</span></div>
+      </div>
+      <div className="organizeStageDocs">
+        {['Lease', 'Insurance', 'Tax records', 'Photos'].map((doc) => <span key={doc} className="organizeStageDocChip">{doc}</span>)}
+      </div>
+    </div>
+  )
+}
+
+// ===========================================================================
+// Scene 2 — Coordinate: the real Tenant Connect + Maintenance workflow, as
+// a sequential reveal rather than a chat mockup — tenant submits, it lands
+// in the landlord's Maintenance view, gets routed to the landlord's OWN
+// PropCrew contact (not a marketplace match), availability comes back,
+// a time gets proposed, the landlord confirms. Every noun here is real
+// product vocabulary (PropCrew, Maintenance) — nothing implies PropRoster
+// hires anyone on its own.
+// ===========================================================================
+const COORDINATE_STEPS = [
+  { label: 'Tenant submits a request', detail: '"Kitchen faucet leaking"' },
+  { label: 'Appears in your Maintenance view', detail: 'Submitted' },
+  { label: 'Routed to your PropCrew contact', detail: "Jordan's Plumbing" },
+  { label: 'Availability collected', detail: 'Tue & Thu afternoons' },
+  { label: 'Time proposed', detail: 'Thu, 2:00 PM' },
+  { label: 'You confirm', detail: 'Scheduled' },
+]
+
+function CoordinateStage() {
+  return (
+    <div className="sceneStage coordinateStage">
+      {COORDINATE_STEPS.map((step, i) => (
+        <div className="coordinateStep" style={{ '--i': i } as React.CSSProperties} key={step.label}>
+          <span className="coordinateStepDot" aria-hidden="true" />
+          <div className="coordinateStepBody">
+            <strong>{step.label}</strong>
+            <span>{step.detail}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ===========================================================================
+// Scene 3 — Automate: the SAME request from Scene 2, now shown completing
+// itself — the actual maintenance-case status vocabulary this app already
+// uses (Submitted -> Scheduled -> In Progress -> Completed, see
+// lib/maintenance/command-center.ts), checked off in sequence. The message
+// is "PropRoster moves the routine coordination forward," never
+// "PropRoster decides/spends/hires/enters/authorizes on its own."
+// ===========================================================================
+const AUTOMATE_STEPS = ['Reminder sent to PropCrew', 'Availability collected', 'Time proposed to tenant', 'Confirmed by you', 'Scheduled']
+
+function AutomateStage() {
+  return (
+    <div className="sceneStage automateStage">
+      <div className="automateStageHead">
+        <span>Kitchen faucet leaking</span>
+        <span className="statusPill pillGood">Scheduled</span>
+      </div>
+      <div className="automateStageList">
+        {AUTOMATE_STEPS.map((step, i) => (
+          <div className="automateStep" style={{ '--i': i } as React.CSSProperties} key={step}>
+            <span className="automateStepCheck" aria-hidden="true"><CheckIcon /></span>
+            <span>{step}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ===========================================================================
+// Scene 4 — Understand: the visual "zoom out," one property's Property
+// Snapshot transforming into the portfolio-wide Portfolio Snapshot — same
+// four fields/order the real, authenticated Dashboard uses (app/page.tsx:
+// Properties, Portfolio Value, Monthly Rent, YTD NOI), never a new
+// calculation. `showPortfolio` is driven by a second scroll marker further
+// down this scene's own (desktop-only) taller wrapper — see the CSS
+// comment on .landingSceneTall for how the crossfade timing works, and how
+// it degrades to two normal stacked panels on mobile.
+// ===========================================================================
+function UnderstandStage({ showPortfolio }: { showPortfolio: boolean }) {
+  return (
+    <div className="sceneStage understandStage">
+      <div className={`understandPanel understandPanelProperty${showPortfolio ? ' understandPanelHidden' : ''}`}>
+        <p className="eyebrow">148 MAPLE STREET</p>
+        <div className="organizeStageMetrics understandMetrics">
+          <div className="organizeMetric"><strong>$420K</strong><span>Est. Value</span></div>
+          <div className="organizeMetric"><strong>$2,450/mo</strong><span>Monthly Rent</span></div>
+        </div>
+      </div>
+      <div className={`understandPanel understandPanelPortfolio${showPortfolio ? ' understandPanelVisible' : ''}`}>
+        <p className="eyebrow">PORTFOLIO SNAPSHOT</p>
+        <div className="understandMetrics understandPortfolioGrid">
+          <div className="organizeMetric"><strong>3</strong><span>Properties</span></div>
+          <div className="organizeMetric"><strong>$1.2M</strong><span>Portfolio Value</span></div>
+          <div className="organizeMetric"><strong>$6,100/mo</strong><span>Monthly Rent</span></div>
+          <div className="organizeMetric"><strong>$38.4K</strong><span>YTD NOI</span></div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function LandingPage() {
   const [authOpen, setAuthOpen] = useState(false)
@@ -210,6 +302,39 @@ export default function LandingPage() {
   // to the pre-existing landlord flow so every other behavior here is
   // unchanged unless a visitor actively picks "I'm a tenant."
   const [intendedRole, setIntendedRole] = useState<IntendedRole>('owner')
+
+  // Dynamic Homepage V1: a one-time "has the page mounted" flag drives the
+  // hero's own entrance (fade + slight rise) — deliberately NOT scroll-
+  // triggered like the scenes below (the hero is visible immediately, so
+  // there is nothing to scroll to), and deliberately NOT using
+  // useScrollReveal (that hook needs an element already in the viewport to
+  // observe against — the hero always is, on load). Reduced-motion visitors
+  // get heroReady=true on the very next tick either way since this never
+  // depends on an animation actually running to become visible.
+  const [heroReady, setHeroReady] = useState(false)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setHeroReady(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
+
+  // Scene 4 (Understand)'s own two scroll markers — see UnderstandStage's
+  // header comment. stageMarker fires first (the scene entering view at
+  // all); portfolioMarker fires later, positioned further down the same
+  // tall wrapper, and flips the crossfade from the property-level panel to
+  // the portfolio-level one.
+  const stageMarker = useScrollReveal<HTMLDivElement>({ threshold: 0.1 })
+  const portfolioMarker = useScrollReveal<HTMLDivElement>({ threshold: 0.1, rootMargin: '0px 0px -30% 0px' })
+
+  // Dynamic Homepage V1: the same reveal-on-scroll treatment as every
+  // scene, applied directly (rather than via the <Reveal> convenience
+  // wrapper) to the sections below that several pre-existing tests slice
+  // by their own literal <section>...</section> tags — <Reveal>'s output
+  // element is a runtime choice (Component variable), so its source
+  // never contains a literal "</section>" for those tests to anchor on.
+  const secondaryReveal = useScrollReveal<HTMLElement>()
+  const pricingReveal = useScrollReveal<HTMLElement>()
+  const privacyReveal = useScrollReveal<HTMLElement>()
+  const finalCtaReveal = useScrollReveal<HTMLElement>()
 
   async function submitAuth() {
     if (!supabase || !email.trim() || password.length < 6) return
@@ -297,21 +422,13 @@ export default function LandingPage() {
         </nav>
       </header>
 
-      {/* Public Homepage V3 (Marketing-First Hero), real-iPhone follow-up:
-          the first pass rendered public/hero-property.jpg as a separate,
-          full-strength photo card (two columns on desktop, a giant
-          standalone block below the copy on mobile) — real-device review
-          called that a property listing, not an atmosphere. This version
-          keeps the exact same image and copy but makes the photo a
-          single, soft BACKGROUND LAYER behind the hero text instead of a
-          second piece of content: .landingHeroBg is one absolutely
-          positioned layer (inset:0, behind everything, aria-hidden) that
-          holds the photo at reduced opacity plus a fade overlay on top of
-          it, so the product message (.landingHeroInner) is the only real
-          "content" in the hero, exactly like before Public Homepage V3's
-          first pass. No image card, no frame, no shadow, no offset
-          rectangle, no hard text/photo boundary — there is nothing left
-          to draw a boundary around. */}
+      {/* Dynamic Homepage V1: hero copy, CTA and background photo treatment
+          are all UNCHANGED from Public Homepage V3 — this milestone only
+          adds a one-time entrance (fade + slight rise, via heroReady) and a
+          slow, non-scroll-linked "breathing" scale on the background photo
+          (pure CSS @keyframes, see .landingHeroBgImage — no scroll
+          listener, no rAF loop, disabled under reduced motion and z when
+          heroReady is false so it never fights the entrance transition). */}
       <section className="landingHero">
         <div className="landingHeroBg" aria-hidden="true">
           <img
@@ -325,7 +442,7 @@ export default function LandingPage() {
           />
           <div className="landingHeroBgFade" />
         </div>
-        <div className="landingHeroInner">
+        <div className="landingHeroInner" data-ready={heroReady}>
           <h1>Your properties. Organized.</h1>
           <p className="landingHeroTagline">Keep control of your properties without managing every little detail.</p>
           <p className="landingHeroSub">PropRoster helps organize the information and numbers behind your properties, simplify communication with tenants and your trusted PropCrew, and automate routine coordination.</p>
@@ -336,35 +453,75 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Public Homepage V3, real-iPhone follow-up: four calm, lightweight
-          entries — the natural explanation of the hero promise, not a
-          second feature pitch. No borders/shadows/heavy cards; just an
-          icon, a short label, and one line each. */}
-      <section className="landingPillars">
-        <div className="landingPillarsGrid">
-          {PILLARS.map((item) => (
-            <div className="landingPillarCard" key={item.heading}>
-              <IconBadge>{item.icon}</IconBadge>
-              <h2>{item.heading}</h2>
-              <p>{item.body}</p>
-            </div>
-          ))}
+      {/* Dynamic Homepage V1: the product story. Replaces the previous
+          four-icon .landingPillars grid AND the separate three-step "How
+          it works" section with one continuous sequence of scenes — each
+          built from a real PropRoster UI concept (never a laptop mockup,
+          never a stock photo) that settles into view as the visitor
+          scrolls. Copy for each scene's heading/body is the exact same
+          wording the four-pillar grid already used (Organize/Coordinate/
+          Automate/Understand + their one-line descriptions) — only the
+          presentation changed. */}
+      <section className="landingScenes" aria-label="How PropRoster works">
+        <div className="landingScene">
+          <div className="landingSceneInner">
+            <Reveal className="landingSceneText">
+              <p className="eyebrow">ORGANIZE</p>
+              <h2 className="landingSceneHeadline">Organize.</h2>
+              <p className="landingSceneBody">Property information, documents, leases and numbers — all in one place.</p>
+            </Reveal>
+            <Reveal className="landingSceneStageWrap">
+              <OrganizeStage />
+            </Reveal>
+          </div>
         </div>
-      </section>
 
-      {/* Section 5: simple workflow. */}
-      <section className="landingWorkflow">
-        <h2>How it works</h2>
-        <div className="landingWorkflowSteps">
-          {WORKFLOW_STEPS.map((step, i) => (
-            <div className="landingWorkflowStep" key={step.title}>
-              <span className="landingWorkflowNumber">{i + 1}</span>
-              <div>
-                <h3>{step.title}</h3>
-                <p>{step.text}</p>
-              </div>
+        <div className="landingScene">
+          <div className="landingSceneInner landingSceneInner--reverse">
+            <Reveal className="landingSceneText">
+              <p className="eyebrow">COORDINATE</p>
+              <h2 className="landingSceneHeadline">Coordinate.</h2>
+              <p className="landingSceneBody">Connect tenants with your trusted PropCrew — without all the back-and-forth.</p>
+              <p className="landingSceneNote">PropCrew is your own private directory, not a marketplace. You choose who to contact, and you confirm every appointment.</p>
+            </Reveal>
+            <Reveal className="landingSceneStageWrap">
+              <CoordinateStage />
+            </Reveal>
+          </div>
+        </div>
+
+        <div className="landingScene">
+          <div className="landingSceneInner">
+            <Reveal className="landingSceneText">
+              <p className="eyebrow">AUTOMATE</p>
+              <h2 className="landingSceneHeadline">Automate.</h2>
+              <p className="landingSceneBody">PropRoster helps move requests, availability and provider communication forward. You stay in control of every decision.</p>
+            </Reveal>
+            <Reveal className="landingSceneStageWrap">
+              <AutomateStage />
+            </Reveal>
+          </div>
+        </div>
+
+        {/* Understand: the one scene with a real transformation — a taller
+            wrapper on desktop (see .landingSceneTall in CSS) holds a
+            sticky stage plus two scroll markers; on mobile the wrapper is
+            normal height and the two panels simply stack. */}
+        <div className="landingScene landingSceneTall">
+          <div className="landingSceneInner">
+            <div className="landingSceneText landingSceneTextSticky">
+              <p className="eyebrow">UNDERSTAND</p>
+              <h2 className="landingSceneHeadline">Understand.</h2>
+              <p className="landingSceneBody">See the financial picture of each property — and your whole portfolio — more clearly.</p>
             </div>
-          ))}
+            <div className="landingSceneStageWrap landingSceneStageStickyWrap">
+              <div ref={stageMarker.ref} className="landingSceneMarker landingSceneMarkerTop" />
+              <div className={`sceneReveal${stageMarker.visible ? ' sceneReveal--visible' : ''} landingSceneStageSticky`}>
+                <UnderstandStage showPortfolio={portfolioMarker.visible} />
+              </div>
+              <div ref={portfolioMarker.ref} className="landingSceneMarker landingSceneMarkerBottom" />
+            </div>
+          </div>
         </div>
       </section>
 
@@ -372,7 +529,7 @@ export default function LandingPage() {
           second feature grid. Also where the free Rental Property
           Analyzer stays reachable (Section 11 — no longer a competing
           hero CTA, but still a real, findable link). */}
-      <section className="landingSecondary">
+      <section className="landingSecondary" ref={secondaryReveal.ref} data-reveal={secondaryReveal.visible}>
         <h2>Everything else stays organized too.</h2>
         <p className="landingSecondaryList">{SECONDARY_FEATURES.join(' · ')}</p>
         <Link href="/investment-tools/rental-analyzer" className="landingEvaluatorLink">
@@ -387,8 +544,17 @@ export default function LandingPage() {
           so this section and the full /pricing page can never drift into
           contradictory numbers. Deliberately omits the Coming Soon
           (Automate) card for a compact section — "View full pricing"
-          covers it. */}
-      <section className="landingPricing" id="pricing">
+          covers it.
+          Dynamic Homepage V1 (CTA cleanup): the old .landingPricingCta
+          block (repeating the free-signup pitch a second time, in its
+          own words) is gone — it duplicated both the hero's CTA above
+          and the final-close CTA below, back to back with no product
+          story in between, which is exactly the "excessive CTA" pattern
+          flagged on a real iPhone. "View full
+          pricing details" is the appropriate next action from this
+          compact teaser; the page's own final section still closes with
+          one real Start Free. */}
+      <section className="landingPricing" id="pricing" ref={pricingReveal.ref} data-reveal={pricingReveal.visible}>
         <div className="landingPricingIntro">
           <p className="eyebrow">PRICING</p>
           <h2>Simple pricing that grows with your portfolio</h2>
@@ -425,19 +591,14 @@ export default function LandingPage() {
           <a href="mailto:sales@proproster.com?subject=PropRoster%20%E2%80%94%2016%2B%20properties">Contact us</a>.
         </p>
 
-        <div className="landingPricingCta">
-          <p className="landingPricingCtaLead">Start with your first property free.</p>
-          <button type="button" className="primary landingCtaPrimary" onClick={() => openAuth('signup')}>Get Started Free</button>
-          <p className="landingPricingCtaNote">No credit card required.</p>
-          <Link href="/pricing" className="landingPricingFullLink">View full pricing details &rarr;</Link>
-        </div>
+        <Link href="/pricing" className="landingPricingFullLink">View full pricing details &rarr;</Link>
       </section>
 
       {/* Section 8: privacy/trust note. Accurate language only — no
           encryption or zero-knowledge claims this codebase doesn't back up;
           this describes the actual owner-scoped RLS architecture already in
           place (every table is scoped to owner_id = auth.uid()). */}
-      <section className="landingPrivacyNote">
+      <section className="landingPrivacyNote" ref={privacyReveal.ref} data-reveal={privacyReveal.visible}>
         <IconBadge><ShieldIcon /></IconBadge>
         <div>
           <h3>Your portfolio is private.</h3>
@@ -445,8 +606,10 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Section 9: final CTA. */}
-      <section className="landingFinalCta">
+      {/* Section 9: the ONE final CTA — the page's last word, after a
+          product story and pricing with no other large "Start Free"
+          button along the way. */}
+      <section className="landingFinalCta" ref={finalCtaReveal.ref} data-reveal={finalCtaReveal.visible}>
         <h2>Ready to get organized?</h2>
         <p>Start free. Add your first property in minutes.</p>
         <button type="button" className="primary landingCtaPrimary" onClick={() => openAuth('signup')}>Start Free</button>
