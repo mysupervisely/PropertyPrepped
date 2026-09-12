@@ -101,7 +101,14 @@ describe('Phase C.3: no new calculation — every value still traces to the exac
   it('still assembles input via buildPropertyPerformanceInput + computePropertyPerformance exactly as before — no new Supabase query, no new formula', () => {
     const buildCallIdx = pageSource.indexOf('computePropertyPerformance(buildPropertyPerformanceInput({')
     expect(buildCallIdx).toBeGreaterThan(-1)
-    expect((pageSource.match(/computePropertyPerformance\(buildPropertyPerformanceInput\(\{/g) || []).length).toBe(1)
+    // Property Intelligence V1, Phase D (Portfolio Snapshot V1) added a
+    // SECOND call site — the exact same pipeline, run once per property
+    // for the Dashboard's own portfolio aggregation (see
+    // property-intelligence-v1-phase-d-wiring.test.ts) — not a second,
+    // competing formula. Two call sites to the SAME two functions is the
+    // expected, approved shape now; a count of 1 would mean Phase D
+    // either never shipped or reimplemented the pipeline a second time.
+    expect((pageSource.match(/computePropertyPerformance\(buildPropertyPerformanceInput\(\{/g) || []).length).toBe(2)
   })
 
   it('no arithmetic combining two engine fields was introduced anywhere in the snapshot card', () => {
@@ -211,28 +218,28 @@ describe('Phase C.3 follow-up (2nd real-device round): visible "Performance" sec
   })
 })
 
-describe('Phase C.3: the Dashboard\'s own Portfolio Snapshot is completely untouched (out of scope)', () => {
-  it('the Portfolio Snapshot section still uses its own pre-existing .snapshotMetrics/.portfolioSnapshot classes, unrelated to and unchanged by the new .propertySnapshot* classes', () => {
-    const portfolioIdx = pageSource.indexOf('className="snapshotMetrics"')
+describe('Phase C.3: the Dashboard\'s own Portfolio Snapshot uses independent, non-colliding CSS from the Property Snapshot', () => {
+  // Property Intelligence V1, Phase D (Portfolio Snapshot V1) later gave
+  // the Dashboard's own Portfolio Snapshot a real canonical-data overhaul
+  // (Properties/Portfolio Value/Monthly Rent/YTD NOI, replacing the old
+  // naive `totals.*` reduce) — see property-intelligence-v1-phase-d-
+  // wiring.test.ts for everything about ITS content/formula/coverage
+  // semantics. What this describe block still protects, unchanged since
+  // Phase C.3: the two features never share a class name, so a change to
+  // one page's tile CSS can never silently restyle the other's.
+  it('the Dashboard Portfolio Snapshot tiles use their own .portfolioSnapshot*-prefixed classes, never the Property Snapshot\'s .propertySnapshot* classes', () => {
+    const portfolioIdx = pageSource.indexOf('className="portfolioSnapshotGrid"')
     expect(portfolioIdx).toBeGreaterThan(-1)
-    const portfolioSlice = pageSource.slice(portfolioIdx, portfolioIdx + 700)
-    expect(portfolioSlice).toContain('{properties.length}')
-    expect(portfolioSlice).toContain('compactMoney(totals.value)')
-    expect(portfolioSlice).toContain('compactMoney(totals.rent)')
-    expect(portfolioSlice).toContain('compactMoney(totals.monthlyExpenses)')
-    // Uses the bare, un-prefixed class names — proves it was not migrated
-    // to (or accidentally caught by) the new .propertySnapshot* rules.
+    const portfolioSlice = pageSource.slice(portfolioIdx, portfolioIdx + 900)
+    expect(portfolioSlice).toContain('portfolioPerformance.propertyCount')
     expect(portfolioSlice).not.toContain('propertySnapshotMetric')
   })
 
-  it('the Dashboard\'s own bare .snapshotMetric/.snapshotMetrics/.portfolioSnapshot CSS rules are untouched — still their original flex/border-left layout, not the new grid pattern', () => {
-    expect(cssSource).toContain('.portfolioSnapshot { background: var(--surface); border: 1px solid var(--line); border-radius: 14px;')
-    expect(cssSource).toContain('.snapshotMetrics { display: flex; flex-wrap: wrap;')
-    expect(cssSource).toContain('.snapshotMetric { flex: 1 1 auto; min-width: 120px; padding: 0 18px; border-left: 1px solid var(--line); }')
-  })
-
-  it('no Portfolio Snapshot aggregation logic (totals.*, Net Cash Flow summing, Phase D scope) was added', () => {
-    expect(pageSource).not.toMatch(/totals\.(netCashFlow|noi|capRate)/i)
+  it('the two features\' tile CSS rules remain genuinely independent — .propertySnapshotMetric and .portfolioSnapshotMetric are two separate rules, never one aliasing the other', () => {
+    expect(cssSource).toContain('.propertySnapshotMetric {')
+    expect(cssSource).toContain('.portfolioSnapshotMetric {')
+    expect(cssSource).not.toMatch(/\.propertySnapshotMetric\s*,\s*\.portfolioSnapshotMetric/)
+    expect(cssSource).not.toMatch(/\.portfolioSnapshotMetric\s*,\s*\.propertySnapshotMetric/)
   })
 })
 

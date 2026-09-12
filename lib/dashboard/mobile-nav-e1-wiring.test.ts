@@ -195,11 +195,11 @@ describe('Dashboard: Needs Your Attention replaces the old standalone PropWatch 
   })
 })
 
-describe('Portfolio Snapshot is unchanged in substance (Section 4) — same four metrics, quieter toggle only', () => {
-  it('still exactly Property count / Est. Value / Monthly Income / Monthly Expenses — no metrics added, no charts', () => {
-    expect(pageSource).toContain('<span>Est. Value</span>')
-    expect(pageSource).toContain('<span>Monthly Income</span>')
-    expect(pageSource).toContain('<span>Monthly Expenses</span>')
+describe('Portfolio Snapshot is unchanged in substance (Section 4) — same four-metric shape, quieter toggle only', () => {
+  it('still exactly four metrics, no charts — Property Intelligence V1, Phase D (Portfolio Snapshot V1) replaced WHICH four (Properties/Portfolio Value/Monthly Rent/YTD NOI, canonical-data-backed) but not the "four quiet tiles, no analytics panel" shape this section originally established; see property-intelligence-v1-phase-d-wiring.test.ts for everything about the new content', () => {
+    expect(pageSource).toContain('<span>Portfolio Value</span>')
+    expect(pageSource).toContain('<span>Monthly Rent</span>')
+    expect(pageSource).not.toMatch(/<canvas|<svg.*chart|Chart\.js|recharts/i)
   })
 
   it('the Hide/Show toggle still works the same way, just visually quieter (no bordered white pill)', () => {

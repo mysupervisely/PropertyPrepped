@@ -754,10 +754,9 @@ h2, h3, p { margin-top: 0; }
 }
 /* Portfolio Snapshot — compact homepage summary (replaces the old
    .portfolioStats grid of 7 individually-carded stats, which felt heavy
-   and competed with the property portfolio below it). One light card,
-   one horizontal row of metrics on desktop, wraps to a clean 2x2 on
-   tablet/mobile. Deliberately no per-metric card/border/icon — a quick
-   glance, not the primary content. */
+   and competed with the property portfolio below it). One light card;
+   deliberately no per-metric border/icon — a quick glance, not the
+   primary content. */
 .portfolioSnapshot { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 20px 16px; margin: 18px 0 30px; }
 .portfolioSnapshotHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .portfolioSnapshotHead h2 { margin: 0; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
@@ -768,15 +767,29 @@ h2, h3, p { margin-top: 0; }
 .snapshotToggle { flex-shrink: 0; border: 0; background: transparent; color: var(--muted); font-size: 12px; font-weight: 650; padding: 4px 2px; }
 .snapshotToggle:hover { color: var(--brand); }
 .snapshotCollapsedSummary { margin: 4px 0 0; color: var(--text); font-size: 14px; font-weight: 650; }
-.snapshotMetrics { display: flex; flex-wrap: wrap; margin-top: 12px; }
-.snapshotMetric { flex: 1 1 auto; min-width: 120px; padding: 0 18px; border-left: 1px solid var(--line); }
-.snapshotMetric:first-child { border-left: 0; padding-left: 0; }
-.snapshotMetric strong { display: block; font-size: 20px; font-weight: 700; letter-spacing: -0.4px; line-height: 1.25; white-space: nowrap; }
-.snapshotMetric span { display: block; font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+/* Property Intelligence V1, Phase D (Portfolio Snapshot V1): replaces
+   the old border-left divider-strip row (.snapshotMetrics/.snapshotMetric)
+   with the same quiet TILE language the individual Property Snapshot
+   already established (Property Intelligence V1, Phase C.3) — light
+   neutral fill, rounded corners, no border, no shadow. Deliberately a
+   SEPARATE class name from .propertySnapshotMetric (same visual values,
+   independent stylesheet ownership — a change to one page's tiles is
+   never silently coupled to the other's). 4 across on desktop/tablet,
+   2x2 on mobile — four short, equally-weighted facts, never a hierarchy
+   that needs more than one row. */
+.portfolioSnapshotGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.portfolioSnapshotMetric { display: flex; flex-direction: column; justify-content: center; gap: 3px; min-width: 0; background: var(--bg); border-radius: 12px; padding: 12px 14px; min-height: 76px; }
+.portfolioSnapshotMetric strong { font-size: 20px; font-weight: 700; letter-spacing: -.3px; line-height: 1.15; overflow-wrap: break-word; }
+.portfolioSnapshotMetric span { font-size: 12px; color: var(--muted); font-weight: var(--weight-medium); }
+/* The one genuinely new piece of UI Phase D adds: a quiet coverage note,
+   shown only when a tile is partial (see portfolioCoverageNote() in
+   app/page.tsx) — complete coverage and "—" (fully unavailable) both
+   render with no extra line, so this never adds clutter to a clean
+   number. */
+.portfolioSnapshotCoverageNote { font-size: 10.5px; color: var(--muted); }
 @media (max-width: 760px) {
-  .snapshotMetric { flex: 1 1 45%; min-width: 0; border-left: 0; padding: 10px 0 0; margin-top: 10px; border-top: 1px solid var(--line); }
-  .snapshotMetric:nth-child(-n+2) { padding-top: 0; margin-top: 0; border-top: 0; }
-  .snapshotMetric strong { white-space: normal; font-size: 18px; }
+  .portfolioSnapshotGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 460px) {
   /* Mobile Dashboard Spacing Micro-Fix: 18px top margin -> 8px on
@@ -785,7 +798,7 @@ h2, h3, p { margin-top: 0; }
      up the wasted gap after the greeting, without touching the 30px
      bottom margin (spacing before PropWatch) or any other value. */
   .portfolioSnapshot { padding: 13px 16px 15px; margin-top: 8px; }
-  .snapshotMetric strong { font-size: 17px; }
+  .portfolioSnapshotMetric strong { font-size: 18px; }
 }
 
 /* Milestone 16: Landlord Command Center — Needs Attention / Upcoming /

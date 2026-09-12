@@ -166,7 +166,14 @@ describe('Property Intelligence V1, Phase C — wiring', () => {
   })
 
   it('11c. the engine input is assembled from data this page already loaded — no new Supabase query added for Phase C', () => {
-    const buildCallIdx = pageSource.indexOf('computePropertyPerformance(buildPropertyPerformanceInput({')
+    // Property Intelligence V1, Phase D (Portfolio Snapshot V1) added an
+    // EARLIER call site (the Dashboard's own portfolio aggregation loop,
+    // near the top of the component) — this test is specifically about
+    // the per-selected-property Overview tab's own call, so it's scoped
+    // to start searching only after the `if (selected) {` boundary,
+    // rather than relying on this being the first occurrence in the file.
+    const selectedBranchIdx = pageSource.indexOf('if (selected) {')
+    const buildCallIdx = pageSource.indexOf('computePropertyPerformance(buildPropertyPerformanceInput({', selectedBranchIdx)
     expect(buildCallIdx).toBeGreaterThan(-1)
     const buildCallBlock = pageSource.slice(buildCallIdx, pageSource.indexOf('}))', buildCallIdx))
     expect(buildCallBlock).not.toMatch(/supabase\s*\.\s*from\(/)
