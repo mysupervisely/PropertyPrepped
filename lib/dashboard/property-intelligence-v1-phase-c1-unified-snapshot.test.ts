@@ -83,7 +83,11 @@ describe('Phase C.1: the "Rent Unknown" vs. known-rent contradiction is fixed at
   })
 
   it('the hero rent-status pill is suppressed when status is Unknown but the canonical rent amount IS known', () => {
-    expect(heroSlice).toContain("{currentRentRow && !(currentRentRow.status === 'Unknown' && rentAmountKnown) && <span className={`statusPill ${rentStatusPillClass(currentRentRow.status)}`}>Rent {currentRentRow.status}</span>}")
+    // Mobile Property Section Selector V1, Part B: the rendered word
+    // changed from the raw status (currentRentRow.status) to
+    // rentStatusLabel(currentRentRow.status) — same suppression
+    // condition, same guard, just a presentation-only label wrapper.
+    expect(heroSlice).toContain("{currentRentRow && !(currentRentRow.status === 'Unknown' && rentAmountKnown) && <span className={`statusPill ${rentStatusPillClass(currentRentRow.status)}`}>Rent {rentStatusLabel(currentRentRow.status)}</span>}")
   })
 
   it('the Tenancy section\'s rent-status pill gets the same fix, not a second/different rule', () => {

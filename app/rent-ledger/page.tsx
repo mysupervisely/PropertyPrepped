@@ -51,6 +51,18 @@ function rentStatusPillClass(status: RentStatus): string {
   return 'pillNeutral' // Upcoming, Unknown
 }
 
+// Mobile Property Section Selector V1, Part B — same presentation-only
+// rent-status label clarity as app/page.tsx's own rentStatusLabel (this
+// legacy compatibility route keeps its own copy of rentStatusPillClass
+// too, same existing pattern): 'Unknown' means no due date could be
+// derived for this lease/period — never that a payment wasn't
+// recorded — so it renders as "Due date unavailable" instead. See
+// app/page.tsx's rentStatusLabel for the full canonical-source
+// explanation; RentStatus itself and deriveRentStatus are unchanged.
+function rentStatusLabel(status: RentStatus): string {
+  return status === 'Unknown' ? 'Due date unavailable' : status
+}
+
 type PropertyRef = { id: string; address: string; city: string; property_type: string }
 type LeaseRef = { id: string; property_id: string; tenant_name: string; monthly_rent: number; rent_due_day: number | null; start_date: string; end_date: string }
 type PaymentRow = {
@@ -276,7 +288,7 @@ function RentLedgerWorkspace({ user }: { user: User }) {
             return (
               <article className="rentLedgerRow" key={row.leaseId}>
                 <button className="rentLedgerRowSummary" onClick={() => setExpandedLeaseId(expanded ? null : row.leaseId)} aria-expanded={expanded}>
-                  <span className={`statusPill ${rentStatusPillClass(row.status)}`}>{row.status}</span>
+                  <span className={`statusPill ${rentStatusPillClass(row.status)}`}>{rentStatusLabel(row.status)}</span>
                   <span className="rentLedgerRowProperty">{row.propertyLabel}</span>
                   <span className="rentLedgerRowTenant">Tenant: {row.tenantName}</span>
                   <span className="rentLedgerRowDue">{row.dueDate ? `Due ${new Date(`${row.dueDate}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : 'Rent due day not entered'}</span>
