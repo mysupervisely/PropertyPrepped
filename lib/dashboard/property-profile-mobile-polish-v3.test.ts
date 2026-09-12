@@ -61,10 +61,14 @@ describe('Section 5: the primary tab nav reflects Phase D\'s Maintenance promoti
     expect(tabsRule).not.toContain('overflow-x')
   })
 
-  it('the old fixed 3-column (2-row) mobile tab grid is gone, replaced by a single horizontally scrollable row (Phase D.1)', () => {
+  it('the old fixed 3-column (2-row) mobile tab grid is gone; Mobile Property Section Selector V1 replaced Phase D.1\'s own horizontally scrollable row with a compact selector below 761px', () => {
     expect(cssSource).not.toContain('.tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }')
-    expect(cssSource).toContain('.tabs { display: flex; grid-template-columns: none;')
-    expect(cssSource).toMatch(/\.tabs \{ display: flex;[^}]*overflow-x: auto/)
+    // Phase D.1's horizontal scroller (`.tabs { display: flex; ...
+    // overflow-x: auto ... }`) is gone in turn — see
+    // mobile-property-section-selector-v1-wiring.test.ts for the
+    // current, authoritative mobile-nav assertions.
+    expect(cssSource).not.toMatch(/\.tabs \{ display: flex;[^}]*overflow-x: auto/)
+    expect(cssSource).toMatch(/@media \(max-width: 760px\) \{\s*\n[\s\S]*?\.tabs \{ display: none; \}/)
   })
 })
 

@@ -53,15 +53,17 @@ describe('All seven property sections exist and are always rendered in the tab n
 })
 
 // Originally "No horizontal scrolling/swiping for the six-section
-// property navigation." Simplification + Maintenance Workspace V2,
-// Phase D.1 deliberately introduces a horizontally scrollable mobile
-// tab strip: seven equal-weight primary tabs no longer fit the old
-// fixed 3-per-row grid without leaving a lone, oddly stretched 7th tab
-// on its own mostly-empty row — a single scrollable row was judged
-// less broken-looking than that, and was one of the two approaches
-// that phase's own brief offered. Desktop/default stays a plain,
-// non-scrolling grid (ample width for seven short labels in one row).
-describe('Property navigation at mobile widths (Phase D.1: horizontally scrollable, desktop/default stays a plain grid)', () => {
+// property navigation," then Phase D.1 deliberately introduced a
+// horizontally scrollable mobile tab strip instead (seven equal-weight
+// primary tabs no longer fit the old fixed 3-per-row grid). Mobile
+// Property Section Selector V1 replaces THAT horizontal scroller in
+// turn — on a real iPhone it let Documents/Tax/PropCrew disappear
+// off-screen with no visual hint how many more sections existed. See
+// lib/dashboard/mobile-property-section-selector-v1-wiring.test.ts for
+// the current, authoritative assertions on the mobile selector;
+// desktop's plain non-scrolling grid (below) is unchanged by that
+// milestone.
+describe('Property navigation at desktop/default width (superseded at mobile widths by Mobile Property Section Selector V1)', () => {
   it('.tabs is a non-scrolling grid at desktop/default width', () => {
     const rule = cssSource.match(/\.tabs\s*\{[^}]*\}/)?.[0] || ''
     expect(rule).toContain('display: grid')
@@ -69,17 +71,7 @@ describe('Property navigation at mobile widths (Phase D.1: horizontally scrollab
     expect(rule).not.toContain('display: flex')
   })
 
-  it('the 760px breakpoint switches .tabs to a single horizontally scrollable row, replacing the old fixed 3-column grid', () => {
-    const mobileBlocks = [...cssSource.matchAll(/@media \(max-width: (760|460)px\) \{([\s\S]*?)\n\}/g)]
-    expect(mobileBlocks.length).toBeGreaterThan(0)
-    const tabsRulesInMobileBlocks = mobileBlocks
-      .map((m) => m[2].match(/\.tabs(?:\s+button)?\s*\{[^}]*\}/g) || [])
-      .flat()
-    expect(tabsRulesInMobileBlocks.some((r) => r.includes('overflow-x: auto'))).toBe(true)
-    expect(tabsRulesInMobileBlocks.some((r) => r.includes('grid-template-columns: repeat(3'))).toBe(false)
-  })
-
-  it('no carousel/"more menu" class names were introduced for the property nav — a plain scrollable row, not a new interaction pattern', () => {
+  it('no carousel/"more menu" class names were introduced for the property nav', () => {
     expect(pageSource).not.toMatch(/propertyTabsCarousel|propertyTabsMore|propertyTabsOverflow/)
   })
 })

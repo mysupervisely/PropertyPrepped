@@ -526,6 +526,25 @@ function rentStatusPillClass(status: RentStatus): string {
   return 'pillNeutral' // Upcoming, Unknown
 }
 
+// Mobile Property Section Selector V1, Part B — rent-status label
+// clarity. deriveRentStatus() (lib/rent-ledger/status.ts) returns
+// 'Unknown' in exactly one situation: obligation.dueDate === null,
+// meaning no due date could be derived for this lease/period at all —
+// never that a payment wasn't recorded, and never anything about
+// whether the rent AMOUNT is known (that's the separate
+// rentAmountKnown check elsewhere in this file). Two distinct
+// canonical causes collapse into that same null (see
+// RentObligationReason in status.ts: 'missing_rent_due_day' — no
+// rent_due_day on file — or 'invalid_lease_dates' — the lease's own
+// start/end dates don't parse), and the UI has no reason code to tell
+// them apart without a business-logic change, so "Due date
+// unavailable" is used rather than overstating that only the due day
+// is missing. Presentation only — RentStatus itself, deriveRentStatus,
+// and every other status word are unchanged.
+function rentStatusLabel(status: RentStatus): string {
+  return status === 'Unknown' ? 'Due date unavailable' : status
+}
+
 /** Tenant name(s)/phone/email — normalizeTenants() already returns an array so this renders correctly whether a future schema adds true multi-tenant support. */
 function TenantContactList({ lease }: { lease: LeaseRecord }) {
   const tenants = normalizeTenants(lease)
@@ -830,6 +849,28 @@ export default function Home() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('Overview')
+  // Mobile Property Section Selector V1: the mobile-only compact
+  // "current section ▾" control that replaces the horizontally
+  // scrolling .tabs strip below 761px (desktop keeps the full .tabs
+  // row unchanged). Local, controlled open state — same outside-click-
+  // to-close convention as components/AuthNavMenu.tsx.
+  const [mobileTabMenuOpen, setMobileTabMenuOpen] = useState(false)
+  const mobileTabMenuRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!mobileTabMenuOpen) return
+    function handleClickOutside(e: MouseEvent) {
+      if (mobileTabMenuRef.current && !mobileTabMenuRef.current.contains(e.target as Node)) setMobileTabMenuOpen(false)
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMobileTabMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [mobileTabMenuOpen])
   const [docCategory, setDocCategory] = useState('All')
   const [uploadCategory, setUploadCategory] = useState('Other')
   const [isDragging, setIsDragging] = useState(false)
@@ -2575,7 +2616,7 @@ export default function Home() {
               <div><p className="eyebrow">{selected.property_type.toUpperCase()}</p><h1>{selected.address}</h1><p className="heroCity">{selected.city}</p>
                 <div className="heroStatusPills">
                   {occupancy && <span className={`statusPill ${occupancyPillClass(occupancy)}`}>{occupancy === 'Occupancy unknown' ? 'Unknown' : occupancy === 'Upcoming tenancy' ? 'Upcoming' : occupancy}</span>}
-                  {currentRentRow && !(currentRentRow.status === 'Unknown' && rentAmountKnown) && <span className={`statusPill ${rentStatusPillClass(currentRentRow.status)}`}>Rent {currentRentRow.status}</span>}
+                  {currentRentRow && !(currentRentRow.status === 'Unknown' && rentAmountKnown) && <span className={`statusPill ${rentStatusPillClass(currentRentRow.status)}`}>Rent {rentStatusLabel(currentRentRow.status)}</span>}
                 </div>
               </div>
               {/* Investment Analysis is a related but secondary action next
@@ -2589,14 +2630,54 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Property Profile Mobile Redesign V2: a non-scrolling grid, not
-            the old horizontally-swiping flex row — all six sections are
-            always visible together (3x2 on mobile via .tabs' own
-            @media rule, one row on wider layouts). role="tablist"/"tab"
-            matches the same semantic pattern the Rent/Documents/Details
-            sub-tabs below already use. Tab identity, state and routing
-            (activeTab/setActiveTab, ?tab= deep links) are unchanged. */}
+        {/* role="tablist"/"tab" matches the same semantic pattern the
+            Rent/Documents/Details sub-tabs below already use. Tab
+            identity, state and routing (activeTab/setActiveTab, ?tab=
+            deep links) are unchanged and shared with the mobile
+            selector below — both read/write the exact same `tabs`
+            array and activeTab state, never a second source of truth.
+            Desktop-only now (Mobile Property Section Selector V1
+            replaced the horizontally-scrolling mobile version of this
+            same strip with .mobilePropertyNav below — see its own
+            comment). */}
         <nav className="tabs" role="tablist" aria-label="Property sections">{tabs.map((tab) => <button key={tab} role="tab" aria-selected={activeTab === tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
+
+        {/* Mobile Property Section Selector V1: below 761px (the exact
+            width .tabs used to become a horizontal scroller at — see
+            that rule's own removal in globals.css), the seven-tab strip
+            no longer fits without sections disappearing off-screen.
+            This compact "current section ▾" control replaces it at
+            that breakpoint only; desktop keeps .tabs above, hidden here
+            via CSS, not a second navigation implementation — same
+            `tabs` array, same activeTab/setActiveTab. Opens a small
+            anchored menu (not a full-screen sheet — six/seven short
+            labels don't need one), closed by an outside click, Escape,
+            or picking a section. */}
+        <div className="mobilePropertyNav" ref={mobileTabMenuRef}>
+          <button
+            type="button"
+            className="mobilePropertyNavTrigger"
+            aria-haspopup="listbox"
+            aria-expanded={mobileTabMenuOpen}
+            aria-label={`Property section: ${activeTab}. Change section`}
+            onClick={() => setMobileTabMenuOpen((open) => !open)}
+          >
+            <span>{activeTab}</span>
+            <span className="mobilePropertyNavChevron" aria-hidden="true">⌄</span>
+          </button>
+          {mobileTabMenuOpen && (
+            <ul className="mobilePropertyNavMenu" role="listbox" aria-label="Property sections">
+              {tabs.map((tab) => (
+                <li key={tab} role="option" aria-selected={activeTab === tab}>
+                  <button type="button" className={activeTab === tab ? 'active' : ''} onClick={() => { setActiveTab(tab); setMobileTabMenuOpen(false) }}>
+                    <span className="mobilePropertyNavCheck" aria-hidden="true">{activeTab === tab ? '✓' : ''}</span>
+                    {tab}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
         {activeTab === 'Overview' && <section className="workspaceContent workspaceContentTight">
           <div className="sectionHead workspaceHeading workspaceHeadingTight"><div><p className="eyebrow">OVERVIEW</p><h2>At a glance</h2></div><button className="secondary" onClick={() => openEditProperty(selected)}>Edit property facts</button></div>
@@ -2798,7 +2879,7 @@ export default function Home() {
                     a "Rent Unknown" badge (that status only means the
                     payment due-date can't be determined, not that the
                     amount is unknown). See rentAmountKnown above. */}
-                {currentRentRow && <div><span>{formatPeriodLabel(currentRentPeriod)} rent</span><strong>{money(currentRentRow.expectedAmount)}</strong> {!(currentRentRow.status === 'Unknown' && rentAmountKnown) && <span className={`statusPill ${rentStatusPillClass(currentRentRow.status)}`}>{currentRentRow.status}</span>}</div>}
+                {currentRentRow && <div><span>{formatPeriodLabel(currentRentPeriod)} rent</span><strong>{money(currentRentRow.expectedAmount)}</strong> {!(currentRentRow.status === 'Unknown' && rentAmountKnown) && <span className={`statusPill ${rentStatusPillClass(currentRentRow.status)}`}>{rentStatusLabel(currentRentRow.status)}</span>}</div>}
               </div>
               <button className="secondary overviewSectionAction" onClick={() => { setActiveTab('Rent'); setRentSubTab('Lease') }}>Open Rent</button>
             </section>
@@ -2954,7 +3035,7 @@ export default function Home() {
                 <div className="rentThisMonthCard" key={row.leaseId}>
                   <div className="rentThisMonthHead">
                     <div><p className="eyebrow">RENT — {formatPeriodLabel(currentRentPeriod).toUpperCase()}</p><h3>{row.tenantName}</h3></div>
-                    <span className={`statusPill ${rentStatusPillClass(row.status)}`}>{row.status}</span>
+                    <span className={`statusPill ${rentStatusPillClass(row.status)}`}>{rentStatusLabel(row.status)}</span>
                   </div>
                   <div className="recordMetrics">
                     <div><span>Expected</span><strong>{money(row.expectedAmount)}</strong></div>
@@ -3494,7 +3575,7 @@ export default function Home() {
               <button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button>
               <div className="miniStats">
                 <div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div>
-                {propertyRentRow ? <div><span>Rent status</span><strong><span className={`statusPill ${rentStatusPillClass(propertyRentRow.status)}`}>{propertyRentRow.status}</span></strong></div> : <div><span>Value</span><strong>{money(property.estimated_value)}</strong></div>}
+                {propertyRentRow ? <div><span>Rent status</span><strong><span className={`statusPill ${rentStatusPillClass(propertyRentRow.status)}`}>{rentStatusLabel(propertyRentRow.status)}</span></strong></div> : <div><span>Value</span><strong>{money(property.estimated_value)}</strong></div>}
               </div>
               {propertyAlertCount > 0 && <button className="cardAlertBadge" onClick={() => openProperty(property.id, 'Overview')}>{propertyAlertCount} alert{propertyAlertCount === 1 ? '' : 's'} need{propertyAlertCount === 1 ? 's' : ''} attention</button>}
               <div className="cardActions">
