@@ -352,3 +352,57 @@ describe('10. Public Homepage V3: hero copy, height, and CTA note are unaffected
     expect(heroSlice).toContain('<p className="landingHeroFreeNote">Start with your first property free. No credit card required.</p>')
   })
 })
+
+// Public Homepage V3, real-iPhone follow-up (3rd round): a real iPhone
+// review liked the overall direction but found the hero CTA button
+// visually offset/floating to the left on mobile, even though the
+// h1/tagline/paragraph above it are correctly left-aligned. This centers
+// just the CTA group (button + free-property note) at the existing
+// mobile breakpoint — not the whole hero column, not desktop.
+describe('1-6. Public Homepage V3: mobile hero CTA group is centered (3rd round)', () => {
+  const bp560Start = cssSource.indexOf('@media (max-width: 560px)', cssSource.indexOf('.landingHero {'))
+  const bp560End = cssSource.indexOf('\n}', cssSource.indexOf('.landingSignInCard { padding: 24px 18px', bp560Start)) + 2
+  const bp560 = cssSource.slice(bp560Start, bp560End)
+
+  it('1. the hero Start Free button still exists, unchanged copy/onClick', () => {
+    const heroStart = landingSource.indexOf('<section className="landingHero">')
+    const heroEnd = landingSource.indexOf('</section>', heroStart) + '</section>'.length
+    const heroSlice = landingSource.slice(heroStart, heroEnd)
+    expect(heroSlice).toContain("onClick={() => openAuth('signup')}>Start Free</button>")
+  })
+
+  it('2. at the mobile breakpoint, the CTA group is centered — .landingHeroCtas switches from flex-start to center', () => {
+    expect(bp560).toContain('.landingHeroCtas { justify-content: center; }')
+    // The base/desktop rule stays flex-start — this is an override, not a
+    // replacement of the shared rule.
+    const baseCtasRule = cssSource.match(/\.landingHeroCtas \{[^}]*\}/)?.[0] || ''
+    expect(baseCtasRule).toContain('justify-content: flex-start')
+  })
+
+  it('3. the free-property note centers along with the button at the same breakpoint', () => {
+    expect(bp560).toContain('.landingHeroFreeNote { text-align: center; }')
+  })
+
+  it('4. desktop CTA alignment is untouched — the centering override lives only inside the ≤560px block, never at the base rule or the ≤980px block', () => {
+    const beforeMediaQueries = cssSource.slice(0, cssSource.indexOf('@media (max-width: 980px)'))
+    expect(beforeMediaQueries).not.toMatch(/\.landingHeroCtas\s*\{[^}]*justify-content:\s*center/)
+    const bp980Start = cssSource.indexOf('@media (max-width: 980px)')
+    const bp980 = cssSource.slice(bp980Start, cssSource.indexOf('@media (max-width: 560px)', bp980Start))
+    expect(bp980).not.toMatch(/\.landingHeroCtas/)
+  })
+
+  it('the button keeps its own intrinsic size — no width:100%/flex-grow was added, so it does not become full-width as a side effect of centering', () => {
+    expect(bp560).not.toMatch(/\.landingHeroCtas[^}]*width:\s*100%/)
+    expect(bp560).not.toMatch(/\.landingCtaPrimary\s*\{[^}]*width:\s*100%/)
+  })
+
+  it('5. the mobile header still has no Start Free button — unaffected by this round', () => {
+    expect(bp560).toContain('.landingNavStartFree { display: none; }')
+  })
+
+  it("h1/tagline/paragraph above the CTA stay left-aligned — only the CTA group centers, not the whole hero column", () => {
+    expect(bp560).not.toMatch(/\.landingHeroInner\s*\{[^}]*text-align:\s*center/)
+    const innerRule = cssSource.match(/\.landingHeroInner \{[^}]*\}/)?.[0] || ''
+    expect(innerRule).toContain('text-align: left')
+  })
+})

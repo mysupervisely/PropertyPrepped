@@ -1425,6 +1425,16 @@ h2, h3, p { margin-top: 0; }
   .landingNavStartFree { display: none; }
   .landingHero { padding: 44px 16px 40px; }
   .landingHeroInner h1 { letter-spacing: -0.02em; }
+  /* Public Homepage V3, real-iPhone follow-up (3rd round): the CTA
+     button read as visually offset/floating to the left on a real
+     iPhone, even though the h1/tagline/paragraph above it are correctly
+     left-aligned. Centering just the CTA group (button + free-property
+     note) — not the whole .landingHeroInner column — matches the
+     approved mobile hierarchy: copy stays left-aligned, only the
+     button+note pair centers underneath it. Desktop is untouched: this
+     rule lives only inside this ≤560px block. */
+  .landingHeroCtas { justify-content: center; }
+  .landingHeroFreeNote { text-align: center; }
   .landingPillars { padding: 40px 16px 4px; }
   .landingWorkflow { padding: 40px 16px; }
   .landingSecondary { padding: 32px 16px; }
