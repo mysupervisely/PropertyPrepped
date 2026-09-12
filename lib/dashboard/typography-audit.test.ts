@@ -41,12 +41,15 @@ describe('Global h1 letter-spacing is proportional (em-relative), not a fixed px
 
   it('the landing hero h1 (its own clamp()) is also em-relative, base and mobile override alike', () => {
     // Public Homepage V2 restructured the hero (no more .landingHeroHeadline
-    // wrapper — the h1 now sits directly in .landingHeroContent), but the
-    // same underlying invariant this guard protects (proportional,
-    // em-relative letter-spacing under a responsive clamp(), at both the
-    // base rule and its mobile override) is unchanged.
-    expect(CSS).toMatch(/\.landingHeroContent h1 \{[^}]*letter-spacing: -0\.\d+em/)
-    expect(CSS).toMatch(/\.landingHeroContent h1 \{ letter-spacing: -0\.\d+em; \}/)
+    // wrapper — the h1 sat directly in .landingHeroContent); Public
+    // Homepage V3's real-iPhone follow-up renamed that wrapper again, to
+    // .landingHeroInner (now a background-photo-layer hero, not a
+    // two-column grid), but the same underlying invariant this guard
+    // protects (proportional, em-relative letter-spacing under a
+    // responsive clamp(), at both the base rule and its mobile override)
+    // is unchanged.
+    expect(CSS).toMatch(/\.landingHeroInner h1 \{[^}]*letter-spacing: -0\.\d+em/)
+    expect(CSS).toMatch(/\.landingHeroInner h1 \{ letter-spacing: -0\.\d+em; \}/)
   })
 
   it('no copy/markup workaround (non-breaking spaces, manual <br> mid-sentence) was used to paper over the spacing instead of fixing the CSS', () => {
