@@ -88,7 +88,11 @@ describe('Phase C.1: the "Rent Unknown" vs. known-rent contradiction is fixed at
 
   it('the Tenancy section\'s rent-status pill gets the same fix, not a second/different rule', () => {
     const tenancyIdx = pageSource.indexOf('<h2 className="overviewSectionHeading">Tenancy</h2>')
-    const tenancySlice = pageSource.slice(tenancyIdx, tenancyIdx + 1200)
+    // Widened from the original 1200 (Desktop Property Page Quiet Layout
+    // V1 added an explanatory comment ahead of the tenancyGrid container
+    // between the heading and the rent-status pill) — the pill's fix
+    // itself is unchanged, just further from the heading now.
+    const tenancySlice = pageSource.slice(tenancyIdx, tenancyIdx + 1800)
     expect(tenancySlice).toContain("!(currentRentRow.status === 'Unknown' && rentAmountKnown)")
   })
 

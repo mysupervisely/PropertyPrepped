@@ -2781,7 +2781,15 @@ export default function Home() {
           {selected.property_type === 'Rental Property' && (
             <section className="overviewInfoSection">
               <h2 className="overviewSectionHeading">Tenancy</h2>
-              <div className="detailRows">
+              {/* Desktop Property Page Quiet Layout V1: same .detailRows
+                  fields, values, conditionals and rent-status pill as
+                  before — tenancyGrid only changes the CONTAINER at
+                  desktop widths (a horizontal band of quiet segments
+                  divided by a vertical hairline, instead of another
+                  stack of full-width bordered rows) via app/globals.css;
+                  below the 901px breakpoint it falls back to the exact
+                  pre-existing stacked-row .detailRows presentation. */}
+              <div className="detailRows tenancyGrid">
                 <div><span>Occupancy</span><strong>{occupancy === 'Occupancy unknown' ? 'Unknown' : occupancy || 'Vacant'}</strong></div>
                 {currentLease && <div><span>Tenant</span><strong>{currentLease.tenant_name}</strong></div>}
                 {currentLease && <div><span>Lease term</span><strong>{new Date(`${currentLease.start_date}T12:00:00`).toLocaleDateString()} – {new Date(`${currentLease.end_date}T12:00:00`).toLocaleDateString()}</strong></div>}
