@@ -20,9 +20,7 @@ import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { useSubscription } from '../../lib/useSubscription'
-import { entitlementsFor } from '../../lib/billing/entitlements'
 import { AuthHeader } from '../../components/AuthHeader'
-import { UpgradePrompt } from '../../components/UpgradePrompt'
 import type { ApplyFields, DocumentAnalysisOutput } from '../../lib/document-intelligence/schemas'
 import type { DocumentType } from '../../lib/document-intelligence/types'
 import type { SmartUploadContact, SmartUploadProperty, SmartUploadSystem } from '../../lib/smart-upload/types'
@@ -69,7 +67,7 @@ const STATUS_TONE: Record<ImportDisplayStatus, string> = {
 
 export default function SmartImportPage() {
   const { user, ready } = useAuthUser()
-  const { plan, loading: planLoading } = useSubscription(user)
+  const { loading: planLoading } = useSubscription(user)
 
   if (!ready || (user && planLoading)) return <main className="authShell"><div className="loadingState">Loading Portfolio Import…</div></main>
 
@@ -86,26 +84,14 @@ export default function SmartImportPage() {
     )
   }
 
-  // Launch Pricing: Smart Import shares the exact same AI pipeline as
-  // Smart Upload/Retry Analysis (see this file's own top comment) — a
-  // page-level gate here is the "meaningful entry point" half of
-  // enforcement; the analyze route's server-side check is what actually
-  // stops the AI cost regardless of what this page does.
-  if (!entitlementsFor(plan).canUseSmartImport && supabase) {
-    return (
-      <main className="shell">
-        <AuthHeader />
-        <UpgradePrompt
-          supabase={supabase}
-          currentPlan={plan}
-          onClose={() => {}}
-          headline="Portfolio Import is included with Manage."
-          targetPlanId="manage"
-          description="Manage includes Smart Upload, Portfolio Import, AI Document Intelligence, Rent Ledger and PropWatch."
-        />
-      </main>
-    )
-  }
+  // Property Overview + Pricing Polish V1, Stage 1: Portfolio Import is
+  // now core PropRoster functionality on every plan (Free/Organize/
+  // Manage) — previously gated behind a Manage-only entitlement
+  // (canUseSmartImport), removed here along with the "included with
+  // Manage" upgrade prompt it triggered. The AI analysis pipeline it
+  // shares with Smart Upload still has its own platform-level fair-use
+  // safeguard, enforced server-side by the analyze route regardless of
+  // this page — see lib/billing/entitlements.ts's own comment.
 
   return <SmartImportWorkspace ownerId={user.id} />
 }

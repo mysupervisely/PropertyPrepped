@@ -160,27 +160,30 @@ describe('entitlementsFor — still-unmeasured future capability stubs', () => {
   })
 })
 
-describe('entitlementsFor — Free (Launch Pricing)', () => {
-  it('has none of the Manage-tier capabilities', () => {
+describe('entitlementsFor — Free (Property Overview + Pricing Polish V1, Stage 1: FINAL decision)', () => {
+  it('has every core capability — Stage 1 removed the Manage-only gate; only property count differs by plan now', () => {
     const e = entitlementsFor('free')
-    expect(e.canUseSmartUpload).toBe(false)
-    expect(e.canUseSmartImport).toBe(false)
-    expect(e.canUseDocumentIntelligence).toBe(false)
-    expect(e.canUseRentLedger).toBe(false)
-    expect(e.canUsePropWatch).toBe(false)
-    expect(e.monthlyAIAnalyses).toBe(0)
+    expect(e.canUseSmartUpload).toBe(true)
+    expect(e.canUseSmartImport).toBe(true)
+    expect(e.canUseDocumentIntelligence).toBe(true)
+    expect(e.canUseRentLedger).toBe(true)
+    expect(e.canUsePropWatch).toBe(true)
+    // A real, platform-level fair-use safeguard (infrastructure cost
+    // control, not a marketed feature) — same number every real plan
+    // gets, not a marker of "no AI on this plan."
+    expect(e.monthlyAIAnalyses).toBe(50)
   })
 })
 
-describe('entitlementsFor — Organize (Launch Pricing)', () => {
-  it('has none of the Manage-tier capabilities, same as Free', () => {
+describe('entitlementsFor — Organize (Property Overview + Pricing Polish V1, Stage 1)', () => {
+  it('has every core capability, identical to Free and Manage', () => {
     const e = entitlementsFor('organize')
-    expect(e.canUseSmartUpload).toBe(false)
-    expect(e.canUseSmartImport).toBe(false)
-    expect(e.canUseDocumentIntelligence).toBe(false)
-    expect(e.canUseRentLedger).toBe(false)
-    expect(e.canUsePropWatch).toBe(false)
-    expect(e.monthlyAIAnalyses).toBe(0)
+    expect(e.canUseSmartUpload).toBe(true)
+    expect(e.canUseSmartImport).toBe(true)
+    expect(e.canUseDocumentIntelligence).toBe(true)
+    expect(e.canUseRentLedger).toBe(true)
+    expect(e.canUsePropWatch).toBe(true)
+    expect(e.monthlyAIAnalyses).toBe(50)
   })
 
   it('still gets the full property/document/PropCrew/Search/Investment-Tools/Lease-Management baseline via maxProperties + the absence of any other gate', () => {
@@ -188,8 +191,8 @@ describe('entitlementsFor — Organize (Launch Pricing)', () => {
   })
 })
 
-describe('entitlementsFor — Manage (Launch Pricing)', () => {
-  it('has every new capability, with a 50/month AI allowance', () => {
+describe('entitlementsFor — Manage (Property Overview + Pricing Polish V1, Stage 1)', () => {
+  it('has every core capability, identical to Free and Organize — the SAME 50/month AI allowance, not a bigger one', () => {
     const e = entitlementsFor('manage')
     expect(e.canUseSmartUpload).toBe(true)
     expect(e.canUseSmartImport).toBe(true)
@@ -197,6 +200,21 @@ describe('entitlementsFor — Manage (Launch Pricing)', () => {
     expect(e.canUseRentLedger).toBe(true)
     expect(e.canUsePropWatch).toBe(true)
     expect(e.monthlyAIAnalyses).toBe(50)
+  })
+})
+
+describe('entitlementsFor — Stage 1: Free/Organize/Manage capabilities are uniform (only maxProperties legitimately differs)', () => {
+  it('every ManageCapabilities field (including the AI allowance) is identical across the three real self-serve plans', () => {
+    const free = entitlementsFor('free')
+    const organize = entitlementsFor('organize')
+    const manage = entitlementsFor('manage')
+    for (const field of ['canUseSmartUpload', 'canUseSmartImport', 'canUseDocumentIntelligence', 'canUseRentLedger', 'canUsePropWatch', 'monthlyAIAnalyses', 'tenantConnect'] as const) {
+      expect(organize[field]).toEqual(free[field])
+      expect(manage[field]).toEqual(free[field])
+    }
+    // The one legitimate difference between the three plans.
+    expect(free.maxProperties).not.toBe(organize.maxProperties)
+    expect(organize.maxProperties).not.toBe(manage.maxProperties)
   })
 })
 
@@ -228,18 +246,21 @@ describe('entitlementsFor — owner/internal plan', () => {
   })
 })
 
-describe('entitlementsFor — Milestone 10 tenantConnect launch intent', () => {
-  it('matches the exact launch intent: Free/Organize/legacy Investor false, Manage/legacy Portfolio/Portfolio Pro/Owner true', () => {
-    expect(entitlementsFor('free').tenantConnect).toBe(false)
-    expect(entitlementsFor('organize').tenantConnect).toBe(false)
-    // Legacy Investor stays false deliberately — the long-term intent is
-    // a paid add-on, but no Stripe add-on product exists yet, so it must
-    // not be enabled as if it were already sold. Unchanged by Launch Pricing.
-    expect(entitlementsFor('investor').tenantConnect).toBe(false)
+describe('entitlementsFor — tenantConnect (Property Overview + Pricing Polish V1, Stage 1: FINAL decision)', () => {
+  it('true for every real plan except legacy Investor: Free/Organize/Manage/Automate/Portfolio/Portfolio Pro/Owner true, Investor false', () => {
+    expect(entitlementsFor('free').tenantConnect).toBe(true)
+    expect(entitlementsFor('organize').tenantConnect).toBe(true)
     expect(entitlementsFor('manage').tenantConnect).toBe(true)
+    expect(entitlementsFor('automate').tenantConnect).toBe(true)
     expect(entitlementsFor('portfolio').tenantConnect).toBe(true)
     expect(entitlementsFor('portfolio_pro').tenantConnect).toBe(true)
     expect(entitlementsFor('owner').tenantConnect).toBe(true)
+    // Legacy Investor stays false deliberately — the long-term intent is
+    // a genuinely separate, optional paid add-on, but no Stripe add-on
+    // product exists yet, so it must not be enabled as if it were
+    // already sold. Unchanged by this milestone — the one deliberate
+    // carve-out, not a new contradiction.
+    expect(entitlementsFor('investor').tenantConnect).toBe(false)
   })
 })
 
@@ -259,7 +280,7 @@ describe('aiAllowanceRemaining — Section: AI Enforcement', () => {
     expect(aiAllowanceRemaining(50, 51)).toBe(false)
   })
 
-  it('a zero limit (Free/Organize — no Document Intelligence capability at all) always blocks', () => {
+  it('a zero limit always blocks, even with zero usage — pure function behavior; no real plan actually carries limit 0 as of Stage 1 (see the CAPABILITIES_BY_PLAN test above), but this defensive case must still hold', () => {
     expect(aiAllowanceRemaining(0, 0)).toBe(false)
   })
 })

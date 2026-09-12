@@ -646,14 +646,14 @@ export default function Home() {
 
   const { plan } = useSubscription(user)
   const entitlements = useMemo(() => entitlementsFor(plan), [plan])
-  // Launch Pricing: one shared UpgradePrompt instance, distinguished by
-  // WHY it was opened — 'propertyLimit' keeps the original property-count
-  // framing (REACHED_LIMIT_COPY/NEXT_PLAN), 'documentIntelligence' shows
-  // the AI-capability framing (targets Manage specifically, since
-  // NEXT_PLAN's "next rung" may still be Organize, which doesn't include
-  // it). Both reuse the same modal/checkout plumbing — no second prompt
-  // component.
-  const [showUpgrade, setShowUpgrade] = useState<null | 'propertyLimit' | 'documentIntelligence'>(null)
+  // Launch Pricing: the shared UpgradePrompt instance, shown when a
+  // property-count limit is reached (REACHED_LIMIT_COPY/NEXT_PLAN).
+  // Property Overview + Pricing Polish V1, Stage 1: the 'documentIntelligence'
+  // feature-gate variant this used to also cover was removed — AI
+  // Document Intelligence is now core functionality on every plan (see
+  // lib/billing/entitlements.ts), so there is nothing left to upsell it
+  // into.
+  const [showUpgrade, setShowUpgrade] = useState<null | 'propertyLimit'>(null)
   // Portfolio Snapshot expand/collapse (Section 3/4) — defaults expanded;
   // corrected from localStorage on mount (client-only, so this can't run
   // during server rendering). Presentation preference only, never sent to
@@ -2742,26 +2742,45 @@ export default function Home() {
               this milestone deliberately does not delete the underlying
               monthly_expenses/monthly_rent data or edit capability, only
               this one competing display. */}
-          <div className="overviewGrid">
-            <div className="overviewPanel financialDetailsCard"><h3>Expenses &amp; tax</h3><div className="detailRows">
-              <div><span>Monthly property expenses</span><strong>{money(selected.monthly_expenses)}</strong></div>
-              <div><span>Annual property tax</span><strong>{selected.property_tax_annual != null ? money(selected.property_tax_annual) : 'Not entered'}</strong></div>{selected.hoa_monthly != null && <div><span>HOA / month</span><strong>{money(selected.hoa_monthly)}</strong></div>}
+          {/* Property Overview + Pricing Polish V1: Expenses & tax /
+              Property facts / Rent & tenant / Notes / Timeline / Quick
+              Actions used to be five or six equally-weighted bordered
+              .overviewPanel cards — reading as a stack of admin cards
+              rather than one coherent property page. This is a
+              presentation-only pass: every field, value, conditional and
+              handler below is unchanged from before; only the wrapping
+              markup/CSS changed (plain sections with a heading and a top
+              hairline, .overviewInfoSection/.overviewSectionHeading/
+              .overviewInfoGrid, in app/globals.css) — Property Snapshot
+              above (.overviewPanel .propertySnapshotCard) is untouched. */}
+          <section className="overviewInfoSection">
+            <h2 className="overviewSectionHeading">Property information</h2>
+            <div className="overviewInfoGrid">
+              <div className="overviewInfoGroup financialDetailsCard">
+                <h3 className="overviewInfoGroupLabel">Expenses &amp; tax</h3>
+                <div className="detailRows">
+                  <div><span>Monthly property expenses</span><strong>{money(selected.monthly_expenses)}</strong></div>
+                  <div><span>Annual property tax</span><strong>{selected.property_tax_annual != null ? money(selected.property_tax_annual) : 'Not entered'}</strong></div>{selected.hoa_monthly != null && <div><span>HOA / month</span><strong>{money(selected.hoa_monthly)}</strong></div>}
+                </div>
+              </div>
+              <div className="overviewInfoGroup">
+                <h3 className="overviewInfoGroupLabel">Property facts</h3>
+                <div className="detailRows">
+                  {selected.beds != null && <div><span>Beds</span><strong>{selected.beds}</strong></div>}
+                  {selected.baths != null && <div><span>Baths</span><strong>{selected.baths}</strong></div>}
+                  {selected.square_feet != null && <div><span>Square feet</span><strong>{selected.square_feet.toLocaleString()}</strong></div>}
+                  {selected.year_built != null && <div><span>Year built</span><strong>{selected.year_built}</strong></div>}
+                  {selected.lot_size_sqft != null && <div><span>Lot size</span><strong>{selected.lot_size_sqft.toLocaleString()} sqft</strong></div>}
+                  {selected.purchase_date && <div><span>Purchase date</span><strong>{new Date(`${selected.purchase_date}T12:00:00`).toLocaleDateString()}</strong></div>}
+                  {selected.beds == null && selected.baths == null && selected.square_feet == null && selected.year_built == null && selected.lot_size_sqft == null && !selected.purchase_date && <p className="muted">Add beds, baths, square footage and more from Edit property facts.</p>}
+                </div>
+              </div>
             </div>
-            </div>
-            <div className="overviewPanel"><h3>Property facts</h3><div className="detailRows">
-              {selected.beds != null && <div><span>Beds</span><strong>{selected.beds}</strong></div>}
-              {selected.baths != null && <div><span>Baths</span><strong>{selected.baths}</strong></div>}
-              {selected.square_feet != null && <div><span>Square feet</span><strong>{selected.square_feet.toLocaleString()}</strong></div>}
-              {selected.year_built != null && <div><span>Year built</span><strong>{selected.year_built}</strong></div>}
-              {selected.lot_size_sqft != null && <div><span>Lot size</span><strong>{selected.lot_size_sqft.toLocaleString()} sqft</strong></div>}
-              {selected.purchase_date && <div><span>Purchase date</span><strong>{new Date(`${selected.purchase_date}T12:00:00`).toLocaleDateString()}</strong></div>}
-              {selected.beds == null && selected.baths == null && selected.square_feet == null && selected.year_built == null && selected.lot_size_sqft == null && !selected.purchase_date && <p className="muted">Add beds, baths, square footage and more from Edit property facts.</p>}
-            </div></div>
-          </div>
+          </section>
 
           {selected.property_type === 'Rental Property' && (
-            <div className="overviewPanel">
-              <h3>Rent &amp; tenant</h3>
+            <section className="overviewInfoSection">
+              <h2 className="overviewSectionHeading">Tenancy</h2>
               <div className="detailRows">
                 <div><span>Occupancy</span><strong>{occupancy === 'Occupancy unknown' ? 'Unknown' : occupancy || 'Vacant'}</strong></div>
                 {currentLease && <div><span>Tenant</span><strong>{currentLease.tenant_name}</strong></div>}
@@ -2773,16 +2792,28 @@ export default function Home() {
                     amount is unknown). See rentAmountKnown above. */}
                 {currentRentRow && <div><span>{formatPeriodLabel(currentRentPeriod)} rent</span><strong>{money(currentRentRow.expectedAmount)}</strong> {!(currentRentRow.status === 'Unknown' && rentAmountKnown) && <span className={`statusPill ${rentStatusPillClass(currentRentRow.status)}`}>{currentRentRow.status}</span>}</div>}
               </div>
-              <button className="secondary" onClick={() => { setActiveTab('Rent'); setRentSubTab('Lease') }}>Open Rent</button>
-            </div>
+              <button className="secondary overviewSectionAction" onClick={() => { setActiveTab('Rent'); setRentSubTab('Lease') }}>Open Rent</button>
+            </section>
           )}
 
-          <div className="overviewGrid">
-            <div className="overviewPanel"><h3>Notes</h3><PropertyNotesPanel propertyId={selected.id} ownerId={user.id} notes={selectedNotes} onRefresh={() => void loadPortfolio()} compact /></div>
-            <div className="overviewPanel"><h3>Timeline</h3><PropertyTimelinePanel events={selectedTimeline} limit={6} /></div>
-          </div>
+          <section className="overviewInfoSection">
+            <h2 className="overviewSectionHeading">Notes &amp; history</h2>
+            <div className="overviewInfoGrid">
+              <div className="overviewInfoGroup">
+                <h3 className="overviewInfoGroupLabel">Notes</h3>
+                <PropertyNotesPanel propertyId={selected.id} ownerId={user.id} notes={selectedNotes} onRefresh={() => void loadPortfolio()} compact />
+              </div>
+              <div className="overviewInfoGroup">
+                <h3 className="overviewInfoGroupLabel">Timeline</h3>
+                <PropertyTimelinePanel events={selectedTimeline} limit={6} />
+              </div>
+            </div>
+          </section>
 
-          <div className="quickActions"><div><p className="eyebrow">QUICK ACTIONS</p></div><div className="quickActionButtons"><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Documents') }}>Documents <span className="quickActionCount">{selectedDocs.length}</span></button><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Photos') }}>Photos <span className="quickActionCount">{selectedPhotos.length}</span></button><button onClick={() => setActiveTab('Maintenance')}>Maintenance <span className="quickActionCount">{selectedMaintenance.length}</span></button><button onClick={() => { setActiveTab('Rent'); setRentSubTab('Ledger') }}>Add transaction</button></div></div>
+          <section className="overviewInfoSection quickActions">
+            <p className="eyebrow">QUICK ACTIONS</p>
+            <div className="quickActionButtons"><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Documents') }}>Documents <span className="quickActionCount">{selectedDocs.length}</span></button><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Photos') }}>Photos <span className="quickActionCount">{selectedPhotos.length}</span></button><button onClick={() => setActiveTab('Maintenance')}>Maintenance <span className="quickActionCount">{selectedMaintenance.length}</span></button><button onClick={() => { setActiveTab('Rent'); setRentSubTab('Ledger') }}>Add transaction</button></div>
+          </section>
         </section>}
 
         {activeTab === 'Documents' && <section className="workspaceContent">
@@ -3238,8 +3269,6 @@ export default function Home() {
               currentMortgageBalance={latestMortgage ? Number(latestMortgage.current_balance) : null}
               currentMonthlyRent={latestLease ? Number(latestLease.monthly_rent) : Number(selected.monthly_rent)}
               currentEstimatedValue={Number(selected.estimated_value)}
-              canUseDocumentIntelligence={entitlements.canUseDocumentIntelligence}
-              onUpgradeClick={() => setShowUpgrade('documentIntelligence')}
               onClose={() => setShowDocIntelId(null)}
               onOpenDocument={() => void openDocument(activeDoc)}
               onRefresh={() => void loadPortfolio()}
@@ -3534,16 +3563,6 @@ export default function Home() {
 
       {showUpgrade === 'propertyLimit' && supabase && (
         <UpgradePrompt supabase={supabase} currentPlan={plan} onClose={() => setShowUpgrade(null)} />
-      )}
-      {showUpgrade === 'documentIntelligence' && supabase && (
-        <UpgradePrompt
-          supabase={supabase}
-          currentPlan={plan}
-          onClose={() => setShowUpgrade(null)}
-          headline="AI Document Intelligence is included with Manage."
-          targetPlanId="manage"
-          description="Manage includes Smart Upload, Portfolio Import, AI Document Intelligence, Rent Ledger and PropWatch."
-        />
       )}
     </main>
   )

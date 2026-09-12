@@ -63,7 +63,12 @@ describe('Avatar menu simplification — AuthNavMenu', () => {
 describe('Rent Ledger becomes a compatibility route, not deleted', () => {
   it('/rent-ledger still exists and still uses the existing source of truth (no duplicated payment-mutation logic)', () => {
     const source = readFile('app/rent-ledger/page.tsx')
-    expect(source).toContain('canUseRentLedger')
+    // Property Overview + Pricing Polish V1, Stage 1: canUseRentLedger
+    // (and the "included with Manage" upgrade prompt it gated) was
+    // removed from this page — Rent Ledger is now core functionality on
+    // every plan, so there is nothing left to gate here. The underlying
+    // ledger/payment source of truth is unchanged.
+    expect(source).not.toContain('canUseRentLedger')
     expect(source).toContain("supabase.from('rent_payments')")
   })
 })
@@ -147,22 +152,34 @@ describe('Pricing feature copy stays truthful to real entitlements', () => {
     expect(highlightsMatch).not.toBeNull()
     return highlightsMatch![1]
   })()
+  const coreMatch = source.match(/export const CORE_FEATURES: string\[\] = \[([\s\S]*?)\]/)
+  const coreBlock = (() => {
+    expect(coreMatch).not.toBeNull()
+    return coreMatch![1]
+  })()
 
-  it('Organize\'s highlighted features never claim Manage-only capabilities (Smart Upload / PropWatch / AI)', () => {
-    const organizeMatch = highlightsBlock.match(/organize: \[([\s\S]*?)\],/)
-    expect(organizeMatch).not.toBeNull()
-    const organizeBlock = organizeMatch![1]
-    expect(organizeBlock).not.toMatch(/Smart Upload/)
-    expect(organizeBlock).not.toMatch(/PropWatch/)
-  })
-
-  it('"Tenant & Lease Management" is renamed to narrower "Rent & lease tracking" language in the actual bullet content', () => {
-    expect(highlightsBlock).not.toContain('Tenant & Lease Management')
-    expect(highlightsBlock).toContain('Rent & lease tracking')
+  // Property Overview + Pricing Polish V1, Stage 1 (FINAL product
+  // decision): Tenant Connect/Smart Upload/Portfolio Import/Rent Ledger/
+  // PropWatch are no longer Manage-only — they are core PropRoster
+  // capabilities on every real plan (see lib/billing/entitlements.ts's
+  // CORE_CAPABILITIES/TENANT_CONNECT_ENABLED). This SUPERSEDES the
+  // earlier, now-incorrect invariant this test used to protect ("CORE_FEATURES
+  // must never claim a Manage-only capability") — the correct invariant
+  // now is the opposite: these capabilities live in the SHARED
+  // CORE_FEATURES list, not as a plan-specific PLAN_FEATURE_HIGHLIGHTS
+  // bullet repeated only on Manage's own card.
+  it('Free, Organize and Manage have no PLAN_FEATURE_HIGHLIGHTS entry of their own — every real capability (including what used to be Manage-only) lives once in the shared CORE_FEATURES list', () => {
+    expect(highlightsBlock).not.toMatch(/organize:\s*\[/)
+    expect(highlightsBlock).not.toMatch(/\bmanage:\s*\[/)
+    expect(highlightsBlock).not.toMatch(/\bfree:\s*\[/)
+    for (const nowCore of ['Tenant Connect', 'Smart Upload', 'PropWatch', 'Rent Ledger']) {
+      expect(coreBlock).toMatch(nowCore)
+    }
   })
 
   it('Global Search is no longer a headline pricing bullet on any plan', () => {
     expect(highlightsBlock).not.toMatch(/Global Search/)
+    expect(coreBlock).not.toMatch(/Global Search/)
   })
 })
 

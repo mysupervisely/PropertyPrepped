@@ -5,13 +5,18 @@
 //
 // The one shared header for every authenticated PropRoster page
 // (dashboard, property workspace, Profile, PropCrew, Billing).
-// Intentionally minimal: hamburger + wordmark on the left, a single
+// Intentionally minimal: profile avatar + wordmark on the left, a single
 // primary-action slot (Smart Upload) on the right — nothing else. No
 // email, no Pricing/Investment Tools/PropCrew/Profile/Log out buttons,
-// no per-property actions. All of those already live in the hamburger
-// (AuthNavMenu) or, for property-specific actions, in the page's own
-// contextual content (see app/page.tsx's propertyHero for Edit/
-// Investment Analysis/back).
+// no per-property actions. All of those already live in the account/
+// tools menu (AuthNavMenu, opened by tapping the avatar) or, for
+// property-specific actions, in the page's own contextual content (see
+// app/page.tsx's propertyHero for Edit/Investment Analysis/back).
+//
+// Property Overview + Pricing Polish V1: the avatar used to be paired
+// with a separate, always-visible hamburger button on desktop — two
+// controls opening the same panel. The avatar is now the single trigger
+// at every breakpoint (see ProfileEntryButton's own header comment).
 //
 // This component now also owns the Smart Upload modal's open/closed
 // state — SmartUploadButton stays a dumb presentational button, and
@@ -33,11 +38,6 @@ import { ProfileEntryButton } from './ProfileEntryButton'
 import { MobileBottomNav } from './MobileBottomNav'
 import { SmartUploadButton } from './SmartUploadButton'
 import { SmartUploadModal } from './SmartUpload/SmartUploadModal'
-import { UpgradePrompt } from './UpgradePrompt'
-import { supabase } from '../lib/supabase'
-import { useAuthUser } from '../lib/useAuthUser'
-import { useSubscription } from '../lib/useSubscription'
-import { entitlementsFor } from '../lib/billing/entitlements'
 
 export function AuthHeader({
   onBrandClick, onSmartUploadCompleted, registerSmartUploadTrigger, hideMobileNav,
@@ -57,32 +57,28 @@ export function AuthHeader({
   // Phase E1 removed that bottom-nav item, making the header's own
   // hamburger the only opener again. Phase E1.1 removed the mobile
   // hamburger too (see globals.css's own header-row comment) — the
-  // avatar (ProfileEntryButton) is now the mobile opener, the
-  // hamburger stays the desktop opener, both driving this SAME lifted
-  // state, never two separate menu instances.
+  // avatar (ProfileEntryButton) became the mobile opener. Property
+  // Overview + Pricing Polish V1 removed the desktop hamburger as well
+  // — the avatar is now the ONLY opener at every breakpoint, still
+  // driving this SAME lifted state, never a second menu instance.
   const [navMenuOpen, setNavMenuOpen] = useState(false)
-  // Launch Pricing: Smart Upload's entry point is global (this header
-  // renders on every authenticated page), so the gate lives here rather
-  // than being threaded through every page that renders AuthHeader.
-  // UI-only — the real cost boundary is the analyze route's server-side
-  // AI-allowance check (Section: AI Enforcement); this just avoids
-  // opening a workflow the plan can't complete.
-  const [showUpgrade, setShowUpgrade] = useState(false)
-  const { user } = useAuthUser()
-  const { plan } = useSubscription(user)
-  const canUseSmartUpload = entitlementsFor(plan).canUseSmartUpload
+  // Property Overview + Pricing Polish V1, Stage 1: Smart Upload is now
+  // core PropRoster functionality on every plan (Free/Organize/Manage) —
+  // the old Manage-only entitlement gate and its upgrade-prompt this
+  // header used to show here were removed. The AI pipeline's own
+  // platform-level fair-use safeguard is still enforced server-side by
+  // the analyze route regardless of this button — see
+  // lib/billing/entitlements.ts's own comment.
 
   // Property-First UX Cleanup: exposes an external trigger for opening
   // THIS SAME Smart Upload modal — no second implementation, no rebuilt
   // AI pipeline — so a property's Documents tab can offer "Smart Upload"
   // as one path inside its own "+ Add Document" flow (the spec's "not a
   // completely separate top-level product") while every other page keeps
-  // using the header button exactly as before. Re-registers whenever the
-  // plan-gated behavior it wraps changes, so the exposed function is
-  // never stale.
+  // using the header button exactly as before.
   useEffect(() => {
-    registerSmartUploadTrigger?.(() => (canUseSmartUpload ? setSmartUploadOpen(true) : setShowUpgrade(true)))
-  }, [registerSmartUploadTrigger, canUseSmartUpload])
+    registerSmartUploadTrigger?.(() => setSmartUploadOpen(true))
+  }, [registerSmartUploadTrigger])
 
   const brandContent = (
     <>
@@ -95,12 +91,11 @@ export function AuthHeader({
     <>
       <header className={`topbar authHeader${hideMobileNav ? '' : ' authHeaderWithBottomNav'}`}>
         <div className="topbarBrandGroup">
-          {/* Phase D.2: the landlord's own profile entry point ("me") —
-              always visible, distinct from the tools menu right next to
-              it. Phase E1.1: on mobile it also opens that SAME tools
-              menu (the hamburger trigger is desktop-only now) — see
-              ProfileEntryButton's own header comment for the full
-              reasoning. */}
+          {/* Phase D.2: the landlord's own profile entry point ("me").
+              Property Overview + Pricing Polish V1: also the single
+              trigger for the tools/account menu right next to it, at
+              every breakpoint — see ProfileEntryButton's own header
+              comment for the full reasoning. */}
           <ProfileEntryButton menuOpen={navMenuOpen} onOpenMenu={() => setNavMenuOpen((o) => !o)} />
           {/* Dashboard Navigation Bug fix: reuse the exact same
               onBrandClick this header already threads to the wordmark
@@ -119,7 +114,7 @@ export function AuthHeader({
               a search action/icon rather than a large primary navigation
               destination." Same /search route and page, unchanged. */}
           <Link href="/search" className="headerSearchButton" aria-label="Search">🔍</Link>
-          <SmartUploadButton onClick={() => (canUseSmartUpload ? setSmartUploadOpen(true) : setShowUpgrade(true))} />
+          <SmartUploadButton onClick={() => setSmartUploadOpen(true)} />
         </div>
       </header>
       {/* Simplification + Maintenance Workspace V2, Phase D.1: GLOBAL
@@ -127,21 +122,11 @@ export function AuthHeader({
           not rendered at all on pricing/the admin tool (hideMobileNav).
           Phase E1: down to four destinations (Dashboard/Maintenance/
           PropCrew/Tax Center) — see MobileBottomNav's own header
-          comment. "More" is gone from this bar; the header's hamburger
-          trigger above is the one way to reach that panel now, on
+          comment. "More" is gone from this bar; the header's profile
+          avatar above is the one way to reach that panel now, on
           every width. */}
       {!hideMobileNav && <MobileBottomNav onDashboardNavigate={onBrandClick} />}
       <SmartUploadModal open={smartUploadOpen} onClose={() => setSmartUploadOpen(false)} onCompleted={onSmartUploadCompleted} />
-      {showUpgrade && supabase && (
-        <UpgradePrompt
-          supabase={supabase}
-          currentPlan={plan}
-          onClose={() => setShowUpgrade(false)}
-          headline="Smart Upload is included with Manage."
-          targetPlanId="manage"
-          description="Manage includes Smart Upload, Portfolio Import, AI Document Intelligence, Rent Ledger and PropWatch."
-        />
-      )}
     </>
   )
 }

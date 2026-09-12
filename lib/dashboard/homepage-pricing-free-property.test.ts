@@ -164,7 +164,15 @@ describe('Homepage pricing section reads from the canonical source — never a s
     const sectionEnd = landingSource.indexOf('</section>', sectionIdx)
     const section = landingSource.slice(sectionIdx, sectionEnd)
     expect(section).toContain('{PLAN_FEATURE_HIGHLIGHTS[planId]')
-    for (const feature of PLAN_FEATURE_HIGHLIGHTS.free!) {
+    // Property Overview + Pricing Polish V1, Stage 1: Free/Organize/Manage
+    // all have no plan-specific PLAN_FEATURE_HIGHLIGHTS entry anymore —
+    // their entire feature set (including what used to be Manage-only:
+    // Tenant Connect, Smart Upload, Rent Ledger, PropWatch, etc.) is now
+    // shared, stated once via CORE_FEATURES on /pricing (see
+    // lib/billing/plans.ts's own comment). 'automate' (not part of
+    // PUBLIC_PLAN_ORDER, so never rendered by this homepage section
+    // anyway) is the only remaining entry, so it's what's sampled here.
+    for (const feature of PLAN_FEATURE_HIGHLIGHTS.automate!) {
       expect(section).not.toContain(`>${feature}<`) // not literally duplicated as static JSX text
     }
   })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PLAN_IDS, PLANS, PUBLIC_PLAN_ORDER, COMING_SOON_PLAN_ORDER, TENANT_CONNECT_PRICING_NOTE, PLAN_FEATURE_HIGHLIGHTS, CONTACT_TIER, isPlanId } from './plans'
+import { PLAN_IDS, PLANS, PUBLIC_PLAN_ORDER, COMING_SOON_PLAN_ORDER, TENANT_CONNECT_PRICING_NOTE, PLAN_FEATURE_HIGHLIGHTS, CORE_FEATURES, CONTACT_TIER, isPlanId } from './plans'
 
 describe('internal owner plan — catalog shape', () => {
   it('exists in PLANS with unlimited properties and no price', () => {
@@ -76,7 +76,11 @@ describe('Legacy Subscribers — CRITICAL: existing plan catalog entries are unt
 describe('Public Homepage V2 — pricing truthfulness (Tenant Connect is now real)', () => {
   it('Manage no longer carries a "Coming soon" note — a real tenant-facing UI exists (app/tenant/page.tsx) and TENANT_CONNECT_ENABLED.manage is true', () => {
     expect(TENANT_CONNECT_PRICING_NOTE.manage).toBeUndefined()
-    expect(PLAN_FEATURE_HIGHLIGHTS.manage).toContain('Tenant Connect')
+    // Property Overview + Pricing Polish V1, Stage 1: Tenant Connect is
+    // now a shared CORE_FEATURES item (Free/Organize/Manage alike), not
+    // a Manage-only PLAN_FEATURE_HIGHLIGHTS bullet.
+    expect(CORE_FEATURES).toContain('Tenant Connect')
+    expect(PLAN_FEATURE_HIGHLIGHTS.manage).toBeUndefined()
   })
 
   it('legacy Portfolio/Portfolio Pro and the not-yet-purchasable Automate still say "Coming soon" — unchanged, outside this milestone\'s scope (not shown as purchasable public cards)', () => {

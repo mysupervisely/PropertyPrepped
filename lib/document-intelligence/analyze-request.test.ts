@@ -354,11 +354,12 @@ describe('handleAnalyzeRequest — Launch Pricing: server-side AI allowance enfo
     expect(deps.claimProcessing).not.toHaveBeenCalled()
   })
 
-  it('a plan without the capability at all (limit: 0) gets the same structured block, with plan-specific copy', () => {
+  it('limit: 0 (not expected for any real plan as of Property Overview + Pricing Polish V1, Stage 1 — every real plan now carries a real numeric allowance — but kept as a defensive fallback) gets the same structured block, with plan-neutral copy', () => {
     return handleAnalyzeRequest({ documentId: 'doc-1' }, baseDeps({ checkAiAllowance: vi.fn().mockResolvedValue({ allowed: false, limit: 0, used: 0 }) }))
       .then((result) => {
         expect(result.status).toBe(403)
-        expect(result.body.message).toMatch(/included with the manage plan/i)
+        expect(result.body.message).toMatch(/not available on this account/i)
+        expect(String(result.body.message).toLowerCase()).not.toContain('manage')
       })
   })
 

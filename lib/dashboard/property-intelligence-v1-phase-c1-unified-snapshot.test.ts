@@ -86,10 +86,10 @@ describe('Phase C.1: the "Rent Unknown" vs. known-rent contradiction is fixed at
     expect(heroSlice).toContain("{currentRentRow && !(currentRentRow.status === 'Unknown' && rentAmountKnown) && <span className={`statusPill ${rentStatusPillClass(currentRentRow.status)}`}>Rent {currentRentRow.status}</span>}")
   })
 
-  it('the "Rent & tenant" panel\'s rent-status pill gets the same fix, not a second/different rule', () => {
-    const rentTenantIdx = pageSource.indexOf('Rent &amp; tenant')
-    const rentTenantSlice = pageSource.slice(rentTenantIdx, rentTenantIdx + 1200)
-    expect(rentTenantSlice).toContain("!(currentRentRow.status === 'Unknown' && rentAmountKnown)")
+  it('the Tenancy section\'s rent-status pill gets the same fix, not a second/different rule', () => {
+    const tenancyIdx = pageSource.indexOf('<h2 className="overviewSectionHeading">Tenancy</h2>')
+    const tenancySlice = pageSource.slice(tenancyIdx, tenancyIdx + 1200)
+    expect(tenancySlice).toContain("!(currentRentRow.status === 'Unknown' && rentAmountKnown)")
   })
 
   it('lib/rent-ledger/status.ts (the source of RentStatus.Unknown) was NOT modified — the fix is presentation-only, reusing Property Intelligence\'s rent resolution rather than a second competing rule', () => {
@@ -132,10 +132,10 @@ describe('Phase C.1: the old "Estimated cash flow" formula is retired from prese
 
 describe('Phase C.1: the renamed, slimmed "Expenses & tax" card (formerly "Financial details")', () => {
   const cardIdx = pageSource.indexOf('financialDetailsCard')
-  const cardSlice = pageSource.slice(cardIdx, pageSource.indexOf('overviewPanel"><h3>Property facts'))
+  const cardSlice = pageSource.slice(cardIdx, pageSource.indexOf('<h3 className="overviewInfoGroupLabel">Property facts'))
 
   it('keeps Monthly property expenses, Annual property tax, and HOA — editable property-level inputs, not performance figures', () => {
-    expect(cardSlice).toContain('<h3>Expenses &amp; tax</h3>')
+    expect(cardSlice).toContain('<h3 className="overviewInfoGroupLabel">Expenses &amp; tax</h3>')
     expect(cardSlice).toContain('<span>Monthly property expenses</span><strong>{money(selected.monthly_expenses)}</strong>')
     expect(cardSlice).toContain('<span>Annual property tax</span>')
     expect(cardSlice).toContain('selected.hoa_monthly')
@@ -155,7 +155,7 @@ describe('Phase C.1: the renamed, slimmed "Expenses & tax" card (formerly "Finan
 
 describe('Phase C.1: Property Facts stays out of the financial metric grid', () => {
   it('beds/baths/sqft/year built/lot size/purchase date remain in their own separate card, not folded into the snapshot or the Expenses & tax card', () => {
-    const factsIdx = pageSource.indexOf('overviewPanel"><h3>Property facts')
+    const factsIdx = pageSource.indexOf('<h3 className="overviewInfoGroupLabel">Property facts')
     const factsSlice = pageSource.slice(factsIdx, factsIdx + 900)
     expect(factsSlice).toContain('selected.beds')
     expect(factsSlice).toContain('selected.baths')
@@ -180,7 +180,7 @@ describe('Phase C.1: everything else stays intact', () => {
     const overviewSlice = pageSource.slice(idx, end)
     expect(overviewSlice).toContain('<PropertyNotesPanel')
     expect(overviewSlice).toContain('<PropertyTimelinePanel')
-    expect(overviewSlice).toContain('className="quickActions"')
+    expect(overviewSlice).toMatch(/className="overviewInfoSection quickActions"/)
   })
 
   it('no schema/migration changes were made', () => {
