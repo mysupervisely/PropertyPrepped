@@ -1,0 +1,22 @@
+# PropRoster — Landlord Digest V1's scheduled trigger.
+#
+# Deliberately minimal: no [build] section here at all, so this file
+# does not touch the site's existing build command/publish
+# directory/plugin configuration (all of that continues to come from
+# the Netlify dashboard exactly as it does today) — this is additive,
+# not a replacement config. The only thing this milestone needs
+# declared in code is where Functions live and the one scheduled
+# function's cron.
+#
+# One canonical scheduler for the app (per this milestone's own
+# instruction) — no GitHub Actions cron, no Supabase pg_cron alongside
+# this.
+
+[functions]
+  directory = "netlify/functions"
+
+# Monday, 13:00 UTC, once a week — see lib/notifications/digest-period.ts's
+# own DIGEST_SCHEDULE_DESCRIPTION constant, which must stay in sync with
+# this string if the schedule ever changes.
+[functions."landlord-digest"]
+  schedule = "0 13 * * 1"
