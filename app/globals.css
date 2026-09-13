@@ -845,8 +845,14 @@ h2, h3, p { margin-top: 0; }
   .financialStats { grid-template-columns: 1fr 1fr; }
   .financialStat { min-height: 96px; padding: 13px; }
   .financialStat strong { font-size: 19px; }
-  .financialActions { width: 100%; }
-  .financialActions .primary, .financialActions .secondary, .financialActions .csvButton { flex: 1 1 auto; justify-content: center; text-align: center; }
+  /* Authenticated Mobile UI Cleanup V1: this used to stretch every
+     Ledger header action — Import CSV, Export CSV, and the real
+     primary action, "+ Add transaction" — to equal-width, full-bleed
+     blocks (same pattern as .rentThisMonthActions above and PropCrew
+     Mobile Cleanup V1's own fix). Removed rather than overridden:
+     .financialActions already wraps (flex-wrap: wrap, in its base
+     rule), so each action keeps its natural compact size and the same
+     primary/secondary hierarchy the desktop layout already has. */
 }
 /* Portfolio Snapshot — compact homepage summary (replaces the old
    .portfolioStats grid of 7 individually-carded stats, which felt heavy
@@ -2507,7 +2513,16 @@ h2, h3, p { margin-top: 0; }
   .rentLedgerSummary { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .rentLedgerMonthNav h2 { min-width: 0; font-size: 17px; }
   .rentLedgerRowAmount { margin-left: 0; }
-  .rentThisMonthActions .primary, .rentThisMonthActions .secondary { flex: 1; text-align: center; }
+  /* Authenticated Mobile UI Cleanup V1: this used to stretch BOTH
+     "+ Record Payment" (the real primary action) and "View Full Rent
+     Ledger" (secondary navigation) to equal-width, full-bleed blocks —
+     the same "every action gets primary-sized treatment" pattern
+     PropCrew Mobile Cleanup V1 already fixed for "+ Add to PropCrew."
+     Removed rather than overridden: without it, .rentThisMonthActions'
+     own flex-wrap already lets both buttons keep their natural,
+     content-sized width (wrapping onto their own line if needed),
+     restoring the same primary/secondary hierarchy desktop already
+     has — no new class needed. */
 }
 
 /* ============================================================
