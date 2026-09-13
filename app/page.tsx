@@ -67,6 +67,11 @@ import { logUploadDiagnostic, initialUploadDebugState, type UploadDebugState } f
 import { UploadDebugPanel } from '../components/uploads/UploadDebugPanel'
 import { logPhotoUploadDiagnostic, safeFileSummary, safeFileListSummary, safeErrorSummary } from '../lib/property-photos/diagnostics'
 import { friendlyPortfolioLoadMessage } from '../lib/dashboard/portfolio-load-status'
+import {
+  buildAttentionDismissalKey, buildVacancyDismissalKey, filterDismissedAttentionItems,
+  type DismissibleAttentionKind,
+} from '../lib/dashboard/attention-dismissal'
+import { DismissibleAttentionRow } from '../components/DismissibleAttentionRow'
 import { enrichMaintenanceCases, relevantContactsForProperty, showsDedicatedUrgentBadge, type IntakeSessionOutcome, type PropCrewLinkRef, type MaintenanceCaseStatus, type EnrichedMaintenanceCase } from '../lib/maintenance/command-center'
 import { latestOutreachForContact, type ProviderOutreachRow } from '../lib/maintenance/provider-outreach'
 import { sendProviderOutreach as postProviderOutreach, providerOutreachErrorMessage } from '../lib/maintenance/provider-outreach-client'
@@ -738,6 +743,13 @@ export default function Home() {
       return next
     })
   }
+  // Property + Attention Usability V1, Part 3-C: dismissal is
+  // presentation filtering only, loaded once per portfolio load
+  // alongside everything else (see loadPortfolio()) — never touches any
+  // canonical status/urgency calculation. A plain Set of the owner's own
+  // dismissal_key values, matched against each item's own
+  // buildAttentionDismissalKey()/buildVacancyDismissalKey() result.
+  const [dismissedAttentionKeys, setDismissedAttentionKeys] = useState<Set<string>>(new Set())
   const [properties, setProperties] = useState<Property[]>([])
   const [documents, setDocuments] = useState<PropertyDocument[]>([])
   const [photos, setPhotos] = useState<PropertyPhoto[]>([])
@@ -1128,6 +1140,28 @@ export default function Home() {
     const { needsAttention, upcoming } = splitAttentionAndUpcoming(dateItems)
     const vacancy = entitlements.canUsePropWatch ? buildVacancyItems(properties, leases, propertyLabelById) : []
 
+    // Property + Attention Usability V1, Part 3-B/C: dismissal is
+    // presentation filtering layered on top of the exact same canonical
+    // needsAttention/vacancy lists above — nothing above this point
+    // changes because of it, and the underlying attention/vacancy
+    // computation is never re-run or second-guessed. Open Maintenance
+    // items (below) are intentionally NOT filtered here — they aren't
+    // dismissible in this pass (see the Dashboard's own rendering of
+    // openMaintenanceItems, which stays a plain, undismissible row).
+    const visibleNeedsAttention = filterDismissedAttentionItems(needsAttention, dismissedAttentionKeys)
+    const leasesByProperty = new Map<string, LeaseRecord[]>()
+    for (const lease of leases) {
+      const list = leasesByProperty.get(lease.property_id) || []
+      list.push(lease)
+      leasesByProperty.set(lease.property_id, list)
+    }
+    const visibleVacancy = vacancy.filter((v) => {
+      const property = properties.find((p) => p.id === v.propertyId)
+      if (!property) return true // shouldn't happen (vacancy is only ever built from real properties), but never hide on a lookup miss
+      const key = buildVacancyDismissalKey(property, leasesByProperty.get(v.propertyId) || [])
+      return !dismissedAttentionKeys.has(key)
+    })
+
     // Tenant Connect M3.1 — PropWatch's Open Maintenance now reads from
     // canonical maintenance_requests (active = status !== 'Completed',
     // the SAME definition the Maintenance Command Center itself uses),
@@ -1142,7 +1176,7 @@ export default function Home() {
     // the portfolio-wide list), so a card's own count is never wrong just
     // because some other property's alerts filled up the top-10 list.
     const attentionCounts = new Map<string, number>()
-    for (const item of needsAttention) attentionCounts.set(item.propertyId, (attentionCounts.get(item.propertyId) || 0) + 1)
+    for (const item of visibleNeedsAttention) attentionCounts.set(item.propertyId, (attentionCounts.get(item.propertyId) || 0) + 1)
 
     // Same current-month rent-status source Rent Ledger/the property
     // Rent tab already use (buildRentLedgerRows) — gated behind
@@ -1165,18 +1199,50 @@ export default function Home() {
     ])
 
     return {
-      attentionItems: limitItems(sortByDaysUntilAscending(needsAttention), NEEDS_ATTENTION_LIMIT),
+      attentionItems: limitItems(sortByDaysUntilAscending(visibleNeedsAttention), NEEDS_ATTENTION_LIMIT),
       upcomingItems: limitItems(sortByDaysUntilAscending(upcoming), UPCOMING_LIMIT),
       openMaintenanceItems: limitItems(buildOpenMaintenanceRequestItems(enrichedRequestsForPropWatch, propertyLabelById), OPEN_MAINTENANCE_LIMIT),
       recentActivity: limitItems(activity, RECENT_ACTIVITY_LIMIT),
-      vacancyItems: vacancy,
+      vacancyItems: visibleVacancy,
       attentionCountByProperty: attentionCounts,
       rentStatusByProperty: rentByProperty,
     }
-  }, [leases, insurancePolicies, mortgages, maintenanceRecords, maintenanceRequests, intakeSessions, documents, transactions, propertyNotes, properties, contacts, propertyLabelById, rentPayments, propertySystems, entitlements, tenantRequests])
+  }, [leases, insurancePolicies, mortgages, maintenanceRecords, maintenanceRequests, intakeSessions, documents, transactions, propertyNotes, properties, contacts, propertyLabelById, rentPayments, propertySystems, entitlements, tenantRequests, dismissedAttentionKeys])
 
   function goToNav(propertyId: string, nav: NavTarget) {
     openProperty(propertyId, nav.tab, nav.docsSubTab, nav.propSubTab, nav.rentSubTab)
+  }
+
+  // Property + Attention Usability V1, Part 3-B/C: the ONE place that
+  // writes to attention_dismissals — the ONLY table this milestone's
+  // dismissal feature ever touches. Presentation filtering only: this
+  // never updates rent_payments, maintenance_requests/records, leases,
+  // insurance_policies, mortgages, property_systems, or tenant_requests
+  // — clearing an item cannot mark rent paid, close a request, or
+  // change any date on file (see this milestone's own report for the
+  // exhaustive per-type confirmation). Optimistic: the item's own key
+  // fully determines whether it's filtered out, so hiding it locally
+  // the moment Clear is pressed needs no reconciliation once the
+  // insert below confirms — it only needs to be rolled back if the
+  // insert genuinely failed.
+  async function clearAttentionItem(key: string, propertyId: string, attentionType: DismissibleAttentionKind) {
+    if (!supabase || !user) return
+    setDismissedAttentionKeys((prev) => new Set(prev).add(key))
+    const { error: dismissError } = await supabase.from('attention_dismissals').insert({
+      owner_id: user.id, property_id: propertyId, attention_type: attentionType, dismissal_key: key,
+    })
+    // 23505 = unique_violation — this exact key was already dismissed
+    // (a double-tap, a retry after a slow first request) — not a real
+    // failure, the end state (dismissed) is already correct either way.
+    if (dismissError && dismissError.code !== '23505') {
+      console.error('attention dismissal failed to persist', dismissError)
+      setDismissedAttentionKeys((prev) => {
+        const next = new Set(prev)
+        next.delete(key)
+        return next
+      })
+      surfaceError('Could not clear that item. Please try again.')
+    }
   }
 
   const selected = properties.find((property) => property.id === selectedId) || null
@@ -1289,6 +1355,7 @@ export default function Home() {
       { data: providerOutreachRows },
       { data: availabilityWindowRows },
       { data: appointmentRows },
+      { data: dismissalRows },
     ] = await Promise.all([
       client.from('properties').select('*').order('created_at', { ascending: true }),
       client.from('property_documents').select('*').order('created_at', { ascending: false }),
@@ -1324,6 +1391,15 @@ export default function Home() {
       // not exist yet" exclusion from firstError as the above two.
       client.from('maintenance_availability_windows').select('id, request_id, window_date, window_label'),
       client.from('maintenance_appointments').select('id, maintenance_request_id, outreach_id, proposed_local_start_at, proposed_by, matched_availability, status, confirmed_at, created_at').order('created_at', { ascending: false }),
+      // Property + Attention Usability V1, Part 3-C: the owner's own
+      // dismissed-attention-item keys, fetched once per load. Same
+      // defensive exclusion from firstError as tenant_requests/
+      // maintenance_intake_sessions/etc above — this table's own
+      // migration may not be applied yet in every environment, and its
+      // absence must never block the rest of the Dashboard from
+      // loading; a query error here simply means "nothing dismissed
+      // yet" rather than a hard failure.
+      client.from('attention_dismissals').select('dismissal_key'),
     ])
     const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError || contactError || requestError || systemError || noteError || ownershipError || rentPaymentError || taxRecordError || taxCustomItemError
     if (firstError) {
@@ -1373,6 +1449,13 @@ export default function Home() {
     setProperties(rawProperties.map((p) => ({ ...p, coverUrl: coverMap.get(p.id) })))
     setDocuments((docRows || []) as PropertyDocument[])
     setPhotos(signedPhotos)
+    // Property + Attention Usability V1, Part 3-C: a plain Set of the
+    // owner's own dismissal_key values — matched against each item's
+    // own buildAttentionDismissalKey()/buildVacancyDismissalKey()
+    // result in the attentionItems/vacancyItems useMemo below. Never
+    // fatal if the table isn't there yet (dismissalRows is simply
+    // undefined/null in that case, per the defensive query above).
+    setDismissedAttentionKeys(new Set(((dismissalRows || []) as { dismissal_key: string }[]).map((r) => r.dismissal_key)))
     // PHOTO_RELOAD_SUCCESS is logged here (not in addPhotoFiles) because
     // this is the one place with direct access to the freshly-fetched
     // array — reading `photos`/`selectedPhotos` state back inside
@@ -3508,26 +3591,56 @@ export default function Home() {
   // PropWatch information through ONE clean section") — it is still
   // fully computed above, untouched, simply not rendered on the
   // dashboard for now.
+  // Property + Attention Usability V1, Part 3-C: each vacancy item's own
+  // dismissal key needs that property's own lease history — recomputed
+  // here (not exposed from the useMemo above, which only needs it
+  // internally to filter) since vacancyItems is always a short list.
+  // Same buildVacancyDismissalKey() the useMemo above already uses to
+  // decide visibility — this is only ever building the identical key a
+  // second time for the (already-visible, already-not-dismissed) items
+  // actually being rendered, never a different one.
+  const vacancyDismissalKeyByPropertyId = new Map(vacancyItems.map((v: VacancyItem) => {
+    const property = properties.find((p) => p.id === v.propertyId)
+    const leasesForProperty = leases.filter((l) => l.property_id === v.propertyId)
+    return [v.propertyId, property ? buildVacancyDismissalKey(property, leasesForProperty) : `vacancy:${v.propertyId}:unknown`]
+  }))
+
   const attentionRows = [
-    ...attentionItems.map((item) => (
-      <button key={`attn-${item.type}-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
-        <span className={`statusPill ${item.urgency === 'Expired' ? 'pillBad' : 'pillWarn'}`}>{item.urgency === 'Expired' ? 'Expired' : 'Due soon'}</span>
-        <span className="dashboardItemBody">
-          <strong>{item.label}</strong>
-          <span>{item.description}</span>
-          <span className="muted">{item.propertyLabel} &middot; {dateOnly(item.date)}</span>
-        </span>
-      </button>
-    )),
-    ...vacancyItems.map((item: VacancyItem) => (
-      <button key={`vac-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
-        <span className="statusPill pillNeutral">Vacant</span>
-        <span className="dashboardItemBody">
-          <strong>{item.propertyLabel}</strong>
-          <span>No current lease</span>
-        </span>
-      </button>
-    )),
+    ...attentionItems.map((item) => {
+      const key = buildAttentionDismissalKey(item)
+      return (
+        <DismissibleAttentionRow
+          key={`attn-${item.type}-${item.id}`}
+          onOpen={() => goToNav(item.propertyId, item.nav)}
+          onClear={() => void clearAttentionItem(key, item.propertyId, key.split(':')[0] as DismissibleAttentionKind)}
+          clearLabel={`Clear: ${item.label} at ${item.propertyLabel}`}
+        >
+          <span className={`statusPill ${item.urgency === 'Expired' ? 'pillBad' : 'pillWarn'}`}>{item.urgency === 'Expired' ? 'Expired' : 'Due soon'}</span>
+          <span className="dashboardItemBody">
+            <strong>{item.label}</strong>
+            <span>{item.description}</span>
+            <span className="muted">{item.propertyLabel} &middot; {dateOnly(item.date)}</span>
+          </span>
+        </DismissibleAttentionRow>
+      )
+    }),
+    ...vacancyItems.map((item: VacancyItem) => {
+      const key = vacancyDismissalKeyByPropertyId.get(item.propertyId) || `vacancy:${item.propertyId}:unknown`
+      return (
+        <DismissibleAttentionRow
+          key={`vac-${item.id}`}
+          onOpen={() => goToNav(item.propertyId, item.nav)}
+          onClear={() => void clearAttentionItem(key, item.propertyId, 'vacancy')}
+          clearLabel={`Clear: Vacant at ${item.propertyLabel}`}
+        >
+          <span className="statusPill pillNeutral">Vacant</span>
+          <span className="dashboardItemBody">
+            <strong>{item.propertyLabel}</strong>
+            <span>No current lease</span>
+          </span>
+        </DismissibleAttentionRow>
+      )
+    }),
     ...openMaintenanceItems.map((item) => (
       <button key={`maint-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
         <span className="statusPill pillWarn">{item.status}</span>

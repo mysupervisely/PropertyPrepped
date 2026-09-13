@@ -8,19 +8,24 @@ import { join } from 'node:path'
 // canonical NavTarget (lib/dashboard/attention.ts, lib/rent-ledger/
 // ledger.ts, lib/tenant-connect/requests.ts — all already covered by
 // their own existing tests), and the Dashboard's "Needs Your Attention"
-// rows already wire onClick to goToNav(item.propertyId, item.nav), which
-// forwards straight into the SAME openProperty() deep-link mechanism the
-// rest of the app already uses. So Part 3-A ("tap an item, land on the
-// right place to work on it") required NO code change — this file locks
-// in that it stays true, rather than re-testing the nav targets
-// themselves (already covered elsewhere).
+// rows already wire tap/click to goToNav(item.propertyId, item.nav),
+// which forwards straight into the SAME openProperty() deep-link
+// mechanism the rest of the app already uses. So Part 3-A ("tap an
+// item, land on the right place to work on it") required NO change to
+// the navigation itself — this file locks in that it stays true, rather
+// than re-testing the nav targets themselves (already covered
+// elsewhere).
 //
-// Part 3-B/C/D (swipe-to-dismiss, its persistence, and the accessible
-// fallback) are explicitly NOT implemented in this same change — see
-// this milestone's own completion report for the proposed dismissal
-// schema, held for approval before any migration is created or applied.
-// The last describe block below is a regression guard proving exactly
-// that boundary was respected.
+// UPDATE (approved follow-up): Part 3-B/C/D (swipe-to-dismiss, its
+// persistence, and the accessible fallback) are now implemented —
+// dismissible rows (date-driven attention items and vacancy items) are
+// wrapped in components/DismissibleAttentionRow.tsx, which takes over
+// the tap/click handler as its own `onOpen` prop rather than a plain
+// button onClick; tap/click behavior itself (goToNav, same NavTarget)
+// is otherwise unchanged. See lib/dashboard/attention-dismissal-wiring-
+// v1.test.ts for the dismissal feature's own dedicated wiring tests
+// (persistence, filtering, count/View-all, canonical-state-untouched
+// confirmation, owner scoping).
 
 const ROOT = join(__dirname, '..', '..')
 function readFile(relativePath: string): string {
@@ -44,30 +49,31 @@ describe('goToNav — the one function every attention-item click goes through',
   })
 })
 
-describe('Needs Your Attention rows — every group is clickable via goToNav', () => {
+describe('Needs Your Attention rows — every group still navigates via goToNav', () => {
   const attentionRowsBody = sliceFunction('const attentionRows = [', 'const NEEDS_ATTENTION_PREVIEW_LIMIT')
 
-  it('date-driven attention items (Lease/Insurance/Mortgage/Maintenance/Rent/System/TenantRequest) navigate via goToNav', () => {
-    expect(attentionRowsBody).toMatch(/attentionItems\.map\(\(item\) => \(\s*<button key=\{`attn-\$\{item\.type\}-\$\{item\.id\}`\} className="dashboardItemRow" onClick=\{\(\) => goToNav\(item\.propertyId, item\.nav\)\}>/)
+  it('date-driven attention items (Lease/Insurance/Mortgage/Maintenance/Rent/System/TenantRequest) navigate via goToNav, now through DismissibleAttentionRow\'s onOpen', () => {
+    expect(attentionRowsBody).toMatch(/attentionItems\.map\(\(item\) => \{[\s\S]*?<DismissibleAttentionRow[\s\S]*?onOpen=\{\(\) => goToNav\(item\.propertyId, item\.nav\)\}/)
   })
 
-  it('vacancy items navigate via goToNav (same mechanism, no separate routing)', () => {
-    expect(attentionRowsBody).toMatch(/vacancyItems\.map\(\(item: VacancyItem\) => \(\s*<button key=\{`vac-\$\{item\.id\}`\} className="dashboardItemRow" onClick=\{\(\) => goToNav\(item\.propertyId, item\.nav\)\}>/)
+  it('vacancy items navigate via goToNav, same onOpen mechanism, no separate routing', () => {
+    expect(attentionRowsBody).toMatch(/vacancyItems\.map\(\(item: VacancyItem\) => \{[\s\S]*?<DismissibleAttentionRow[\s\S]*?onOpen=\{\(\) => goToNav\(item\.propertyId, item\.nav\)\}/)
   })
 
-  it('open maintenance items navigate via goToNav (same mechanism, no separate routing)', () => {
+  it('open maintenance items (not dismissible) are still a plain button navigating via goToNav, unchanged', () => {
     expect(attentionRowsBody).toMatch(/openMaintenanceItems\.map\(\(item\) => \(\s*<button key=\{`maint-\$\{item\.id\}`\} className="dashboardItemRow" onClick=\{\(\) => goToNav\(item\.propertyId, item\.nav\)\}>/)
   })
 
   it('no new routing architecture was introduced — goToNav/openProperty remain the only property-navigation path from the dashboard', () => {
-    // Every dashboardItemRow-styled button on the dashboard goes through
-    // either goToNav or openProperty directly — never a raw route change,
-    // a new Link, or a second navigation helper.
-    const dashboardRowButtons = attentionRowsBody.match(/<button key=\{[\s\S]*?\} className="dashboardItemRow" onClick=\{[^}]*\}>/g) || []
-    expect(dashboardRowButtons.length).toBeGreaterThanOrEqual(3)
-    for (const button of dashboardRowButtons) {
-      expect(button).toMatch(/onClick=\{\(\) => goToNav\(item\.propertyId, item\.nav\)\}/)
+    // Both dismissible groups' onOpen, and open-maintenance's own plain
+    // onClick, all go through goToNav — never a raw route change, a new
+    // Link, or a second navigation helper.
+    const onOpenCalls = attentionRowsBody.match(/onOpen=\{[^}]*\}/g) || []
+    expect(onOpenCalls.length).toBe(2) // attentionItems + vacancyItems
+    for (const call of onOpenCalls) {
+      expect(call).toMatch(/onOpen=\{\(\) => goToNav\(item\.propertyId, item\.nav\)\}/)
     }
+    expect(attentionRowsBody).toMatch(/onClick=\{\(\) => goToNav\(item\.propertyId, item\.nav\)\}/) // open maintenance's own plain button
   })
 })
 
@@ -95,25 +101,16 @@ describe('Every canonical attention type carries a sensible existing NavTarget (
   })
 })
 
-describe('Scope boundary: dismissal (swipe/persistence/accessible fallback) is NOT part of this change', () => {
-  // This milestone's own report proposes a notification_dismissals-style
-  // migration for approval, per the explicit "STOP before implementing
-  // the persistence/schema portion of Part 3" instruction. This guard
-  // proves that boundary was actually respected in the diff, not just
-  // stated in prose.
-  it('no attention-dismissal UI or persistence call exists anywhere in app/page.tsx yet', () => {
-    expect(pageSource).not.toMatch(/dismissAttention|attentionDismiss|swipeToDismiss/i)
-    expect(pageSource).not.toContain('attention_dismissals')
-    expect(pageSource).not.toContain('notification_dismissals')
-    // dashboardItemRow (the attention/vacancy/maintenance row markup) has
-    // exactly one interactive affordance — the row's own onClick — no
-    // second control layered on top of it yet.
-    expect(pageSource).not.toMatch(/dashboardItemRow[\s\S]{0,400}swipe/i)
+describe('Dismissal is implemented (approved follow-up) — high-level presence check; see attention-dismissal-wiring-v1.test.ts for the full wiring tests', () => {
+  it('exactly one migration exists for attention dismissal, and it is the approved shape', () => {
+    const migrationFiles = readdirSync(join(ROOT, 'supabase')).filter((f) => f.endsWith('.sql'))
+    const dismissalMigrations = migrationFiles.filter((f) => /dismiss/i.test(f))
+    expect(dismissalMigrations).toEqual(['milestone-32-attention-dismissals.sql'])
   })
 
-  it('no new migration file for attention dismissal was created', () => {
-    const migrationFiles = readdirSync(join(ROOT, 'supabase')).filter((f) => f.endsWith('.sql'))
-    expect(migrationFiles.some((f) => /dismiss/i.test(f))).toBe(false)
+  it('app/page.tsx reads attention_dismissals in exactly one place (loadPortfolio) and writes to it in exactly one place (clearAttentionItem) — never to any canonical business table as part of dismissal', () => {
+    const tableCalls = pageSource.match(/from\('attention_dismissals'\)\.\w+/g) || []
+    expect(tableCalls.sort()).toEqual(["from('attention_dismissals').insert", "from('attention_dismissals').select"])
   })
 })
 
