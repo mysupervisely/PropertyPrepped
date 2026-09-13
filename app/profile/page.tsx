@@ -65,6 +65,16 @@ export default function ProfilePage() {
   // real device.
   const [photoDebug, setPhotoDebug] = useState<UploadDebugState | null>(null)
 
+  // Landlord Digest V1: a separate table (public.notification_preferences),
+  // so it gets its own load/save cycle rather than folding into
+  // draft/save() above (which is scoped to user_profiles only). Saves
+  // immediately on toggle — a single boolean reads better as "on/off,
+  // done" than as one more field waiting on the page's own Save button.
+  const [digestEnabled, setDigestEnabled] = useState(false)
+  const [digestLoading, setDigestLoading] = useState(true)
+  const [digestSaving, setDigestSaving] = useState(false)
+  const [digestError, setDigestError] = useState('')
+
   useEffect(() => {
     if (!supabase || !user) return
     setLoading(true)
@@ -78,6 +88,31 @@ export default function ProfilePage() {
       setLoading(false)
     })
   }, [user?.id])
+
+  useEffect(() => {
+    if (!supabase || !user) return
+    setDigestLoading(true)
+    supabase.from('notification_preferences').select('weekly_digest_enabled').eq('owner_id', user.id).maybeSingle().then(({ data, error: fetchError }) => {
+      if (fetchError) setDigestError(fetchError.message)
+      else setDigestEnabled(Boolean(data?.weekly_digest_enabled))
+      setDigestLoading(false)
+    })
+  }, [user?.id])
+
+  // Upserts rather than a plain update — a pre-existing-account row is
+  // always there by now (the trigger + one-time backfill in
+  // supabase/milestone-31-landlord-digest-v1.sql guarantee it), but
+  // upsert costs nothing extra and never leaves a signed-in user unable
+  // to opt in on the rare chance their row is somehow missing.
+  async function setWeeklyDigestEnabled(next: boolean) {
+    if (!supabase || !user) return
+    setDigestSaving(true)
+    setDigestError('')
+    const { error: saveError } = await supabase.from('notification_preferences').upsert({ owner_id: user.id, weekly_digest_enabled: next, updated_at: new Date().toISOString() })
+    if (saveError) setDigestError(saveError.message)
+    else setDigestEnabled(next)
+    setDigestSaving(false)
+  }
 
   useEffect(() => {
     if (!supabase || !profile?.photo_path) { setPhotoUrl(null); return }
@@ -295,6 +330,18 @@ export default function ProfilePage() {
             </select>
           </label>
         </div>
+      </section>
+
+      <section className="evaluatorSection profileFormSection">
+        <div className="evaluatorSectionHead"><h2>Notifications</h2></div>
+        <div className="fullField reusePreferenceField">
+          <span>Weekly landlord digest<small>A weekly email summary when something across your portfolio needs attention — rent, leases, maintenance and more. Sent at most once a week, and only when there's something to report.</small></span>
+          <div className="modeToggle">
+            <button type="button" className={digestEnabled ? 'active' : ''} disabled={digestLoading || digestSaving} onClick={() => { if (!digestEnabled) void setWeeklyDigestEnabled(true) }}>On</button>
+            <button type="button" className={!digestEnabled ? 'active' : ''} disabled={digestLoading || digestSaving} onClick={() => { if (digestEnabled) void setWeeklyDigestEnabled(false) }}>Off</button>
+          </div>
+        </div>
+        {digestError && <p className="errorMessage">{digestError}</p>}
       </section>
 
       <section className="evaluatorSection profileFormSection">
