@@ -170,3 +170,40 @@ export function classifyPhotoSelection(files: File[]): ClassifiedPhotoSelection 
 export function isFirstCoverPhoto(hasExistingCover: boolean, indexInBatch: number): boolean {
   return !hasExistingCover && indexInBatch === 0
 }
+
+export type CoverReassignmentDecision =
+  | { action: 'promote'; photoId: string; storagePath: string }
+  | { action: 'clear' }
+  | { action: 'none' }
+
+/**
+ * Property + Attention Usability V1 — property-photo bug fix.
+ *
+ * What becomes the property's new cover after one photo is removed —
+ * pulled out of app/page.tsx's removePhoto() for the same reason as
+ * isFirstCoverPhoto() above: a decision that was previously only
+ * verifiable by reading source, now independently testable with plain
+ * data (no Supabase/React involved).
+ *
+ * Only relevant when the REMOVED photo was itself the cover
+ * (`wasCover`) — removing a non-cover photo never changes who the
+ * cover is, so callers should skip calling this entirely in that case
+ * (kept as an explicit `'none'` branch here too, so the decision is
+ * total and never silently assumed by a caller).
+ *
+ * `remainingPhotos` must already exclude the photo being removed, in
+ * the same order the gallery shows them (soonest/most-recently-added
+ * first, per property_photos' own `order('created_at', {ascending:
+ * false})` — see loadPortfolio()) — the first entry, if any, becomes
+ * the new cover; an empty list means the property has no photos left
+ * at all, so its cover is cleared rather than left pointing at
+ * whichever photo happened to be deleted.
+ */
+export function decideCoverAfterRemoval(
+  wasCover: boolean,
+  remainingPhotos: { id: string; storage_path: string }[],
+): CoverReassignmentDecision {
+  if (!wasCover) return { action: 'none' }
+  const next = remainingPhotos[0]
+  return next ? { action: 'promote', photoId: next.id, storagePath: next.storage_path } : { action: 'clear' }
+}

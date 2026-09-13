@@ -724,6 +724,26 @@ h2, h3, p { margin-top: 0; }
   .photoGallery { grid-template-columns: 1fr; }
   .galleryItem { height: 280px; }
   .workspaceHeading { flex-direction: column; align-items: flex-start; }
+  /* Property + Attention Usability V1: real-iPhone screenshot showed
+     excessive dead space between the Edit/Investment Analysis row and
+     the Overview section selector just below it. Root cause was
+     cumulative, not any one rule alone — .propertyHero's own bottom
+     padding (34px 0 28px, unchanged for desktop, where the tabs strip
+     sits right under it with room to spare) was written before
+     .mobilePropertyNav existed; once the mobile selector was added
+     with its own 10px top margin (below), the two stacked, and (below
+     620px) .heroInfoActions' OWN 18px margin-bottom — itself added
+     back when the hero was immediately followed by the old
+     horizontally-scrolling mobile tabs strip, not this selector —
+     stacked on top of both. Tightened here, mobile-only; .propertyHero
+     itself (and its desktop padding) is untouched. */
+  .propertyHero { padding-bottom: 14px; }
+  /* Same reasoning for the smaller second gap noted between the
+     selector and OVERVIEW / At a glance: .workspaceContentTight's own
+     padding-top (20px, used by every tab, unchanged elsewhere) plus
+     .mobilePropertyNav's margin-bottom stacked a bit more than this
+     particular transition needs. */
+  .workspaceContentTight { padding-top: 12px; }
 }
 @media (max-width: 460px) {
   .stats { grid-template-columns: 1fr; }
@@ -2352,8 +2372,15 @@ h2, h3, p { margin-top: 0; }
      hero once the actions wrap under the title on mobile — Property
      Intelligence V1, Phase C.1 removed the hero metric row that used to
      sit here, but the property tabs nav immediately follows the hero
-     section, so the same breathing room still applies. */
-  .heroInfoActions { justify-content: flex-start; flex-wrap: wrap; margin-bottom: 18px; }
+     section, so the same breathing room still applies.
+     Property + Attention Usability V1: this 18px stacked with
+     .mobilePropertyNav's own 10px top margin and .propertyHero's
+     bottom padding (now also tightened for mobile, see the
+     max-width: 760px block above) to produce the excessive gap
+     reported from a real iPhone. Cut to a small residual value — just
+     enough that a wrapped Investment Analysis link doesn't touch the
+     selector directly — rather than removed outright. */
+  .heroInfoActions { justify-content: flex-start; flex-wrap: wrap; margin-bottom: 6px; }
 }
 
 /* Smart Upload Foundation (components/SmartUpload/*) — a mobile-first

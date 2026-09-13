@@ -60,7 +60,7 @@ import {
 import { buildTenantRequestDateItems } from '../lib/tenant-connect/requests'
 import type { TenantRequest } from '../lib/tenant-connect/types'
 import { MaintenanceCategoryIcon } from '../components/icons/MaintenanceCategoryIcon'
-import { validatePropertyPhotoFile, toUploadableFile, classifyPhotoSelection, isFirstCoverPhoto } from '../lib/property-photos/validate'
+import { validatePropertyPhotoFile, toUploadableFile, classifyPhotoSelection, isFirstCoverPhoto, decideCoverAfterRemoval } from '../lib/property-photos/validate'
 import { resolveImageContentType, toUploadableImageFile } from '../lib/uploads/image-file'
 import { beginReadingFileBytes, toDurableUploadableFile } from '../lib/uploads/durable-file'
 import { logUploadDiagnostic, initialUploadDebugState, type UploadDebugState } from '../lib/uploads/diagnostics'
@@ -2091,34 +2091,141 @@ export default function Home() {
     else if (action === 'EstimatedValue' && selected) { openEditProperty(selected); setEditDraft((d) => ({ ...d, value: values.value || d.value })) }
   }
 
+  // Property + Attention Usability V1 — property-photo bug fix.
+  //
+  // ROOT CAUSE TRACE: the full add/delete/replace flow was re-audited
+  // end to end (Storage, property_photos, properties.cover_photo_path,
+  // RLS, signed-URL rendering, the hero's own coverUrl source). The
+  // ADD path (addPhotoFiles(), below) already reads live, freshly-
+  // reloaded state for "does this property already have a cover" —
+  // adding a photo after a delete is mechanically identical to adding
+  // the very first photo ever, and that path is correct.
+  //
+  // The real, concrete gap was here: setCover()/removePhoto() were the
+  // ONLY photo-mutating functions in this file that never checked a
+  // single one of their Supabase writes' own errors, and had no
+  // exception safety — every other photo function (addPhotoFiles(),
+  // addProperty()'s cover-photo block) already received this exact
+  // hardening across three earlier iOS investigation rounds (see
+  // docs/property-photo-upload-fix.md), but it was never backported to
+  // delete/set-cover. Concretely, if the property_photos row DELETE
+  // silently failed (a transient network/RLS edge case), the deleted
+  // photo's row would survive with is_cover still true — which would
+  // then permanently block any FUTURE upload from ever becoming the
+  // new cover, since addPhotoFiles()'s hasCover check reads exactly
+  // that flag. And with no try/catch/finally, any unexpected exception
+  // anywhere in either function left `busy` stuck true forever,
+  // disabling the "Add property photos" control (and every other
+  // busy-gated control on the page) with zero feedback — a byte-for-
+  // byte match for "delete looked like it worked, but I can never add
+  // a replacement." Fixed by making both functions structurally match
+  // the already-hardened upload path, and by extracting the "who
+  // becomes the new cover" decision into decideCoverAfterRemoval()
+  // (lib/property-photos/validate.ts), independently unit-tested,
+  // mirroring the existing isFirstCoverPhoto() precedent.
+  //
+  // No schema/migration change — same table, same bucket, same RLS.
   async function setCover(photo: PropertyPhoto) {
     if (!supabase || !selectedId) return
     setBusy(true)
-    await supabase.from('property_photos').update({ is_cover: false }).eq('property_id', selectedId)
-    await supabase.from('property_photos').update({ is_cover: true }).eq('id', photo.id)
-    await supabase.from('properties').update({ cover_photo_path: photo.storage_path }).eq('id', selectedId)
-    await loadPortfolio()
-    setBusy(false)
+    setError('')
+    try {
+      logPhotoUploadDiagnostic('PHOTO_SET_COVER_START', { propertyId: selectedId })
+      const { error: clearError } = await supabase.from('property_photos').update({ is_cover: false }).eq('property_id', selectedId)
+      if (clearError) {
+        logPhotoUploadDiagnostic('PHOTO_SET_COVER_ERROR', { stage: 'clear_existing', error: safeErrorSummary(clearError) })
+        console.error('property-photo set-cover: clearing the existing cover failed', clearError)
+        surfaceError('Could not update the cover photo. Please try again.')
+        return
+      }
+      const { error: assignError } = await supabase.from('property_photos').update({ is_cover: true }).eq('id', photo.id)
+      if (assignError) {
+        logPhotoUploadDiagnostic('PHOTO_SET_COVER_ERROR', { stage: 'assign_new', error: safeErrorSummary(assignError) })
+        console.error('property-photo set-cover: assigning the new cover failed', assignError)
+        surfaceError('Could not update the cover photo. Please try again.')
+        return
+      }
+      const { error: pathError } = await supabase.from('properties').update({ cover_photo_path: photo.storage_path }).eq('id', selectedId)
+      if (pathError) {
+        logPhotoUploadDiagnostic('PHOTO_SET_COVER_ERROR', { stage: 'cover_photo_path', error: safeErrorSummary(pathError) })
+        console.error('property-photo set-cover: cover_photo_path update failed', pathError)
+        surfaceError('The cover changed, but the property record could not be fully updated. Please try again.')
+      } else {
+        logPhotoUploadDiagnostic('PHOTO_SET_COVER_SUCCESS', { propertyId: selectedId })
+      }
+      await loadPortfolio()
+    } catch (unexpected) {
+      logPhotoUploadDiagnostic('PHOTO_UNEXPECTED_EXCEPTION', { site: 'set-cover', error: safeErrorSummary(unexpected) })
+      console.error('property-photo set-cover threw unexpectedly', unexpected)
+      surfaceError('Something went wrong updating the cover photo. Please try again.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function removePhoto(photo: PropertyPhoto) {
     if (!supabase || !selectedId) return
     setBusy(true)
+    setError('')
     const wasCover = photo.is_cover
-    const { error: storageError } = await supabase.storage.from('property-photos').remove([photo.storage_path])
-    if (storageError) setError(storageError.message)
-    await supabase.from('property_photos').delete().eq('id', photo.id)
-    if (wasCover) {
-      const remaining = selectedPhotos.filter((p) => p.id !== photo.id)
-      if (remaining[0]) {
-        await supabase.from('property_photos').update({ is_cover: true }).eq('id', remaining[0].id)
-        await supabase.from('properties').update({ cover_photo_path: remaining[0].storage_path }).eq('id', selectedId)
-      } else {
-        await supabase.from('properties').update({ cover_photo_path: null }).eq('id', selectedId)
+    try {
+      logPhotoUploadDiagnostic('PHOTO_DELETE_START', { propertyId: selectedId, wasCover })
+      // A Storage removal failure is logged but NOT fatal to the rest
+      // of this flow — an orphaned storage object is a lesser problem
+      // than a photo the user can never remove from their own gallery.
+      // It is no longer silently swallowed, though (previously: only
+      // set on-screen error text, nothing logged, and execution
+      // continued exactly the same either way — kept that same
+      // continue-regardless behavior, just no longer silent).
+      const { error: storageError } = await supabase.storage.from('property-photos').remove([photo.storage_path])
+      if (storageError) {
+        logPhotoUploadDiagnostic('PHOTO_DELETE_STORAGE_ERROR', { error: safeErrorSummary(storageError) })
+        console.error('property-photo delete: storage removal failed', storageError)
       }
+      const { error: rowError } = await supabase.from('property_photos').delete().eq('id', photo.id)
+      if (rowError) {
+        // THE FIX: this write was previously completely unchecked. Stop
+        // here rather than proceeding to reassign a cover based on a
+        // row that never actually left the database — see this
+        // function's own header comment above for the failure mode
+        // this closes.
+        logPhotoUploadDiagnostic('PHOTO_DELETE_DB_ERROR', { error: safeErrorSummary(rowError) })
+        console.error('property-photo delete: removing the photo record failed', rowError)
+        surfaceError('This photo could not be removed. Please try again.')
+        return
+      }
+      logPhotoUploadDiagnostic('PHOTO_DELETE_SUCCESS', { propertyId: selectedId })
+      const remaining = selectedPhotos.filter((p) => p.id !== photo.id)
+      const decision = decideCoverAfterRemoval(wasCover, remaining)
+      if (decision.action === 'promote') {
+        const { error: reassignError } = await supabase.from('property_photos').update({ is_cover: true }).eq('id', decision.photoId)
+        if (reassignError) {
+          logPhotoUploadDiagnostic('PHOTO_COVER_REASSIGN_ERROR', { stage: 'is_cover', error: safeErrorSummary(reassignError) })
+          console.error('property-photo delete: promoting the next photo to cover failed', reassignError)
+          surfaceError('The photo was removed, but a new cover photo could not be set. Please choose one from the gallery.')
+        } else {
+          const { error: pathError } = await supabase.from('properties').update({ cover_photo_path: decision.storagePath }).eq('id', selectedId)
+          if (pathError) {
+            logPhotoUploadDiagnostic('PHOTO_COVER_REASSIGN_ERROR', { stage: 'cover_photo_path', error: safeErrorSummary(pathError) })
+            console.error('property-photo delete: cover_photo_path update failed', pathError)
+            surfaceError('The photo was removed, but the property record could not be fully updated.')
+          }
+        }
+      } else if (decision.action === 'clear') {
+        const { error: pathError } = await supabase.from('properties').update({ cover_photo_path: null }).eq('id', selectedId)
+        if (pathError) {
+          logPhotoUploadDiagnostic('PHOTO_COVER_REASSIGN_ERROR', { stage: 'clear', error: safeErrorSummary(pathError) })
+          console.error('property-photo delete: clearing cover_photo_path failed', pathError)
+        }
+      }
+      await loadPortfolio()
+    } catch (unexpected) {
+      logPhotoUploadDiagnostic('PHOTO_UNEXPECTED_EXCEPTION', { site: 'remove-photo', error: safeErrorSummary(unexpected) })
+      console.error('property-photo delete threw unexpectedly', unexpected)
+      surfaceError('Something went wrong removing that photo. Please try again.')
+    } finally {
+      setBusy(false)
     }
-    await loadPortfolio()
-    setBusy(false)
   }
 
 

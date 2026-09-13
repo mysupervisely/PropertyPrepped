@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validatePropertyPhotoFile, resolvePhotoContentType, toUploadableFile, classifyPhotoSelection, isFirstCoverPhoto } from './validate'
+import { validatePropertyPhotoFile, resolvePhotoContentType, toUploadableFile, classifyPhotoSelection, isFirstCoverPhoto, decideCoverAfterRemoval } from './validate'
 
 describe('resolvePhotoContentType', () => {
   it('uses the browser-reported type when present', () => {
@@ -192,5 +192,32 @@ describe('isFirstCoverPhoto', () => {
   it('no photo in the batch becomes the cover when the property already has one (existing cover plus new gallery photo)', () => {
     expect(isFirstCoverPhoto(true, 0)).toBe(false)
     expect(isFirstCoverPhoto(true, 1)).toBe(false)
+  })
+})
+
+// Property + Attention Usability V1 — property-photo bug fix. Extracted
+// from app/page.tsx's removePhoto() so the "who becomes the new cover
+// after a delete" decision (the exact scenario the real-iPhone bug
+// report traversed: existing photo -> delete -> empty state -> add a
+// replacement) is independently testable with plain data.
+describe('decideCoverAfterRemoval', () => {
+  it('does nothing when the removed photo was not the cover — a non-cover deletion never changes who the cover is', () => {
+    expect(decideCoverAfterRemoval(false, [{ id: 'p1', storage_path: 'a/b/p1.jpg' }])).toEqual({ action: 'none' })
+    expect(decideCoverAfterRemoval(false, [])).toEqual({ action: 'none' })
+  })
+
+  it('clears the cover when the removed photo WAS the cover and no photos remain — the exact single-photo delete scenario from the bug report', () => {
+    expect(decideCoverAfterRemoval(true, [])).toEqual({ action: 'clear' })
+  })
+
+  it('promotes the next remaining photo to cover when the removed photo was the cover and others remain', () => {
+    const remaining = [{ id: 'p2', storage_path: 'a/b/p2.jpg' }, { id: 'p3', storage_path: 'a/b/p3.jpg' }]
+    expect(decideCoverAfterRemoval(true, remaining)).toEqual({ action: 'promote', photoId: 'p2', storagePath: 'a/b/p2.jpg' })
+  })
+
+  it('promotes specifically the FIRST remaining photo (gallery order), never an arbitrary one', () => {
+    const remaining = [{ id: 'newest', storage_path: 'a/b/newest.jpg' }, { id: 'oldest', storage_path: 'a/b/oldest.jpg' }]
+    const decision = decideCoverAfterRemoval(true, remaining)
+    expect(decision).toEqual({ action: 'promote', photoId: 'newest', storagePath: 'a/b/newest.jpg' })
   })
 })
