@@ -75,6 +75,7 @@ import { PROPCREW_PRIVACY_DISCLOSURE, PROPCREW_PRIVATE_NOTE_LABEL, REUSE_PREFERE
 import { isContactPickerSupported, normalizeContactPickerResult, type ContactPickerResult, type PropCrewImportCandidate } from '../lib/propcrew/contact-picker'
 import { parseVCardFile } from '../lib/propcrew/vcard'
 import { findExactContactMatch } from '../lib/propcrew/dedupe'
+import { formatPhoneForDisplay } from '../lib/propcrew/phone-display'
 
 export const PROPCREW_CATEGORIES = [
   'HVAC', 'Plumbing', 'Electrical', 'Roofing', 'Handyman', 'Landscaping', 'Pest Control',
@@ -495,7 +496,7 @@ export function PropCrewPanel({
 
   return (
     <div className="propCrewPanel">
-      <div className="sectionHead workspaceHeading">
+      <div className="sectionHead workspaceHeading propCrewHeader">
         {showHeader ? (
           <div>
             {/* Launch Polish: approved mixed-case brand casing, an
@@ -507,7 +508,18 @@ export function PropCrewPanel({
         ) : <div />}
         <div className="propCrewHeaderActions">
           {linkableContacts.length > 0 && <button className="secondary" onClick={() => setShowLinkExisting(true)}>Link Existing Contact</button>}
-          <button className="primary" onClick={openAddChooser}>+ Add to PropCrew</button>
+          {/* PropCrew Mobile Cleanup V1: same handler, same destination —
+              only the LABEL shortens below 761px (the same breakpoint
+              the mobile Property section selector already uses), via a
+              plain CSS show/hide swap (.propCrewAddButtonFull/Short in
+              app/globals.css). The old @media (max-width:480px) rule
+              that stretched this button to a full-width block is what
+              made "+ Add to PropCrew" dominate the screen on a real
+              iPhone; it's replaced, not layered on top of. */}
+          <button className="primary" onClick={openAddChooser}>
+            <span className="propCrewAddButtonFull">+ Add to PropCrew</span>
+            <span className="propCrewAddButtonShort">+ Add</span>
+          </button>
         </div>
       </div>
 
@@ -520,18 +532,26 @@ export function PropCrewPanel({
             const propertyLabels = propertyIdsFor(contact).map((id) => propertiesById.get(id)?.address).filter(Boolean)
             const expanded = expandedId === contact.id
             return (
+              // PropCrew Mobile Cleanup V1: every field, value, conditional
+              // and handler below is unchanged from before — only the
+              // wrapping markup/CSS changed. .recordCard/.contactCard are
+              // untouched base classes (still shared with Leases/
+              // Insurance/Maintenance elsewhere); every new class here is
+              // .propCrewCard*-prefixed, so this restyle can never leak
+              // into those other, unrelated .recordCard modules.
               <article className="recordCard contactCard propCrewCard" key={contact.id}>
-                <div className="recordTop">
-                  <div>
-                    <span className="statusPill">{contact.role}</span>
-                    {contact.would_use_again && <span className={`reusePill reuse-${reusePreferenceTone(contact.would_use_again)}`}>Would use again: {REUSE_PREFERENCE_LABELS[contact.would_use_again]}</span>}
+                <div className="recordTop propCrewCardTop">
+                  <div className="propCrewCardIdentity">
                     <h3>{contact.business_name || contact.name}</h3>
                     <p>{contact.business_name ? contact.name : 'No business name added'}</p>
                   </div>
-                  <button className="recordDelete" onClick={() => void remove(contact.id)}>×</button>
+                  <div className="propCrewCardTopRight">
+                    <span className="statusPill propCrewCategoryPill">{contact.role}</span>
+                    <button className="recordDelete" aria-label={`Remove ${contact.business_name || contact.name} from PropCrew`} onClick={() => void remove(contact.id)}>×</button>
+                  </div>
                 </div>
                 <div className="contactLinks">
-                  {contact.phone && <a href={`tel:${contact.phone}`}>{contact.phone}</a>}
+                  {contact.phone && <a className="propCrewPhoneLink" href={`tel:${contact.phone}`}>{formatPhoneForDisplay(contact.phone)}</a>}
                   {contact.email && <a href={`mailto:${contact.email}`}>{contact.email}</a>}
                   {contact.website && <a href={normalizeUrl(contact.website)} target="_blank" rel="noopener noreferrer">{contact.website}</a>}
                   {!contact.phone && !contact.email && !contact.website && <span className="muted">No contact details added</span>}
@@ -544,7 +564,15 @@ export function PropCrewPanel({
                     {history.documentedSpend > 0 && ` · $${history.documentedSpend.toLocaleString()} documented`}
                   </p>
                 )}
-                <button type="button" className="propCrewToggle" onClick={() => setExpandedId(expanded ? null : contact.id)}>{expanded ? 'Hide details' : 'View details'}</button>
+                {/* "Would use again" moves from a loud top-of-card pill to
+                    a quiet footer alongside View details — same field,
+                    same three values/tones, just visually secondary now
+                    (per real-device review: it was competing with the
+                    provider's own identity for attention). */}
+                <div className="propCrewCardFooter">
+                  {contact.would_use_again && <span className={`reusePill propCrewReuseQuiet reuse-${reusePreferenceTone(contact.would_use_again)}`}>Would use again: {REUSE_PREFERENCE_LABELS[contact.would_use_again]}</span>}
+                  <button type="button" className="propCrewToggle" onClick={() => setExpandedId(expanded ? null : contact.id)}>{expanded ? 'Hide details' : 'View details'}</button>
+                </div>
                 {expanded && (
                   <div className="propCrewDetails">
                     {contact.experience_note ? (
@@ -562,7 +590,7 @@ export function PropCrewPanel({
           })}
         </div>
       ) : (
-        <div className="emptyModule"><strong>No PropCrew providers yet</strong><span>Add contractors, agents, lenders and other professionals as you work with them.</span><div className="propCrewHeaderActions">{linkableContacts.length > 0 && <button className="secondary" onClick={() => setShowLinkExisting(true)}>Link Existing Contact</button>}<button className="primary" onClick={openAddChooser}>+ Add to PropCrew</button></div></div>
+        <div className="emptyModule"><strong>No PropCrew providers yet</strong><span>Add contractors, agents, lenders and other professionals as you work with them.</span><div className="propCrewHeaderActions">{linkableContacts.length > 0 && <button className="secondary" onClick={() => setShowLinkExisting(true)}>Link Existing Contact</button>}<button className="primary" onClick={openAddChooser}><span className="propCrewAddButtonFull">+ Add to PropCrew</span><span className="propCrewAddButtonShort">+ Add</span></button></div></div>
       )}
 
       {/* PropCrew Mobile Contact Import V1 (UX polish pass): the first
