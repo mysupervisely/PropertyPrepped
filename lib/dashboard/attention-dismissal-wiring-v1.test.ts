@@ -96,19 +96,43 @@ describe('Filtering wiring: dismissed items are excluded from the SAME canonical
     expect(depsLine).toContain('dismissedAttentionKeys')
   })
 
-  it('openMaintenanceItems is intentionally NOT filtered by dismissal — it stays out of scope for this pass', () => {
+  it('openMaintenanceItems IS filtered by dismissal too (approved follow-up correction — see attention-dismissal.ts\'s own header comment for why the original exclusion was overly cautious)', () => {
+    expect(memoBody).toContain('filterDismissedOpenMaintenanceItems(')
     const returnLine = memoBody.match(/openMaintenanceItems: [^\n]+/)?.[0] || ''
-    expect(returnLine.length).toBeGreaterThan(0)
-    expect(returnLine).not.toContain('filterDismissed')
+    expect(returnLine).toContain('visibleOpenMaintenanceItems')
   })
 })
 
 describe('"View all" cannot bring back a dismissed instance', () => {
-  it('attentionRows (what View all expands) is built from attentionItems/vacancyItems — the already-filtered lists — never a separate unfiltered source', () => {
+  it('attentionRows (what View all expands) is built from attentionItems/vacancyItems/openMaintenanceItems — the already-filtered lists — never a separate unfiltered source', () => {
     const attentionRowsIdx = pageSource.indexOf('const attentionRows = [')
-    const nearby = pageSource.slice(attentionRowsIdx, attentionRowsIdx + 2500)
+    const nearby = pageSource.slice(attentionRowsIdx, attentionRowsIdx + 3000)
     expect(nearby).toContain('attentionItems.map(')
     expect(nearby).toContain('vacancyItems.map(')
+    expect(nearby).toContain('openMaintenanceItems.map(')
+  })
+})
+
+describe('Open Maintenance rows: each request is independently clearable, keyed by its own canonical id', () => {
+  const attentionRowsIdx = pageSource.indexOf('const attentionRows = [')
+  const openMaintenanceBlock = pageSource.slice(pageSource.indexOf('openMaintenanceItems.map(', attentionRowsIdx), pageSource.indexOf('\n  ]', attentionRowsIdx))
+
+  it('the dismissal key comes from buildOpenMaintenanceDismissalKey(item) — the canonical maintenance_requests id + date — never item.description (the visible title)', () => {
+    expect(openMaintenanceBlock).toContain('const key = buildOpenMaintenanceDismissalKey(item)')
+    expect(openMaintenanceBlock).not.toMatch(/clearAttentionItem\([^)]*item\.description/)
+  })
+
+  it('onClear persists via clearAttentionItem with attentionType \'open-maintenance\' — a distinct kind from the maintenance_records-sourced \'maintenance\' type', () => {
+    expect(openMaintenanceBlock).toContain("void clearAttentionItem(key, item.propertyId, 'open-maintenance')")
+  })
+
+  it('each row\'s key is derived per-item (from that item\'s own id/date), so three separate requests for the same property never share a key', () => {
+    // The key is computed INSIDE the .map() callback, from `item` — not
+    // hoisted/memoized against a single shared value outside the loop.
+    const mapIdx = openMaintenanceBlock.indexOf('.map((item) => {')
+    const keyIdx = openMaintenanceBlock.indexOf('const key = buildOpenMaintenanceDismissalKey(item)')
+    expect(mapIdx).toBeGreaterThan(-1)
+    expect(keyIdx).toBeGreaterThan(mapIdx)
   })
 })
 

@@ -23,11 +23,11 @@
 // alone is NOT period-specific), and buildVacancyDismissalKey()'s for
 // the vacancy-episode design (vacancy has no DashboardDateItem at all).
 
-import type { DashboardDateItem, DashboardDateItemType } from './attention'
+import type { DashboardDateItem, DashboardDateItemType, OpenMaintenanceItem } from './attention'
 
 /** The attention_dismissals.attention_type values this app ever writes — matches the exact prefixes used in dismissal_key, so a row's own attention_type column is always redundant-but-consistent with its key (useful for admin/debugging queries, never load-bearing on its own). */
 export type DismissibleAttentionKind =
-  | 'rent' | 'lease' | 'insurance' | 'mortgage' | 'system' | 'maintenance' | 'tenant-request' | 'vacancy'
+  | 'rent' | 'lease' | 'insurance' | 'mortgage' | 'system' | 'maintenance' | 'tenant-request' | 'vacancy' | 'open-maintenance'
 
 const TYPE_TO_DISMISSAL_PREFIX: Record<DashboardDateItemType, DismissibleAttentionKind> = {
   Rent: 'rent',
@@ -96,4 +96,35 @@ export function buildVacancyDismissalKey(property: PropertyForVacancyDismissal, 
 /** Removes any item whose own dismissal key is in `dismissedKeys` — pure presentation filtering, never touches the input array's own contents or any canonical field. */
 export function filterDismissedAttentionItems<T extends DashboardDateItem>(items: T[], dismissedKeys: ReadonlySet<string>): T[] {
   return items.filter((item) => !dismissedKeys.has(buildAttentionDismissalKey(item)))
+}
+
+/**
+ * The stable dismissal key for one Open Maintenance item.
+ *
+ * Follow-up correction: V1 deliberately excluded these, reasoning their
+ * identity was less clean than the other seven types. On inspection
+ * that was overly cautious — `OpenMaintenanceItem.id` (lib/dashboard/
+ * attention.ts's buildOpenMaintenanceRequestItems()) is spread straight
+ * off the canonical `maintenance_requests` row (lib/maintenance/
+ * command-center.ts's enrichMaintenanceCases(), `{...c, ...}`) — a real,
+ * never-recurring primary key, exactly as stable as the `maintenance`
+ * type's own `maintenance_records.id` already in use above. Multiple
+ * open requests for the same property (e.g. three separate AC-related
+ * requests logged on three different dates) each carry their OWN id, so
+ * clearing one can never affect another — verified explicitly in this
+ * module's own test file.
+ *
+ * Prefixed `open-maintenance` (not `maintenance`) so this never
+ * collides with a `maintenance_records`-sourced item even in the
+ * astronomically unlikely case their raw ids matched — the two are
+ * genuinely different canonical sources (active requests vs. service
+ * history) and must stay independently dismissible.
+ */
+export function buildOpenMaintenanceDismissalKey(item: OpenMaintenanceItem): string {
+  return `open-maintenance:${item.id}:${item.date}`
+}
+
+/** Removes any Open Maintenance item whose own dismissal key is dismissed — same pure filtering contract as filterDismissedAttentionItems(). */
+export function filterDismissedOpenMaintenanceItems(items: OpenMaintenanceItem[], dismissedKeys: ReadonlySet<string>): OpenMaintenanceItem[] {
+  return items.filter((item) => !dismissedKeys.has(buildOpenMaintenanceDismissalKey(item)))
 }

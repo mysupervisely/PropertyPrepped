@@ -60,20 +60,18 @@ describe('Needs Your Attention rows — every group still navigates via goToNav'
     expect(attentionRowsBody).toMatch(/vacancyItems\.map\(\(item: VacancyItem\) => \{[\s\S]*?<DismissibleAttentionRow[\s\S]*?onOpen=\{\(\) => goToNav\(item\.propertyId, item\.nav\)\}/)
   })
 
-  it('open maintenance items (not dismissible) are still a plain button navigating via goToNav, unchanged', () => {
-    expect(attentionRowsBody).toMatch(/openMaintenanceItems\.map\(\(item\) => \(\s*<button key=\{`maint-\$\{item\.id\}`\} className="dashboardItemRow" onClick=\{\(\) => goToNav\(item\.propertyId, item\.nav\)\}>/)
+  it('open maintenance items (now dismissible too — see the approved follow-up) navigate via goToNav, same onOpen mechanism as the other two groups', () => {
+    expect(attentionRowsBody).toMatch(/openMaintenanceItems\.map\(\(item\) => \{[\s\S]*?<DismissibleAttentionRow[\s\S]*?onOpen=\{\(\) => goToNav\(item\.propertyId, item\.nav\)\}/)
   })
 
   it('no new routing architecture was introduced — goToNav/openProperty remain the only property-navigation path from the dashboard', () => {
-    // Both dismissible groups' onOpen, and open-maintenance's own plain
-    // onClick, all go through goToNav — never a raw route change, a new
-    // Link, or a second navigation helper.
+    // All three dismissible groups' onOpen go through goToNav — never a
+    // raw route change, a new Link, or a second navigation helper.
     const onOpenCalls = attentionRowsBody.match(/onOpen=\{[^}]*\}/g) || []
-    expect(onOpenCalls.length).toBe(2) // attentionItems + vacancyItems
+    expect(onOpenCalls.length).toBe(3) // attentionItems + vacancyItems + openMaintenanceItems
     for (const call of onOpenCalls) {
       expect(call).toMatch(/onOpen=\{\(\) => goToNav\(item\.propertyId, item\.nav\)\}/)
     }
-    expect(attentionRowsBody).toMatch(/onClick=\{\(\) => goToNav\(item\.propertyId, item\.nav\)\}/) // open maintenance's own plain button
   })
 })
 
@@ -121,7 +119,7 @@ describe('Existing Dashboard behavior this milestone must not change', () => {
     expect(pageSource).toContain("You&apos;re all caught up.")
   })
 
-  it('attentionItems/vacancyItems/openMaintenanceItems computation (useMemo) is untouched by this pass', () => {
+  it('the useMemo\'s own output shape (attentionItems/vacancyItems/openMaintenanceItems/etc) is unchanged — only dismissal filtering was layered on top, in the approved follow-up', () => {
     const memoStart = pageSource.indexOf('const { attentionItems, upcomingItems, openMaintenanceItems, recentActivity, vacancyItems, attentionCountByProperty, rentStatusByProperty } = useMemo(')
     expect(memoStart).toBeGreaterThan(-1)
   })

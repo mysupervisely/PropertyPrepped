@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildAttentionDismissalKey, buildVacancyDismissalKey, filterDismissedAttentionItems,
+  buildOpenMaintenanceDismissalKey, filterDismissedOpenMaintenanceItems,
 } from './attention-dismissal'
-import type { DashboardDateItem } from './attention'
+import type { DashboardDateItem, OpenMaintenanceItem } from './attention'
+
+function openMaintenanceItem(overrides: Partial<OpenMaintenanceItem>): OpenMaintenanceItem {
+  return {
+    id: 'req-1', description: 'Ac not working', category: 'Urgent', vendor: null,
+    propertyId: 'p1', propertyLabel: '5558 Pats Point', date: '2026-09-08', status: 'New',
+    nav: { tab: 'Maintenance' },
+    ...overrides,
+  }
+}
 
 function item(overrides: Partial<DashboardDateItem>): DashboardDateItem {
   return {
@@ -101,5 +111,50 @@ describe('filterDismissedAttentionItems', () => {
     const copy = [...items]
     filterDismissedAttentionItems(items, new Set(['lease:l1:2026-10-10']))
     expect(items).toEqual(copy)
+  })
+})
+
+// Property + Attention Usability V1 follow-up — Open Maintenance items
+// are now dismissible too (see this file's own header comment for why
+// the earlier V1 exclusion was overly cautious). The real-device report
+// this closes: three separate AC-related requests for the same
+// property ("5558 Pats Point") on three different dates, none of which
+// could be cleared before this fix.
+describe('buildOpenMaintenanceDismissalKey', () => {
+  it('uses the canonical maintenance_requests id + date, never the visible title', () => {
+    const key = buildOpenMaintenanceDismissalKey(openMaintenanceItem({ id: 'req-42', description: 'Ac not working', date: '2026-09-08' }))
+    expect(key).toBe('open-maintenance:req-42:2026-09-08')
+    expect(key).not.toContain('working')
+  })
+
+  it('the required scenario: three separate requests for the SAME property on different dates each get a distinct key', () => {
+    const req1 = buildOpenMaintenanceDismissalKey(openMaintenanceItem({ id: 'req-1', propertyId: 'p1', date: '2026-09-08', description: 'Ac not working' }))
+    const req2 = buildOpenMaintenanceDismissalKey(openMaintenanceItem({ id: 'req-2', propertyId: 'p1', date: '2026-09-09', description: 'Ac not cooling' }))
+    const req3 = buildOpenMaintenanceDismissalKey(openMaintenanceItem({ id: 'req-3', propertyId: 'p1', date: '2026-09-11', description: 'ac not working' }))
+    expect(new Set([req1, req2, req3]).size).toBe(3)
+  })
+
+  it('never collides with a maintenance_records-sourced ("maintenance") key even if the raw ids matched — genuinely different canonical sources', () => {
+    const openKey = buildOpenMaintenanceDismissalKey(openMaintenanceItem({ id: 'shared-id', date: '2026-09-08' }))
+    const recordKey = buildAttentionDismissalKey(item({ type: 'Maintenance', id: 'shared-id', date: '2026-09-08' }))
+    expect(openKey).not.toBe(recordKey)
+  })
+})
+
+describe('filterDismissedOpenMaintenanceItems', () => {
+  it('clearing one of three same-property requests leaves the other two visible', () => {
+    const items = [
+      openMaintenanceItem({ id: 'req-1', date: '2026-09-08', description: 'Ac not working' }),
+      openMaintenanceItem({ id: 'req-2', date: '2026-09-09', description: 'Ac not cooling' }),
+      openMaintenanceItem({ id: 'req-3', date: '2026-09-11', description: 'ac not working' }),
+    ]
+    const dismissed = new Set([buildOpenMaintenanceDismissalKey(items[0])])
+    const result = filterDismissedOpenMaintenanceItems(items, dismissed)
+    expect(result.map((i) => i.id)).toEqual(['req-2', 'req-3'])
+  })
+
+  it('an empty dismissed set changes nothing', () => {
+    const items = [openMaintenanceItem({ id: 'req-1' }), openMaintenanceItem({ id: 'req-2' })]
+    expect(filterDismissedOpenMaintenanceItems(items, new Set())).toEqual(items)
   })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validatePropertyPhotoFile, resolvePhotoContentType, toUploadableFile, classifyPhotoSelection, isFirstCoverPhoto, decideCoverAfterRemoval } from './validate'
+import { validatePropertyPhotoFile, resolvePhotoContentType, toUploadableFile, classifyPhotoSelection, isFirstCoverPhoto, decideCoverAfterRemoval, MAX_PROPERTY_PHOTO_BYTES } from './validate'
 
 describe('resolvePhotoContentType', () => {
   it('uses the browser-reported type when present', () => {
@@ -56,6 +56,44 @@ describe('validatePropertyPhotoFile', () => {
 
   it('never throws on an empty filename or missing extension', () => {
     expect(() => validatePropertyPhotoFile({ name: '', type: '', size: 100 })).not.toThrow()
+  })
+})
+
+// Round 3 (real-iPhone retest): the previously-missing maximum-file-size
+// check, matching the property-photos Storage bucket's own 20MB
+// file_size_limit (supabase/schema.sql) exactly — a modern iPhone's
+// 48MP HEIC/ProRAW captures routinely exceed this, and previously sailed
+// straight past validation into a slow, memory-heavy, silently-failing
+// upload attempt.
+describe('validatePropertyPhotoFile — maximum file size (the confirmed Round 3 root-cause gap)', () => {
+  it('accepts a file exactly at the limit', () => {
+    const result = validatePropertyPhotoFile({ name: 'house.jpg', type: 'image/jpeg', size: MAX_PROPERTY_PHOTO_BYTES })
+    expect(result.ok).toBe(true)
+  })
+
+  it('accepts a file just under the limit (a large but real modern-iPhone HEIC photo)', () => {
+    const result = validatePropertyPhotoFile({ name: 'IMG_9999.HEIC', type: 'image/heic', size: MAX_PROPERTY_PHOTO_BYTES - 1 })
+    expect(result.ok).toBe(true)
+  })
+
+  it('rejects a file one byte over the limit with a clear, specific reason naming the actual size and the actual limit', () => {
+    const result = validatePropertyPhotoFile({ name: 'IMG_0001.HEIC', type: 'image/heic', size: MAX_PROPERTY_PHOTO_BYTES + 1 })
+    expect(result.ok).toBe(false)
+    expect(!result.ok && result.reason).toMatch(/20MB limit/)
+  })
+
+  it('rejects a real-world oversized ProRAW-shaped file (45MB) with the size stated in the message', () => {
+    const size = 45 * 1024 * 1024
+    const result = validatePropertyPhotoFile({ name: 'IMG_1234.HEIC', type: 'image/heic', size })
+    expect(result.ok).toBe(false)
+    expect(!result.ok && result.reason).toContain('45.0MB')
+    expect(!result.ok && result.reason).toMatch(/20MB limit/)
+  })
+
+  it('the size check runs before the type check, so an oversized file gets the size-specific message even if it would also fail other checks', () => {
+    const result = validatePropertyPhotoFile({ name: 'huge.pdf', type: 'application/pdf', size: MAX_PROPERTY_PHOTO_BYTES + 1000 })
+    expect(result.ok).toBe(false)
+    expect(!result.ok && result.reason).toMatch(/over the 20MB limit/)
   })
 })
 
