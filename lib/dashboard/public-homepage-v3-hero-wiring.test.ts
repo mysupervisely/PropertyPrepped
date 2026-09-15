@@ -95,9 +95,18 @@ describe('1. Public Homepage V3: hero-property.jpg is still used', () => {
 })
 
 describe('2-3. Public Homepage V3: the photo is an integrated background layer, not a standalone card', () => {
-  it('no dedicated image-card/frame classes survive anywhere in the file — the old .landingHeroVisual/.landingHeroImageFrame/.landingHeroGrid two-column wrapper are gone', () => {
-    expect(landingSource).not.toMatch(/landingHeroVisual|landingHeroImageFrame|landingHeroGrid|landingHeroContent\b/)
-    expect(cssSource).not.toMatch(/landingHeroVisual|landingHeroImageFrame|landingHeroGrid/)
+  // Rescoped for Desktop Homepage V4 (real-device follow-up): real-device
+  // review of this exact V3 decision later asked for the opposite on
+  // desktop — the house photo removed from the primary composition and
+  // replaced with a real product-UI preview, in a deliberate two-column
+  // layout. .landingHeroGrid was reintroduced for THAT (see
+  // desktop-homepage-v4-wiring.test.ts for its own coverage) — it is not
+  // a return of V3's old house-image-card treatment, which is why
+  // .landingHeroVisual/.landingHeroImageFrame/.landingHeroContent (the
+  // actual old image-card class names) are still asserted absent below.
+  it('no dedicated image-card/frame classes survive anywhere in the file — the old .landingHeroVisual/.landingHeroImageFrame image-card treatment never returned', () => {
+    expect(landingSource).not.toMatch(/landingHeroVisual|landingHeroImageFrame|landingHeroContent\b/)
+    expect(cssSource).not.toMatch(/landingHeroVisual|landingHeroImageFrame/)
   })
 
   it('the image sits inside one absolutely positioned background layer behind the copy, not beside or below it in a second content block', () => {
@@ -311,11 +320,13 @@ describe('1-6. Public Homepage V3: mobile header no longer duplicates "Start Fre
 })
 
 describe('7. Public Homepage V3: the background-photo architecture from the previous round is preserved, only re-tuned', () => {
+  // landingHeroGrid dropped from this negative check for the same reason
+  // as the "2-3." describe block above — see its own comment.
   it('still the same background-layer classes — no standalone image/card returns', () => {
     expect(landingSource).toContain('className="landingHeroBg" aria-hidden="true"')
     expect(landingSource).toContain('className="landingHeroBgImage"')
     expect(landingSource).toContain('className="landingHeroBgFade"')
-    expect(landingSource).not.toMatch(/landingHeroVisual|landingHeroImageFrame|landingHeroGrid/)
+    expect(landingSource).not.toMatch(/landingHeroVisual|landingHeroImageFrame/)
   })
 
   it('8. still exactly one <img> in the whole page, still decorative (empty alt, aria-hidden wrapper) — no image card was reintroduced', () => {

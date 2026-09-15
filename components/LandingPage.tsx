@@ -286,6 +286,55 @@ function UnderstandStage({ showPortfolio }: { showPortfolio: boolean }) {
   )
 }
 
+// ===========================================================================
+// Desktop Homepage V4 — the hero's own product visual. Real-device
+// feedback: the desktop hero "still feels like a real-estate landing
+// page with a house photo," not a software product's first screen. The
+// house background is now desktop-hidden (see .landingHeroBg's own CSS
+// comment) and replaced with this — a polished, large preview of the
+// SAME Portfolio Snapshot the authenticated Dashboard actually shows
+// (app/page.tsx's own portfolioSnapshot section: Properties / Portfolio
+// Value / Monthly Rent / YTD NOI, in that exact order), plus two compact
+// property rows so it reads as a real dashboard, not four numbers on a
+// card. Sample data only (signed out — there is no live account), same
+// convention every other scene on this page already uses (see
+// UnderstandStage's own header comment) — never presented as real, never
+// a metric this app doesn't actually compute. Mobile is completely
+// unaffected: this component never renders below 901px (see
+// .landingHeroProduct's own display:none default, overridden only at
+// the desktop breakpoint).
+// ===========================================================================
+const HERO_PREVIEW_PROPERTIES = [
+  { address: '148 Maple Street', rent: '$2,450/mo', flag: 'Lease expiring soon' },
+  { address: '5558 Pats Point', rent: '$1,890/mo', flag: null },
+]
+
+function HeroProductPreview() {
+  return (
+    <div className="heroProductPanel">
+      <div className="heroProductHead">
+        <p className="eyebrow">PORTFOLIO SNAPSHOT</p>
+      </div>
+      <div className="organizeStageMetrics understandPortfolioGrid heroProductMetrics">
+        <div className="organizeMetric"><strong>3</strong><span>Properties</span></div>
+        <div className="organizeMetric"><strong>$1.2M</strong><span>Portfolio Value</span></div>
+        <div className="organizeMetric"><strong>$6,100/mo</strong><span>Monthly Rent</span></div>
+        <div className="organizeMetric"><strong>$38.4K</strong><span>YTD NOI</span></div>
+      </div>
+      <div className="heroProductProperties">
+        <p className="heroProductPropertiesLabel">My Properties</p>
+        {HERO_PREVIEW_PROPERTIES.map((p) => (
+          <div className="heroProductPropertyRow" key={p.address}>
+            <span className="heroProductPropertyAddress">{p.address}</span>
+            <span className="heroProductPropertyRent">{p.rent}</span>
+            {p.flag && <span className="statusPill pillWarn heroProductPropertyFlag">{p.flag}</span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function LandingPage() {
   const [authOpen, setAuthOpen] = useState(false)
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
@@ -422,13 +471,26 @@ export default function LandingPage() {
         </nav>
       </header>
 
-      {/* Dynamic Homepage V1: hero copy, CTA and background photo treatment
-          are all UNCHANGED from Public Homepage V3 — this milestone only
-          adds a one-time entrance (fade + slight rise, via heroReady) and a
-          slow, non-scroll-linked "breathing" scale on the background photo
-          (pure CSS @keyframes, see .landingHeroBgImage — no scroll
-          listener, no rAF loop, disabled under reduced motion and z when
-          heroReady is false so it never fights the entrance transition). */}
+      {/* Desktop Homepage V4: hero copy/CTA/free-plan note are BYTE-FOR-
+          BYTE unchanged from Dynamic Homepage V1 — only the COMPOSITION
+          changed. Real-device feedback on the previous pass: the desktop
+          hero "still feels like a real-estate landing page with a house
+          photo," not a software product's first screen — the house was
+          the dominant visual, the product was nowhere in it. Fixed by
+          recomposing into a deliberate two-part desktop layout
+          (.landingHeroGrid, ≥901px only): copy on the left, a large
+          HeroProductPreview (the real Portfolio Snapshot, not the house)
+          on the right — see that component's own header comment. The
+          house background photo is now desktop-hidden entirely (see
+          .landingHeroBg's own CSS comment) rather than kept "faded and
+          secondary" — real-device feedback specifically asked for the
+          product to become the visual anchor, not a subtler house.
+          Mobile is completely unchanged: below 901px this still renders
+          as the single-column hero with the house background exactly as
+          Public Homepage V3/Dynamic Homepage V1 left it — see the ≤900px
+          CSS block. The one-time entrance (heroReady) and the
+          background's slow "breathing" scale are also unchanged,
+          wherever the background still renders (mobile only, now). */}
       <section className="landingHero">
         <div className="landingHeroBg" aria-hidden="true">
           <img
@@ -442,14 +504,19 @@ export default function LandingPage() {
           />
           <div className="landingHeroBgFade" />
         </div>
-        <div className="landingHeroInner" data-ready={heroReady}>
-          <h1>Your properties. Organized.</h1>
-          <p className="landingHeroTagline">Keep control of your properties without managing every little detail.</p>
-          <p className="landingHeroSub">PropRoster helps organize the information and numbers behind your properties, simplify communication with tenants and your trusted PropCrew, and automate routine coordination.</p>
-          <div className="landingHeroCtas">
-            <button type="button" className="primary landingCtaPrimary" onClick={() => openAuth('signup')}>Start Free</button>
+        <div className="landingHeroGrid">
+          <div className="landingHeroInner" data-ready={heroReady}>
+            <h1>Your properties. Organized.</h1>
+            <p className="landingHeroTagline">Keep control of your properties without managing every little detail.</p>
+            <p className="landingHeroSub">PropRoster helps organize the information and numbers behind your properties, simplify communication with tenants and your trusted PropCrew, and automate routine coordination.</p>
+            <div className="landingHeroCtas">
+              <button type="button" className="primary landingCtaPrimary" onClick={() => openAuth('signup')}>Start Free</button>
+            </div>
+            <p className="landingHeroFreeNote">Start with your first property free. No credit card required.</p>
           </div>
-          <p className="landingHeroFreeNote">Start with your first property free. No credit card required.</p>
+          <div className="landingHeroProduct" data-ready={heroReady}>
+            <HeroProductPreview />
+          </div>
         </div>
       </section>
 
