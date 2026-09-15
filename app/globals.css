@@ -2857,6 +2857,156 @@ h2, h3, p { margin-top: 0; }
   .taxPanelGroupToggleTitle h4 { font-size: 13.5px; }
 }
 
+/* ============================================================
+   Tax Center — usability/workflow-completion pass (app/tax-center/page.tsx),
+   refined by the Mobile Visual Refinement pass: a compact financial
+   timeline rather than a stack of large transaction cards. Section 1/2
+   of that milestone: the FIRST thing a landlord sees — a compact
+   Income/Expenses/Net/Receipts summary, a prominent + Add Expense
+   action, and a clean, month-grouped activity feed — ahead of the
+   existing V1-V3 tax-specific tables below (all untouched). Reuses
+   .overlay/.modal/.modalTop/.modalActions/.formGrid/.fullField/
+   .sectionHead/.muted as-is — no second input styling system, and
+   (Section 7) no second pill-badge system either: source/receipt
+   status are now quiet secondary text, not stacked .statusPill badges.
+   ============================================================ */
+.taxCenterSummarySection { display: grid; gap: 14px; margin-bottom: 28px; }
+.taxCenterSummaryStrip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; background: white; border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+.taxCenterSummaryTile { border-left: 1px solid var(--line); padding-left: 10px; min-width: 0; }
+.taxCenterSummaryTile:first-child { border-left: 0; padding-left: 0; }
+.taxCenterSummaryTile span { display: block; color: var(--muted); font-size: 11px; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.taxCenterSummaryTile strong { display: block; font-size: 17px; letter-spacing: -.3px; overflow-wrap: anywhere; }
+.taxCenterSummaryTileNet strong { color: var(--brand); }
+.taxCenterAddExpense { justify-self: start; padding: 13px 26px; font-size: 14px; }
+
+.taxCenterFeedSection { margin-bottom: 32px; }
+.taxCenterFeedHead p { margin-top: 2px; }
+.taxCenterFilterToggle { white-space: nowrap; flex-shrink: 0; }
+.taxCenterFilters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: -6px 0 18px; }
+.taxCenterFilters label { font-size: 12px; font-weight: 650; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.taxCenterFilters select { border: 1px solid var(--line); border-radius: 9px; padding: 9px 10px; background: white; color: var(--text); width: 100%; }
+.taxCenterFiltersClear { grid-column: 1 / -1; justify-self: start; border: 0; background: transparent; color: var(--brand); font-size: 12.5px; font-weight: 650; cursor: pointer; padding: 4px 0 0; }
+.taxCenterFeedEmpty { padding: 34px 0; text-align: center; }
+
+/* Section 5 — month-grouped, compact rows (the biggest visual change:
+   Section 6). Each month is its own quiet, bordered group; rows inside
+   share hairline dividers (a 1px background peeking through 1px row
+   gaps) rather than each row carrying its own full border/shadow —
+   this is what makes it read as one continuous timeline, not a stack
+   of separate cards. */
+.taxCenterFeedList { display: grid; gap: 22px; }
+.taxCenterFeedMonthGroup { display: grid; gap: 8px; min-width: 0; }
+.taxCenterFeedMonthHeading { margin: 0; padding: 0 2px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.taxCenterFeedRows { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.taxCenterFeedRow { display: flex; align-items: flex-start; gap: 10px; background: white; padding: 12px 14px; text-decoration: none; color: inherit; min-width: 0; }
+.taxCenterFeedRowLink { cursor: pointer; }
+.taxCenterFeedRowLink:hover, .taxCenterFeedRowLink:focus-visible { background: var(--brand-soft); }
+.taxCenterFeedIcon { flex-shrink: 0; width: 28px; height: 28px; padding: 6px; box-sizing: border-box; border-radius: 999px; background: var(--brand-soft); color: var(--brand); }
+.taxCenterFeedIcon svg { width: 100%; height: 100%; }
+.taxCenterFeedMain { flex: 1 1 0%; min-width: 0; display: grid; gap: 3px; }
+/* Amount shares the description's own line, right-aligned within it
+   (Section 10) — not a separate full-height column — matching the
+   approved compact-timeline reference exactly. */
+.taxCenterFeedTitleLine { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.taxCenterFeedTitleLine strong { font-size: 14px; min-width: 0; overflow-wrap: anywhere; }
+.taxCenterFeedSub, .taxCenterFeedSourceLine { font-size: 11.5px; overflow-wrap: anywhere; }
+.taxCenterFeedAmount { font-weight: 700; font-size: 14px; white-space: nowrap; flex-shrink: 0; }
+.taxCenterFeedAmountIncome { color: #1c6b40; }
+.taxCenterFeedAmountExpense { color: var(--text); }
+.taxCenterFeedChevron { align-self: center; flex-shrink: 0; color: var(--muted); font-size: 19px; line-height: 1; padding-left: 2px; }
+/* Section 8 — a quiet, tappable "Attach receipt" in place of "No
+   receipt", MANUAL rows only (app/tax-center/page.tsx's own
+   taxCenterFeedRowHref/renderFeedRow decide which rows ever render
+   this — never a Rent Ledger/Maintenance-owned row). */
+.taxCenterAttachReceiptLabel { color: var(--brand); font-weight: 650; cursor: pointer; }
+.taxCenterAttachReceiptLabel input[type="file"] { display: none; }
+.taxCenterAttachReceiptError { display: block; margin-top: 3px; font-size: 11px; color: #8a3d35; }
+
+/* + Add Expense modal — deliberately narrower than the default .modal
+   (which sizes for wider forms elsewhere), matching the short field
+   list this one actually has (Section 2). */
+.taxCenterAddExpenseModal { width: min(520px, 100%); }
+.taxCenterReceiptField { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.taxCenterReceiptButton { cursor: pointer; margin: 4px 0 0; }
+.taxCenterReceiptButton input[type="file"] { display: none; }
+.taxCenterReceiptRemove { border: 0; background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 650; cursor: pointer; padding: 0; margin-top: 4px; }
+
+/* Section 13 — the real-iPhone Date field bug. Root cause: a native
+   <input type="date"> has a large iOS-Safari intrinsic min-content
+   width (the calendar-picker affordance included), and a CSS grid item
+   defaults to min-width: auto — its content's own min-content size —
+   not 0. Inside .formGrid's 1fr/1fr columns that intrinsic size wins
+   over `width: 100%`, so the field (and its grid track) blows out
+   past its column's fair share instead of shrinking to it, reading as
+   oversized relative to every sibling field. Fix: min-width: 0 on both
+   the grid item (the <label>) and the input itself, so the input is
+   free to shrink to the column's actual width — `width: 100%` then
+   applies as intended and the field renders exactly like every other
+   field, with the native picker still fully functional (no custom
+   date widget, no -webkit-appearance: none on the input as a whole —
+   only what's needed to stop it imposing its own minimum size).
+   Scoped to THIS modal only — every other .formGrid date field in the
+   app (Lease/Mortgage/Insurance/Maintenance/property edit) is
+   untouched, per this pass's explicit "do not touch" boundaries. */
+.taxCenterAddExpenseModal .formGrid > label { min-width: 0; }
+.taxCenterAddExpenseModal .formGrid input[type="date"] { min-width: 0; width: 100%; box-sizing: border-box; }
+
+/* Section 14 — small mobile polish, meaning unchanged: tighten the
+   explanatory line under "Add Expense" so it doesn't push the form
+   below the fold on a short iPhone viewport. */
+.taxCenterAddExpenseModal > p.muted:first-of-type { margin: 4px 0 14px; font-size: 12.5px; line-height: 1.45; }
+
+/* Information-Architecture Simplification pass — "Your Tax Records" /
+   "Year-End" progressive-disclosure row lists, and the drill-in sheets
+   they open (reusing .overlay/.modal/.sectionHead/.financialStats/
+   .taxPropertyList/.taxCategoryTable* etc. as-is — no new list/table
+   styling system, just the row list itself). Apple-Settings-style:
+   restrained borders, one hairline-divided list, comfortable tap
+   targets — never a giant card per row. Same .taxCenterFeedRows/
+   .taxCenterFeedRow hairline-divider pattern the Activity timeline
+   already established (app/globals.css's earlier Tax Center block),
+   reused for Missing Receipts' rows via renderFeedRow() itself. */
+.taxCenterRecordsSection { margin-bottom: 28px; }
+.taxCenterRecordsList { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.taxCenterRecordsRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; text-align: left; border: 0; background: white; padding: 14px 16px; cursor: pointer; color: inherit; font: inherit; }
+.taxCenterRecordsRow:hover, .taxCenterRecordsRow:focus-visible { background: var(--brand-soft); }
+.taxCenterRecordsRowMain { display: grid; gap: 2px; min-width: 0; }
+.taxCenterRecordsRowMain strong { font-size: 14px; }
+.taxCenterRecordsRowMain span { font-size: 12px; color: var(--muted); }
+.taxCenterRecordsRowRight { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.taxCenterRecordsCount { display: inline-block; min-width: 20px; text-align: center; font-size: 12.5px; font-weight: 700; color: var(--brand); background: var(--brand-soft); border-radius: 999px; padding: 2px 8px; }
+.taxCenterRecordsChevron { color: var(--muted); font-size: 19px; line-height: 1; }
+/* Section 8/12 — "a secondary action rather than major standalone
+   prominence": a plain quiet text link, not a boxed .secondary button. */
+.taxCenterPrintLink { display: block; margin-top: 10px; border: 0; background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 650; cursor: pointer; padding: 4px 2px; text-decoration: underline; text-underline-offset: 2px; }
+
+/* Drill-in sheets — wider than the Add Expense modal (these hold
+   tables/lists, not a short form), same base .overlay/.modal chrome. */
+.taxCenterRecordsModal { width: min(720px, 100%); }
+.taxCenterRecordsModal .sectionHead { margin: 24px 0 12px; }
+.taxCenterRecordsModal .sectionHead:first-of-type { margin-top: 18px; }
+.taxCenterRecordsModal .sectionHead h3 { margin: 0 0 4px; font-size: 15px; font-weight: 700; }
+.taxCenterReadinessSummary { display: grid; gap: 4px; background: var(--brand-soft); border: 1px solid #cadfd4; border-radius: 12px; padding: 12px 14px; font-size: 12.5px; line-height: 1.5; margin-bottom: 18px; }
+.taxCenterReadinessSummary p { margin: 0; }
+.taxCenterReadinessSummary a { color: var(--brand); font-weight: 650; }
+
+@media (max-width: 760px) {
+  .taxCenterAddExpense { width: 100%; justify-self: stretch; }
+  .taxCenterFilters { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 430px) {
+  .taxCenterSummaryStrip { padding: 12px 10px; gap: 6px; }
+  .taxCenterSummaryTile { padding-left: 7px; }
+  .taxCenterSummaryTile span { font-size: 10px; }
+  .taxCenterSummaryTile strong { font-size: 14.5px; }
+  .taxCenterFilters { grid-template-columns: 1fr; }
+  .taxCenterFeedRow { padding: 11px 12px; gap: 8px; }
+  .taxCenterAddExpenseModal { padding: 18px; }
+  .taxCenterRecordsRow { padding: 12px 14px; }
+  .taxCenterRecordsRowMain strong { font-size: 13.5px; }
+  .taxCenterRecordsModal { padding: 18px; }
+}
+
 /* ==========================================================================
    Tenant Connect V1 (Milestone 24) — the compact Property > Rent > Tenant
    status card, the landlord-side Requests panel (reuses .maintenanceList/
