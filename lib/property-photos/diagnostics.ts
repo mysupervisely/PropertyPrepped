@@ -52,6 +52,19 @@ export type PhotoUploadStage =
   | 'PHOTO_RELOAD_ERROR'
   | 'PHOTO_RENDER_RESULT'
   | 'PHOTO_UNEXPECTED_EXCEPTION'
+  // Property + Attention Usability V1 — removePhoto()/setCover() never
+  // had diagnostic coverage before (only the gallery-add path did), so
+  // a real-device retest of the delete/replace flow had nowhere to
+  // look if it failed. Same taxonomy shape as the PHOTO_DB_* stages
+  // above, scoped to the delete/cover-change flow instead of upload.
+  | 'PHOTO_DELETE_START'
+  | 'PHOTO_DELETE_STORAGE_ERROR'
+  | 'PHOTO_DELETE_DB_ERROR'
+  | 'PHOTO_DELETE_SUCCESS'
+  | 'PHOTO_COVER_REASSIGN_ERROR'
+  | 'PHOTO_SET_COVER_START'
+  | 'PHOTO_SET_COVER_ERROR'
+  | 'PHOTO_SET_COVER_SUCCESS'
 
 function isDev(): boolean {
   return process.env.NODE_ENV !== 'production'

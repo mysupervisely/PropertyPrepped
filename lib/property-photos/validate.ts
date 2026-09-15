@@ -40,8 +40,38 @@
 //
 // Neither pass required a Storage bucket/policy/schema change — both
 // were application-layer gaps.
+//
+// ROUND 3 (real-iPhone retest, "add photo still doesn't work"): re-tracing
+// the whole picker→validate→process→upload→insert→cover→refresh→display
+// pipeline turned up a THIRD, still-unaudited gap sitting before any of
+// the above ever runs: this file had NO maximum file-size check at all.
+// The property-photos bucket (supabase/schema.sql) enforces a hard
+// `file_size_limit` of 20971520 bytes (20MB) server-side — but a modern
+// iPhone (12 Pro and later) routinely produces single photos well past
+// that: 48MP HEIC captures commonly land in the 10-20MB+ range, and
+// ProRAW/Live Photos can run 25-75MB. Before this fix, such a file sailed
+// straight through validatePropertyPhotoFile() (which only checked for
+// EMPTY/non-image, never TOO LARGE), then got fully read into memory by
+// beginReadingFileBytes()'s `file.arrayBuffer()` call and only THEN
+// handed to Storage — which would reject it with a generic server error
+// (or, under mobile Safari memory pressure from buffering a 50-75MB
+// array buffer, could fail silently before ever reaching the network
+// call at all, with no clear message surfaced to the user either way).
+// MAX_PROPERTY_PHOTO_BYTES below fails fast, client-side, with a message
+// that names the actual reason and the actual limit — before any
+// expensive read is ever attempted.
 
 export type FileLike = { name: string; type: string; size: number }
+
+/**
+ * Mirrors the property-photos Storage bucket's own `file_size_limit`
+ * (supabase/schema.sql, 20971520 bytes) exactly — this is not an
+ * independent guess at a "reasonable" limit, it's the same number the
+ * server already enforces, checked here first so a too-large file is
+ * rejected instantly with a clear, specific reason instead of an opaque
+ * failure after a slow, memory-heavy upload attempt.
+ */
+export const MAX_PROPERTY_PHOTO_BYTES = 20971520
 
 export type PhotoValidation = { ok: true; contentType: string | undefined } | { ok: false; reason: string }
 
@@ -89,6 +119,11 @@ export function resolvePhotoContentType(file: FileLike): string | undefined {
 export function validatePropertyPhotoFile(file: FileLike): PhotoValidation {
   if (file.size === 0) {
     return { ok: false, reason: `"${file.name}" appears to be empty (0 bytes). Try selecting it again, or choose a different photo.` }
+  }
+  if (file.size > MAX_PROPERTY_PHOTO_BYTES) {
+    const limitMb = Math.floor(MAX_PROPERTY_PHOTO_BYTES / (1024 * 1024))
+    const fileMb = (file.size / (1024 * 1024)).toFixed(1)
+    return { ok: false, reason: `"${file.name}" is ${fileMb}MB, which is over the ${limitMb}MB limit. Try a smaller photo, or turn off "ProRAW"/reduce the camera's photo resolution and retake it.` }
   }
   if (file.type && !file.type.startsWith('image/')) {
     return { ok: false, reason: `"${file.name}" doesn't look like an image file.` }
@@ -169,4 +204,41 @@ export function classifyPhotoSelection(files: File[]): ClassifiedPhotoSelection 
  */
 export function isFirstCoverPhoto(hasExistingCover: boolean, indexInBatch: number): boolean {
   return !hasExistingCover && indexInBatch === 0
+}
+
+export type CoverReassignmentDecision =
+  | { action: 'promote'; photoId: string; storagePath: string }
+  | { action: 'clear' }
+  | { action: 'none' }
+
+/**
+ * Property + Attention Usability V1 — property-photo bug fix.
+ *
+ * What becomes the property's new cover after one photo is removed —
+ * pulled out of app/page.tsx's removePhoto() for the same reason as
+ * isFirstCoverPhoto() above: a decision that was previously only
+ * verifiable by reading source, now independently testable with plain
+ * data (no Supabase/React involved).
+ *
+ * Only relevant when the REMOVED photo was itself the cover
+ * (`wasCover`) — removing a non-cover photo never changes who the
+ * cover is, so callers should skip calling this entirely in that case
+ * (kept as an explicit `'none'` branch here too, so the decision is
+ * total and never silently assumed by a caller).
+ *
+ * `remainingPhotos` must already exclude the photo being removed, in
+ * the same order the gallery shows them (soonest/most-recently-added
+ * first, per property_photos' own `order('created_at', {ascending:
+ * false})` — see loadPortfolio()) — the first entry, if any, becomes
+ * the new cover; an empty list means the property has no photos left
+ * at all, so its cover is cleared rather than left pointing at
+ * whichever photo happened to be deleted.
+ */
+export function decideCoverAfterRemoval(
+  wasCover: boolean,
+  remainingPhotos: { id: string; storage_path: string }[],
+): CoverReassignmentDecision {
+  if (!wasCover) return { action: 'none' }
+  const next = remainingPhotos[0]
+  return next ? { action: 'promote', photoId: next.id, storagePath: next.storage_path } : { action: 'clear' }
 }

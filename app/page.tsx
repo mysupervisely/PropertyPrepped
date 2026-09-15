@@ -60,13 +60,19 @@ import {
 import { buildTenantRequestDateItems } from '../lib/tenant-connect/requests'
 import type { TenantRequest } from '../lib/tenant-connect/types'
 import { MaintenanceCategoryIcon } from '../components/icons/MaintenanceCategoryIcon'
-import { validatePropertyPhotoFile, toUploadableFile, classifyPhotoSelection, isFirstCoverPhoto } from '../lib/property-photos/validate'
+import { validatePropertyPhotoFile, toUploadableFile, classifyPhotoSelection, isFirstCoverPhoto, decideCoverAfterRemoval } from '../lib/property-photos/validate'
 import { resolveImageContentType, toUploadableImageFile } from '../lib/uploads/image-file'
 import { beginReadingFileBytes, toDurableUploadableFile } from '../lib/uploads/durable-file'
 import { logUploadDiagnostic, initialUploadDebugState, type UploadDebugState } from '../lib/uploads/diagnostics'
 import { UploadDebugPanel } from '../components/uploads/UploadDebugPanel'
 import { logPhotoUploadDiagnostic, safeFileSummary, safeFileListSummary, safeErrorSummary } from '../lib/property-photos/diagnostics'
 import { friendlyPortfolioLoadMessage } from '../lib/dashboard/portfolio-load-status'
+import {
+  buildAttentionDismissalKey, buildVacancyDismissalKey, filterDismissedAttentionItems,
+  buildOpenMaintenanceDismissalKey, filterDismissedOpenMaintenanceItems,
+  type DismissibleAttentionKind,
+} from '../lib/dashboard/attention-dismissal'
+import { DismissibleAttentionRow } from '../components/DismissibleAttentionRow'
 import { enrichMaintenanceCases, relevantContactsForProperty, showsDedicatedUrgentBadge, type IntakeSessionOutcome, type PropCrewLinkRef, type MaintenanceCaseStatus, type EnrichedMaintenanceCase } from '../lib/maintenance/command-center'
 import { latestOutreachForContact, type ProviderOutreachRow } from '../lib/maintenance/provider-outreach'
 import { sendProviderOutreach as postProviderOutreach, providerOutreachErrorMessage } from '../lib/maintenance/provider-outreach-client'
@@ -738,6 +744,13 @@ export default function Home() {
       return next
     })
   }
+  // Property + Attention Usability V1, Part 3-C: dismissal is
+  // presentation filtering only, loaded once per portfolio load
+  // alongside everything else (see loadPortfolio()) — never touches any
+  // canonical status/urgency calculation. A plain Set of the owner's own
+  // dismissal_key values, matched against each item's own
+  // buildAttentionDismissalKey()/buildVacancyDismissalKey() result.
+  const [dismissedAttentionKeys, setDismissedAttentionKeys] = useState<Set<string>>(new Set())
   const [properties, setProperties] = useState<Property[]>([])
   const [documents, setDocuments] = useState<PropertyDocument[]>([])
   const [photos, setPhotos] = useState<PropertyPhoto[]>([])
@@ -1128,6 +1141,27 @@ export default function Home() {
     const { needsAttention, upcoming } = splitAttentionAndUpcoming(dateItems)
     const vacancy = entitlements.canUsePropWatch ? buildVacancyItems(properties, leases, propertyLabelById) : []
 
+    // Property + Attention Usability V1, Part 3-B/C: dismissal is
+    // presentation filtering layered on top of the exact same canonical
+    // needsAttention/vacancy lists above — nothing above this point
+    // changes because of it, and the underlying attention/vacancy
+    // computation is never re-run or second-guessed. Open Maintenance
+    // items get the same treatment further below, once
+    // enrichedRequestsForPropWatch exists (see visibleOpenMaintenanceItems).
+    const visibleNeedsAttention = filterDismissedAttentionItems(needsAttention, dismissedAttentionKeys)
+    const leasesByProperty = new Map<string, LeaseRecord[]>()
+    for (const lease of leases) {
+      const list = leasesByProperty.get(lease.property_id) || []
+      list.push(lease)
+      leasesByProperty.set(lease.property_id, list)
+    }
+    const visibleVacancy = vacancy.filter((v) => {
+      const property = properties.find((p) => p.id === v.propertyId)
+      if (!property) return true // shouldn't happen (vacancy is only ever built from real properties), but never hide on a lookup miss
+      const key = buildVacancyDismissalKey(property, leasesByProperty.get(v.propertyId) || [])
+      return !dismissedAttentionKeys.has(key)
+    })
+
     // Tenant Connect M3.1 — PropWatch's Open Maintenance now reads from
     // canonical maintenance_requests (active = status !== 'Completed',
     // the SAME definition the Maintenance Command Center itself uses),
@@ -1136,13 +1170,24 @@ export default function Home() {
     // dashboard/attention.ts) for the full root-cause this fixes.
     const enrichedRequestsForPropWatch = enrichMaintenanceCases(maintenanceRequests, tenantRequests, intakeSessions)
 
+    // Property + Attention Usability V1 follow-up: Open Maintenance
+    // items are dismissible too (see lib/dashboard/attention-dismissal.ts's
+    // own header comment for why the earlier V1 exclusion was overly
+    // cautious) — same presentation-filtering-only treatment as
+    // visibleNeedsAttention/visibleVacancy above, never touching
+    // maintenance_requests itself.
+    const visibleOpenMaintenanceItems = filterDismissedOpenMaintenanceItems(
+      buildOpenMaintenanceRequestItems(enrichedRequestsForPropWatch, propertyLabelById),
+      dismissedAttentionKeys,
+    )
+
     // Property-First UX Cleanup: property cards show "one or two
     // important alerts if applicable" — a per-property count of the SAME
     // needsAttention items above (before NEEDS_ATTENTION_LIMIT truncates
     // the portfolio-wide list), so a card's own count is never wrong just
     // because some other property's alerts filled up the top-10 list.
     const attentionCounts = new Map<string, number>()
-    for (const item of needsAttention) attentionCounts.set(item.propertyId, (attentionCounts.get(item.propertyId) || 0) + 1)
+    for (const item of visibleNeedsAttention) attentionCounts.set(item.propertyId, (attentionCounts.get(item.propertyId) || 0) + 1)
 
     // Same current-month rent-status source Rent Ledger/the property
     // Rent tab already use (buildRentLedgerRows) — gated behind
@@ -1165,18 +1210,50 @@ export default function Home() {
     ])
 
     return {
-      attentionItems: limitItems(sortByDaysUntilAscending(needsAttention), NEEDS_ATTENTION_LIMIT),
+      attentionItems: limitItems(sortByDaysUntilAscending(visibleNeedsAttention), NEEDS_ATTENTION_LIMIT),
       upcomingItems: limitItems(sortByDaysUntilAscending(upcoming), UPCOMING_LIMIT),
-      openMaintenanceItems: limitItems(buildOpenMaintenanceRequestItems(enrichedRequestsForPropWatch, propertyLabelById), OPEN_MAINTENANCE_LIMIT),
+      openMaintenanceItems: limitItems(visibleOpenMaintenanceItems, OPEN_MAINTENANCE_LIMIT),
       recentActivity: limitItems(activity, RECENT_ACTIVITY_LIMIT),
-      vacancyItems: vacancy,
+      vacancyItems: visibleVacancy,
       attentionCountByProperty: attentionCounts,
       rentStatusByProperty: rentByProperty,
     }
-  }, [leases, insurancePolicies, mortgages, maintenanceRecords, maintenanceRequests, intakeSessions, documents, transactions, propertyNotes, properties, contacts, propertyLabelById, rentPayments, propertySystems, entitlements, tenantRequests])
+  }, [leases, insurancePolicies, mortgages, maintenanceRecords, maintenanceRequests, intakeSessions, documents, transactions, propertyNotes, properties, contacts, propertyLabelById, rentPayments, propertySystems, entitlements, tenantRequests, dismissedAttentionKeys])
 
   function goToNav(propertyId: string, nav: NavTarget) {
     openProperty(propertyId, nav.tab, nav.docsSubTab, nav.propSubTab, nav.rentSubTab)
+  }
+
+  // Property + Attention Usability V1, Part 3-B/C: the ONE place that
+  // writes to attention_dismissals — the ONLY table this milestone's
+  // dismissal feature ever touches. Presentation filtering only: this
+  // never updates rent_payments, maintenance_requests/records, leases,
+  // insurance_policies, mortgages, property_systems, or tenant_requests
+  // — clearing an item cannot mark rent paid, close a request, or
+  // change any date on file (see this milestone's own report for the
+  // exhaustive per-type confirmation). Optimistic: the item's own key
+  // fully determines whether it's filtered out, so hiding it locally
+  // the moment Clear is pressed needs no reconciliation once the
+  // insert below confirms — it only needs to be rolled back if the
+  // insert genuinely failed.
+  async function clearAttentionItem(key: string, propertyId: string, attentionType: DismissibleAttentionKind) {
+    if (!supabase || !user) return
+    setDismissedAttentionKeys((prev) => new Set(prev).add(key))
+    const { error: dismissError } = await supabase.from('attention_dismissals').insert({
+      owner_id: user.id, property_id: propertyId, attention_type: attentionType, dismissal_key: key,
+    })
+    // 23505 = unique_violation — this exact key was already dismissed
+    // (a double-tap, a retry after a slow first request) — not a real
+    // failure, the end state (dismissed) is already correct either way.
+    if (dismissError && dismissError.code !== '23505') {
+      console.error('attention dismissal failed to persist', dismissError)
+      setDismissedAttentionKeys((prev) => {
+        const next = new Set(prev)
+        next.delete(key)
+        return next
+      })
+      surfaceError('Could not clear that item. Please try again.')
+    }
   }
 
   const selected = properties.find((property) => property.id === selectedId) || null
@@ -1289,6 +1366,7 @@ export default function Home() {
       { data: providerOutreachRows },
       { data: availabilityWindowRows },
       { data: appointmentRows },
+      { data: dismissalRows },
     ] = await Promise.all([
       client.from('properties').select('*').order('created_at', { ascending: true }),
       client.from('property_documents').select('*').order('created_at', { ascending: false }),
@@ -1324,6 +1402,15 @@ export default function Home() {
       // not exist yet" exclusion from firstError as the above two.
       client.from('maintenance_availability_windows').select('id, request_id, window_date, window_label'),
       client.from('maintenance_appointments').select('id, maintenance_request_id, outreach_id, proposed_local_start_at, proposed_by, matched_availability, status, confirmed_at, created_at').order('created_at', { ascending: false }),
+      // Property + Attention Usability V1, Part 3-C: the owner's own
+      // dismissed-attention-item keys, fetched once per load. Same
+      // defensive exclusion from firstError as tenant_requests/
+      // maintenance_intake_sessions/etc above — this table's own
+      // migration may not be applied yet in every environment, and its
+      // absence must never block the rest of the Dashboard from
+      // loading; a query error here simply means "nothing dismissed
+      // yet" rather than a hard failure.
+      client.from('attention_dismissals').select('dismissal_key'),
     ])
     const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError || contactError || requestError || systemError || noteError || ownershipError || rentPaymentError || taxRecordError || taxCustomItemError
     if (firstError) {
@@ -1369,10 +1456,31 @@ export default function Home() {
       }
       return { ...photo, signedUrl: data?.signedUrl }
     }))
-    const coverMap = new Map(signedPhotos.filter((p) => p.is_cover).map((p) => [p.property_id, p.signedUrl]))
+    // Property + Attention Usability V1 follow-up (Edit Property photo
+    // management): built as an explicit first-match-wins loop, not
+    // `new Map(...entries)` (which lets a LATER entry silently overwrite
+    // an earlier one for the same key). rawPhotos is already newest-first
+    // (order('created_at', {ascending: false}) above), so this now
+    // always prefers the most-recently-created is_cover row for a
+    // property. Normally there is only ever one such row, so this is a
+    // no-op change of behavior — it only matters in the rare transient
+    // state where changeCoverPhoto()'s last (non-fatal, logged) step
+    // failed to un-cover the OLD row: the NEW cover still displays
+    // correctly instead of the stale old one.
+    const coverMap = new Map<string, string | undefined>()
+    for (const p of signedPhotos) {
+      if (p.is_cover && !coverMap.has(p.property_id)) coverMap.set(p.property_id, p.signedUrl)
+    }
     setProperties(rawProperties.map((p) => ({ ...p, coverUrl: coverMap.get(p.id) })))
     setDocuments((docRows || []) as PropertyDocument[])
     setPhotos(signedPhotos)
+    // Property + Attention Usability V1, Part 3-C: a plain Set of the
+    // owner's own dismissal_key values — matched against each item's
+    // own buildAttentionDismissalKey()/buildVacancyDismissalKey()
+    // result in the attentionItems/vacancyItems useMemo below. Never
+    // fatal if the table isn't there yet (dismissalRows is simply
+    // undefined/null in that case, per the defensive query above).
+    setDismissedAttentionKeys(new Set(((dismissalRows || []) as { dismissal_key: string }[]).map((r) => r.dismissal_key)))
     // PHOTO_RELOAD_SUCCESS is logged here (not in addPhotoFiles) because
     // this is the one place with direct access to the freshly-fetched
     // array — reading `photos`/`selectedPhotos` state back inside
@@ -2091,36 +2199,272 @@ export default function Home() {
     else if (action === 'EstimatedValue' && selected) { openEditProperty(selected); setEditDraft((d) => ({ ...d, value: values.value || d.value })) }
   }
 
+  // Property + Attention Usability V1 — property-photo bug fix.
+  //
+  // ROOT CAUSE TRACE: the full add/delete/replace flow was re-audited
+  // end to end (Storage, property_photos, properties.cover_photo_path,
+  // RLS, signed-URL rendering, the hero's own coverUrl source). The
+  // ADD path (addPhotoFiles(), below) already reads live, freshly-
+  // reloaded state for "does this property already have a cover" —
+  // adding a photo after a delete is mechanically identical to adding
+  // the very first photo ever, and that path is correct.
+  //
+  // The real, concrete gap was here: setCover()/removePhoto() were the
+  // ONLY photo-mutating functions in this file that never checked a
+  // single one of their Supabase writes' own errors, and had no
+  // exception safety — every other photo function (addPhotoFiles(),
+  // addProperty()'s cover-photo block) already received this exact
+  // hardening across three earlier iOS investigation rounds (see
+  // docs/property-photo-upload-fix.md), but it was never backported to
+  // delete/set-cover. Concretely, if the property_photos row DELETE
+  // silently failed (a transient network/RLS edge case), the deleted
+  // photo's row would survive with is_cover still true — which would
+  // then permanently block any FUTURE upload from ever becoming the
+  // new cover, since addPhotoFiles()'s hasCover check reads exactly
+  // that flag. And with no try/catch/finally, any unexpected exception
+  // anywhere in either function left `busy` stuck true forever,
+  // disabling the "Add property photos" control (and every other
+  // busy-gated control on the page) with zero feedback — a byte-for-
+  // byte match for "delete looked like it worked, but I can never add
+  // a replacement." Fixed by making both functions structurally match
+  // the already-hardened upload path, and by extracting the "who
+  // becomes the new cover" decision into decideCoverAfterRemoval()
+  // (lib/property-photos/validate.ts), independently unit-tested,
+  // mirroring the existing isFirstCoverPhoto() precedent.
+  //
+  // No schema/migration change — same table, same bucket, same RLS.
   async function setCover(photo: PropertyPhoto) {
     if (!supabase || !selectedId) return
     setBusy(true)
-    await supabase.from('property_photos').update({ is_cover: false }).eq('property_id', selectedId)
-    await supabase.from('property_photos').update({ is_cover: true }).eq('id', photo.id)
-    await supabase.from('properties').update({ cover_photo_path: photo.storage_path }).eq('id', selectedId)
-    await loadPortfolio()
-    setBusy(false)
+    setError('')
+    try {
+      logPhotoUploadDiagnostic('PHOTO_SET_COVER_START', { propertyId: selectedId })
+      const { error: clearError } = await supabase.from('property_photos').update({ is_cover: false }).eq('property_id', selectedId)
+      if (clearError) {
+        logPhotoUploadDiagnostic('PHOTO_SET_COVER_ERROR', { stage: 'clear_existing', error: safeErrorSummary(clearError) })
+        console.error('property-photo set-cover: clearing the existing cover failed', clearError)
+        surfaceError('Could not update the cover photo. Please try again.')
+        return
+      }
+      const { error: assignError } = await supabase.from('property_photos').update({ is_cover: true }).eq('id', photo.id)
+      if (assignError) {
+        logPhotoUploadDiagnostic('PHOTO_SET_COVER_ERROR', { stage: 'assign_new', error: safeErrorSummary(assignError) })
+        console.error('property-photo set-cover: assigning the new cover failed', assignError)
+        surfaceError('Could not update the cover photo. Please try again.')
+        return
+      }
+      const { error: pathError } = await supabase.from('properties').update({ cover_photo_path: photo.storage_path }).eq('id', selectedId)
+      if (pathError) {
+        logPhotoUploadDiagnostic('PHOTO_SET_COVER_ERROR', { stage: 'cover_photo_path', error: safeErrorSummary(pathError) })
+        console.error('property-photo set-cover: cover_photo_path update failed', pathError)
+        surfaceError('The cover changed, but the property record could not be fully updated. Please try again.')
+      } else {
+        logPhotoUploadDiagnostic('PHOTO_SET_COVER_SUCCESS', { propertyId: selectedId })
+      }
+      await loadPortfolio()
+    } catch (unexpected) {
+      logPhotoUploadDiagnostic('PHOTO_UNEXPECTED_EXCEPTION', { site: 'set-cover', error: safeErrorSummary(unexpected) })
+      console.error('property-photo set-cover threw unexpectedly', unexpected)
+      surfaceError('Something went wrong updating the cover photo. Please try again.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function removePhoto(photo: PropertyPhoto) {
     if (!supabase || !selectedId) return
     setBusy(true)
+    setError('')
     const wasCover = photo.is_cover
-    const { error: storageError } = await supabase.storage.from('property-photos').remove([photo.storage_path])
-    if (storageError) setError(storageError.message)
-    await supabase.from('property_photos').delete().eq('id', photo.id)
-    if (wasCover) {
-      const remaining = selectedPhotos.filter((p) => p.id !== photo.id)
-      if (remaining[0]) {
-        await supabase.from('property_photos').update({ is_cover: true }).eq('id', remaining[0].id)
-        await supabase.from('properties').update({ cover_photo_path: remaining[0].storage_path }).eq('id', selectedId)
-      } else {
-        await supabase.from('properties').update({ cover_photo_path: null }).eq('id', selectedId)
+    try {
+      logPhotoUploadDiagnostic('PHOTO_DELETE_START', { propertyId: selectedId, wasCover })
+      // A Storage removal failure is logged but NOT fatal to the rest
+      // of this flow — an orphaned storage object is a lesser problem
+      // than a photo the user can never remove from their own gallery.
+      // It is no longer silently swallowed, though (previously: only
+      // set on-screen error text, nothing logged, and execution
+      // continued exactly the same either way — kept that same
+      // continue-regardless behavior, just no longer silent).
+      const { error: storageError } = await supabase.storage.from('property-photos').remove([photo.storage_path])
+      if (storageError) {
+        logPhotoUploadDiagnostic('PHOTO_DELETE_STORAGE_ERROR', { error: safeErrorSummary(storageError) })
+        console.error('property-photo delete: storage removal failed', storageError)
       }
+      const { error: rowError } = await supabase.from('property_photos').delete().eq('id', photo.id)
+      if (rowError) {
+        // THE FIX: this write was previously completely unchecked. Stop
+        // here rather than proceeding to reassign a cover based on a
+        // row that never actually left the database — see this
+        // function's own header comment above for the failure mode
+        // this closes.
+        logPhotoUploadDiagnostic('PHOTO_DELETE_DB_ERROR', { error: safeErrorSummary(rowError) })
+        console.error('property-photo delete: removing the photo record failed', rowError)
+        surfaceError('This photo could not be removed. Please try again.')
+        return
+      }
+      logPhotoUploadDiagnostic('PHOTO_DELETE_SUCCESS', { propertyId: selectedId })
+      const remaining = selectedPhotos.filter((p) => p.id !== photo.id)
+      const decision = decideCoverAfterRemoval(wasCover, remaining)
+      if (decision.action === 'promote') {
+        const { error: reassignError } = await supabase.from('property_photos').update({ is_cover: true }).eq('id', decision.photoId)
+        if (reassignError) {
+          logPhotoUploadDiagnostic('PHOTO_COVER_REASSIGN_ERROR', { stage: 'is_cover', error: safeErrorSummary(reassignError) })
+          console.error('property-photo delete: promoting the next photo to cover failed', reassignError)
+          surfaceError('The photo was removed, but a new cover photo could not be set. Please choose one from the gallery.')
+        } else {
+          const { error: pathError } = await supabase.from('properties').update({ cover_photo_path: decision.storagePath }).eq('id', selectedId)
+          if (pathError) {
+            logPhotoUploadDiagnostic('PHOTO_COVER_REASSIGN_ERROR', { stage: 'cover_photo_path', error: safeErrorSummary(pathError) })
+            console.error('property-photo delete: cover_photo_path update failed', pathError)
+            surfaceError('The photo was removed, but the property record could not be fully updated.')
+          }
+        }
+      } else if (decision.action === 'clear') {
+        const { error: pathError } = await supabase.from('properties').update({ cover_photo_path: null }).eq('id', selectedId)
+        if (pathError) {
+          logPhotoUploadDiagnostic('PHOTO_COVER_REASSIGN_ERROR', { stage: 'clear', error: safeErrorSummary(pathError) })
+          console.error('property-photo delete: clearing cover_photo_path failed', pathError)
+        }
+      }
+      await loadPortfolio()
+    } catch (unexpected) {
+      logPhotoUploadDiagnostic('PHOTO_UNEXPECTED_EXCEPTION', { site: 'remove-photo', error: safeErrorSummary(unexpected) })
+      console.error('property-photo delete threw unexpectedly', unexpected)
+      surfaceError('Something went wrong removing that photo. Please try again.')
+    } finally {
+      setBusy(false)
     }
-    await loadPortfolio()
-    setBusy(false)
   }
 
+  // Property + Attention Usability V1 — Round 3 (real-iPhone retest,
+  // "property photo is still broken" + "move primary photo management
+  // into Edit Property").
+  //
+  // Reinvestigation confirmed the ADD path was already correct end to
+  // end (see this file's ROOT CAUSE TRACE comment above setCover()), and
+  // Round 3's own Part B closed a real, separate gap (no max-file-size
+  // check — see lib/property-photos/validate.ts's header). But the
+  // user's actual complaint was UX, not just a bug: reaching "Photos" to
+  // fix a broken/missing cover photo requires Overview -> Documents tab
+  // -> Photos sub-tab -> Add -> Set cover — several taps on a phone, for
+  // what should be a one-tap fix from the property's own settings. This
+  // function is the new, single entry point for "Edit Property ->
+  // Add/Change photo," used for BOTH the empty-state ("no cover yet")
+  // and replace ("already has a cover") cases — same function either
+  // way, since `previousCover` is simply null in the empty case.
+  //
+  // Reuses, unchanged: the property-photos bucket, the property_photos
+  // table, is_cover cover-photo semantics, validatePropertyPhotoFile()/
+  // toDurableUploadableFile() (the same upload pipeline addPhotoFiles()
+  // and addProperty() already use), and loadPortfolio()'s existing
+  // signed-URL + coverMap display path. No new table, no new bucket, no
+  // new cover-photo field — none was needed.
+  //
+  // SAFE SEQUENCE (exactly as required): (1) validate, (2) upload the
+  // new file to Storage at a fresh path — the OLD cover is completely
+  // untouched by this step, so a failure here leaves the property
+  // exactly as it was; (3) insert the new property_photos row as
+  // is_cover:false FIRST — a DB failure here cleans up the orphaned
+  // Storage object and, again, leaves the OLD cover untouched; (4) flip
+  // ONLY the new row to is_cover:true — if this fails, the new photo
+  // still exists as an ordinary gallery photo and the OLD cover is still
+  // live, a safe non-broken partial state; (5) best-effort update
+  // properties.cover_photo_path (never read for display — see
+  // loadPortfolio()'s coverMap — so this step is non-fatal); (6) ONLY
+  // NOW clear is_cover on the OLD row, never deleting it — preserving
+  // this app's existing gallery-retention semantics (the same rule
+  // isFirstCoverPhoto() already encodes for the add-photo path: a
+  // replaced cover photo remains in the gallery as a normal, non-cover
+  // photo, never silently discarded).
+  async function changeCoverPhoto(file: File, bytesPromise: Promise<ArrayBuffer>) {
+    if (!supabase || !user || !selectedId) return
+    logPhotoUploadDiagnostic('PHOTO_PICKER_SELECTED', { site: 'edit-property-cover', ...safeFileSummary(file) })
+    const validation = validatePropertyPhotoFile(file)
+    logPhotoUploadDiagnostic('PHOTO_VALIDATION_RESULT', { site: 'edit-property-cover', accepted: validation.ok, size: file.size, ...(validation.ok ? { contentType: validation.contentType } : { reason: validation.reason }) })
+    if (!validation.ok) { surfaceError(validation.reason); return }
+    setBusy(true)
+    setError('')
+    try {
+      const durable = await toDurableUploadableFile(file, validation.contentType, bytesPromise)
+      logPhotoUploadDiagnostic('PHOTO_PAYLOAD_READY', { site: 'edit-property-cover', originalSize: file.size, byteLength: durable.byteLength })
+      if (file.size > 0 && durable.byteLength === 0) {
+        logPhotoUploadDiagnostic('PHOTO_PAYLOAD_READ_ERROR', { site: 'edit-property-cover', error: { message: `reported ${file.size} bytes but 0 bytes were readable` } })
+        surfaceError('Could not read the selected photo. Please try again.')
+        return
+      }
+      // Captured BEFORE any write below — this is the row that must
+      // stay untouched until step 6.
+      const previousCover = selectedPhotos.find((p) => p.is_cover) || null
+      const path = `${user.id}/${selectedId}/photos/${crypto.randomUUID()}-${safeName(durable.file.name)}`
+      logPhotoUploadDiagnostic('PHOTO_UPLOAD_START', { site: 'edit-property-cover', propertyId: selectedId, bucket: 'property-photos', path, contentType: validation.contentType, size: durable.file.size })
+      const { error: uploadError } = await supabase.storage.from('property-photos').upload(path, durable.file, { contentType: validation.contentType, upsert: false })
+      if (uploadError) {
+        logPhotoUploadDiagnostic('PHOTO_UPLOAD_ERROR', { site: 'edit-property-cover', path, error: safeErrorSummary(uploadError) })
+        console.error('property-photo cover change: upload failed', uploadError)
+        surfaceError('Photo upload failed. Please try a JPEG or PNG, or choose another photo.')
+        return
+      }
+      logPhotoUploadDiagnostic('PHOTO_UPLOAD_SUCCESS', { site: 'edit-property-cover', path })
+      logPhotoUploadDiagnostic('PHOTO_DB_INSERT_START', { site: 'edit-property-cover', propertyId: selectedId })
+      const { data: insertedPhoto, error: rowError } = await supabase.from('property_photos').insert({ owner_id: user.id, property_id: selectedId, name: durable.file.name, storage_path: path, is_cover: false }).select('id').single()
+      if (rowError || !insertedPhoto) {
+        // Storage upload succeeded but the DB row failed — clean up the
+        // now-orphaned object. The OLD cover was never touched, so the
+        // property still shows a usable image.
+        await supabase.storage.from('property-photos').remove([path])
+        logPhotoUploadDiagnostic('PHOTO_DB_INSERT_ERROR', { site: 'edit-property-cover', error: safeErrorSummary(rowError) })
+        console.error('property-photo cover change: DB insert failed after a successful upload', rowError)
+        surfaceError('Photo upload failed. Please try a JPEG or PNG, or choose another photo.')
+        return
+      }
+      logPhotoUploadDiagnostic('PHOTO_DB_INSERT_SUCCESS', { site: 'edit-property-cover' })
+      logPhotoUploadDiagnostic('PHOTO_SET_COVER_START', { site: 'edit-property-cover', propertyId: selectedId })
+      const { error: assignError } = await supabase.from('property_photos').update({ is_cover: true }).eq('id', insertedPhoto.id)
+      if (assignError) {
+        // The new photo exists as an ordinary, non-cover gallery photo,
+        // and the OLD cover is still intact and still displaying — a
+        // safe partial state, recoverable from the Photos tab (Set
+        // cover), never a broken/missing image.
+        logPhotoUploadDiagnostic('PHOTO_SET_COVER_ERROR', { site: 'edit-property-cover', stage: 'assign_new', error: safeErrorSummary(assignError) })
+        console.error('property-photo cover change: assigning the new cover failed', assignError)
+        surfaceError('The photo uploaded, but could not be set as the cover. It was added to the Photos tab — set it as the cover from there.')
+        await loadPortfolio()
+        return
+      }
+      // Best-effort — cover_photo_path is write-only and never read for
+      // actual display (property_photos.is_cover + a freshly-signed URL
+      // is the real source of truth, per loadPortfolio()'s coverMap), so
+      // a failure here does not affect what the user actually sees.
+      const { error: pathError } = await supabase.from('properties').update({ cover_photo_path: path }).eq('id', selectedId)
+      if (pathError) {
+        logPhotoUploadDiagnostic('PHOTO_DB_UPDATE_ERROR', { site: 'edit-property-cover:cover_photo_path', error: safeErrorSummary(pathError) })
+        console.error('property-photo cover change: cover_photo_path update failed (non-fatal — not read for display)', pathError)
+      }
+      // ONLY NOW un-cover the OLD row — never delete it, so it remains
+      // in the gallery as a normal photo (the same retention semantics
+      // isFirstCoverPhoto() already encodes for the add-photo path).
+      if (previousCover) {
+        const { error: clearError } = await supabase.from('property_photos').update({ is_cover: false }).eq('id', previousCover.id)
+        if (clearError) {
+          // Cosmetic-only: two rows would transiently both read
+          // is_cover=true. Not surfaced as a user-facing error — the new
+          // cover is already fully live and correct, and loadPortfolio()'s
+          // coverMap (see its own comment) always prefers the most
+          // recently created is_cover row, so display is unaffected.
+          logPhotoUploadDiagnostic('PHOTO_SET_COVER_ERROR', { site: 'edit-property-cover', stage: 'clear_previous', error: safeErrorSummary(clearError) })
+          console.error('property-photo cover change: clearing the previous cover failed (cosmetic — new cover already live)', clearError)
+        }
+      }
+      logPhotoUploadDiagnostic('PHOTO_SET_COVER_SUCCESS', { site: 'edit-property-cover', propertyId: selectedId })
+      await loadPortfolio()
+    } catch (unexpected) {
+      logPhotoUploadDiagnostic('PHOTO_UNEXPECTED_EXCEPTION', { site: 'edit-property-cover', error: safeErrorSummary(unexpected) })
+      console.error('property-photo cover change threw unexpectedly', unexpected)
+      surfaceError('Something went wrong updating the property photo. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function addTransaction() {
     if (!supabase || !user || !selectedId || !transactionDraft.description.trim() || Number(transactionDraft.amount) <= 0) return
@@ -3338,7 +3682,34 @@ export default function Home() {
           {showModuleForm === 'Maintenance' && <div className="formGrid"><label>Service date<input type="date" value={maintenanceDraft.serviceDate} onChange={e=>setMaintenanceDraft({...maintenanceDraft,serviceDate:e.target.value})} /></label><label>Status<select value={maintenanceDraft.status} onChange={e=>setMaintenanceDraft({...maintenanceDraft,status:e.target.value})}><option>Completed</option><option>Scheduled</option><option>In progress</option><option>Needs follow-up</option></select></label><label>Category<select value={maintenanceDraft.category} onChange={e=>setMaintenanceDraft({...maintenanceDraft,category:e.target.value})}>{MAINTENANCE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></label><label>Vendor<input value={maintenanceDraft.vendor} onChange={e=>setMaintenanceDraft({...maintenanceDraft,vendor:e.target.value})} /></label><label>Cost<input inputMode="decimal" value={maintenanceDraft.cost} onChange={e=>setMaintenanceDraft({...maintenanceDraft,cost:e.target.value})} /></label><label>Receipt / invoice<select value={maintenanceDraft.documentId} onChange={e=>setMaintenanceDraft({...maintenanceDraft,documentId:e.target.value})}><option value="">No attachment</option>{selectedDocs.filter(d=>['Receipts','Warranties','Other'].includes(d.category)).map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><label className="fullField">Description<input value={maintenanceDraft.description} onChange={e=>setMaintenanceDraft({...maintenanceDraft,description:e.target.value})} placeholder="HVAC repair, annual service, roof inspection…" /></label><label className="recurringCheck fullField"><input type="checkbox" checked={maintenanceDraft.addToFinancials} onChange={e=>setMaintenanceDraft({...maintenanceDraft,addToFinancials:e.target.checked})} /><span>Add this cost to Financials</span><small>PropRoster creates a linked Maintenance expense so you only enter the cost once.</small></label></div>}
           <div className="modalActions"><button className="secondary" onClick={() => setShowModuleForm(null)}>Cancel</button><button className="primary" disabled={busy} onClick={() => void (showModuleForm==='Lease'?saveLease():showModuleForm==='Mortgage'?saveMortgage():showModuleForm==='Insurance'?saveInsurance():saveMaintenance())}>{busy?'Saving…':'Save'}</button></div></div></div>}
 
-        {showEdit && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowEdit(false)}><div className="modal"><div className="modalTop"><div><p className="eyebrow">PROPERTY SETTINGS</p><h2>Edit property</h2></div><button className="iconButton" onClick={() => setShowEdit(false)}>×</button></div><div className="formGrid"><label>Street address<AddressAutocomplete value={editDraft.address} onTextChange={(v) => setEditDraft({ ...editDraft, address: v })} onSelect={(addr) => setEditDraft((d) => ({ ...d, ...applyNormalizedAddress(addr, d.address) }))} placeholder="123 Example Street" /></label><label>City, state & ZIP<input value={editDraft.city} onChange={(e) => setEditDraft({ ...editDraft, city: e.target.value })} placeholder="Example City, FL 12345" /></label><label>Property type<select value={editDraft.type} onChange={(e) => setEditDraft({ ...editDraft, type: e.target.value })}><option>Rental Property</option><option>Primary Residence</option><option>Vacation Home</option><option>Commercial</option><option>Land</option><option>Other</option></select></label><label>Purchase price<input inputMode="decimal" value={editDraft.purchasePrice} onChange={(e) => setEditDraft({ ...editDraft, purchasePrice: e.target.value })} placeholder="390000" /></label><label>Estimated value<input inputMode="decimal" value={editDraft.value} onChange={(e) => setEditDraft({ ...editDraft, value: e.target.value })} placeholder="520000" /></label><label>Mortgage balance<input inputMode="decimal" value={editDraft.mortgage} onChange={(e) => setEditDraft({ ...editDraft, mortgage: e.target.value })} placeholder="310000" /></label><label>Financing status<select value={editDraft.financingStatus} onChange={(e) => setEditDraft({ ...editDraft, financingStatus: e.target.value })}>{FINANCING_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label><label>Monthly rent<input inputMode="decimal" value={editDraft.rent} onChange={(e) => setEditDraft({ ...editDraft, rent: e.target.value })} placeholder="2950" /></label><label>Monthly property expenses<input inputMode="decimal" value={editDraft.monthlyExpenses} onChange={(e) => setEditDraft({ ...editDraft, monthlyExpenses: e.target.value })} placeholder="1925" /></label><label>Purchase date<input type="date" value={editDraft.purchaseDate} onChange={(e) => setEditDraft({ ...editDraft, purchaseDate: e.target.value })} /></label><label>Beds<input inputMode="numeric" value={editDraft.beds} onChange={(e) => setEditDraft({ ...editDraft, beds: e.target.value })} placeholder="3" /></label><label>Baths<input inputMode="decimal" value={editDraft.baths} onChange={(e) => setEditDraft({ ...editDraft, baths: e.target.value })} placeholder="2.5" /></label><label>Square feet<input inputMode="numeric" value={editDraft.squareFeet} onChange={(e) => setEditDraft({ ...editDraft, squareFeet: e.target.value })} placeholder="1850" /></label><label>Year built<input inputMode="numeric" value={editDraft.yearBuilt} onChange={(e) => setEditDraft({ ...editDraft, yearBuilt: e.target.value })} placeholder="1998" /></label><label>Lot size (sqft)<input inputMode="numeric" value={editDraft.lotSizeSqft} onChange={(e) => setEditDraft({ ...editDraft, lotSizeSqft: e.target.value })} placeholder="6500" /></label><label>Annual property tax<input inputMode="decimal" value={editDraft.propertyTaxAnnual} onChange={(e) => setEditDraft({ ...editDraft, propertyTaxAnnual: e.target.value })} placeholder="4200" /></label><label>HOA / month<input inputMode="decimal" value={editDraft.hoaMonthly} onChange={(e) => setEditDraft({ ...editDraft, hoaMonthly: e.target.value })} placeholder="0" /></label></div><div className="editPropertyFooter"><button className="dangerButton" onClick={() => setShowDeleteConfirm(true)}>Delete Property</button><div className="modalActions compactActions"><button className="secondary" onClick={() => setShowEdit(false)}>Cancel</button><button className="primary" disabled={busy || !editDraft.address.trim() || !editDraft.city.trim()} onClick={() => void updateProperty()}>{busy ? 'Saving…' : 'Save Changes'}</button></div></div></div></div>}
+        {showEdit && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowEdit(false)}><div className="modal"><div className="modalTop"><div><p className="eyebrow">PROPERTY SETTINGS</p><h2>Edit property</h2></div><button className="iconButton" onClick={() => setShowEdit(false)}>×</button></div>
+          {/* Property + Attention Usability V1, Round 3: primary/cover
+              photo management, moved directly into Edit Property. Same
+              canonical storage bucket, property_photos table,
+              cover-photo semantics and upload pipeline as the Photos
+              tab (Documents > Photos) — see changeCoverPhoto()'s own
+              header comment for the exact safe sequence. The Photos tab
+              itself is unchanged and still works for additional,
+              non-cover photos. */}
+          <div className="editPropertyPhotoSection">
+            <div className="editPropertyPhotoPreview">{selected.coverUrl ? <img src={selected.coverUrl} alt={selected.address} /> : <div className="editPropertyPhotoPlaceholder">+</div>}</div>
+            <div className="editPropertyPhotoActions">
+              <label className="secondary editPropertyPhotoButton">{busy ? 'Uploading…' : selected.coverUrl ? 'Change photo' : 'Add photo'}<input type="file" accept="image/*" disabled={busy} onChange={(e) => {
+                const file = e.target.files?.[0]
+                // Same durable-read pattern every other photo picker in
+                // this file already uses (see handleImage's own comment
+                // for the full trace of why this must run synchronously,
+                // before the input's value is reset) — begin reading the
+                // file's bytes now, before anything else touches it.
+                const bytesPromise = file ? beginReadingFileBytes(file) : null
+                e.target.value = ''
+                if (file && bytesPromise) void changeCoverPhoto(file, bytesPromise)
+              }} /></label>
+              {selected.coverUrl && <button type="button" className="dangerButton" disabled={busy} onClick={() => { const cover = selectedPhotos.find((p) => p.is_cover); if (cover) void removePhoto(cover) }}>Remove photo</button>}
+              <p className="editPropertyPhotoHint">{selected.coverUrl ? 'This is the cover photo shown on your Dashboard and this property\'s overview.' : 'Add a cover photo so this property is easy to recognize on your Dashboard.'}</p>
+            </div>
+          </div>
+          <div className="formGrid"><label>Street address<AddressAutocomplete value={editDraft.address} onTextChange={(v) => setEditDraft({ ...editDraft, address: v })} onSelect={(addr) => setEditDraft((d) => ({ ...d, ...applyNormalizedAddress(addr, d.address) }))} placeholder="123 Example Street" /></label><label>City, state & ZIP<input value={editDraft.city} onChange={(e) => setEditDraft({ ...editDraft, city: e.target.value })} placeholder="Example City, FL 12345" /></label><label>Property type<select value={editDraft.type} onChange={(e) => setEditDraft({ ...editDraft, type: e.target.value })}><option>Rental Property</option><option>Primary Residence</option><option>Vacation Home</option><option>Commercial</option><option>Land</option><option>Other</option></select></label><label>Purchase price<input inputMode="decimal" value={editDraft.purchasePrice} onChange={(e) => setEditDraft({ ...editDraft, purchasePrice: e.target.value })} placeholder="390000" /></label><label>Estimated value<input inputMode="decimal" value={editDraft.value} onChange={(e) => setEditDraft({ ...editDraft, value: e.target.value })} placeholder="520000" /></label><label>Mortgage balance<input inputMode="decimal" value={editDraft.mortgage} onChange={(e) => setEditDraft({ ...editDraft, mortgage: e.target.value })} placeholder="310000" /></label><label>Financing status<select value={editDraft.financingStatus} onChange={(e) => setEditDraft({ ...editDraft, financingStatus: e.target.value })}>{FINANCING_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label><label>Monthly rent<input inputMode="decimal" value={editDraft.rent} onChange={(e) => setEditDraft({ ...editDraft, rent: e.target.value })} placeholder="2950" /></label><label>Monthly property expenses<input inputMode="decimal" value={editDraft.monthlyExpenses} onChange={(e) => setEditDraft({ ...editDraft, monthlyExpenses: e.target.value })} placeholder="1925" /></label><label>Purchase date<input type="date" value={editDraft.purchaseDate} onChange={(e) => setEditDraft({ ...editDraft, purchaseDate: e.target.value })} /></label><label>Beds<input inputMode="numeric" value={editDraft.beds} onChange={(e) => setEditDraft({ ...editDraft, beds: e.target.value })} placeholder="3" /></label><label>Baths<input inputMode="decimal" value={editDraft.baths} onChange={(e) => setEditDraft({ ...editDraft, baths: e.target.value })} placeholder="2.5" /></label><label>Square feet<input inputMode="numeric" value={editDraft.squareFeet} onChange={(e) => setEditDraft({ ...editDraft, squareFeet: e.target.value })} placeholder="1850" /></label><label>Year built<input inputMode="numeric" value={editDraft.yearBuilt} onChange={(e) => setEditDraft({ ...editDraft, yearBuilt: e.target.value })} placeholder="1998" /></label><label>Lot size (sqft)<input inputMode="numeric" value={editDraft.lotSizeSqft} onChange={(e) => setEditDraft({ ...editDraft, lotSizeSqft: e.target.value })} placeholder="6500" /></label><label>Annual property tax<input inputMode="decimal" value={editDraft.propertyTaxAnnual} onChange={(e) => setEditDraft({ ...editDraft, propertyTaxAnnual: e.target.value })} placeholder="4200" /></label><label>HOA / month<input inputMode="decimal" value={editDraft.hoaMonthly} onChange={(e) => setEditDraft({ ...editDraft, hoaMonthly: e.target.value })} placeholder="0" /></label></div><div className="editPropertyFooter"><button className="dangerButton" onClick={() => setShowDeleteConfirm(true)}>Delete Property</button><div className="modalActions compactActions"><button className="secondary" onClick={() => setShowEdit(false)}>Cancel</button><button className="primary" disabled={busy || !editDraft.address.trim() || !editDraft.city.trim()} onClick={() => void updateProperty()}>{busy ? 'Saving…' : 'Save Changes'}</button></div></div></div></div>}
 
         {showDeleteConfirm && <div className="overlay deleteOverlay" onMouseDown={(e) => e.target === e.currentTarget && setShowDeleteConfirm(false)}><div className="modal deleteModal"><div className="modalTop"><div><p className="eyebrow dangerEyebrow">PERMANENT ACTION</p><h2>Delete this property?</h2></div><button className="iconButton" onClick={() => setShowDeleteConfirm(false)}>×</button></div><p className="deleteWarning">This permanently removes <strong>{selected.address}</strong> and its associated documents, photos, financial transactions, lease, mortgage, insurance, maintenance records, contacts, and maintenance requests. This cannot be undone.</p><div className="modalActions"><button className="secondary" onClick={() => setShowDeleteConfirm(false)}>Keep Property</button><button className="dangerButton solidDanger" disabled={busy} onClick={() => void deleteProperty()}>{busy ? 'Deleting…' : 'Delete Permanently'}</button></div></div></div>}
 
@@ -3401,36 +3772,74 @@ export default function Home() {
   // PropWatch information through ONE clean section") — it is still
   // fully computed above, untouched, simply not rendered on the
   // dashboard for now.
+  // Property + Attention Usability V1, Part 3-C: each vacancy item's own
+  // dismissal key needs that property's own lease history — recomputed
+  // here (not exposed from the useMemo above, which only needs it
+  // internally to filter) since vacancyItems is always a short list.
+  // Same buildVacancyDismissalKey() the useMemo above already uses to
+  // decide visibility — this is only ever building the identical key a
+  // second time for the (already-visible, already-not-dismissed) items
+  // actually being rendered, never a different one.
+  const vacancyDismissalKeyByPropertyId = new Map(vacancyItems.map((v: VacancyItem) => {
+    const property = properties.find((p) => p.id === v.propertyId)
+    const leasesForProperty = leases.filter((l) => l.property_id === v.propertyId)
+    return [v.propertyId, property ? buildVacancyDismissalKey(property, leasesForProperty) : `vacancy:${v.propertyId}:unknown`]
+  }))
+
   const attentionRows = [
-    ...attentionItems.map((item) => (
-      <button key={`attn-${item.type}-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
-        <span className={`statusPill ${item.urgency === 'Expired' ? 'pillBad' : 'pillWarn'}`}>{item.urgency === 'Expired' ? 'Expired' : 'Due soon'}</span>
-        <span className="dashboardItemBody">
-          <strong>{item.label}</strong>
-          <span>{item.description}</span>
-          <span className="muted">{item.propertyLabel} &middot; {dateOnly(item.date)}</span>
-        </span>
-      </button>
-    )),
-    ...vacancyItems.map((item: VacancyItem) => (
-      <button key={`vac-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
-        <span className="statusPill pillNeutral">Vacant</span>
-        <span className="dashboardItemBody">
-          <strong>{item.propertyLabel}</strong>
-          <span>No current lease</span>
-        </span>
-      </button>
-    )),
-    ...openMaintenanceItems.map((item) => (
-      <button key={`maint-${item.id}`} className="dashboardItemRow" onClick={() => goToNav(item.propertyId, item.nav)}>
-        <span className="statusPill pillWarn">{item.status}</span>
-        <span className="dashboardItemBody">
-          <strong>{item.description}</strong>
-          <span>{[item.category, item.vendor].filter(Boolean).join(' · ')}</span>
-          <span className="muted">{item.propertyLabel} &middot; {dateOnly(item.date)}</span>
-        </span>
-      </button>
-    )),
+    ...attentionItems.map((item) => {
+      const key = buildAttentionDismissalKey(item)
+      return (
+        <DismissibleAttentionRow
+          key={`attn-${item.type}-${item.id}`}
+          onOpen={() => goToNav(item.propertyId, item.nav)}
+          onClear={() => void clearAttentionItem(key, item.propertyId, key.split(':')[0] as DismissibleAttentionKind)}
+          clearLabel={`Clear: ${item.label} at ${item.propertyLabel}`}
+        >
+          <span className={`statusPill ${item.urgency === 'Expired' ? 'pillBad' : 'pillWarn'}`}>{item.urgency === 'Expired' ? 'Expired' : 'Due soon'}</span>
+          <span className="dashboardItemBody">
+            <strong>{item.label}</strong>
+            <span>{item.description}</span>
+            <span className="muted">{item.propertyLabel} &middot; {dateOnly(item.date)}</span>
+          </span>
+        </DismissibleAttentionRow>
+      )
+    }),
+    ...vacancyItems.map((item: VacancyItem) => {
+      const key = vacancyDismissalKeyByPropertyId.get(item.propertyId) || `vacancy:${item.propertyId}:unknown`
+      return (
+        <DismissibleAttentionRow
+          key={`vac-${item.id}`}
+          onOpen={() => goToNav(item.propertyId, item.nav)}
+          onClear={() => void clearAttentionItem(key, item.propertyId, 'vacancy')}
+          clearLabel={`Clear: Vacant at ${item.propertyLabel}`}
+        >
+          <span className="statusPill pillNeutral">Vacant</span>
+          <span className="dashboardItemBody">
+            <strong>{item.propertyLabel}</strong>
+            <span>No current lease</span>
+          </span>
+        </DismissibleAttentionRow>
+      )
+    }),
+    ...openMaintenanceItems.map((item) => {
+      const key = buildOpenMaintenanceDismissalKey(item)
+      return (
+        <DismissibleAttentionRow
+          key={`maint-${item.id}`}
+          onOpen={() => goToNav(item.propertyId, item.nav)}
+          onClear={() => void clearAttentionItem(key, item.propertyId, 'open-maintenance')}
+          clearLabel={`Clear: ${item.description} at ${item.propertyLabel}`}
+        >
+          <span className="statusPill pillWarn">{item.status}</span>
+          <span className="dashboardItemBody">
+            <strong>{item.description}</strong>
+            <span>{[item.category, item.vendor].filter(Boolean).join(' · ')}</span>
+            <span className="muted">{item.propertyLabel} &middot; {dateOnly(item.date)}</span>
+          </span>
+        </DismissibleAttentionRow>
+      )
+    }),
   ]
   // A "small useful subset," not a second giant feed — View all reveals
   // the rest of this SAME already-computed list in place (no new page,

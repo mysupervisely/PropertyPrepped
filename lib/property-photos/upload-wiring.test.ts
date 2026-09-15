@@ -19,6 +19,8 @@ function sliceFunction(name: string, nextFnMarker: string): string {
 
 const addPhotoFilesBody = sliceFunction('async function addPhotoFiles(', 'async function openDocument(')
 const addPropertyBody = sliceFunction('async function addProperty()', 'function openEditProperty(')
+const setCoverBody = sliceFunction('async function setCover(', 'async function removePhoto(')
+const removePhotoBody = sliceFunction('async function removePhoto(', 'async function addTransaction()')
 
 describe('Property photo upload — M2.1 fixes (still in place)', () => {
   it('handleImage validates the picked cover photo and surfaces a rejection instead of silently accepting/dropping it', () => {
@@ -262,5 +264,96 @@ describe('Property photo upload — V2 post-selection-failure investigation', ()
     expect(effectBody).toContain('galleryCount')
     expect(effectBody).toContain('withSignedUrl')
     expect(effectBody).toContain('[selectedId, photos]')
+  })
+})
+
+// Property + Attention Usability V1 — property-photo bug fix.
+//
+// ROOT CAUSE: unlike addPhotoFiles()/addProperty() (hardened across
+// three earlier rounds above), removePhoto()/setCover() never checked
+// a single one of their own Supabase writes' errors and had no
+// exception safety at all. A silently-failed property_photos DELETE
+// left a stale is_cover=true row behind, which permanently blocked any
+// FUTURE upload from ever becoming the new cover (addPhotoFiles()'s own
+// hasCover check reads exactly that flag) — and an unguarded exception
+// anywhere in either function left `busy` stuck true forever, disabling
+// the "Add property photos" control with zero feedback. This exactly
+// matches "existing photo -> delete -> empty state -> add a
+// replacement -> fails," the reported production bug.
+describe('Property photo delete/set-cover — property-photo bug fix (Property + Attention Usability V1)', () => {
+  it('removePhoto() checks the property_photos DELETE\'s own error and stops before touching cover_photo_path on a row that never actually left the database', () => {
+    expect(removePhotoBody).toMatch(/const \{ error: rowError \} = await supabase\.from\('property_photos'\)\.delete\(\)\.eq\('id', photo\.id\)/)
+    expect(removePhotoBody).toContain('if (rowError)')
+    const rowErrorIdx = removePhotoBody.indexOf('if (rowError)')
+    const returnIdx = removePhotoBody.indexOf('return', rowErrorIdx)
+    const nextBlockIdx = removePhotoBody.indexOf('decideCoverAfterRemoval', rowErrorIdx)
+    expect(returnIdx).toBeGreaterThan(rowErrorIdx)
+    expect(nextBlockIdx).toBeGreaterThan(returnIdx) // the early return comes BEFORE any cover-reassignment logic
+  })
+
+  it('removePhoto() uses the extracted, independently-tested decideCoverAfterRemoval() rather than inline cover-reassignment logic', () => {
+    expect(removePhotoBody).toContain('decideCoverAfterRemoval(wasCover, remaining)')
+    expect(removePhotoBody).toContain("decision.action === 'promote'")
+    expect(removePhotoBody).toContain("decision.action === 'clear'")
+    expect(source).toMatch(/from '\.\.\/lib\/property-photos\/validate'/)
+    expect(source).toContain('decideCoverAfterRemoval')
+  })
+
+  it('removePhoto() checks the cover-reassignment writes\' own errors (both the promote and the clear branch)', () => {
+    expect(removePhotoBody).toMatch(/const \{ error: reassignError \} = await supabase\.from\('property_photos'\)\.update\(\{ is_cover: true \}\)\.eq\('id', decision\.photoId\)/)
+    expect(removePhotoBody).toContain('if (reassignError)')
+    expect(removePhotoBody).toMatch(/const \{ error: pathError \} = await supabase\.from\('properties'\)\.update\(\{ cover_photo_path: decision\.storagePath \}\)/)
+    expect(removePhotoBody).toMatch(/const \{ error: pathError \} = await supabase\.from\('properties'\)\.update\(\{ cover_photo_path: null \}\)/)
+  })
+
+  it('removePhoto() is wrapped in try/catch/finally, matching the exception-safety already applied to addPhotoFiles()/addProperty()', () => {
+    expect(removePhotoBody).toMatch(/\btry\s*\{/)
+    expect(removePhotoBody).toContain('} catch (unexpected) {')
+    expect(removePhotoBody).toContain('} finally {')
+    expect(removePhotoBody).toContain("logPhotoUploadDiagnostic('PHOTO_UNEXPECTED_EXCEPTION'")
+    // busy is reset unconditionally in `finally`, not only on the happy path — this is the exact fix for "busy left stuck true forever, permanently disabling Add property photos."
+    const finallyIdx = removePhotoBody.indexOf('} finally {')
+    expect(removePhotoBody.slice(finallyIdx, finallyIdx + 60)).toContain('setBusy(false)')
+  })
+
+  it('removePhoto() logs the PHOTO_DELETE_* diagnostic taxonomy end to end', () => {
+    for (const stage of ['PHOTO_DELETE_START', 'PHOTO_DELETE_STORAGE_ERROR', 'PHOTO_DELETE_DB_ERROR', 'PHOTO_DELETE_SUCCESS']) {
+      expect(removePhotoBody, `expected ${stage} in removePhoto()`).toContain(`'${stage}'`)
+    }
+  })
+
+  it('removePhoto() is invoked fire-and-forget with no .catch() — confirming its own try/catch is load-bearing, not redundant', () => {
+    expect(source).toContain('void removePhoto(photo)')
+    expect(source).not.toMatch(/removePhoto\([^)]*\)\.catch/)
+  })
+
+  it('setCover() checks every one of its three writes\' own errors and stops on the first failure rather than proceeding on bad data', () => {
+    expect(setCoverBody).toMatch(/const \{ error: clearError \} = await supabase\.from\('property_photos'\)\.update\(\{ is_cover: false \}\)/)
+    expect(setCoverBody).toMatch(/const \{ error: assignError \} = await supabase\.from\('property_photos'\)\.update\(\{ is_cover: true \}\)\.eq\('id', photo\.id\)/)
+    expect(setCoverBody).toMatch(/const \{ error: pathError \} = await supabase\.from\('properties'\)\.update\(\{ cover_photo_path: photo\.storage_path \}\)/)
+    expect(setCoverBody).toContain('if (clearError)')
+    expect(setCoverBody).toContain('if (assignError)')
+    expect(setCoverBody).toContain('if (pathError)')
+  })
+
+  it('setCover() is wrapped in try/catch/finally too, with the same PHOTO_UNEXPECTED_EXCEPTION handling', () => {
+    expect(setCoverBody).toMatch(/\btry\s*\{/)
+    expect(setCoverBody).toContain('} catch (unexpected) {')
+    expect(setCoverBody).toContain('} finally {')
+    expect(setCoverBody).toContain("logPhotoUploadDiagnostic('PHOTO_UNEXPECTED_EXCEPTION'")
+    const finallyIdx = setCoverBody.indexOf('} finally {')
+    expect(setCoverBody.slice(finallyIdx, finallyIdx + 60)).toContain('setBusy(false)')
+  })
+
+  it('setCover() is invoked fire-and-forget with no .catch()', () => {
+    expect(source).toContain('void setCover(photo)')
+    expect(source).not.toMatch(/setCover\([^)]*\)\.catch/)
+  })
+
+  it('no schema/table/bucket change: still the same property_photos table and property-photos bucket, no new ones introduced', () => {
+    expect(removePhotoBody).toContain("storage.from('property-photos')")
+    expect(removePhotoBody).toContain("from('property_photos')")
+    expect(setCoverBody).toContain("from('property_photos')")
+    expect(source).not.toMatch(/create table|alter table|create policy/i)
   })
 })

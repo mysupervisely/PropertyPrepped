@@ -76,6 +76,32 @@
   --color-danger-soft: #fdeceb;
 }
 * { box-sizing: border-box; }
+/* Property + Attention Usability V1 follow-up: real-iPhone report (via
+   an in-app WebView browser, not Safari/Chrome directly) of Dashboard
+   content clipped on the left, uniformly across unrelated sections
+   (the greeting, "Needs Your Attention", its item count) while boxed
+   content (Portfolio Snapshot, cards) looked "mostly aligned" — the
+   exact fingerprint of the document being horizontally scrolled a few
+   pixels right, which this repo has hit and fixed twice before (see
+   .shell's own header comment below): SOME element, somewhere, is
+   wider than the viewport, and nothing at the true document root
+   stops that from making the whole page horizontally scrollable.
+   `.shell` already clips everything inside itself, but it is not the
+   document root — anything rendered as a SIBLING of `.shell` (the
+   one confirmed example: `.installHint`, deliberately rendered outside
+   `.shell` so it can never cover content — see its own comment) is
+   completely outside that containment. A headless-Chromium
+   reproduction of the Dashboard (topbar, greeting, Needs Your
+   Attention, property grid, bottom nav, install hint) at every common
+   iPhone width found no overflow — Chromium and the WebKit-based
+   WebView the report came from do not always agree here, so this is a
+   structural, defense-in-depth fix at the correct root level rather
+   than chasing a single WebKit/WebView-only quirk: the true document
+   root (html/body) now cannot itself become wider than the viewport,
+   regardless of which descendant (present or future) might otherwise
+   try. Zero visual effect on anything that already fits — this only
+   changes behavior for content that doesn't. */
+html, body { overflow-x: hidden; max-width: 100%; }
 html { scroll-behavior: smooth; }
 /* PWA/Mobile Installability V1: viewport-fit=cover (app/layout.tsx's
    `viewport` export) lets standalone/home-screen launches draw
@@ -724,6 +750,26 @@ h2, h3, p { margin-top: 0; }
   .photoGallery { grid-template-columns: 1fr; }
   .galleryItem { height: 280px; }
   .workspaceHeading { flex-direction: column; align-items: flex-start; }
+  /* Property + Attention Usability V1: real-iPhone screenshot showed
+     excessive dead space between the Edit/Investment Analysis row and
+     the Overview section selector just below it. Root cause was
+     cumulative, not any one rule alone — .propertyHero's own bottom
+     padding (34px 0 28px, unchanged for desktop, where the tabs strip
+     sits right under it with room to spare) was written before
+     .mobilePropertyNav existed; once the mobile selector was added
+     with its own 10px top margin (below), the two stacked, and (below
+     620px) .heroInfoActions' OWN 18px margin-bottom — itself added
+     back when the hero was immediately followed by the old
+     horizontally-scrolling mobile tabs strip, not this selector —
+     stacked on top of both. Tightened here, mobile-only; .propertyHero
+     itself (and its desktop padding) is untouched. */
+  .propertyHero { padding-bottom: 14px; }
+  /* Same reasoning for the smaller second gap noted between the
+     selector and OVERVIEW / At a glance: .workspaceContentTight's own
+     padding-top (20px, used by every tab, unchanged elsewhere) plus
+     .mobilePropertyNav's margin-bottom stacked a bit more than this
+     particular transition needs. */
+  .workspaceContentTight { padding-top: 12px; }
 }
 @media (max-width: 460px) {
   .stats { grid-template-columns: 1fr; }
@@ -931,6 +977,21 @@ h2, h3, p { margin-top: 0; }
   .dashboardItemRow .statusPill { width: fit-content; }
 }
 
+/* Property + Attention Usability V1, Part 3-B/D (components/
+   DismissibleAttentionRow.tsx): swipe-to-reveal Clear on mobile, plus a
+   quiet trailing "⋮" for desktop/keyboard/no-swipe users. Calm, neutral
+   charcoal (var(--text)) rather than a destructive red — Clear never
+   deletes or changes anything, it only changes what's shown, so it
+   should never read as dangerous. */
+.dismissibleAttentionRow { position: relative; overflow: hidden; border-radius: 12px; }
+.dismissibleAttentionReveal { position: absolute; top: 0; right: 0; bottom: 0; width: 84px; display: flex; }
+.dismissibleAttentionClear { flex: 1; border: 0; border-radius: 12px; background: var(--text); color: white; font-weight: 650; font-size: 13px; }
+.dismissibleAttentionForeground { position: relative; transition: transform .18s ease; touch-action: pan-y; }
+.dismissibleAttentionForeground .dashboardItemRow { width: 100%; background: white; }
+.dismissibleAttentionMain { padding-right: 40px; }
+.dismissibleAttentionKebab { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); border: 0; background: transparent; color: var(--muted); font-size: 18px; line-height: 1; width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; }
+.dismissibleAttentionKebab:hover, .dismissibleAttentionKebab:focus-visible { background: var(--brand-soft); color: var(--brand); }
+
 /* Simplification + Maintenance Workspace V2, Phase E1: Recent Activity
    as a native <details>/<summary> disclosure — collapsed by default on
    every width (Section 6's hard requirement is mobile; collapsing by
@@ -1096,6 +1157,22 @@ h2, h3, p { margin-top: 0; }
 .deleteWarning strong { color: var(--text); }
 .dangerEyebrow { color: #8a3d35; }
 @media (max-width: 620px) { .editPropertyFooter { align-items: stretch; flex-direction: column-reverse; } .compactActions { width: 100%; } .compactActions button, .editPropertyFooter > .dangerButton { width: 100%; } }
+
+/* Property + Attention Usability V1 — Round 3: primary/cover photo
+   management, moved directly into Edit Property (near the top, above
+   the property-facts form) so fixing a missing/wrong cover photo no
+   longer requires leaving this modal for the Documents > Photos tab.
+   Deliberately small and plain — a preview thumbnail plus one or two
+   buttons, not a second gallery UI. */
+.editPropertyPhotoSection { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.editPropertyPhotoPreview { width: 96px; height: 96px; flex-shrink: 0; border-radius: 14px; overflow: hidden; background: #e4ebe7; border: 1px solid var(--line); }
+.editPropertyPhotoPreview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.editPropertyPhotoPlaceholder { height: 100%; display: grid; place-items: center; color: var(--brand); font-size: 26px; font-weight: 700; background: linear-gradient(135deg, #eef2ef, #dce6e0); }
+.editPropertyPhotoActions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.editPropertyPhotoActions .editPropertyPhotoButton { cursor: pointer; margin: 0; }
+.editPropertyPhotoActions .editPropertyPhotoButton input[type="file"] { display: none; }
+.editPropertyPhotoHint { width: 100%; color: var(--muted); font-size: 12px; margin: 2px 0 0; }
+@media (max-width: 480px) { .editPropertyPhotoSection { flex-wrap: wrap; } .editPropertyPhotoActions { width: 100%; } .editPropertyPhotoActions button, .editPropertyPhotoActions .editPropertyPhotoButton { flex: 1 1 auto; text-align: center; } }
 
 /* Milestone 7: Investment Tools */
 .investmentShell { max-width: 1180px; }
@@ -2352,8 +2429,15 @@ h2, h3, p { margin-top: 0; }
      hero once the actions wrap under the title on mobile — Property
      Intelligence V1, Phase C.1 removed the hero metric row that used to
      sit here, but the property tabs nav immediately follows the hero
-     section, so the same breathing room still applies. */
-  .heroInfoActions { justify-content: flex-start; flex-wrap: wrap; margin-bottom: 18px; }
+     section, so the same breathing room still applies.
+     Property + Attention Usability V1: this 18px stacked with
+     .mobilePropertyNav's own 10px top margin and .propertyHero's
+     bottom padding (now also tightened for mobile, see the
+     max-width: 760px block above) to produce the excessive gap
+     reported from a real iPhone. Cut to a small residual value — just
+     enough that a wrapped Investment Analysis link doesn't touch the
+     selector directly — rather than removed outright. */
+  .heroInfoActions { justify-content: flex-start; flex-wrap: wrap; margin-bottom: 6px; }
 }
 
 /* Smart Upload Foundation (components/SmartUpload/*) — a mobile-first
@@ -2537,7 +2621,20 @@ h2, h3, p { margin-top: 0; }
    cover anything — no offset/clearance math of any kind. The home-
    indicator safe area is still respected, just as normal trailing
    margin instead of a fixed-position offset. */
-.installHint { display: flex; align-items: center; gap: 10px; background: var(--brand); color: white; border-radius: 12px; padding: 10px 14px; font-size: 13px; line-height: 1.4; box-shadow: 0 6px 18px rgba(0,0,0,.18); margin: 16px max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+/* Property + Attention Usability V1 follow-up: this bar renders OUTSIDE
+   .shell by design (see the comment above), which also means .shell's
+   own overflow-x: hidden containment cannot protect against it — the
+   one place on the page a too-wide flex row could still widen the true
+   document root. Same fix as .topbar/.sectionHead's own earlier
+   instances of this exact bug class: flex-wrap so a row that doesn't
+   fit drops to two lines instead of forcing extra width, min-width: 0
+   on the text child so it can actually shrink/wrap instead of refusing
+   to go below its own intrinsic content width, and an explicit
+   max-width: 100% (box-sizing: border-box already applies globally) so
+   this element's own box can never exceed the viewport regardless of
+   its margin math. */
+.installHint { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; max-width: 100%; background: var(--brand); color: white; border-radius: 12px; padding: 10px 14px; font-size: 13px; line-height: 1.4; box-shadow: 0 6px 18px rgba(0,0,0,.18); margin: 16px max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+.installHint > span { min-width: 0; }
 .installHint strong { font-weight: 700; }
 .installHint button { border: 0; background: rgba(255,255,255,.18); color: white; border-radius: 8px; padding: 6px 10px; font-weight: 650; font-size: 12px; white-space: nowrap; }
 .installHintDismiss { margin-left: auto; background: transparent !important; padding: 2px 6px !important; font-size: 18px; line-height: 1; }
