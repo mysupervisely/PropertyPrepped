@@ -1523,6 +1523,31 @@ h2, h3, p { margin-top: 0; }
 .landingCtaPrimary { padding: 13px 26px; font-size: 15px; }
 .landingHeroFreeNote { color: var(--muted); font-size: 13.5px; margin: 12px 0 0; }
 
+/* Desktop Homepage V4 — hero recomposition. .landingHeroGrid is a plain
+   block by default (mobile: the copy column stacks above the
+   background-photo hero exactly as before) and only becomes a two-
+   column grid at the desktop breakpoint below. .landingHeroProduct
+   (the product-preview column) is hidden by default for the same
+   reason — it must never render, take layout space, or download its
+   content meaningfully differently on mobile; the ≥901px rule is the
+   only place it becomes visible. */
+.landingHeroGrid { position: relative; z-index: 1; }
+.landingHeroProduct { display: none; }
+
+/* HeroProductPreview's own card — deliberately reuses .sceneStage's
+   exact card treatment (light fill, rounded, restrained shadow) so this
+   reads as "the same interface" the product-story scenes below already
+   show, not a new visual system invented for the hero. */
+.heroProductPanel { background: var(--surface); border-radius: var(--radius-card); border: 1px solid var(--line); box-shadow: 0 40px 80px -44px rgba(20, 35, 28, .4); padding: 28px; }
+.heroProductHead { margin-bottom: 4px; }
+.heroProductMetrics { margin-top: 16px; padding-top: 16px; }
+.heroProductProperties { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); display: grid; gap: 10px; }
+.heroProductPropertiesLabel { margin: 0 0 4px; font-size: 12.5px; font-weight: 650; color: var(--muted); }
+.heroProductPropertyRow { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.heroProductPropertyAddress { font-size: 13.5px; font-weight: 650; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.heroProductPropertyRent { font-size: 13px; color: var(--muted); flex-shrink: 0; }
+.heroProductPropertyFlag { flex-shrink: 0; font-size: 11px; padding: 3px 9px; }
+
 /* Dynamic Homepage V1 — the shared reveal primitive (see
    lib/homepage/use-scroll-reveal.ts): every scene's text and stage use
    this SAME pair of classes, so the motion language (distance/duration/
@@ -1621,9 +1646,36 @@ h2, h3, p { margin-top: 0; }
 
 @media (min-width: 901px) {
   .landingSceneTall { min-height: 100vh; display: flex; align-items: flex-start; }
-  .landingSceneTall .landingSceneInner { width: 100%; align-items: start; min-height: 220vh; }
+  .landingSceneTall .landingSceneInner { width: 100%; align-items: start; min-height: 112vh; }
   .landingSceneTextSticky { position: sticky; top: 140px; align-self: start; }
   .landingSceneStageSticky { position: sticky; top: 140px; }
+
+  /* Desktop Homepage V4 — hero recomposition (see LandingPage.tsx's own
+     comment on the hero section for the full rationale). The house
+     background photo is fully hidden at desktop widths — real-device
+     feedback specifically asked for the ACTUAL product to become the
+     visual anchor, not a subtler house, so this isn't a "make it more
+     faint" tweak, it's removed from the desktop composition entirely.
+     (Mobile is untouched: .landingHeroBg keeps rendering exactly as
+     before below this breakpoint.) */
+  .landingHeroBg { display: none; }
+  .landingHero { background: var(--bg); padding: 88px 40px 76px; overflow: visible; }
+  .landingHeroGrid { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); gap: 64px; align-items: center; max-width: 1220px; margin: 0 auto; }
+  .landingHeroInner { max-width: 540px; }
+  /* Stronger desktop presence per real-device feedback ("undersized
+     relative to the available canvas") — the mobile-relevant lower
+     bound (32px) and the vw-scaling behavior are unchanged; only the
+     desktop ceiling moved (54px -> 60px) and the vw multiplier is
+     slightly higher so it actually reaches closer to that ceiling on a
+     real MacBook width instead of asymptoting well below it. */
+  .landingHeroInner h1 { font-size: clamp(32px, 4.6vw, 60px); }
+  .landingHeroProduct {
+    display: block;
+    opacity: 0;
+    transform: translateY(16px) scale(.98);
+    transition: opacity .8s ease .1s, transform .8s ease .1s;
+  }
+  .landingHeroProduct[data-ready="true"] { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 /* Dynamic Homepage V1 — reduced motion. "The entire page must remain
@@ -1640,6 +1692,7 @@ h2, h3, p { margin-top: 0; }
   .sceneReveal,
   [data-reveal],
   .landingHeroInner,
+  .landingHeroProduct,
   .landingHeroBgImage,
   .coordinateStep,
   .automateStep,
