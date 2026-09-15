@@ -2857,6 +2857,66 @@ h2, h3, p { margin-top: 0; }
   .taxPanelGroupToggleTitle h4 { font-size: 13.5px; }
 }
 
+/* ============================================================
+   Tax Center — usability/workflow-completion pass (app/tax-center/page.tsx).
+   Section 1/2/5/7 of that milestone: the FIRST thing a landlord sees —
+   Income/Expenses/Net/Receipts for the selected year, a prominent
+   + Add Expense action, and a clean, source-labeled activity feed —
+   ahead of the existing V1-V3 tax-specific tables below (all untouched).
+   Reuses .overlay/.modal/.modalTop/.modalActions/.formGrid/.fullField/
+   .statusPill/.pillGood/.pillNeutral/.pillMuted/.sectionHead/.muted as-is
+   — no second input or pill styling system.
+   ============================================================ */
+.taxCenterSummarySection { display: grid; gap: 14px; margin-bottom: 28px; }
+.taxCenterSummaryStrip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; background: white; border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+.taxCenterSummaryTile { border-left: 1px solid var(--line); padding-left: 16px; min-width: 0; }
+.taxCenterSummaryTile:first-child { border-left: 0; padding-left: 0; }
+.taxCenterSummaryTile span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+.taxCenterSummaryTile strong { display: block; font-size: 21px; letter-spacing: -.4px; overflow-wrap: anywhere; }
+.taxCenterSummaryTileNet strong { color: var(--brand); }
+.taxCenterAddExpense { justify-self: start; padding: 13px 26px; font-size: 14px; }
+
+.taxCenterFeedSection { margin-bottom: 32px; }
+.taxCenterFilterToggle { white-space: nowrap; flex-shrink: 0; }
+.taxCenterFilters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: -6px 0 18px; }
+.taxCenterFilters label { font-size: 12px; font-weight: 650; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.taxCenterFilters select { border: 1px solid var(--line); border-radius: 9px; padding: 9px 10px; background: white; color: var(--text); width: 100%; }
+.taxCenterFiltersClear { grid-column: 1 / -1; justify-self: start; border: 0; background: transparent; color: var(--brand); font-size: 12.5px; font-weight: 650; cursor: pointer; padding: 4px 0 0; }
+.taxCenterFeedEmpty { padding: 34px 0; text-align: center; }
+.taxCenterFeedList { display: grid; gap: 10px; }
+.taxCenterFeedRow { display: flex; align-items: center; justify-content: space-between; gap: 14px; background: white; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.taxCenterFeedMain { display: grid; gap: 5px; min-width: 0; }
+.taxCenterFeedMain strong { font-size: 14px; overflow-wrap: anywhere; }
+.taxCenterFeedMain .muted { font-size: 12px; }
+.taxCenterFeedMeta { display: flex; gap: 6px; flex-wrap: wrap; }
+.taxSourcePill { font-size: 10px; }
+.taxCenterFeedAmount { font-weight: 700; font-size: 15px; white-space: nowrap; flex-shrink: 0; }
+.taxCenterFeedAmountIncome { color: #1c6b40; }
+.taxCenterFeedAmountExpense { color: var(--text); }
+
+/* + Add Expense modal — deliberately narrower than the default .modal
+   (which sizes for wider forms elsewhere), matching the short field
+   list this one actually has (Section 2). */
+.taxCenterAddExpenseModal { width: min(520px, 100%); }
+.taxCenterReceiptField { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.taxCenterReceiptButton { cursor: pointer; margin: 4px 0 0; }
+.taxCenterReceiptButton input[type="file"] { display: none; }
+.taxCenterReceiptRemove { border: 0; background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 650; cursor: pointer; padding: 0; margin-top: 4px; }
+
+@media (max-width: 760px) {
+  .taxCenterSummaryStrip { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 16px; }
+  .taxCenterSummaryTile:nth-child(2n+1) { border-left: 0; padding-left: 0; }
+  .taxCenterSummaryTile:nth-child(n+3) { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: 12px; }
+  .taxCenterAddExpense { width: 100%; justify-self: stretch; }
+  .taxCenterFilters { grid-template-columns: 1fr 1fr; }
+  .taxCenterFeedRow { align-items: flex-start; }
+}
+@media (max-width: 430px) {
+  .taxCenterSummaryStrip { padding: 16px; }
+  .taxCenterSummaryTile strong { font-size: 18px; }
+  .taxCenterFilters { grid-template-columns: 1fr; }
+}
+
 /* ==========================================================================
    Tenant Connect V1 (Milestone 24) — the compact Property > Rent > Tenant
    status card, the landlord-side Requests panel (reuses .maintenanceList/

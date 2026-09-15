@@ -29,7 +29,7 @@ export function getAvailableTaxYears(transactions: TransactionInput[], now: Date
   return Array.from(years).sort().reverse()
 }
 
-export function filterTransactionsForYear(transactions: TransactionInput[], year: string): TransactionInput[] {
+export function filterTransactionsForYear<T extends TransactionInput>(transactions: T[], year: string): T[] {
   return transactions.filter((t) => t.transaction_date.startsWith(year))
 }
 

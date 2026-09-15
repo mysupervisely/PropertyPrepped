@@ -45,6 +45,8 @@ import {
 import { CUSTOM_ITEM_GROUPS, CUSTOM_ITEM_GROUP_LABELS, customItemsForPanelGroup, type CustomTaxItem, type CustomTaxItemGroup } from '../../lib/tax-center/custom-items'
 import { isIncomeCategory, isOperatingExpenseCategory, isCapitalExpenseCategory } from '../../lib/tax-center/categories'
 import type { TransactionInput, MaintenanceRecordInput as _MaintenanceRecordInput } from '../../lib/tax-center/types'
+import { beginReadingFileBytes, toDurableUploadableFile } from '../../lib/uploads/durable-file'
+import { uploadReceiptDocument } from '../../lib/documents/upload-receipt'
 
 export type PropertyTaxRecordRow = ManualTaxFields & MileageFields & {
   id: string
@@ -174,6 +176,14 @@ export function PropertyTaxPanel({
   const [customItemDraft, setCustomItemDraft] = useState(emptyCustomItemDraft())
   const [customItemSaving, setCustomItemSaving] = useState(false)
   const [customItemError, setCustomItemError] = useState('')
+  // Usability/workflow-completion pass — Section 3 ("complete the
+  // receipt gap"): a custom item could previously only ATTACH an
+  // already-uploaded document via the dropdown below, never capture/
+  // upload a new one inline. A newly chosen file here takes priority
+  // over customItemDraft.documentId at save time (see saveCustomItem) —
+  // the two controls are mutually exclusive, never combined.
+  const [customItemReceiptFile, setCustomItemReceiptFile] = useState<File | null>(null)
+  const [customItemReceiptBytesPromise, setCustomItemReceiptBytesPromise] = useState<Promise<ArrayBuffer> | null>(null)
 
   // Re-populate the draft whenever the year changes (or the parent's
   // taxRecords refreshes after a save) — never while the user still has
@@ -328,6 +338,8 @@ export function PropertyTaxPanel({
 
   function openAddCustomItem() {
     setCustomItemDraft(emptyCustomItemDraft())
+    setCustomItemReceiptFile(null)
+    setCustomItemReceiptBytesPromise(null)
     setCustomItemError('')
     setCustomItemFormOpenId('new')
   }
@@ -337,11 +349,14 @@ export function PropertyTaxPanel({
       description: item.description, amount: String(item.amount), group: item.category_group,
       notes: item.notes || '', documentId: item.document_id || '',
     })
+    setCustomItemReceiptFile(null)
+    setCustomItemReceiptBytesPromise(null)
     setCustomItemError('')
     setCustomItemFormOpenId(item.id)
   }
 
   function closeCustomItemForm() {
+    if (customItemSaving) return
     setCustomItemFormOpenId(null)
     setCustomItemError('')
   }
@@ -353,6 +368,33 @@ export function PropertyTaxPanel({
     if (!Number.isFinite(amount) || amount < 0) { setCustomItemError('Enter a valid, non-negative amount.'); return }
     setCustomItemSaving(true)
     setCustomItemError('')
+
+    // Section 3 — a newly attached file takes priority over whatever was
+    // picked in the "existing document" dropdown; uploaded FIRST, exactly
+    // like the new Tax Center "+ Add Expense" flow, so a failed upload
+    // never saves an item that silently lost its receipt.
+    let documentId = customItemDraft.documentId || null
+    if (customItemReceiptFile && customItemReceiptBytesPromise) {
+      const durable = await toDurableUploadableFile(customItemReceiptFile, customItemReceiptFile.type || undefined, customItemReceiptBytesPromise)
+      const uploadResult = await uploadReceiptDocument(ownerId, propertyId, durable.file, {
+        uploadFile: async (path, file, contentType) => {
+          const { error: uploadError } = await supabase.storage.from('property-documents').upload(path, file, { contentType, upsert: false })
+          return { error: uploadError?.message || null }
+        },
+        insertDocumentRow: async (row) => {
+          const { data, error: rowError } = await supabase.from('property_documents').insert(row).select('id').single()
+          return { id: (data?.id as string) || null, error: rowError?.message || null }
+        },
+        removeFile: async (path) => { await supabase.storage.from('property-documents').remove([path]) },
+      })
+      if (!uploadResult.ok) {
+        setCustomItemError(`Item not saved — the receipt could not be uploaded (${uploadResult.error}). Try again, or save without a receipt.`)
+        setCustomItemSaving(false)
+        return
+      }
+      documentId = uploadResult.documentId
+    }
+
     const payload = {
       property_id: propertyId,
       owner_id: ownerId,
@@ -365,7 +407,7 @@ export function PropertyTaxPanel({
       amount,
       category_group: customItemDraft.group,
       notes: customItemDraft.notes.trim() || null,
-      document_id: customItemDraft.documentId || null,
+      document_id: documentId,
     }
     const { error: saveError } = customItemFormOpenId === 'new'
       ? await supabase.from('property_tax_custom_items').insert(payload)
@@ -549,11 +591,23 @@ export function PropertyTaxPanel({
                 <label className="fullField">Notes
                   <input value={customItemDraft.notes} onChange={(e) => setCustomItemDraft((d) => ({ ...d, notes: e.target.value }))} placeholder="Optional" />
                 </label>
-                <label className="fullField">Supporting document (optional)
-                  <select value={customItemDraft.documentId} onChange={(e) => setCustomItemDraft((d) => ({ ...d, documentId: e.target.value }))}>
+                <label className="fullField">Existing document (optional)
+                  <select value={customItemDraft.documentId} disabled={!!customItemReceiptFile} onChange={(e) => setCustomItemDraft((d) => ({ ...d, documentId: e.target.value }))}>
                     <option value="">No attachment</option>
                     {documentOptions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
                   </select>
+                </label>
+                <label className="fullField taxCenterReceiptField">Or upload a new receipt <span className="muted">(optional)</span>
+                  <label className="secondary taxCenterReceiptButton">
+                    {customItemReceiptFile ? customItemReceiptFile.name : 'Add photo or file'}
+                    <input type="file" accept="image/*,.pdf,application/pdf" onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      const bytesPromise = file ? beginReadingFileBytes(file) : null
+                      e.target.value = ''
+                      if (file && bytesPromise) { setCustomItemReceiptFile(file); setCustomItemReceiptBytesPromise(bytesPromise) }
+                    }} />
+                  </label>
+                  {customItemReceiptFile && <button type="button" className="taxCenterReceiptRemove" onClick={() => { setCustomItemReceiptFile(null); setCustomItemReceiptBytesPromise(null) }}>Remove</button>}
                 </label>
               </div>
               {customItemError && <p className="errorMessage">{customItemError}</p>}
