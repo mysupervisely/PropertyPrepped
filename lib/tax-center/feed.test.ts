@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  resolveTransactionSource, buildTaxCenterFeed, computeTaxCenterYearSummary, filterTaxCenterFeed,
+  resolveTransactionSource, buildTaxCenterFeed, computeTaxCenterYearSummary, filterTaxCenterFeed, groupFeedByMonth,
   type TaxCenterFeedTransactionInput, type TaxCenterFeedItem,
 } from './feed'
 
@@ -145,5 +145,49 @@ describe('filterTaxCenterFeed', () => {
 
   it('combines filters (AND, not OR)', () => {
     expect(filterTaxCenterFeed(items, { propertyId: 'p1', type: 'Expense' }).map((i) => i.id)).toEqual(['2'])
+  })
+})
+
+describe('groupFeedByMonth', () => {
+  function feedItem(overrides: Partial<TaxCenterFeedItem>): TaxCenterFeedItem {
+    return {
+      id: 'i1', description: 'x', amount: 100, type: 'Expense', propertyId: 'p1', propertyLabel: 'X',
+      date: '2026-01-01', category: 'Repairs', vendor: null, source: 'manual', hasReceipt: false,
+      ...overrides,
+    }
+  }
+
+  it('an empty feed produces no groups', () => {
+    expect(groupFeedByMonth([])).toEqual([])
+  })
+
+  it('a single month produces a single group with a readable label', () => {
+    const groups = groupFeedByMonth([feedItem({ id: '1', date: '2026-09-12' }), feedItem({ id: '2', date: '2026-09-01' })])
+    expect(groups).toHaveLength(1)
+    expect(groups[0]).toMatchObject({ key: '2026-09', label: 'September 2026' })
+    expect(groups[0].items.map((i) => i.id)).toEqual(['1', '2'])
+  })
+
+  it('groups newest month first, matching an already newest-first input feed — never re-sorts within or across groups', () => {
+    const groups = groupFeedByMonth([
+      feedItem({ id: 'sep-new', date: '2026-09-12' }),
+      feedItem({ id: 'sep-old', date: '2026-09-01' }),
+      feedItem({ id: 'aug', date: '2026-08-20' }),
+      feedItem({ id: 'jan', date: '2026-01-05' }),
+    ])
+    expect(groups.map((g) => g.label)).toEqual(['September 2026', 'August 2026', 'January 2026'])
+    expect(groups[0].items.map((i) => i.id)).toEqual(['sep-new', 'sep-old'])
+    expect(groups[1].items.map((i) => i.id)).toEqual(['aug'])
+    expect(groups[2].items.map((i) => i.id)).toEqual(['jan'])
+  })
+
+  it('respects whatever order the input feed is already in — grouping never introduces its own sort', () => {
+    // Deliberately NOT newest-first input — proves grouping is a pure
+    // bucket-by-month, not a second ordering decision.
+    const groups = groupFeedByMonth([
+      feedItem({ id: 'jan', date: '2026-01-05' }),
+      feedItem({ id: 'sep', date: '2026-09-12' }),
+    ])
+    expect(groups.map((g) => g.key)).toEqual(['2026-01', '2026-09'])
   })
 })

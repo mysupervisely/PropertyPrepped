@@ -79,17 +79,87 @@ describe('Tax Center page — Section 4/5: preserved automatic sources, quiet la
     expect(pageSource).toContain('buildTaxCenterFeed(yearFeedTransactions, propertyLabelById, rentPayments, yearMaintenance)')
   })
 
-  it('each feed row shows description, amount, property, category, date, source, and receipt status (Section 5)', () => {
-    const rowStart = pageSource.indexOf('taxCenterFeedRow')
-    const rowEnd = pageSource.indexOf('</div>\n                ))', rowStart)
-    const rowSlice = pageSource.slice(rowStart, rowEnd)
+  function renderFeedRowBody(): string {
+    const start = pageSource.indexOf('function renderFeedRow(item: TaxCenterFeedItem)')
+    const end = pageSource.indexOf('\n  }\n', start)
+    return pageSource.slice(start, end)
+  }
+
+  it('each feed row shows description, amount, property, date, source, and receipt status (Section 5/6)', () => {
+    const rowSlice = renderFeedRowBody()
     expect(rowSlice).toContain('{item.description}')
     expect(rowSlice).toContain('{item.propertyLabel}')
-    expect(rowSlice).toContain('{item.category')
     expect(rowSlice).toContain('SOURCE_LABELS[item.source]')
     expect(rowSlice).toContain('Receipt attached')
     expect(rowSlice).toContain('No receipt')
     expect(rowSlice).toContain('{money(item.amount)}')
+  })
+
+  it('category was dropped from the compact row per the approved mobile-refinement reference — still available via the Category filter', () => {
+    const rowSlice = renderFeedRowBody()
+    expect(rowSlice).not.toContain('{item.category')
+    expect(pageSource).toContain('feedCategories.map((c) => <option key={c} value={c}>{c}</option>)')
+  })
+
+  it('Section 7 — source/receipt status render as quiet secondary text, not stacked statusPill badges', () => {
+    const rowSlice = renderFeedRowBody()
+    expect(rowSlice).not.toContain('statusPill')
+    expect(rowSlice).not.toContain('pillGood')
+    expect(rowSlice).not.toContain('pillMuted')
+    expect(rowSlice).toContain('taxCenterFeedSourceLine')
+  })
+
+  it('Section 10 — amount sits on the same line as the description, right-aligned within it (a compact timeline row, not a separate full-height amount column)', () => {
+    const rowSlice = renderFeedRowBody()
+    const titleLineStart = rowSlice.indexOf('taxCenterFeedTitleLine')
+    const titleLineEnd = rowSlice.indexOf('</span>\n          <span className="muted taxCenterFeedSub"', titleLineStart)
+    const titleLineSlice = rowSlice.slice(titleLineStart, titleLineEnd)
+    expect(titleLineSlice).toContain('{item.description}')
+    expect(titleLineSlice).toContain('taxCenterFeedAmount')
+  })
+
+  it('Section 9 — a quiet source icon (reusing the existing hand-authored icon set, not a new library) leads every row', () => {
+    expect(pageSource).toContain("import { HomeIcon, WrenchIcon, ReceiptIcon } from '../../components/icons/NavIcons'")
+    expect(pageSource).toContain('function TaxCenterSourceIcon(')
+    expect(pageSource).toContain("if (source === 'maintenance') return <WrenchIcon />")
+    expect(pageSource).toContain("if (source === 'rent-ledger') return <HomeIcon />")
+  })
+
+  it('Section 5 — the feed is grouped by month via the shared, tested groupFeedByMonth, applied to the already-filtered feed', () => {
+    expect(pageSource).toContain('groupFeedByMonth(filteredFeed)')
+    expect(pageSource).toContain('feedMonthGroups.map((group)')
+    expect(pageSource).toContain('{group.label}')
+  })
+})
+
+describe('Tax Center page — Section 8/11: quiet receipt attachment and row navigation, source ownership preserved', () => {
+  it('a chevron/navigable destination exists ONLY for Rent Ledger/Maintenance-sourced rows, reusing the existing ?openProperty deep-link mechanism — never a new navigation system', () => {
+    const fnStart = pageSource.indexOf('function taxCenterFeedRowHref(item: TaxCenterFeedItem)')
+    const fnEnd = pageSource.indexOf('\n}\n', fnStart)
+    const body = pageSource.slice(fnStart, fnEnd)
+    expect(body).toContain("if (item.source === 'rent-ledger') return `/?openProperty=${item.propertyId}&openTab=Rent&openRentSubTab=Ledger`")
+    expect(body).toContain("if (item.source === 'maintenance') return `/?openProperty=${item.propertyId}&openTab=Maintenance`")
+    expect(body).toContain('return null')
+  })
+
+  it('a manual row never gets a canonical-record editor invented for it — no Tax Center-owned mutation of Rent Ledger/Maintenance rows', () => {
+    expect(pageSource).not.toContain("from('rent_payments').update")
+    expect(pageSource).not.toContain("from('maintenance_records').update")
+  })
+
+  it('"Attach receipt" only ever appears for source === manual rows without a receipt — never for an automatically-sourced row', () => {
+    const fnStart = pageSource.indexOf('function renderFeedRow(item: TaxCenterFeedItem)')
+    const fnEnd = pageSource.indexOf('\n  }\n', fnStart)
+    const body = pageSource.slice(fnStart, fnEnd)
+    expect(body).toMatch(/item\.source === 'manual' \? \(\s*<label className="taxCenterAttachReceiptLabel">/)
+  })
+
+  it('attachReceiptToTransaction only UPDATEs financial_transactions.document_id — the same table/column every other receipt attachment in this app already writes through, never a new relationship', () => {
+    const fnStart = pageSource.indexOf('async function attachReceiptToTransaction(')
+    const fnEnd = pageSource.indexOf('\n  }\n', fnStart)
+    const body = pageSource.slice(fnStart, fnEnd)
+    expect(body).toContain("supabase.from('financial_transactions').update({ document_id: uploadResult.documentId }).eq('id', item.id)")
+    expect(body).toContain('uploadReceiptDocument(user.id, item.propertyId, durable.file')
   })
 })
 
@@ -158,9 +228,13 @@ describe('PropertyTaxPanel — Section 3: custom items can now attach a NEW rece
 })
 
 describe('Tax Center CSS — mobile-first, no horizontal scroll, comfortable tap targets (Section 9)', () => {
-  it('the summary strip and filters collapse to fewer columns at the 760px and 430px breakpoints, never introducing horizontal scroll', () => {
-    expect(cssSource).toContain('.taxCenterSummarySection')
-    expect(cssSource).toMatch(/@media \(max-width: 760px\) \{[\s\S]*?\.taxCenterSummaryStrip \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/)
+  it('the summary strip stays a single row of 4 (a compact surface, not stacked oversized cards) and tightens further at 430px', () => {
+    expect(cssSource).toContain('.taxCenterSummaryStrip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr))')
+    expect(cssSource).toMatch(/@media \(max-width: 430px\) \{[\s\S]*?\.taxCenterSummaryStrip \{ padding: 12px 10px/)
+  })
+
+  it('filters collapse to fewer columns at the 760px and 430px breakpoints, never introducing horizontal scroll', () => {
+    expect(cssSource).toMatch(/@media \(max-width: 760px\) \{[\s\S]*?\.taxCenterFilters \{ grid-template-columns: 1fr 1fr; \}/)
     expect(cssSource).toMatch(/@media \(max-width: 430px\) \{[\s\S]*?\.taxCenterFilters \{ grid-template-columns: 1fr; \}/)
   })
 
@@ -168,7 +242,24 @@ describe('Tax Center CSS — mobile-first, no horizontal scroll, comfortable tap
     expect(cssSource).toMatch(/@media \(max-width: 760px\) \{[\s\S]*?\.taxCenterAddExpense \{ width: 100%/)
   })
 
-  it('the file-picking input stays hidden behind its label button, matching the existing .editPropertyPhotoButton/.csvButton pattern', () => {
+  it('the file-picking inputs stay hidden behind their label buttons, matching the existing .editPropertyPhotoButton/.csvButton pattern', () => {
     expect(cssSource).toContain('.taxCenterReceiptButton input[type="file"] { display: none; }')
+    expect(cssSource).toContain('.taxCenterAttachReceiptLabel input[type="file"] { display: none; }')
+  })
+
+  it('feed rows share hairline dividers within a bordered month group, not individually-boxed cards — the "compact timeline, not a stack of cards" requirement', () => {
+    expect(cssSource).toMatch(/\.taxCenterFeedRows \{[^}]*border-radius: 12px;[^}]*overflow: hidden;\s*\}/)
+    expect(cssSource).toContain('.taxCenterFeedMonthHeading')
+  })
+})
+
+describe('Tax Center CSS — Section 13: the Date field fix is scoped only to the Add Expense modal', () => {
+  it('min-width: 0 is applied to the date field and its grid item, fixing the iOS grid-blowout root cause, without a custom appearance override that could break the native picker', () => {
+    expect(cssSource).toContain('.taxCenterAddExpenseModal .formGrid > label { min-width: 0; }')
+    expect(cssSource).toContain('.taxCenterAddExpenseModal .formGrid input[type="date"] { min-width: 0; width: 100%; box-sizing: border-box; }')
+  })
+
+  it('every OTHER .formGrid date field in the app (Lease, Mortgage, Insurance, Maintenance, property edit — all explicitly out of scope) is untouched by this rule, since it is scoped under .taxCenterAddExpenseModal', () => {
+    expect(cssSource).not.toMatch(/(?<!taxCenterAddExpenseModal )\.formGrid input\[type="date"\] \{/)
   })
 })

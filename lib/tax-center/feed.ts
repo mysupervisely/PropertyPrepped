@@ -33,10 +33,15 @@ import type { TransactionInput } from './types'
 
 export type TaxCenterTransactionSource = 'rent-ledger' | 'maintenance' | 'manual'
 
+// Mobile Visual Refinement pass: shortened from the original "From Rent
+// Ledger"/"From Maintenance"/"Manually added" pill text to quiet,
+// compact words for a secondary text line ("Maintenance · No receipt")
+// rather than a standalone badge — see this file's header comment for
+// what each source actually means; only the DISPLAY text changed here.
 export const SOURCE_LABELS: Record<TaxCenterTransactionSource, string> = {
-  'rent-ledger': 'From Rent Ledger',
-  maintenance: 'From Maintenance',
-  manual: 'Manually added',
+  'rent-ledger': 'Rent Ledger',
+  maintenance: 'Maintenance',
+  manual: 'Manual',
 }
 
 export type RentPaymentLinkInput = { financial_transaction_id: string | null }
@@ -126,4 +131,39 @@ export function filterTaxCenterFeed(feed: TaxCenterFeedItem[], filters: TaxCente
     if (filters.receiptStatus === 'missing' && item.hasReceipt) return false
     return true
   })
+}
+
+export type TaxCenterFeedMonthGroup = {
+  /** YYYY-MM, stable/sortable — never displayed directly. */
+  key: string
+  /** e.g. "September 2026" */
+  label: string
+  items: TaxCenterFeedItem[]
+}
+
+/**
+ * Presentation-only month grouping for the activity feed (Mobile Visual
+ * Refinement pass, Section 5 — "visually group transactions by month...
+ * this is presentation grouping only"). Never touches the transaction
+ * model — it only buckets an already-built, already-ordered feed. Group
+ * order follows first-encounter order in the input, so a feed that is
+ * itself newest-first (buildTaxCenterFeed's own contract) produces
+ * newest-month-first groups, each with its items in their original
+ * relative order — one sort (in buildTaxCenterFeed), never a second one
+ * here.
+ */
+export function groupFeedByMonth(feed: TaxCenterFeedItem[]): TaxCenterFeedMonthGroup[] {
+  const groups = new Map<string, TaxCenterFeedItem[]>()
+  for (const item of feed) {
+    const key = item.date.slice(0, 7)
+    const existing = groups.get(key)
+    if (existing) existing.push(item)
+    else groups.set(key, [item])
+  }
+  return Array.from(groups.entries()).map(([key, items]) => ({ key, label: monthGroupLabel(key), items }))
+}
+
+function monthGroupLabel(key: string): string {
+  const [year, month] = key.split('-').map(Number)
+  return new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 }

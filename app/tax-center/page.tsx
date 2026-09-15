@@ -51,12 +51,13 @@ import { buildTaxCenterCsv } from '../../lib/tax-center/csv-export'
 import { categoriesInGroup, OPERATING_EXPENSE_LIKE_GROUPS, type CategoryValue } from '../../lib/tax-center/manual-entry'
 import { CUSTOM_ITEM_GROUP_LABELS } from '../../lib/tax-center/custom-items'
 import {
-  buildTaxCenterFeed, computeTaxCenterYearSummary, filterTaxCenterFeed, SOURCE_LABELS,
-  type RentPaymentLinkInput, type TaxCenterFeedFilters, type TaxCenterFeedTransactionInput,
+  buildTaxCenterFeed, computeTaxCenterYearSummary, filterTaxCenterFeed, groupFeedByMonth, SOURCE_LABELS,
+  type RentPaymentLinkInput, type TaxCenterFeedFilters, type TaxCenterFeedItem, type TaxCenterFeedTransactionInput,
 } from '../../lib/tax-center/feed'
 import { FINANCIAL_CATEGORIES } from '../../lib/property-categories'
 import { beginReadingFileBytes, toDurableUploadableFile } from '../../lib/uploads/durable-file'
 import { uploadReceiptDocument } from '../../lib/documents/upload-receipt'
+import { HomeIcon, WrenchIcon, ReceiptIcon } from '../../components/icons/NavIcons'
 import type { CustomTaxItemInput, MaintenanceRecordInput, PropertyInput, PropertyTaxSummary, ReadinessStatus, TaxRecordInput, TransactionInput } from '../../lib/tax-center/types'
 
 // Section 2 of this milestone's own spec: "+ Add Expense" is for
@@ -71,6 +72,30 @@ function emptyExpenseDraft(properties: PropertyInput[]) {
     amount: '', propertyId: properties[0]?.id || '', category: ADD_EXPENSE_CATEGORIES[0] as string,
     date: new Date().toISOString().slice(0, 10), vendor: '', note: '',
   }
+}
+
+// Mobile Visual Refinement pass, Section 9 — reuses the app's existing
+// hand-authored icon set (components/icons/NavIcons.tsx), the same one
+// MaintenanceCategoryIcon already draws from; no new icon library, no
+// decorative icon for a source this feed can't actually resolve.
+function TaxCenterSourceIcon({ source }: { source: TaxCenterFeedItem['source'] }) {
+  if (source === 'maintenance') return <WrenchIcon />
+  if (source === 'rent-ledger') return <HomeIcon />
+  return <ReceiptIcon />
+}
+
+// Section 11 — "preserve source ownership": a Rent Ledger/Maintenance-
+// sourced row may deep-link to that record's own real home tab, reusing
+// the EXACT ?openProperty=&openTab= mechanism this page's own "Rental
+// properties" table already uses two sections down (app/page.tsx's own
+// deep-link handler) — never a second navigation system, and never an
+// editor that could mutate a canonical Rent Ledger/Maintenance record
+// from inside Tax Center. A manual expense has no such destination yet
+// (Tax Center has no transaction editor of its own), so it gets none.
+function taxCenterFeedRowHref(item: TaxCenterFeedItem): string | null {
+  if (item.source === 'rent-ledger') return `/?openProperty=${item.propertyId}&openTab=Rent&openRentSubTab=Ledger`
+  if (item.source === 'maintenance') return `/?openProperty=${item.propertyId}&openTab=Maintenance`
+  return null
 }
 
 // V3: "Expense totals by category" (on-screen + print) now covers every
@@ -151,6 +176,14 @@ function TaxCenterWorkspace() {
   const [expenseError, setExpenseError] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [feedFilters, setFeedFilters] = useState<TaxCenterFeedFilters>({})
+
+  // Section 8 — attaching a receipt directly from a "No receipt" row,
+  // for MANUAL rows only (see attachReceiptToTransaction's own comment
+  // for why this is safe: it never touches a Rent Ledger/Maintenance-
+  // owned record). Keyed by transaction id so only the one row being
+  // acted on shows "Uploading…"/an error, never every row at once.
+  const [attachingReceiptId, setAttachingReceiptId] = useState<string | null>(null)
+  const [attachReceiptError, setAttachReceiptError] = useState<{ id: string; message: string } | null>(null)
 
   async function load() {
     if (!supabase) return
@@ -248,6 +281,9 @@ function TaxCenterWorkspace() {
   const filteredFeed = useMemo(() => filterTaxCenterFeed(feed, feedFilters), [feed, feedFilters])
   const feedCategories = useMemo(() => Array.from(new Set(feed.map((f) => f.category))).sort(), [feed])
   const activeFilterCount = Object.values(feedFilters).filter(Boolean).length
+  // Section 5 — presentation-only month grouping over whatever the
+  // filters left visible; never a second source of the feed itself.
+  const feedMonthGroups = useMemo(() => groupFeedByMonth(filteredFeed), [filteredFeed])
 
   function openAddExpense() {
     setExpenseDraft(emptyExpenseDraft(properties))
@@ -330,6 +366,48 @@ function TaxCenterWorkspace() {
     }
   }
 
+  // Section 8 — "if the current architecture makes it safe and
+  // straightforward, allow tapping 'No receipt'... to attach a receipt."
+  // Safe here because it only ever UPDATES the document_id of a
+  // financial_transactions row this owner already has RLS access to
+  // (the same table/column/RLS every other receipt attachment in this
+  // app already writes through) — never a new relationship, never a
+  // Rent Ledger/Maintenance-owned record (callers only invoke this for
+  // source === 'manual' rows; see taxCenterFeedRowHref's own comment).
+  async function attachReceiptToTransaction(item: TaxCenterFeedItem, file: File, bytesPromise: Promise<ArrayBuffer>) {
+    if (!supabase || !user) return
+    setAttachingReceiptId(item.id)
+    setAttachReceiptError(null)
+    try {
+      const durable = await toDurableUploadableFile(file, file.type || undefined, bytesPromise)
+      const uploadResult = await uploadReceiptDocument(user.id, item.propertyId, durable.file, {
+        uploadFile: async (path, uploadFile, contentType) => {
+          const { error: uploadError } = await supabase!.storage.from('property-documents').upload(path, uploadFile, { contentType, upsert: false })
+          return { error: uploadError?.message || null }
+        },
+        insertDocumentRow: async (row) => {
+          const { data, error: rowError } = await supabase!.from('property_documents').insert(row).select('id').single()
+          return { id: (data?.id as string) || null, error: rowError?.message || null }
+        },
+        removeFile: async (path) => { await supabase!.storage.from('property-documents').remove([path]) },
+      })
+      if (!uploadResult.ok) {
+        setAttachReceiptError({ id: item.id, message: uploadResult.error })
+        return
+      }
+      const { error: updateError } = await supabase.from('financial_transactions').update({ document_id: uploadResult.documentId }).eq('id', item.id)
+      if (updateError) {
+        setAttachReceiptError({ id: item.id, message: updateError.message })
+        return
+      }
+      await load()
+    } catch (unexpected) {
+      setAttachReceiptError({ id: item.id, message: unexpected instanceof Error ? unexpected.message : 'Something went wrong attaching this receipt. Please try again.' })
+    } finally {
+      setAttachingReceiptId(null)
+    }
+  }
+
   function exportCsv() {
     const csv = buildTaxCenterCsv(year, portfolio, propertySummaries)
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
@@ -342,6 +420,59 @@ function TaxCenterWorkspace() {
   }
 
   const generatedOn = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+
+  // Mobile Visual Refinement pass, Section 6/7/8/10/11 — a compact
+  // financial-timeline row: a quiet source icon, description + amount
+  // sharing one line (amount right-aligned), then two quiet secondary
+  // lines (property · date, source · receipt status) instead of the
+  // earlier stacked pills. A plain function (not a nested component) —
+  // it closes over this render's own state/handlers without giving
+  // React a new component identity every render, so a row's own pending
+  // upload state never gets reset by an unrelated re-render.
+  function renderFeedRow(item: TaxCenterFeedItem) {
+    const shortDate = new Date(item.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    const receiptNode = item.hasReceipt ? (
+      <span>Receipt attached</span>
+    ) : item.source === 'manual' ? (
+      <label className="taxCenterAttachReceiptLabel">
+        {attachingReceiptId === item.id ? 'Uploading…' : 'Attach receipt'}
+        <input type="file" accept="image/*,.pdf,application/pdf" onChange={(e) => {
+          const file = e.target.files?.[0]
+          const bytesPromise = file ? beginReadingFileBytes(file) : null
+          e.target.value = ''
+          if (file && bytesPromise) void attachReceiptToTransaction(item, file, bytesPromise)
+        }} />
+      </label>
+    ) : (
+      <span>No receipt</span>
+    )
+    const body = (
+      <>
+        <span className="taxCenterFeedIcon" aria-hidden="true"><TaxCenterSourceIcon source={item.source} /></span>
+        <span className="taxCenterFeedMain">
+          <span className="taxCenterFeedTitleLine">
+            <strong>{item.description}</strong>
+            <span className={`taxCenterFeedAmount ${item.type === 'Income' ? 'taxCenterFeedAmountIncome' : 'taxCenterFeedAmountExpense'}`}>
+              {item.type === 'Income' ? '+' : '-'}{money(item.amount)}
+            </span>
+          </span>
+          <span className="muted taxCenterFeedSub">{item.propertyLabel} · {shortDate}</span>
+          <span className="muted taxCenterFeedSourceLine">{SOURCE_LABELS[item.source]} · {receiptNode}</span>
+          {attachReceiptError?.id === item.id && <span className="taxCenterAttachReceiptError">{attachReceiptError.message}</span>}
+        </span>
+      </>
+    )
+    const href = taxCenterFeedRowHref(item)
+    if (href) {
+      return (
+        <Link href={href} className="taxCenterFeedRow taxCenterFeedRowLink" key={item.id}>
+          {body}
+          <span className="taxCenterFeedChevron" aria-hidden="true">›</span>
+        </Link>
+      )
+    }
+    return <div className="taxCenterFeedRow" key={item.id}>{body}</div>
+  }
 
   return (
     <main className="shell taxCenterShell">
@@ -397,8 +528,8 @@ function TaxCenterWorkspace() {
           </section>
 
           <section className="noPrint taxCenterFeedSection">
-            <div className="sectionHead">
-              <div><h2>Activity — {year}</h2><p>Everything PropRoster already tracks for your rentals, plus anything you&apos;ve added here.</p></div>
+            <div className="sectionHead taxCenterFeedHead">
+              <div><h2>Activity · {year}</h2><p>Income and expenses across your properties.</p></div>
               <button type="button" className="secondary taxCenterFilterToggle" onClick={() => setFiltersOpen((v) => !v)} aria-expanded={filtersOpen}>
                 Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
               </button>
@@ -440,18 +571,11 @@ function TaxCenterWorkspace() {
               <p className="muted taxCenterFeedEmpty">{feed.length === 0 ? `No income or expenses recorded for ${year} yet.` : 'No activity matches these filters.'}</p>
             ) : (
               <div className="taxCenterFeedList">
-                {filteredFeed.map((item) => (
-                  <div className="taxCenterFeedRow" key={item.id}>
-                    <div className="taxCenterFeedMain">
-                      <strong>{item.description}</strong>
-                      <span className="muted">{item.propertyLabel}{item.category ? ` · ${item.category}` : ''} · {new Date(item.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                      <span className="taxCenterFeedMeta">
-                        <span className={`statusPill taxSourcePill ${item.source === 'manual' ? 'pillNeutral' : 'pillGood'}`}>{SOURCE_LABELS[item.source]}</span>
-                        {item.hasReceipt ? <span className="statusPill taxSourcePill pillGood">Receipt attached</span> : <span className="statusPill taxSourcePill pillMuted">No receipt</span>}
-                      </span>
-                    </div>
-                    <div className={`taxCenterFeedAmount ${item.type === 'Income' ? 'taxCenterFeedAmountIncome' : 'taxCenterFeedAmountExpense'}`}>
-                      {item.type === 'Income' ? '+' : '-'}{money(item.amount)}
+                {feedMonthGroups.map((group) => (
+                  <div className="taxCenterFeedMonthGroup" key={group.key}>
+                    <h3 className="taxCenterFeedMonthHeading">{group.label}</h3>
+                    <div className="taxCenterFeedRows">
+                      {group.items.map((item) => renderFeedRow(item))}
                     </div>
                   </div>
                 ))}
