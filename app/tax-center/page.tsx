@@ -104,6 +104,16 @@ function taxCenterFeedRowHref(item: TaxCenterFeedItem): string | null {
 // same rule aggregate.ts uses to compute operatingExpenses itself.
 const EXPENSE_CATEGORIES = OPERATING_EXPENSE_LIKE_GROUPS.flatMap((g) => categoriesInGroup(g))
 const CAPITAL_CATEGORIES = categoriesInGroup('capital')
+// Information-Architecture Simplification pass — "By Category" needs
+// the same per-category portfolio total the old "Capital & depreciable
+// items" table already computed (propertySummaries.reduce over each
+// category's own .effective value), just for the 'financing' group
+// instead — mortgage interest/points/other financing were previously
+// only ever shown as three pre-summed PortfolioTaxSummary fields
+// (mortgageInterest/financingOtherTotal), never broken out by
+// individual category. No new aggregation: same categoryBreakdown data
+// every other category table already reads, just a third group added.
+const FINANCING_CATEGORIES = categoriesInGroup('financing')
 
 function money(n: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Number.isFinite(n) ? n : 0)
@@ -184,6 +194,15 @@ function TaxCenterWorkspace() {
   // acted on shows "Uploading…"/an error, never every row at once.
   const [attachingReceiptId, setAttachingReceiptId] = useState<string | null>(null)
   const [attachReceiptError, setAttachReceiptError] = useState<{ id: string; message: string } | null>(null)
+
+  // Information-Architecture Simplification pass — "Your Tax Records" /
+  // "Year-End" progressive disclosure. One piece of state governs which
+  // single drill-in sheet (if any) is open — reusing the app's existing
+  // .overlay/.modal pattern (same as Add Expense above), never a new
+  // routing/navigation system. expandedPropertyId (already declared
+  // above, pre-dating this pass) still governs which single property is
+  // expanded INSIDE the 'property' sheet.
+  const [openRecordsView, setOpenRecordsView] = useState<'property' | 'category' | 'missing-receipts' | 'readiness' | null>(null)
 
   async function load() {
     if (!supabase) return
@@ -284,6 +303,24 @@ function TaxCenterWorkspace() {
   // Section 5 — presentation-only month grouping over whatever the
   // filters left visible; never a second source of the feed itself.
   const feedMonthGroups = useMemo(() => groupFeedByMonth(filteredFeed), [filteredFeed])
+
+  // "Missing Receipts" (Section 6) — deliberately reads the full,
+  // UNFILTERED `feed` (not filteredFeed/feedFilters — that's Activity's
+  // own, independent filter UI) so it always reflects every expense for
+  // the year regardless of what a landlord happens to have filtered
+  // Activity to. Expense-only: an income row (e.g. a rent payment) was
+  // never expected to carry a "receipt" the way an expense is, and this
+  // keeps it a precise, actionable "still needs documentation" list
+  // rather than mixing in every income row too (the unfiltered
+  // yearSummary.receiptCount above is the separate, already-established
+  // metric that DOES count across both — this is a different, narrower
+  // question, not a redefinition of that one).
+  const missingReceiptItems = useMemo(() => feed.filter((f) => f.type === 'Expense' && !f.hasReceipt), [feed])
+
+  function closeRecordsView() {
+    setOpenRecordsView(null)
+    setExpandedPropertyId(null)
+  }
 
   function openAddExpense() {
     setExpenseDraft(emptyExpenseDraft(properties))
@@ -486,6 +523,11 @@ function TaxCenterWorkspace() {
 
       {error && <p className="errorMessage noPrint">{error}</p>}
 
+      {/* Information-Architecture Simplification pass, Section 8/12: Export
+          CSV and Print moved out of the top bar and into the new Year-End
+          section below (exportCsv()/window.print() themselves untouched —
+          only where their buttons live changed) — the top of the page now
+          reads exactly "Tax Center / [ Year ]", per the approved target. */}
       <div className="taxYearBar noPrint">
         <label>
           Tax year
@@ -493,10 +535,6 @@ function TaxCenterWorkspace() {
             {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
         </label>
-        <div className="taxYearActions">
-          <button type="button" className="secondary" onClick={exportCsv}>Export CSV</button>
-          <button type="button" className="secondary" onClick={() => window.print()}>Print / Save as PDF</button>
-        </div>
       </div>
 
       {!loaded ? (
@@ -641,132 +679,92 @@ function TaxCenterWorkspace() {
             </div>
           )}
 
-          {/* Correction (Property-First UX Cleanup, Tax Center ordering):
-              Property by Property is now the first substantive section —
-              the centerpiece of this page — with Portfolio Summary
-              following it, per the approved required order. The standalone
-              portfolio-level "Tax Readiness" section (formerly here) was
-              removed as redundant/cluttered; the SAME readiness
-              calculation (computePropertyTaxSummary's readiness field,
-              lib/tax-center/readiness.ts — completely untouched) still
-              drives each property's own Status pill below and in Property
-              detail — nothing about the underlying calculation changed,
-              only this one duplicate summary display. */}
-          <section className="noPrint">
-            <div className="sectionHead"><div><h2>Rental properties — {year}</h2><p>Every rental property at a glance. Select a property to review or edit its Tax &amp; Financials tab.</p></div></div>
-            <div className="taxCategoryTableWrap">
-              <table className="ledger taxPropertyTable">
-                <thead><tr><th>Property</th><th>Rental income</th><th>Operating expenses</th><th>Mortgage interest</th><th>Capital improvements / items</th><th>Net result</th><th>Status</th></tr></thead>
-                <tbody>
-                  {propertySummaries.map((p) => (
-                    <tr key={p.propertyId}>
-                      <td><Link href={`/?openProperty=${p.propertyId}&openTab=Tax`}>{p.address}</Link></td>
-                      <td className="moneyCell">{money(p.grossIncome)}</td>
-                      <td className="moneyCell">{money(p.operatingExpenses)}</td>
-                      <td className="moneyCell">{p.mortgageInterest > 0 ? money(p.mortgageInterest) : '—'}</td>
-                      <td className="moneyCell">{p.capitalImprovements > 0 ? money(p.capitalImprovements) : '—'}</td>
-                      <td className="moneyCell">{money(p.netOperatingResult)}</td>
-                      <td><span className={`statusPill ${readinessPillClass(p.readiness.status)}`}>{p.readiness.status}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Information-Architecture Simplification pass — everything that
+              used to render permanently below Activity as five large,
+              always-expanded sections (Rental properties, Portfolio
+              summary, Expense totals by category, Capital & depreciable
+              items by category, Property detail) is now reached through
+              progressive disclosure: two short, tappable row-lists
+              ("Your Tax Records" / "Year-End"), each opening a focused
+              drill-in sheet (the app's existing .overlay/.modal pattern —
+              same as Add Expense above). No calculation changed — every
+              number below still comes straight from propertySummaries/
+              portfolio (computePropertyTaxSummary/computePortfolioTaxSummary,
+              both completely untouched) and the SAME Property detail JSX
+              (category breakdown, capital detail, custom items, notes,
+              readiness items, action links) that used to render inline
+              now renders inside the "By Property" sheet instead — moved,
+              not rewritten. */}
+          <section className="noPrint taxCenterRecordsSection">
+            <div className="sectionHead"><div><h2>Your Tax Records</h2><p>Explore your records by property or category, and find anything that still needs a receipt.</p></div></div>
+            <div className="taxCenterRecordsList">
+              <button type="button" className="taxCenterRecordsRow" onClick={() => setOpenRecordsView('property')}>
+                <span className="taxCenterRecordsRowMain"><strong>By Property</strong><span>See income and expenses for each rental.</span></span>
+                <span className="taxCenterRecordsRowRight"><span className="taxCenterRecordsChevron" aria-hidden="true">›</span></span>
+              </button>
+              <button type="button" className="taxCenterRecordsRow" onClick={() => setOpenRecordsView('category')}>
+                <span className="taxCenterRecordsRowMain"><strong>By Category</strong><span>Review how income and expenses are organized.</span></span>
+                <span className="taxCenterRecordsRowRight"><span className="taxCenterRecordsChevron" aria-hidden="true">›</span></span>
+              </button>
+              <button type="button" className="taxCenterRecordsRow" onClick={() => setOpenRecordsView('missing-receipts')}>
+                <span className="taxCenterRecordsRowMain"><strong>Missing Receipts</strong><span>Find expenses that still need documentation.</span></span>
+                <span className="taxCenterRecordsRowRight">
+                  {missingReceiptItems.length > 0 && <span className="taxCenterRecordsCount">{missingReceiptItems.length}</span>}
+                  <span className="taxCenterRecordsChevron" aria-hidden="true">›</span>
+                </span>
+              </button>
             </div>
           </section>
 
-          <section className="noPrint">
-            <div className="sectionHead"><div><h2>Portfolio summary — {year}</h2><p>Tracked from your Financials ledger, replaced by a manual entry wherever one exists on a property&apos;s Tax &amp; Financials tab — never both added together.</p></div></div>
-            <div className="financialStats">
-              <div className="financialStat"><span>Gross rental income</span><strong>{money(portfolio.grossIncome)}</strong></div>
-              <div className="financialStat"><span>Operating expenses</span><strong>{money(portfolio.operatingExpenses)}</strong></div>
-              <div className="financialStat"><span>Net rental income</span><strong>{money(portfolio.netOperatingResult)}</strong><small>Before tax-specific adjustments</small></div>
-              <div className="financialStat"><span>Properties included</span><strong>{portfolio.propertiesIncluded}</strong></div>
+          <section className="noPrint taxCenterRecordsSection">
+            <div className="sectionHead"><div><h2>Year-End</h2><p>Tools that help when it&apos;s time to send your records to a CPA.</p></div></div>
+            <div className="taxCenterRecordsList">
+              <button type="button" className="taxCenterRecordsRow" onClick={() => setOpenRecordsView('readiness')}>
+                <span className="taxCenterRecordsRowMain"><strong>Tax Readiness</strong><span>See what may still need attention before export.</span></span>
+                <span className="taxCenterRecordsRowRight"><span className="taxCenterRecordsChevron" aria-hidden="true">›</span></span>
+              </button>
+              <button type="button" className="taxCenterRecordsRow" onClick={exportCsv}>
+                <span className="taxCenterRecordsRowMain"><strong>Export for CPA</strong><span>Download your organized records for {year}.</span></span>
+                <span className="taxCenterRecordsRowRight"><span className="taxCenterRecordsChevron" aria-hidden="true">›</span></span>
+              </button>
             </div>
-            <div className="taxNonOperatingNotes">
-              <p><strong>Capital &amp; depreciable items:</strong> {money(portfolio.capitalImprovements)} — {SCHEDULE_E_CAPEX_NOTE}</p>
-              <p><strong>Mortgage interest (manual entry only):</strong> {money(portfolio.mortgageInterest)} — entered on each property&apos;s Tax &amp; Financials tab from a lender statement or Form 1098. Never calculated by PropRoster.</p>
-              <p><strong>Other financing (points, loan costs, etc.):</strong> {money(portfolio.financingOtherTotal)} — organizational only, never mortgage interest and never includes principal.</p>
-              <p><strong>Mortgage payments logged:</strong> {money(portfolio.mortgagePayments)} — {SCHEDULE_E_MORTGAGE_NOTE}</p>
-              {portfolio.customItemsCount > 0 && <p><strong>Custom tax items recorded:</strong> {portfolio.customItemsCount} — already included in the totals above; see Property detail below or the CSV export for each one individually.</p>}
-            </div>
+            <button type="button" className="taxCenterPrintLink" onClick={() => window.print()}>Print Summary</button>
           </section>
 
-          <section className="noPrint">
-            <div className="sectionHead"><div><h2>Expense totals by category</h2><p>Property expenses, professional/administrative, travel, and meals — capital/depreciable items, mortgage interest, and mortgage payments are shown separately.</p></div></div>
-            <div className="taxCategoryTableWrap">
-              <table className="ledger taxCategoryTable">
-                <thead><tr><th>Category</th><th>Amount</th><th>Schedule E reference (informational only)</th></tr></thead>
-                <tbody>
-                  {EXPENSE_CATEGORIES.map((category) => (
-                    <tr key={category.key}>
-                      <td>{category.label}</td>
-                      <td className="moneyCell">{money(portfolio.expenseByCategory[category.key] || 0)}</td>
-                      <td className="muted">{category.trackedCategory ? SCHEDULE_E_REFERENCE[category.trackedCategory as keyof typeof SCHEDULE_E_REFERENCE] : 'Schedule E, Line 19 (Other) — no dedicated line'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section className="noPrint">
-            <div className="sectionHead"><div><h2>Capital &amp; depreciable items by category</h2><p>Never immediately deductible and never part of operating expenses — typically depreciated over time. Review the correct treatment with your tax professional.</p></div></div>
-            <div className="taxCategoryTableWrap">
-              <table className="ledger taxCategoryTable">
-                <thead><tr><th>Category</th><th>Amount</th></tr></thead>
-                <tbody>
-                  {CAPITAL_CATEGORIES.map((category) => (
-                    <tr key={category.key}>
-                      <td>{category.label}</td>
-                      <td className="moneyCell">{money(propertySummaries.reduce((sum, p) => sum + p.categoryBreakdown[category.key].effective, 0))}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section className="noPrint">
-            <div className="sectionHead"><div><h2>Property detail</h2><p>Expand a property to see its full category-by-category breakdown, or jump into Tax &amp; Financials to enter manual amounts.</p></div></div>
-            <div className="taxPropertyList">
-              {propertySummaries.map((p) => {
-                const expanded = expandedPropertyId === p.propertyId
-                return (
-                  <div className="recordCard" key={p.propertyId}>
-                    <button type="button" className="taxPropertyToggle" onClick={() => setExpandedPropertyId(expanded ? null : p.propertyId)}>
-                      <div className="recordTop">
-                        <div><p className="muted">{p.city}</p><h3>{p.address}</h3></div>
-                        <span className={`statusPill ${readinessPillClass(p.readiness.status)}`}>{p.readiness.status}</span>
-                      </div>
-                    </button>
-                    <div className="recordMetrics">
-                      <div><span>Gross income</span><strong>{money(p.grossIncome)}</strong></div>
-                      <div><span>Operating expenses</span><strong>{money(p.operatingExpenses)}</strong></div>
-                      <div><span>Net operating result</span><strong>{money(p.netOperatingResult)}</strong></div>
-                    </div>
-                    {expanded && (
-                      <>
-                        <div className="recordRows">
-                          {EXPENSE_CATEGORIES.filter((c) => p.categoryBreakdown[c.key].effective > 0).map((c) => {
-                            const value = p.categoryBreakdown[c.key]
-                            return (
-                              <div key={c.key}>
-                                <span>{c.label} <span className={`statusPill taxSourcePill ${sourcePillClass(value.source)}`}>{sourceLabel(value.source)}</span></span>
-                                <strong>{money(value.effective)}</strong>
-                              </div>
-                            )
-                          })}
-                          {p.mortgageInterest > 0 && <div><span>Mortgage interest (manual entry)</span><strong>{money(p.mortgageInterest)}</strong></div>}
-                          {p.financingOtherTotal > 0 && <div><span>Other financing (points, loan costs, etc. — organizational only)</span><strong>{money(p.financingOtherTotal)}</strong></div>}
-                          {p.mortgagePayments > 0 && <div><span>Mortgage payments (reference only)</span><strong>{money(p.mortgagePayments)}</strong></div>}
-                          {p.businessMileage !== null && <div><span>Business mileage{p.businessMileageNotes ? ` — ${p.businessMileageNotes}` : ''}</span><strong>{p.businessMileage.toLocaleString()} mi</strong></div>}
+          {openRecordsView === 'property' && (
+            <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && closeRecordsView()}>
+              <div className="modal taxCenterRecordsModal">
+                <div className="modalTop">
+                  <div><p className="eyebrow">TAX CENTER</p><h2>By Property</h2></div>
+                  <button type="button" className="iconButton" onClick={closeRecordsView}>×</button>
+                </div>
+                <p className="muted">Select a property to see its full category-by-category breakdown, or jump into Tax &amp; Financials to enter manual amounts.</p>
+                <div className="financialStats">
+                  <div className="financialStat"><span>Gross rental income</span><strong>{money(portfolio.grossIncome)}</strong></div>
+                  <div className="financialStat"><span>Operating expenses</span><strong>{money(portfolio.operatingExpenses)}</strong></div>
+                  <div className="financialStat"><span>Net rental income</span><strong>{money(portfolio.netOperatingResult)}</strong><small>Before tax-specific adjustments</small></div>
+                  <div className="financialStat"><span>Properties included</span><strong>{portfolio.propertiesIncluded}</strong></div>
+                </div>
+                <div className="taxPropertyList">
+                  {propertySummaries.map((p) => {
+                    const expanded = expandedPropertyId === p.propertyId
+                    return (
+                      <div className="recordCard" key={p.propertyId}>
+                        <button type="button" className="taxPropertyToggle" onClick={() => setExpandedPropertyId(expanded ? null : p.propertyId)}>
+                          <div className="recordTop">
+                            <div><p className="muted">{p.city}</p><h3>{p.address}</h3></div>
+                            <span className={`statusPill ${readinessPillClass(p.readiness.status)}`}>{p.readiness.status}</span>
+                          </div>
+                        </button>
+                        <div className="recordMetrics">
+                          <div><span>Gross income</span><strong>{money(p.grossIncome)}</strong></div>
+                          <div><span>Operating expenses</span><strong>{money(p.operatingExpenses)}</strong></div>
+                          <div><span>Net operating result</span><strong>{money(p.netOperatingResult)}</strong></div>
                         </div>
-
-                        {p.capitalImprovements > 0 && (
-                          <div className="taxPropertyCapitalDetail">
-                            <h4>Capital &amp; depreciable items (not immediately deductible)</h4>
+                        {expanded && (
+                          <>
                             <div className="recordRows">
-                              {CAPITAL_CATEGORIES.filter((c) => p.categoryBreakdown[c.key].effective > 0).map((c) => {
+                              {EXPENSE_CATEGORIES.filter((c) => p.categoryBreakdown[c.key].effective > 0).map((c) => {
                                 const value = p.categoryBreakdown[c.key]
                                 return (
                                   <div key={c.key}>
@@ -775,42 +773,177 @@ function TaxCenterWorkspace() {
                                   </div>
                                 )
                               })}
+                              {p.mortgageInterest > 0 && <div><span>Mortgage interest (manual entry)</span><strong>{money(p.mortgageInterest)}</strong></div>}
+                              {p.financingOtherTotal > 0 && <div><span>Other financing (points, loan costs, etc. — organizational only)</span><strong>{money(p.financingOtherTotal)}</strong></div>}
+                              {p.mortgagePayments > 0 && <div><span>Mortgage payments (reference only)</span><strong>{money(p.mortgagePayments)}</strong></div>}
+                              {p.businessMileage !== null && <div><span>Business mileage{p.businessMileageNotes ? ` — ${p.businessMileageNotes}` : ''}</span><strong>{p.businessMileage.toLocaleString()} mi</strong></div>}
                             </div>
-                          </div>
-                        )}
 
-                        {p.customItems.length > 0 && (
-                          <div className="taxPropertyCustomItems">
-                            <h4>Other tax items</h4>
-                            <div className="recordRows">
-                              {p.customItems.map((item) => (
-                                <div key={item.id}>
-                                  <span>{item.description} <span className="statusPill taxSourcePill pillNeutral">{CUSTOM_ITEM_GROUP_LABELS[item.group]} · Manual</span></span>
-                                  <strong>{money(item.amount)}</strong>
+                            {p.capitalImprovements > 0 && (
+                              <div className="taxPropertyCapitalDetail">
+                                <h4>Capital &amp; depreciable items (not immediately deductible)</h4>
+                                <div className="recordRows">
+                                  {CAPITAL_CATEGORIES.filter((c) => p.categoryBreakdown[c.key].effective > 0).map((c) => {
+                                    const value = p.categoryBreakdown[c.key]
+                                    return (
+                                      <div key={c.key}>
+                                        <span>{c.label} <span className={`statusPill taxSourcePill ${sourcePillClass(value.source)}`}>{sourceLabel(value.source)}</span></span>
+                                        <strong>{money(value.effective)}</strong>
+                                      </div>
+                                    )
+                                  })}
                                 </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                              </div>
+                            )}
 
-                        {p.notes && <p className="muted taxPropertyNotes">Note: {p.notes}</p>}
-                        {p.readiness.items.length > 0 && (
-                          <ul className="taxReadinessItems">
-                            {p.readiness.items.map((item, i) => <li key={i}>{item}</li>)}
-                          </ul>
+                            {p.customItems.length > 0 && (
+                              <div className="taxPropertyCustomItems">
+                                <h4>Other tax items</h4>
+                                <div className="recordRows">
+                                  {p.customItems.map((item) => (
+                                    <div key={item.id}>
+                                      <span>{item.description} <span className="statusPill taxSourcePill pillNeutral">{CUSTOM_ITEM_GROUP_LABELS[item.group]} · Manual</span></span>
+                                      <strong>{money(item.amount)}</strong>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {p.notes && <p className="muted taxPropertyNotes">Note: {p.notes}</p>}
+                            {p.readiness.items.length > 0 && (
+                              <ul className="taxReadinessItems">
+                                {p.readiness.items.map((item, i) => <li key={i}>{item}</li>)}
+                              </ul>
+                            )}
+                            <div className="maintenanceActions">
+                              <Link href={`/?openProperty=${p.propertyId}&openTab=Tax`}>{p.hasManualRecord ? 'Edit manual tax entries' : 'Add manual tax entries'}</Link>
+                              <Link href={`/?openProperty=${p.propertyId}&openTab=Rent&openRentSubTab=Ledger`}>Review in Ledger</Link>
+                              <Link href="/documents">Review documents</Link>
+                            </div>
+                          </>
                         )}
-                        <div className="maintenanceActions">
-                          <Link href={`/?openProperty=${p.propertyId}&openTab=Tax`}>{p.hasManualRecord ? 'Edit manual tax entries' : 'Add manual tax entries'}</Link>
-                          <Link href={`/?openProperty=${p.propertyId}&openTab=Rent&openRentSubTab=Ledger`}>Review in Ledger</Link>
-                          <Link href="/documents">Review documents</Link>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )
-              })}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
-          </section>
+          )}
+
+          {openRecordsView === 'category' && (
+            <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && closeRecordsView()}>
+              <div className="modal taxCenterRecordsModal">
+                <div className="modalTop">
+                  <div><p className="eyebrow">TAX CENTER</p><h2>By Category</h2></div>
+                  <button type="button" className="iconButton" onClick={closeRecordsView}>×</button>
+                </div>
+                <p className="muted">Your {year} totals, organized the same way Tax &amp; Financials organizes them — the current canonical category system, not a new one.</p>
+
+                <div className="sectionHead"><div><h3>Expense categories</h3><p>Property expenses, professional/administrative, travel, and meals — capital/depreciable items and mortgage-related categories are shown separately below.</p></div></div>
+                <div className="taxCategoryTableWrap">
+                  <table className="ledger taxCategoryTable">
+                    <thead><tr><th>Category</th><th>Amount</th><th>Schedule E reference (informational only)</th></tr></thead>
+                    <tbody>
+                      {EXPENSE_CATEGORIES.map((category) => (
+                        <tr key={category.key}>
+                          <td>{category.label}</td>
+                          <td className="moneyCell">{money(portfolio.expenseByCategory[category.key] || 0)}</td>
+                          <td className="muted">{category.trackedCategory ? SCHEDULE_E_REFERENCE[category.trackedCategory as keyof typeof SCHEDULE_E_REFERENCE] : 'Schedule E, Line 19 (Other) — no dedicated line'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="sectionHead"><div><h3>Capital &amp; depreciable items</h3><p>Never immediately deductible and never part of operating expenses — typically depreciated over time. Review the correct treatment with your tax professional.</p></div></div>
+                <div className="taxCategoryTableWrap">
+                  <table className="ledger taxCategoryTable">
+                    <thead><tr><th>Category</th><th>Amount</th></tr></thead>
+                    <tbody>
+                      {CAPITAL_CATEGORIES.map((category) => (
+                        <tr key={category.key}>
+                          <td>{category.label}</td>
+                          <td className="moneyCell">{money(propertySummaries.reduce((sum, p) => sum + p.categoryBreakdown[category.key].effective, 0))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="sectionHead"><div><h3>Mortgage &amp; financing</h3><p>Organizational only — PropRoster never calculates mortgage interest and never treats a mortgage payment or loan cost as a deductible expense.</p></div></div>
+                <div className="taxCategoryTableWrap">
+                  <table className="ledger taxCategoryTable">
+                    <thead><tr><th>Category</th><th>Amount</th></tr></thead>
+                    <tbody>
+                      {FINANCING_CATEGORIES.map((category) => (
+                        <tr key={category.key}>
+                          <td>{category.label}</td>
+                          <td className="moneyCell">{money(propertySummaries.reduce((sum, p) => sum + p.categoryBreakdown[category.key].effective, 0))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="taxNonOperatingNotes">
+                  <p><strong>Mortgage interest:</strong> {SCHEDULE_E_MORTGAGE_NOTE}</p>
+                  <p><strong>Mortgage payments logged (reference only):</strong> {money(portfolio.mortgagePayments)} — principal, interest, and escrow lumped together; never treated as deductible interest itself.</p>
+                  <p><strong>Capital &amp; depreciable items:</strong> {SCHEDULE_E_CAPEX_NOTE}</p>
+                  {portfolio.customItemsCount > 0 && <p><strong>Custom tax items recorded:</strong> {portfolio.customItemsCount} — already included in the totals above; see By Property or the CSV export for each one individually.</p>}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {openRecordsView === 'missing-receipts' && (
+            <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && closeRecordsView()}>
+              <div className="modal taxCenterRecordsModal">
+                <div className="modalTop">
+                  <div><p className="eyebrow">TAX CENTER</p><h2>Missing Receipts</h2></div>
+                  <button type="button" className="iconButton" onClick={closeRecordsView}>×</button>
+                </div>
+                <p className="muted">Expenses for {year} without a receipt on file. Rent Ledger/Maintenance-recorded expenses can be reviewed from their own tab; manually added expenses can attach a receipt right here.</p>
+                {missingReceiptItems.length === 0 ? (
+                  <p className="muted taxCenterFeedEmpty">No missing receipts for {year}.</p>
+                ) : (
+                  <div className="taxCenterFeedRows">
+                    {missingReceiptItems.map((item) => renderFeedRow(item))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {openRecordsView === 'readiness' && (
+            <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && closeRecordsView()}>
+              <div className="modal taxCenterRecordsModal">
+                <div className="modalTop">
+                  <div><p className="eyebrow">TAX CENTER</p><h2>Tax Readiness</h2></div>
+                  <button type="button" className="iconButton" onClick={closeRecordsView}>×</button>
+                </div>
+                <p className="muted">Reflects how organized your {year} records are — not whether your taxes are complete or correct. Review everything with your tax professional.</p>
+                <div className="taxCenterReadinessSummary">
+                  <p>{missingReceiptItems.length} expense{missingReceiptItems.length === 1 ? '' : 's'} still need{missingReceiptItems.length === 1 ? 's' : ''} a receipt.</p>
+                  {taxDocumentCount > 0 && <p>{taxDocumentCount} tax document{taxDocumentCount === 1 ? '' : 's'} in <Link href="/documents">Documents</Link> {taxDocumentCount === 1 ? "isn't" : "aren't"} linked to a property yet.</p>}
+                </div>
+                <div className="taxPropertyList">
+                  {propertySummaries.map((p) => (
+                    <div className="recordCard" key={p.propertyId}>
+                      <div className="recordTop">
+                        <div><p className="muted">{p.city}</p><h3>{p.address}</h3></div>
+                        <span className={`statusPill ${readinessPillClass(p.readiness.status)}`}>{p.readiness.status}</span>
+                      </div>
+                      {p.readiness.items.length > 0 && (
+                        <ul className="taxReadinessItems">
+                          {p.readiness.items.map((item, i) => <li key={i}>{item}</li>)}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Print / Save as PDF summary — hidden on screen (.taxPrintSummary
               is display:none by default), shown only under @media print

@@ -180,16 +180,99 @@ describe('Tax Center page — Section 7: progressive filters', () => {
   })
 })
 
-describe('Tax Center page — untouched V3 sections still present', () => {
-  it('the existing Rental properties, Portfolio summary, and category tables are all still rendered, unchanged', () => {
-    expect(pageSource).toContain('Rental properties — {year}')
-    expect(pageSource).toContain('Portfolio summary — {year}')
+describe('Tax Center page — underlying V3 computations and Print/PDF export are untouched', () => {
+  it('propertySummaries/portfolio still come straight from computePropertyTaxSummary/computePortfolioTaxSummary — no second calculation', () => {
+    expect(pageSource).toContain('properties.map((p) => computePropertyTaxSummary(p, yearTransactions, yearMaintenance, yearTaxRecordByProperty.get(p.id) || null, yearCustomItems))')
+    expect(pageSource).toContain('computePortfolioTaxSummary(year, propertySummaries)')
+  })
+
+  it('the hidden, print-only summary (taxPrintSummary, shown only via @media print) is still rendered, unaffected by the main-page consolidation', () => {
     expect(pageSource).toContain('taxPrintSummary')
   })
 
   it('filterTransactionsForYear stays the single shared year-filter function — the new feed reuses it rather than reimplementing year filtering', () => {
     expect(pageSource).toContain('filterTransactionsForYear(feedTransactions, year)')
     expect(pageSource).toContain('filterTransactionsForYear(transactions, year)')
+  })
+})
+
+describe('Tax Center page — Information-Architecture Simplification: progressive disclosure below Activity', () => {
+  it('the old always-visible Rental properties / Portfolio summary / category-table headings no longer render permanently on the main page', () => {
+    expect(pageSource).not.toContain('Rental properties — {year}')
+    expect(pageSource).not.toContain('Portfolio summary — {year}')
+  })
+
+  it('"Your Tax Records" offers By Property, By Category, and Missing Receipts as compact rows, not full sections', () => {
+    const start = pageSource.indexOf('<h2>Your Tax Records</h2>')
+    const end = pageSource.indexOf('</section>', start)
+    const slice = pageSource.slice(start, end)
+    expect(slice).toContain("onClick={() => setOpenRecordsView('property')}")
+    expect(slice).toContain("onClick={() => setOpenRecordsView('category')}")
+    expect(slice).toContain("onClick={() => setOpenRecordsView('missing-receipts')}")
+  })
+
+  it('the Missing Receipts count badge is computed from real data (missingReceiptItems.length), never hard-coded, and only renders when nonzero', () => {
+    expect(pageSource).toContain('{missingReceiptItems.length > 0 && <span className="taxCenterRecordsCount">{missingReceiptItems.length}</span>}')
+  })
+
+  it('missingReceiptItems is Expense-only and reads the full unfiltered year feed, independent of Activity\'s own feedFilters', () => {
+    expect(pageSource).toContain("const missingReceiptItems = useMemo(() => feed.filter((f) => f.type === 'Expense' && !f.hasReceipt), [feed])")
+  })
+
+  it('"Year-End" offers Tax Readiness and Export for CPA as rows, plus Print as a quiet secondary link (not a full row/major button)', () => {
+    const start = pageSource.indexOf('<h2>Year-End</h2>')
+    const end = pageSource.indexOf('{openRecordsView === \'property\'', start)
+    const slice = pageSource.slice(start, end)
+    expect(slice).toContain("onClick={() => setOpenRecordsView('readiness')}")
+    expect(slice).toContain('onClick={exportCsv}')
+    expect(slice).toContain('className="taxCenterPrintLink" onClick={() => window.print()}')
+  })
+
+  it('the top year bar now contains only the year selector — Export CSV/Print moved into Year-End, not duplicated', () => {
+    const barStart = pageSource.indexOf('<div className="taxYearBar noPrint">')
+    const barEnd = pageSource.indexOf('</div>\n\n      {!loaded', barStart)
+    const barSlice = pageSource.slice(barStart, barEnd)
+    expect(barSlice).not.toContain('onClick={exportCsv}')
+    expect(barSlice).not.toContain('window.print()')
+  })
+
+  it('By Property reuses the exact same propertySummaries/category-breakdown data the old Property detail section used — no second calculation, only relocated presentation', () => {
+    const start = pageSource.indexOf("openRecordsView === 'property'")
+    const end = pageSource.indexOf("{openRecordsView === 'category'", start)
+    const slice = pageSource.slice(start, end)
+    expect(slice).toContain('propertySummaries.map((p) => {')
+    expect(slice).toContain('EXPENSE_CATEGORIES.filter((c) => p.categoryBreakdown[c.key].effective > 0)')
+    expect(slice).toContain('p.customItems.length > 0')
+    expect(slice).toContain('p.readiness.items.length > 0')
+  })
+
+  it('By Category adds a Mortgage & Financing breakdown using the SAME per-category categoryBreakdown reduction pattern Capital already used — no new aggregation', () => {
+    const start = pageSource.indexOf("openRecordsView === 'category'")
+    const end = pageSource.indexOf("{openRecordsView === 'missing-receipts'", start)
+    const slice = pageSource.slice(start, end)
+    expect(slice).toContain('FINANCING_CATEGORIES.map((category) => (')
+    expect(slice).toContain('propertySummaries.reduce((sum, p) => sum + p.categoryBreakdown[category.key].effective, 0)')
+  })
+
+  it('Missing Receipts reuses renderFeedRow() (the exact Activity row renderer) rather than a second row-rendering implementation', () => {
+    const start = pageSource.indexOf("openRecordsView === 'missing-receipts'")
+    const end = pageSource.indexOf("{openRecordsView === 'readiness'", start)
+    const slice = pageSource.slice(start, end)
+    expect(slice).toContain('missingReceiptItems.map((item) => renderFeedRow(item))')
+  })
+
+  it('Tax Readiness never invents a tax score — it only shows the existing per-property readiness status/items, plus the existing (previously unrendered) missing-receipt and unassigned-tax-document counts', () => {
+    const start = pageSource.indexOf("openRecordsView === 'readiness'")
+    const end = pageSource.indexOf('\n          )}\n', start)
+    const slice = pageSource.slice(start, end)
+    expect(slice).toContain('propertySummaries.map((p) => (')
+    expect(slice).toContain('readinessPillClass(p.readiness.status)')
+    expect(slice).toContain('taxDocumentCount > 0 &&')
+    expect(slice).not.toMatch(/tax score|IRS ready|deduction approved/i)
+  })
+
+  it('closing a drill-in sheet also resets which property is expanded, so reopening By Property always starts collapsed', () => {
+    expect(pageSource).toContain('function closeRecordsView() {\n    setOpenRecordsView(null)\n    setExpandedPropertyId(null)\n  }')
   })
 })
 
