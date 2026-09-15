@@ -2,10 +2,11 @@
 
 // PropRoster — Property + Attention Usability V1, Part 3-B/D: swipe-to-
 // reveal-Clear plus a quiet trailing accessible fallback, shared by
-// every dismissible Needs Your Attention row (date-driven attention
-// items and vacancy items — NOT open-maintenance-list items, which
-// aren't dismissible in this pass; see app/page.tsx's own comment at
-// the call site for why).
+// every dismissible Needs Your Attention row — date-driven attention
+// items, vacancy items, AND (as of the Round 3 follow-up) open-
+// maintenance-list items too; see app/page.tsx's own attentionRows
+// comment and lib/dashboard/attention-dismissal.ts's header for why the
+// original open-maintenance exclusion was corrected.
 //
 // This component owns ONLY the gesture/reveal mechanics — it never
 // decides WHAT gets cleared or how that's persisted; `onClear` is the
@@ -24,12 +25,46 @@
 // swipe handling here at all. A drag (once classified horizontal)
 // suppresses the click that would otherwise fire on touchend, so
 // swiping never also navigates.
+//
+// REAL-IPHONE REGRESSION FOLLOW-UP: once open-maintenance rows were
+// ALSO wrapped in this component (Round 3), a real-device report showed
+// the whole Dashboard clipped a few px on the left again — the exact
+// fingerprint this repo has hit before from the document being nudged
+// into a brief horizontal rubber-band scroll (see app/globals.css's
+// `html, body` comment). Bisecting the diff against the last real-
+// device-verified commit showed the ONLY Dashboard-affecting change was
+// this wrapping — so open-maintenance rows (often several per property,
+// e.g. three separate AC-related requests) were, for the first time,
+// running this component's touch-interception logic during ordinary
+// scrolling, on rows a user is statistically likely to scroll past/
+// through. Reproducing the OLD classification (`|dx| > |dy|`, 6px
+// deadzone) against a realistic diagonal thumb-scroll path (early
+// frames drift slightly more horizontal than vertical before settling
+// into a clear vertical trajectory — completely normal human touch
+// behavior) showed it FALSELY classifies that as a horizontal swipe,
+// calling preventDefault() and hijacking the touch that should have
+// been a plain page scroll. That's a real, verifiable defect
+// independent of any single browser engine's rubber-band quirks, and
+// exactly the kind of increased exposure that would newly surface now
+// that open-maintenance rows carry this logic too. Fixed by requiring a
+// clearly DOMINANT horizontal component (not a bare majority) before
+// ever locking the gesture to 'x' — see classifyGestureAxis()
+// (lib/dashboard/attention-swipe-gesture.ts, pulled out there so this
+// decision is independently testable with real dx/dy values — see its
+// own test file for the exact reproduction and fix verification). A
+// genuine horizontal swipe still classifies correctly; only the
+// ambiguous, mostly-vertical case changes.
 
 import { useRef, useState, type ReactNode, type TouchEvent } from 'react'
+import { classifyGestureAxis, clampRevealOffset, shouldSnapOpen } from '../lib/dashboard/attention-swipe-gesture'
 
 const REVEAL_WIDTH = 84 // px — matches .dismissibleAttentionReveal's own width in globals.css
-const DRAG_DEADZONE = 6 // px of movement before a gesture is classified as horizontal vs vertical
-const OPEN_SNAP_THRESHOLD = REVEAL_WIDTH / 2
+const DRAG_DEADZONE = 8 // px of movement before a gesture is classified as horizontal vs vertical
+// A bare `|dx| > |dy|` locked the gesture to horizontal on ordinary,
+// slightly-diagonal vertical scrolling (see this file's header comment
+// for the empirical reproduction) — requiring dx to clearly DOMINATE dy
+// filters that out while still recognizing a real horizontal swipe.
+const HORIZONTAL_DOMINANCE_RATIO = 1.5
 
 type GestureState = { startX: number; startY: number; axis: 'x' | 'y' | null; startOffset: number }
 
@@ -61,20 +96,21 @@ export function DismissibleAttentionRow({
     const dx = t.clientX - g.startX
     const dy = t.clientY - g.startY
     if (g.axis === null) {
-      if (Math.abs(dx) < DRAG_DEADZONE && Math.abs(dy) < DRAG_DEADZONE) return
-      g.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'
+      const axis = classifyGestureAxis(dx, dy, DRAG_DEADZONE, HORIZONTAL_DOMINANCE_RATIO)
+      if (axis === null) return // still within the deadzone — not enough movement to decide yet
+      g.axis = axis
     }
     if (g.axis === 'y') return // a real vertical scroll — never intercepted, never preventDefault
     e.preventDefault()
     draggedRef.current = true
-    setOffset(Math.min(0, Math.max(-REVEAL_WIDTH, g.startOffset + dx)))
+    setOffset(clampRevealOffset(g.startOffset + dx, REVEAL_WIDTH))
   }
 
   function handleTouchEnd() {
     const g = gesture.current
     gesture.current = null
     if (!g || g.axis !== 'x') return
-    setOffset((current) => (current <= -OPEN_SNAP_THRESHOLD ? -REVEAL_WIDTH : 0))
+    setOffset((current) => (shouldSnapOpen(current, REVEAL_WIDTH) ? -REVEAL_WIDTH : 0))
   }
 
   function handleRowClick() {
@@ -92,7 +128,15 @@ export function DismissibleAttentionRow({
       </div>
       <div
         className="dismissibleAttentionForeground"
-        style={{ transform: `translateX(${offset}px)` }}
+        // Omit the transform declaration entirely at rest (offset === 0)
+        // rather than always setting `translateX(0px)` — a non-'none'
+        // transform, even an identity one, promotes the element to its
+        // own compositing layer in most engines. With every dismissible
+        // row (now including every open-maintenance row) doing this
+        // unconditionally, a typical Dashboard could hold a dozen+ such
+        // layers at rest for no visual benefit. Only actually revealed/
+        // mid-drag rows (offset !== 0) need the transform.
+        style={offset !== 0 ? { transform: `translateX(${offset}px)` } : undefined}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}

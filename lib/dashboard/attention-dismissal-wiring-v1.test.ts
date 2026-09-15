@@ -175,8 +175,29 @@ describe('DismissibleAttentionRow — swipe and the desktop/accessible fallback 
     expect(preventDefaultIdx).toBeGreaterThan(yReturnIdx)
   })
 
-  it('the reveal offset is clamped to REVEAL_WIDTH — a swipe can never drag the row further than the Clear panel\'s own width', () => {
-    expect(rowSource).toContain('Math.min(0, Math.max(-REVEAL_WIDTH, g.startOffset + dx))')
+  it('the reveal offset is clamped to REVEAL_WIDTH via the shared, independently-tested clampRevealOffset() — a swipe can never drag the row further than the Clear panel\'s own width (see lib/dashboard/attention-swipe-gesture.test.ts for the clamping behavior itself)', () => {
+    expect(rowSource).toContain('setOffset(clampRevealOffset(g.startOffset + dx, REVEAL_WIDTH))')
+  })
+
+  // Round 3 real-iPhone regression fix (see this component's own header
+  // comment): the axis classification now requires dx to clearly
+  // DOMINATE dy, not just barely exceed it — a bare majority was proven
+  // to misclassify ordinary diagonal scrolling as a horizontal swipe.
+  // See lib/dashboard/attention-swipe-gesture.test.ts for the actual
+  // behavioral proof (both of the old bug and this fix); this just
+  // locks in that the component actually uses that shared function
+  // rather than reintroducing an inline, untested comparison.
+  it('axis classification is delegated to the shared, independently-tested classifyGestureAxis() — not an inline dx/dy comparison', () => {
+    const moveBody = rowSource.slice(rowSource.indexOf('function handleTouchMove'), rowSource.indexOf('function handleTouchEnd'))
+    expect(moveBody).toContain('classifyGestureAxis(dx, dy, DRAG_DEADZONE, HORIZONTAL_DOMINANCE_RATIO)')
+    expect(moveBody).not.toMatch(/Math\.abs\(dx\) > Math\.abs\(dy\)/)
+  })
+
+  it('imports the shared gesture-decision functions from lib/dashboard/attention-swipe-gesture, the same module its own tests exercise directly', () => {
+    expect(rowSource).toContain("from '../lib/dashboard/attention-swipe-gesture'")
+    expect(rowSource).toContain('classifyGestureAxis')
+    expect(rowSource).toContain('clampRevealOffset')
+    expect(rowSource).toContain('shouldSnapOpen')
   })
 })
 
