@@ -858,6 +858,14 @@ export default function Home() {
   const [financialYear, setFinancialYear] = useState(String(new Date().getFullYear()))
   const [transactionDraft, setTransactionDraft] = useState({ date: new Date().toISOString().slice(0, 10), type: 'Expense' as 'Income' | 'Expense', category: 'Repairs', vendor: '', description: '', amount: '', documentId: '', recurring: false })
   const [showAdd, setShowAdd] = useState(false)
+  // Onboarding & First-Run Experience V2: shown once, on the property
+  // workspace, right after a landlord's very FIRST property is created
+  // (see addProperty()'s own isFirstProperty capture) — a brief,
+  // dismissible "here's what to do next" note, never a modal/tour.
+  // Never re-shown for property #2 onward, and never persisted (a page
+  // refresh naturally clears it, which is fine — it's a one-time nudge,
+  // not a record of anything).
+  const [showFirstPropertyNotice, setShowFirstPropertyNotice] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -884,6 +892,19 @@ export default function Home() {
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [mobileTabMenuOpen])
+  // Onboarding & First-Run Experience V2 — accessibility pass on the Add
+  // Property modal (the very first modal a brand-new landlord ever
+  // opens): Escape-to-close, matching the exact same convention already
+  // used above for the mobile tab menu and already established for the
+  // landing page's own sign-in/sign-up modal (components/LandingPage.tsx).
+  useEffect(() => {
+    if (!showAdd) return
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setShowAdd(false)
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [showAdd])
   const [docCategory, setDocCategory] = useState('All')
   const [uploadCategory, setUploadCategory] = useState('Other')
   const [isDragging, setIsDragging] = useState(false)
@@ -1604,6 +1625,11 @@ export default function Home() {
 
   async function addProperty() {
     if (!supabase || !user || !draft.address.trim() || !draft.city.trim()) return
+    // Onboarding & First-Run Experience V2 — captured BEFORE the insert
+    // (properties.length reflects the pre-save count) so the activation
+    // moment below only ever fires for a landlord's genuine first
+    // property, never for property #2 onward.
+    const isFirstProperty = properties.length === 0
     setBusy(true)
     setError('')
     // Post-selection-failure investigation (V2): wrapped in try/finally
@@ -1696,6 +1722,21 @@ export default function Home() {
       setImagePreview('')
       setShowAdd(false)
       await loadPortfolio()
+      // Onboarding & First-Run Experience V2 — the activation moment:
+      // a brand-new landlord's first property should feel useful
+      // immediately, not require scrolling back to the dashboard grid
+      // to find the card they just made. openProperty() below is the
+      // exact helper every property card's own onClick already calls
+      // (it sets selectedId/activeTab and scrolls to top), so the very
+      // next render naturally takes the property-workspace branch
+      // further down this component — no new navigation system.
+      // Established landlords (property #2 onward) keep today's exact
+      // behavior: modal closes, dashboard grid updates, nothing forces
+      // them anywhere.
+      if (isFirstProperty) {
+        openProperty(inserted.id)
+        setShowFirstPropertyNotice(true)
+      }
     } catch (unexpected) {
       logPhotoUploadDiagnostic('PHOTO_UNEXPECTED_EXCEPTION', { site: 'add-property-cover', error: safeErrorSummary(unexpected) })
       console.error('addProperty threw unexpectedly', unexpected)
@@ -2935,15 +2976,26 @@ export default function Home() {
 
     return (
       <main className="shell workspaceShell">
-        <AuthHeader onBrandClick={() => setSelectedId(null)} onSmartUploadCompleted={() => void loadPortfolio()} registerSmartUploadTrigger={(fn) => { smartUploadTriggerRef.current = fn }} />
+        <AuthHeader onBrandClick={() => { setSelectedId(null); setShowFirstPropertyNotice(false) }} onSmartUploadCompleted={() => void loadPortfolio()} registerSmartUploadTrigger={(fn) => { smartUploadTriggerRef.current = fn }} />
         {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
+        {/* Onboarding & First-Run Experience V2 — the one-time activation
+            note (see addProperty()'s isFirstProperty branch). Plain,
+            dismissible, no tour/walkthrough — just enough to answer
+            "what do I do now?" for a landlord seeing their first
+            property's workspace for the first time. */}
+        {showFirstPropertyNotice && (
+          <div className="globalNotice firstPropertyNotice">
+            <span>Property added. Explore the tabs above to add rent, mortgage, insurance, and documents whenever you&apos;re ready.</span>
+            <button type="button" aria-label="Dismiss" onClick={() => setShowFirstPropertyNotice(false)}>×</button>
+          </div>
+        )}
 
         {/* Contextual, property-scoped controls live here now, not in the
             global header (Authenticated Header Simplification, Part 4:
             "these are contextual property actions, not global
             navigation... do not make users open the hamburger just to
             edit the property they are currently viewing"). */}
-        <button className="breadcrumbBack" onClick={() => setSelectedId(null)}>← All Properties</button>
+        <button className="breadcrumbBack" onClick={() => { setSelectedId(null); setShowFirstPropertyNotice(false) }}>← All Properties</button>
 
         <section className="propertyHero">
           <div className="heroPhoto">{selected.coverUrl ? <img src={selected.coverUrl} alt={selected.address} /> : <div className="heroPlaceholder"><span>Property photo</span><small>Add photos in the Photos tab</small></div>}</div>
@@ -4050,14 +4102,14 @@ export default function Home() {
         </details>
       </section>
 
-      {showAdd && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowAdd(false)}><div className="modal"><div className="modalTop"><h2>Add a property</h2><button className="iconButton" onClick={() => setShowAdd(false)}>×</button></div>
+      {showAdd && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowAdd(false)}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="add-property-title"><div className="modalTop"><h2 id="add-property-title">Add a property</h2><button type="button" className="iconButton" aria-label="Close" onClick={() => setShowAdd(false)}>×</button></div>
         {/* Property-First Simplification V2: Portfolio Import is no
             longer a permanent nav destination — it's surfaced here
             instead, contextually, as the second of the two ways to
             build a portfolio. Same route/engine/AI pipeline
             (app/smart-import/page.tsx), not rebuilt or redesigned. */}
         <Link href="/smart-import" className="addPropertyImportLink" onClick={() => setShowAdd(false)}>Have an existing portfolio? <strong>Import it instead →</strong></Link>
-        <label className="uploadBox">{imagePreview ? <img src={imagePreview} alt="Property preview" /> : <div><strong>Add a cover photo</strong><span>Choose a photo now or add one later</span></div>}<input type="file" accept="image/*" onChange={handleImage} /></label><div className="formGrid"><label>Street address<AddressAutocomplete value={draft.address} onTextChange={(v) => setDraft({ ...draft, address: v })} onSelect={(addr) => setDraft((d) => ({ ...d, ...applyNormalizedAddress(addr, d.address) }))} placeholder="123 Example Street" /></label><label>City, state & ZIP<input value={draft.city} onChange={(e) => setDraft({ ...draft, city: e.target.value })} placeholder="Example City, FL 12345" /></label><label>Property type<select value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })}><option>Rental Property</option><option>Primary Residence</option><option>Vacation Home</option><option>Commercial</option><option>Land</option><option>Other</option></select></label><label>Purchase price<input inputMode="decimal" value={draft.purchasePrice} onChange={(e) => setDraft({ ...draft, purchasePrice: e.target.value })} placeholder="390000" /></label><label>Estimated value<input inputMode="decimal" value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} placeholder="520000" /></label><label>Mortgage balance<input inputMode="decimal" value={draft.mortgage} onChange={(e) => setDraft({ ...draft, mortgage: e.target.value })} placeholder="310000" /></label><label>Financing status<select value={draft.financingStatus} onChange={(e) => setDraft({ ...draft, financingStatus: e.target.value })}>{FINANCING_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label><label>Monthly rent<input inputMode="decimal" value={draft.rent} onChange={(e) => setDraft({ ...draft, rent: e.target.value })} placeholder="2950" /></label><label>Monthly property expenses<input inputMode="decimal" value={draft.monthlyExpenses} onChange={(e) => setDraft({ ...draft, monthlyExpenses: e.target.value })} placeholder="1925" /></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowAdd(false)}>Cancel</button><button className="primary" disabled={busy} onClick={() => void addProperty()}>{busy ? 'Saving…' : 'Save Property'}</button></div></div></div>}
+        <label className="uploadBox">{imagePreview ? <img src={imagePreview} alt="Property preview" /> : <div><strong>Add a cover photo</strong><span>Choose a photo now or add one later</span></div>}<input type="file" accept="image/*" onChange={handleImage} /></label><div className="formGrid"><label>Street address<AddressAutocomplete value={draft.address} onTextChange={(v) => setDraft({ ...draft, address: v })} onSelect={(addr) => setDraft((d) => ({ ...d, ...applyNormalizedAddress(addr, d.address) }))} placeholder="123 Example Street" /></label><label>City, state & ZIP<input value={draft.city} onChange={(e) => setDraft({ ...draft, city: e.target.value })} placeholder="Example City, FL 12345" /></label><label>Property type<select value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })}><option>Rental Property</option><option>Primary Residence</option><option>Vacation Home</option><option>Commercial</option><option>Land</option><option>Other</option></select></label><label>Purchase price<input inputMode="decimal" value={draft.purchasePrice} onChange={(e) => setDraft({ ...draft, purchasePrice: e.target.value })} placeholder="390000" /></label><label>Estimated value<input inputMode="decimal" value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} placeholder="520000" /></label><label>Mortgage balance<input inputMode="decimal" value={draft.mortgage} onChange={(e) => setDraft({ ...draft, mortgage: e.target.value })} placeholder="310000" /></label><label>Financing status<select value={draft.financingStatus} onChange={(e) => setDraft({ ...draft, financingStatus: e.target.value })}>{FINANCING_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label><label>Monthly rent<input inputMode="decimal" value={draft.rent} onChange={(e) => setDraft({ ...draft, rent: e.target.value })} placeholder="2950" /></label><label>Monthly property expenses<input inputMode="decimal" value={draft.monthlyExpenses} onChange={(e) => setDraft({ ...draft, monthlyExpenses: e.target.value })} placeholder="1925" /></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowAdd(false)}>Cancel</button><button className="primary" disabled={busy || !draft.address.trim() || !draft.city.trim()} onClick={() => void addProperty()}>{busy ? 'Saving…' : 'Save Property'}</button></div></div></div>}
 
       {showUpgrade === 'propertyLimit' && supabase && (
         <UpgradePrompt supabase={supabase} currentPlan={plan} onClose={() => setShowUpgrade(null)} />

@@ -816,6 +816,14 @@ h2, h3, p { margin-top: 0; }
    app/page.tsx and changeStatus() in app/maintenance/page.tsx. Reuses
    the existing .successMessage palette, just laid out like .globalError. */
 .globalNotice { margin: 14px 0 0; border-radius: 10px; padding: 11px 12px; background: var(--brand-soft); border: 1px solid #cadfd4; color: var(--brand); font-size: 13px; }
+/* Onboarding & First-Run Experience V2 — the one-time "here's what to
+   do next" note shown on a landlord's very first property workspace
+   (app/page.tsx's addProperty()). Same .globalNotice palette, laid out
+   like .globalError (flex, dismiss button on the right) since this one
+   needs an explicit dismiss, unlike the auto-dismissing status notice
+   .globalNotice was originally built for. */
+.firstPropertyNotice { display: flex; align-items: center; justify-content: space-between; gap: 12px; line-height: 1.45; }
+.firstPropertyNotice button { flex-shrink: 0; border: 0; background: transparent; color: inherit; font-size: 20px; line-height: 1; }
 .maintenanceStatusUpdateNotice { margin: 4px 0 0; font-size: 13px; color: var(--brand); font-weight: 600; }
 .loadingState { color: var(--muted); }
 /* Mobile Authentication & Layout Reliability V1 — the two dashboard
@@ -833,7 +841,15 @@ h2, h3, p { margin-top: 0; }
 .setupCard > p { color: var(--muted); line-height: 1.6; }
 .setupCard h1 { margin-bottom: 16px; }
 .setupCode { margin: 20px 0; background: #17201c; color: #edf5f0; border-radius: 12px; padding: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; line-height: 1.7; overflow-wrap: anywhere; }
-.emptyPropertyCard { min-height: 280px; border: 1px dashed #aebbb4; border-radius: 17px; background: #f9fbfa; display: grid; place-items: center; align-content: center; gap: 7px; color: var(--brand); }
+/* Onboarding & First-Run Experience V2: .grid is used for exactly one
+   thing in this app (My Properties' property-card grid, app/page.tsx),
+   so spanning both columns here is safe — a brand-new, zero-property
+   account should meet one clear, full-width "add your first property"
+   moment, not a single half-width tile competing for attention next to
+   nothing. Established accounts (properties.length > 0) never render
+   this element at all, so nothing changes for them. */
+.emptyPropertyCard { grid-column: 1 / -1; min-height: 200px; border: 1px dashed #aebbb4; border-radius: 17px; background: #f9fbfa; display: grid; place-items: center; align-content: center; gap: 7px; color: var(--brand); }
+.emptyPropertyCard strong { font-size: 17px; }
 .emptyPropertyCard span { color: var(--muted); font-size: 13px; }
 .galleryButtons { display: flex; align-items: center; gap: 6px; }
 .galleryMeta .galleryButtons button { font-size: 11px; border: 1px solid rgba(255,255,255,.35); border-radius: 7px; padding: 5px 7px; }

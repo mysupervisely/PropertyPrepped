@@ -62,8 +62,8 @@ describe('Dashboard Navigation Bug fix — AuthHeader threads the same reset it 
 describe('Dashboard Navigation Bug fix — the property workspace still wires its own reset, and All Properties is untouched', () => {
   const source = readFile('app/page.tsx')
 
-  it('the property detail view passes onBrandClick={() => setSelectedId(null)} to AuthHeader (the same reset Dashboard now reuses)', () => {
-    expect(source).toContain('<AuthHeader onBrandClick={() => setSelectedId(null)}')
+  it('the property detail view passes an onBrandClick that resets selectedId to AuthHeader (the same reset Dashboard now reuses) — Onboarding & First-Run Experience V2 additionally clears the one-time first-property notice in the same handler, still a single setSelectedId(null) reset underneath', () => {
+    expect(source).toContain('<AuthHeader onBrandClick={() => { setSelectedId(null); setShowFirstPropertyNotice(false) }}')
   })
 
   it('"All Properties" still calls setSelectedId(null) directly — a separate, unchanged action from Dashboard', () => {
