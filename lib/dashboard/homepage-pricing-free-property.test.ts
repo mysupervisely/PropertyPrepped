@@ -236,15 +236,20 @@ describe('CTA after the pricing section', () => {
 })
 
 describe('Public Homepage V2/V3/Dynamic Homepage V1: the product story is accurately scoped', () => {
-  it('the four Organize/Coordinate/Automate/Understand scenes are still prominently above the quiet secondary-features section', () => {
-    expect(landingSource).toContain('<h2 className="landingSceneHeadline">Organize.</h2>')
-    expect(landingSource).toContain('<h2 className="landingSceneHeadline">Coordinate.</h2>')
-    expect(landingSource).toContain('<h2 className="landingSceneHeadline">Automate.</h2>')
-    expect(landingSource).toContain('<h2 className="landingSceneHeadline">Understand.</h2>')
-    const scenesIdx = landingSource.indexOf('landingScenes')
-    const secondaryIdx = landingSource.indexOf('landingSecondary')
-    expect(scenesIdx).toBeGreaterThan(-1)
-    expect(secondaryIdx).toBeGreaterThan(scenesIdx)
+  // Public Landing Page Polish & Privacy Fix replaced the four-scene
+  // Organize/Coordinate/Automate/Understand sequence with a Story/
+  // Showcase/Capabilities/Tenant Connect/Tax Center structure — see
+  // lib/dashboard/public-landing-page-polish-v1-wiring.test.ts for the
+  // dedicated coverage of that new structure, including the same
+  // "product content appears before the quiet capabilities grid" order
+  // guarantee this test used to check.
+  it('the product story sections still appear above the capabilities grid, in a sensible reading order', () => {
+    const heroIdx = landingSource.indexOf('className="landingHero"')
+    const showcaseIdx = landingSource.indexOf('className="landingShowcase"')
+    const capabilitiesIdx = landingSource.indexOf('className="landingCapabilities"')
+    expect(heroIdx).toBeGreaterThan(-1)
+    expect(showcaseIdx).toBeGreaterThan(heroIdx)
+    expect(capabilitiesIdx).toBeGreaterThan(showcaseIdx)
   })
 
   it('never claims SMS provider outreach, autonomous contractor hiring, or automatic appointment confirmation', () => {
@@ -307,13 +312,18 @@ describe('Public Homepage V2/V3/Dynamic Homepage V1: the product story is accura
     expect(lower).not.toMatch(/collect(s|ing)? rent|process(es|ing)? (rent )?payments?|we collect/)
   })
 
-  it('the Understand scene never annualizes YTD data or shows a fabricated/unsupported metric — same canonical fields the real, authenticated Property/Portfolio Snapshot use (Est. Value/Monthly Rent for a property; Properties/Portfolio Value/Monthly Rent/YTD NOI for a portfolio)', () => {
-    const understandIdx = landingSource.indexOf('function UnderstandStage')
-    const understandBlock = landingSource.slice(understandIdx, landingSource.indexOf('function LandingPage', understandIdx))
-    for (const field of ['Est. Value', 'Monthly Rent', 'Properties</span>', 'Portfolio Value', 'YTD NOI']) {
-      expect(understandBlock).toContain(field)
+  it('the hero and product-showcase previews never annualize YTD data or show a fabricated/unsupported metric — same canonical fields the real, authenticated Property/Portfolio Snapshot use (Est. Value/Monthly Rent for a property; Properties/Portfolio Value/Monthly Rent/YTD NOI for a portfolio)', () => {
+    const heroIdx = landingSource.indexOf('function HeroProductPreview')
+    const showcaseIdx = landingSource.indexOf('function ProductShowcase')
+    const previewBlock = landingSource.slice(heroIdx, landingSource.indexOf('function LandingPage', heroIdx))
+    const showcaseBlock = landingSource.slice(showcaseIdx, landingSource.indexOf('const CAPABILITIES', showcaseIdx))
+    for (const field of ['Properties</span>', 'Portfolio Value', 'YTD NOI', 'Monthly Rent']) {
+      expect(previewBlock).toContain(field)
     }
-    expect(understandBlock.toLowerCase()).not.toMatch(/annual(ized)? (noi|income|rent)|projected|forecast/)
+    for (const field of ['Est. Value', 'Est. Equity', 'Monthly Rent', 'Mortgage']) {
+      expect(showcaseBlock).toContain(field)
+    }
+    expect((previewBlock + showcaseBlock).toLowerCase()).not.toMatch(/annual(ized)? (noi|income|rent)|projected|forecast/)
   })
 
   it('never claims live Cap Rate, NOI (outside the real Portfolio Snapshot field name), Net Cash Flow or automated equity tracking as a homepage-level marketing claim', () => {

@@ -188,8 +188,8 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
     return p ? `${p.address}${p.city ? `, ${p.city}` : ''}` : 'Property'
   }
   // Simplification + Maintenance Workspace V2, Phase D.2: a two-line
-  // address for the card list ("5558 Pats Point Dr" / "Winter Park, FL
-  // 32792") instead of propertyLabel()'s single comma-joined string,
+  // address for the card list (street on one line, "City, State ZIP" on
+  // the next) instead of propertyLabel()'s single comma-joined string,
   // which wraps unpredictably on a narrow card. Presentation only —
   // properties.address/city are unchanged, and this reads the exact
   // same stored fields propertyLabel() already does (city already

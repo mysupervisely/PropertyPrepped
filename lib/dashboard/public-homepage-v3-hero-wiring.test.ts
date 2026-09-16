@@ -40,11 +40,15 @@ const heroStart = landingSource.indexOf('<section className="landingHero">')
 const heroEnd = landingSource.indexOf('</section>', heroStart) + '</section>'.length
 const heroSlice = landingSource.slice(heroStart, heroEnd)
 
-describe('5. Public Homepage V3: hero copy is byte-for-byte unchanged', () => {
-  it('H1, supporting headline, supporting paragraph, primary CTA, and free-property note all match exactly', () => {
+describe('5. Public Homepage V3: hero copy', () => {
+  // Public Landing Page Polish & Privacy Fix deliberately revised the
+  // tagline/sub-copy (Step 4: "immediately answer what is PropRoster and
+  // why it matters, concisely") — H1, CTA, and free-property note stayed
+  // byte-for-byte unchanged; only those two lines were rewritten.
+  it('H1, primary CTA, and free-property note are still exactly as before; tagline/sub are the new, still-concise Step 4 copy', () => {
     expect(heroSlice).toContain('<h1>Your properties. Organized.</h1>')
-    expect(heroSlice).toContain('<p className="landingHeroTagline">Keep control of your properties without managing every little detail.</p>')
-    expect(heroSlice).toContain('<p className="landingHeroSub">PropRoster helps organize the information and numbers behind your properties, simplify communication with tenants and your trusted PropCrew, and automate routine coordination.</p>')
+    expect(heroSlice).toContain('<p className="landingHeroTagline">The simpler way to manage everything around your rental properties.</p>')
+    expect(heroSlice).toContain('<p className="landingHeroSub">Tenants, maintenance, documents, rent and records — organized in one place instead of scattered across texts, email and spreadsheets.</p>')
     expect(heroSlice).toContain('>Start Free</button>')
     expect(heroSlice).toContain('<p className="landingHeroFreeNote">Start with your first property free. No credit card required.</p>')
   })
@@ -198,35 +202,33 @@ describe('Public Homepage V3: hero fills the full viewport width — no leftover
 // This block is rescoped in place to the same underlying invariant —
 // "the exact approved copy still exists, calm/lightweight, no giant
 // bordered cards" — against the new structure.
-describe('8. Public Homepage V3: four pillars remain (Organize / Coordinate / Automate / Understand)', () => {
-  it('all four headings and their exact approved one-line copy are present as scene body copy', () => {
-    expect(landingSource).toContain('Property information, documents, leases and numbers — all in one place.')
-    expect(landingSource).toContain('Connect tenants with your trusted PropCrew — without all the back-and-forth.')
-    expect(landingSource).toContain('See the financial picture of each property — and your whole portfolio — more clearly.')
-    expect(landingSource).toContain('<h2 className="landingSceneHeadline">Organize.</h2>')
-    expect(landingSource).toContain('<h2 className="landingSceneHeadline">Coordinate.</h2>')
-    expect(landingSource).toContain('<h2 className="landingSceneHeadline">Automate.</h2>')
-    expect(landingSource).toContain('<h2 className="landingSceneHeadline">Understand.</h2>')
-  })
-
-  it('exactly four scenes render, one per concept, each its own real-UI-concept stage — no giant bordered feature cards, no icon grid reintroduced', () => {
-    expect((landingSource.match(/className="landingScene(?:"| landingSceneTall")/g) || []).length).toBe(4)
+// Public Landing Page Polish & Privacy Fix replaced the four-scene
+// Organize/Coordinate/Automate/Understand sequence entirely — see
+// lib/dashboard/public-landing-page-polish-v1-wiring.test.ts for the new
+// Story/Showcase/Capabilities/Tenant Connect/Tax Center structure's own
+// coverage, including its own "calm, no giant bordered cards" and
+// "readable without hover" equivalents.
+describe('8-9. Public Homepage V3: product content remains calm, real-UI-driven, and never hover-dependent (rescoped to the current structure)', () => {
+  it('no giant bordered feature-card grid or hover-dependent reveal was reintroduced anywhere on the page', () => {
     expect(landingSource).not.toMatch(/landingPillarsGrid|landingPillarCard/)
     expect(cssSource).not.toMatch(/\.landingPillarsGrid|\.landingPillarCard/)
+    expect(cssSource).not.toMatch(/:hover\s*\{[^}]*opacity:\s*1/)
   })
 
-  it('the shared stage card carries a light, restrained treatment (surface fill, one hairline border, soft shadow) — not a heavy bordered box', () => {
-    const stageRule = cssSource.match(/\.sceneStage \{[^}]*\}/)?.[0] || ''
+  it('the product-showcase card carries a light, restrained treatment (surface fill, one hairline border, soft shadow) — not a heavy bordered box', () => {
+    const stageRule = cssSource.match(/\.showcasePanel \{[^}]*\}/)?.[0] || ''
     expect(stageRule).toContain('background: var(--surface)')
     expect(stageRule).toContain('border: 1px solid var(--line)')
   })
-})
 
-describe('9. Public Homepage V3: mobile scene copy remains readable without hover', () => {
-  it('at tablet/mobile widths every scene stacks to a single column — never a cramped multi-column layout, never a hover-dependent reveal', () => {
-    const bp900Start = cssSource.indexOf('@media (max-width: 900px)')
-    const bp900 = cssSource.slice(bp900Start, cssSource.indexOf('@media (max-width: 980px)', bp900Start))
-    expect(bp900).toMatch(/\.landingSceneInner, \.landingSceneInner--reverse \{ grid-template-columns: 1fr/)
+  it('at tablet/mobile widths the showcase and Tenant Connect two-column sections stack to a single column', () => {
+    const anchor = cssSource.indexOf('.landingShowcaseInner,')
+    expect(anchor).toBeGreaterThan(-1)
+    const enclosingMediaStart = cssSource.lastIndexOf('@media (max-width: 900px)', anchor)
+    expect(enclosingMediaStart).toBeGreaterThan(-1)
+    expect(enclosingMediaStart).toBeLessThan(anchor)
+    const rule = cssSource.slice(anchor, anchor + 200)
+    expect(rule).toContain('.landingTenantConnectInner { grid-template-columns: 1fr')
   })
 
   it('no :hover-only rule reveals scene body text — it is always in the DOM; useScrollReveal only ever adds a visible class, it never keeps content in the DOM but hidden behind a hover requirement', () => {
@@ -263,10 +265,16 @@ describe('Public Homepage V3: everything else on the page is untouched (out of s
   // story), not an accidental content loss — the still-true underlying
   // claim (PropRoster moves coordination forward, the landlord stays in
   // control) is verified below instead of gating on the removed section.
-  it('the "How it works" section is gone (consolidated into the scene sequence); its key claim survives verbatim in the Automate scene', () => {
+  // Public Landing Page Polish & Privacy Fix replaced the Automate
+  // scene's own body copy with the new Tenant Connect section (see
+  // lib/dashboard/public-landing-page-polish-v1-wiring.test.ts) — the
+  // underlying claim survives in different words: the landlord still
+  // chooses who to contact and confirms every appointment, never a
+  // decision PropRoster makes unilaterally.
+  it('the "How it works" section is gone (consolidated into the scene sequence, now Tenant Connect); its key "landlord stays in control" claim survives in current copy', () => {
     expect(landingSource).not.toContain('const WORKFLOW_STEPS')
     expect(landingSource).not.toContain('landingWorkflow')
-    expect(landingSource).toContain('PropRoster helps move requests, availability and provider communication forward. You stay in control of every decision.')
+    expect(landingSource).toContain('You choose who to contact, and you confirm every appointment.')
   })
 })
 
@@ -364,17 +372,10 @@ describe('7. Public Homepage V3: the background-photo architecture from the prev
 // those (duplicating them here would just be the same two checks
 // twice).
 
-describe('10. Public Homepage V3: hero copy, height, and CTA note are unaffected by this round\'s two small tweaks', () => {
-  it('H1/tagline/sub/free-note text is still byte-for-byte the same', () => {
-    const heroStart = landingSource.indexOf('<section className="landingHero">')
-    const heroEnd = landingSource.indexOf('</section>', heroStart) + '</section>'.length
-    const heroSlice = landingSource.slice(heroStart, heroEnd)
-    expect(heroSlice).toContain('<h1>Your properties. Organized.</h1>')
-    expect(heroSlice).toContain('<p className="landingHeroTagline">Keep control of your properties without managing every little detail.</p>')
-    expect(heroSlice).toContain('<p className="landingHeroSub">PropRoster helps organize the information and numbers behind your properties, simplify communication with tenants and your trusted PropCrew, and automate routine coordination.</p>')
-    expect(heroSlice).toContain('<p className="landingHeroFreeNote">Start with your first property free. No credit card required.</p>')
-  })
-})
+// This section's own hero-copy duplicate check was removed — it
+// asserted the exact same H1/tagline/sub/free-note strings as "5. Public
+// Homepage V3: hero copy" at the top of this file, which already covers
+// the current (Public Landing Page Polish & Privacy Fix) copy.
 
 // Public Homepage V3, real-iPhone follow-up (3rd round): a real iPhone
 // review liked the overall direction but found the hero CTA button
