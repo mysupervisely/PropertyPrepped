@@ -58,6 +58,7 @@ import { FINANCIAL_CATEGORIES } from '../../lib/property-categories'
 import { beginReadingFileBytes, toDurableUploadableFile } from '../../lib/uploads/durable-file'
 import { uploadReceiptDocument } from '../../lib/documents/upload-receipt'
 import { HomeIcon, WrenchIcon, ReceiptIcon } from '../../components/icons/NavIcons'
+import { trackEvent } from '../../lib/analytics'
 import type { CustomTaxItemInput, MaintenanceRecordInput, PropertyInput, PropertyTaxSummary, ReadinessStatus, TaxRecordInput, TransactionInput } from '../../lib/tax-center/types'
 
 // Section 2 of this milestone's own spec: "+ Add Expense" is for
@@ -186,6 +187,13 @@ function TaxCenterWorkspace() {
   const [expenseError, setExpenseError] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [feedFilters, setFeedFilters] = useState<TaxCenterFeedFilters>({})
+
+  // Production Readiness & Product Analytics V1 — fires exactly once
+  // per mount of the real workspace (this component only ever mounts
+  // after TaxCenterPage's own auth gate passes), never on a re-render:
+  // an effect with an empty dependency array runs once when the
+  // component first mounts and never again for that mount's lifetime.
+  useEffect(() => { trackEvent('tax_center_viewed') }, [])
 
   // Section 8 — attaching a receipt directly from a "No receipt" row,
   // for MANUAL rows only (see attachReceiptToTransaction's own comment

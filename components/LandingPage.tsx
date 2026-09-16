@@ -63,6 +63,7 @@ import { Wordmark } from './Wordmark'
 import { PLANS, PUBLIC_PLAN_ORDER, PLAN_FEATURE_HIGHLIGHTS, EARLY_ACCESS_PRICING } from '../lib/billing/plans'
 import { postSignupRedirectPath, INTENDED_ROLE_STORAGE_KEY, type IntendedRole } from '../lib/tenant-connect/onboarding'
 import { useScrollReveal } from '../lib/homepage/use-scroll-reveal'
+import { trackEvent } from '../lib/analytics'
 
 function HouseIcon() {
   return (
@@ -392,25 +393,37 @@ export default function LandingPage() {
     setError('')
     if (authMode === 'signin') {
       const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
-      if (signInError) setError(signInError.message)
+      if (signInError) {
+        setError(signInError.message)
+      } else {
+        trackEvent('login_completed')
+      }
     } else {
       const { data, error: signUpError } = await supabase.auth.signUp({ email: email.trim(), password })
       if (signUpError) {
         setError(signUpError.message)
-      } else if (data.session) {
-        // Auto-confirmed (no email-verification step required for this
-        // project) — the account already exists AND is signed in right
-        // now, so the redirect can happen immediately; no need to leave
-        // anything in localStorage for a later visit to act on.
-        if (intendedRole === 'tenant') window.location.href = postSignupRedirectPath('tenant')
       } else {
-        // Email confirmation required — there is no session yet to act
-        // on, so the choice is remembered for the ONE time app/page.tsx
-        // sees this account's first real sign-in (after they click the
-        // confirmation link and sign in) and is cleared immediately
-        // after — see app/page.tsx's own auth-state-change handler.
-        try { if (intendedRole === 'tenant') window.localStorage.setItem(INTENDED_ROLE_STORAGE_KEY, intendedRole) } catch { /* best-effort only */ }
-        setAuthMessage('Account created. Check your email to confirm your address, then sign in.')
+        // Fired here, once, the moment Supabase confirms the account
+        // itself was genuinely created — regardless of which branch
+        // runs next (auto-confirmed vs. email-confirmation-pending
+        // below). Both are a real signup; only a signUpError means it
+        // didn't happen.
+        trackEvent('sign_up_completed')
+        if (data.session) {
+          // Auto-confirmed (no email-verification step required for this
+          // project) — the account already exists AND is signed in right
+          // now, so the redirect can happen immediately; no need to leave
+          // anything in localStorage for a later visit to act on.
+          if (intendedRole === 'tenant') window.location.href = postSignupRedirectPath('tenant')
+        } else {
+          // Email confirmation required — there is no session yet to act
+          // on, so the choice is remembered for the ONE time app/page.tsx
+          // sees this account's first real sign-in (after they click the
+          // confirmation link and sign in) and is cleared immediately
+          // after — see app/page.tsx's own auth-state-change handler.
+          try { if (intendedRole === 'tenant') window.localStorage.setItem(INTENDED_ROLE_STORAGE_KEY, intendedRole) } catch { /* best-effort only */ }
+          setAuthMessage('Account created. Check your email to confirm your address, then sign in.')
+        }
       }
     }
     setBusy(false)
