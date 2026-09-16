@@ -10,6 +10,8 @@ import { canCreateProperty, entitlementsFor } from '../lib/billing/entitlements'
 import { UpgradePrompt } from '../components/UpgradePrompt'
 import LandingPage from '../components/LandingPage'
 import { postSignupRedirectPath, INTENDED_ROLE_STORAGE_KEY, type IntendedRole } from '../lib/tenant-connect/onboarding'
+import { consumeExplicitSignOutFlag } from '../lib/auth/session-signal'
+import { toSafeErrorMessage } from '../lib/user-facing-errors'
 import { AuthHeader } from '../components/AuthHeader'
 import DocumentIntelligencePanel, { type ApplyAction } from '../components/DocumentIntelligencePanel'
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
@@ -642,6 +644,14 @@ function redirectIfIntendedTenant() {
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
   const [authReady, setAuthReady] = useState(false)
+  // Launch Essentials V1 — true only when a real, active session
+  // disappeared on its own (expired/revoked refresh token), never for an
+  // ordinary first visit or an explicit Log out. See
+  // lib/auth/session-signal.ts for how the two are told apart, since
+  // Supabase's own onAuthStateChange fires the identical SIGNED_OUT event
+  // for both.
+  const [sessionExpired, setSessionExpired] = useState(false)
+  const hadUserRef = useRef(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   // Mobile Authentication & Layout Reliability V1 — see
@@ -951,6 +961,7 @@ export default function Home() {
       const { data, error: getUserError } = await client.auth.getUser()
       if (cancelled) return
       if (data.user) {
+        hadUserRef.current = true
         setUser(data.user)
         setAuthReady(true)
         redirectIfIntendedTenant()
@@ -959,6 +970,7 @@ export default function Home() {
       if (getUserError && !isAuthSessionMissingError(getUserError)) {
         const { data: refreshed } = await client.auth.refreshSession()
         if (cancelled) return
+        hadUserRef.current = Boolean(refreshed.user)
         setUser(refreshed.user ?? null)
         setAuthReady(true)
         if (refreshed.user) redirectIfIntendedTenant()
@@ -968,10 +980,21 @@ export default function Home() {
       setAuthReady(true)
     }
     void bootstrapAuth()
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      // Launch Essentials V1 — a SIGNED_OUT that follows a real session
+      // (not this tab's own explicit Log out) means the session expired
+      // or was revoked, not that the user chose to leave — see
+      // lib/auth/session-signal.ts.
+      if (event === 'SIGNED_OUT' && hadUserRef.current && !consumeExplicitSignOutFlag()) {
+        setSessionExpired(true)
+      }
+      hadUserRef.current = Boolean(session?.user)
       setUser(session?.user ?? null)
       setSelectedId(null)
-      if (session?.user) redirectIfIntendedTenant()
+      if (session?.user) {
+        setSessionExpired(false)
+        redirectIfIntendedTenant()
+      }
     })
     return () => { cancelled = true; listener.subscription.unsubscribe() }
   }, [])
@@ -1662,7 +1685,7 @@ export default function Home() {
           setShowAdd(false)
           setShowUpgrade('propertyLimit')
         } else {
-          surfaceError(insertError?.message || 'Unable to add property.')
+          surfaceError(toSafeErrorMessage(insertError, 'Unable to add property.'))
         }
         return
       }
@@ -1807,7 +1830,7 @@ export default function Home() {
     }).eq('id', selected.id).eq('owner_id', user.id)
 
     if (updateError) {
-      setError(updateError.message)
+      setError(toSafeErrorMessage(updateError, 'Unable to save changes to this property.'))
       setBusy(false)
       return
     }
@@ -1828,16 +1851,16 @@ export default function Home() {
 
     if (documentPaths.length) {
       const { error: storageError } = await supabase.storage.from('property-documents').remove(documentPaths)
-      if (storageError) { setError(`Could not remove property documents: ${storageError.message}`); setBusy(false); return }
+      if (storageError) { setError(toSafeErrorMessage(storageError, 'Could not remove this property’s documents.')); setBusy(false); return }
     }
     if (photoPaths.length) {
       const { error: storageError } = await supabase.storage.from('property-photos').remove(photoPaths)
-      if (storageError) { setError(`Could not remove property photos: ${storageError.message}`); setBusy(false); return }
+      if (storageError) { setError(toSafeErrorMessage(storageError, 'Could not remove this property’s photos.')); setBusy(false); return }
     }
 
     const { error: deleteError } = await supabase.from('properties').delete().eq('id', selected.id).eq('owner_id', user.id)
     if (deleteError) {
-      setError(deleteError.message)
+      setError(toSafeErrorMessage(deleteError, 'Unable to delete this property.'))
       setBusy(false)
       return
     }
@@ -1963,7 +1986,7 @@ export default function Home() {
       if (uploadError) {
         logUploadDiagnostic('upload-multiple', 'UPLOAD_STORAGE_ERROR', { error: safeErrorSummary(uploadError) })
         patchFileDebug(index, { storageUpload: 'failed', storageError: uploadError.message, databaseRecord: 'skipped', renderUrl: 'skipped' })
-        setError(uploadError.message)
+        setError(toSafeErrorMessage(uploadError, `"${file.name}" could not be uploaded. Please try again.`))
         continue
       }
       logUploadDiagnostic('upload-multiple', 'UPLOAD_STORAGE_SUCCESS', { path })
@@ -1976,7 +1999,7 @@ export default function Home() {
         logUploadDiagnostic('upload-multiple', 'UPLOAD_DB_ERROR', { error: safeErrorSummary(rowError) })
         await supabase.storage.from('property-documents').remove([path])
         patchFileDebug(index, { databaseRecord: 'failed', databaseError: rowError.message, renderUrl: 'skipped' })
-        setError(rowError.message)
+        setError(toSafeErrorMessage(rowError, `"${file.name}" could not be saved. Please try again.`))
       } else {
         logUploadDiagnostic('upload-multiple', 'UPLOAD_DB_SUCCESS', {})
         patchFileDebug(index, { databaseRecord: 'success', renderUrl: 'success' })
@@ -2144,7 +2167,7 @@ export default function Home() {
     const { data, error: urlError } = await supabase.storage.from('property-documents').createSignedUrl(doc.storage_path, 60)
     if (urlError || !data?.signedUrl) {
       newTab?.close()
-      setError(urlError?.message || 'Unable to open this document. Please try again.')
+      setError(toSafeErrorMessage(urlError, 'Unable to open this document. Please try again.'))
       return
     }
     if (newTab) {
@@ -2164,7 +2187,7 @@ export default function Home() {
   async function toggleDocumentTenantVisible(doc: PropertyDocument) {
     if (!supabase) return
     const { error: err } = await supabase.from('property_documents').update({ tenant_visible: !doc.tenant_visible }).eq('id', doc.id)
-    if (err) setError(err.message)
+    if (err) setError(toSafeErrorMessage(err, 'Unable to update this document.'))
     await loadPortfolio()
   }
 
@@ -2172,9 +2195,9 @@ export default function Home() {
     if (!supabase) return
     setBusy(true)
     const { error: storageError } = await supabase.storage.from('property-documents').remove([doc.storage_path])
-    if (storageError) setError(storageError.message)
+    if (storageError) setError(toSafeErrorMessage(storageError, 'Unable to delete this document.'))
     const { error: rowError } = await supabase.from('property_documents').delete().eq('id', doc.id)
-    if (rowError) setError(rowError.message)
+    if (rowError) setError(toSafeErrorMessage(rowError, 'Unable to delete this document.'))
     await loadPortfolio()
     setBusy(false)
   }
@@ -2226,7 +2249,7 @@ export default function Home() {
     if (moveDraft.documentType) { patch.document_type = moveDraft.documentType; patch.classification_source = 'User' }
     const { error: moveDocError } = await supabase.from('property_documents').update(patch).eq('id', doc.id)
     if (moveDocError) {
-      setMoveError(moveDocError.message)
+      setMoveError(toSafeErrorMessage(moveDocError, 'Unable to move this document.'))
       setBusy(false)
       return
     }
@@ -2539,7 +2562,7 @@ export default function Home() {
       document_id: transactionDraft.documentId || null,
       is_recurring: transactionDraft.recurring,
     })
-    if (insertError) setError(insertError.message)
+    if (insertError) setError(toSafeErrorMessage(insertError, 'Unable to save this transaction.'))
     else {
       // Production Readiness & Product Analytics V1 — Expense-only,
       // matching the funnel's own "expense_created" naming; an Income
@@ -2589,7 +2612,7 @@ export default function Home() {
     const { error: e } = editingLeaseId
       ? await supabase.from('leases').update(payload).eq('id', editingLeaseId)
       : await supabase.from('leases').insert(payload)
-    if (e) setError(e.message); else { setShowModuleForm(null); resetLeaseDraft(); await loadPortfolio() }
+    if (e) setError(toSafeErrorMessage(e, 'Unable to save this lease.')); else { setShowModuleForm(null); resetLeaseDraft(); await loadPortfolio() }
     setBusy(false)
   }
 
@@ -2597,7 +2620,7 @@ export default function Home() {
     if (!supabase || !user || !selectedId || !mortgageDraft.lender.trim()) return
     setBusy(true); setError('')
     const { error: e } = await supabase.from('mortgages').insert({ owner_id:user.id, property_id:selectedId, lender:mortgageDraft.lender.trim(), loan_number:mortgageDraft.loanNumber.trim()||null, original_balance:Number(mortgageDraft.originalBalance||0), current_balance:Number(mortgageDraft.currentBalance||0), interest_rate:Number(mortgageDraft.interestRate||0), monthly_payment:Number(mortgageDraft.monthlyPayment||0), escrow_amount:Number(mortgageDraft.escrowAmount||0), loan_term_years:Number(mortgageDraft.loanTermYears||0)||null, maturity_date:mortgageDraft.maturityDate||null, document_id:mortgageDraft.documentId||null })
-    if (e) setError(e.message); else { await supabase.from('properties').update({ mortgage_balance:Number(mortgageDraft.currentBalance||0) }).eq('id', selectedId); setShowModuleForm(null); setMortgageDraft({ lender:'', loanNumber:'', originalBalance:'', currentBalance:'', interestRate:'', monthlyPayment:'', escrowAmount:'', loanTermYears:'30', maturityDate:'', documentId:'' }); await loadPortfolio() }
+    if (e) setError(toSafeErrorMessage(e, 'Unable to save this mortgage.')); else { await supabase.from('properties').update({ mortgage_balance:Number(mortgageDraft.currentBalance||0) }).eq('id', selectedId); setShowModuleForm(null); setMortgageDraft({ lender:'', loanNumber:'', originalBalance:'', currentBalance:'', interestRate:'', monthlyPayment:'', escrowAmount:'', loanTermYears:'30', maturityDate:'', documentId:'' }); await loadPortfolio() }
     setBusy(false)
   }
 
@@ -2605,7 +2628,7 @@ export default function Home() {
     if (!supabase || !user || !selectedId || !insuranceDraft.carrier.trim()) return
     setBusy(true); setError('')
     const { error: e } = await supabase.from('insurance_policies').insert({ owner_id:user.id, property_id:selectedId, carrier:insuranceDraft.carrier.trim(), policy_number:insuranceDraft.policyNumber.trim()||null, annual_premium:Number(insuranceDraft.annualPremium||0), deductible:Number(insuranceDraft.deductible||0), effective_date:insuranceDraft.effectiveDate||null, expiration_date:insuranceDraft.expirationDate||null, document_id:insuranceDraft.documentId||null })
-    if (e) setError(e.message); else { setShowModuleForm(null); setInsuranceDraft({ carrier:'', policyNumber:'', annualPremium:'', deductible:'', effectiveDate:'', expirationDate:'', documentId:'' }); await loadPortfolio() }
+    if (e) setError(toSafeErrorMessage(e, 'Unable to save this insurance policy.')); else { setShowModuleForm(null); setInsuranceDraft({ carrier:'', policyNumber:'', annualPremium:'', deductible:'', effectiveDate:'', expirationDate:'', documentId:'' }); await loadPortfolio() }
     setBusy(false)
   }
 
@@ -2747,7 +2770,7 @@ export default function Home() {
     if (!supabase) return
     setBusy(true); setError('')
     const { error: e } = await supabase.from(table).delete().eq('id', id)
-    if (e) setError(e.message)
+    if (e) setError(toSafeErrorMessage(e, 'Unable to delete this record.'))
     else { if (financialTransactionId) await supabase.from('financial_transactions').delete().eq('id', financialTransactionId); await loadPortfolio() }
     setBusy(false)
   }
@@ -2756,7 +2779,7 @@ export default function Home() {
     if (!supabase) return
     setBusy(true)
     const { error: deleteError } = await supabase.from('financial_transactions').delete().eq('id', id)
-    if (deleteError) setError(deleteError.message)
+    if (deleteError) setError(toSafeErrorMessage(deleteError, 'Unable to delete this transaction.'))
     else await loadPortfolio()
     setBusy(false)
   }
@@ -2826,7 +2849,7 @@ export default function Home() {
       if (importError) throw importError
       await loadPortfolio()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to import CSV.')
+      setError(toSafeErrorMessage(err, 'Unable to import CSV.'))
     }
     setBusy(false)
   }
@@ -2850,7 +2873,7 @@ export default function Home() {
   }
 
   if (!user) {
-    return <LandingPage />
+    return <LandingPage sessionExpired={sessionExpired} />
   }
 
   // Mobile Authentication & Layout Reliability V1 — see loadPortfolio()
@@ -3384,7 +3407,16 @@ export default function Home() {
                     e.target.value = ''
                     if (files) void addDocumentFiles(files, bytesPromises)
                   }} /></label>
-                  {documentUploadDebug.length > 0 && <div className="uploadDebugPanelGroup">{documentUploadDebug.map((state, i) => <UploadDebugPanel key={i} state={state} />)}</div>}
+                  {/* Launch Essentials V1 — this "temporary" debug panel
+                      (see its own top comment) renders raw storage/DB
+                      error text and was shipping to every production
+                      visitor whose upload failed, not just the real
+                      device-testing session it was built for. Gated to
+                      non-production builds only, the same reliable
+                      existing signal lib/analytics.ts and
+                      GoogleAnalytics.tsx already use for the same kind
+                      of environment check. */}
+                  {process.env.NODE_ENV !== 'production' && documentUploadDebug.length > 0 && <div className="uploadDebugPanelGroup">{documentUploadDebug.map((state, i) => <UploadDebugPanel key={i} state={state} />)}</div>}
                 </div>
                 <div className="addDocumentOption addDocumentOptionSmart">
                   <h3>Smart Upload</h3>

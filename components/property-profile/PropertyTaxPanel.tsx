@@ -47,6 +47,7 @@ import { isIncomeCategory, isOperatingExpenseCategory, isCapitalExpenseCategory 
 import type { TransactionInput, MaintenanceRecordInput as _MaintenanceRecordInput } from '../../lib/tax-center/types'
 import { beginReadingFileBytes, toDurableUploadableFile } from '../../lib/uploads/durable-file'
 import { uploadReceiptDocument } from '../../lib/documents/upload-receipt'
+import { toSafeErrorMessage } from '../../lib/user-facing-errors'
 
 export type PropertyTaxRecordRow = ManualTaxFields & MileageFields & {
   id: string
@@ -324,7 +325,7 @@ export function PropertyTaxPanel({
     const { error: saveError } = await supabase.from('property_tax_records').upsert(payload, { onConflict: 'property_id,tax_year' })
     setSaving(false)
     if (saveError) {
-      setError(saveError.message)
+      setError(toSafeErrorMessage(saveError, 'Unable to save your tax figures.'))
       return
     }
     setDirty(false)
@@ -388,7 +389,7 @@ export function PropertyTaxPanel({
         removeFile: async (path) => { await supabase.storage.from('property-documents').remove([path]) },
       })
       if (!uploadResult.ok) {
-        setCustomItemError(`Item not saved — the receipt could not be uploaded (${uploadResult.error}). Try again, or save without a receipt.`)
+        setCustomItemError(`Item not saved — the receipt could not be uploaded. ${toSafeErrorMessage(uploadResult.error, 'Try again, or save without a receipt.')}`)
         setCustomItemSaving(false)
         return
       }
@@ -414,7 +415,7 @@ export function PropertyTaxPanel({
       : await supabase.from('property_tax_custom_items').update(payload).eq('id', customItemFormOpenId)
     setCustomItemSaving(false)
     if (saveError) {
-      setCustomItemError(saveError.message)
+      setCustomItemError(toSafeErrorMessage(saveError, 'Unable to save this item.'))
       return
     }
     setCustomItemFormOpenId(null)
@@ -424,7 +425,7 @@ export function PropertyTaxPanel({
   async function removeCustomItem(item: CustomTaxItemRow) {
     if (!window.confirm(`Remove "${item.description}" from this property's ${year} tax items?`)) return
     const { error: deleteError } = await supabase.from('property_tax_custom_items').delete().eq('id', item.id)
-    if (deleteError) { setCustomItemError(deleteError.message); return }
+    if (deleteError) { setCustomItemError(toSafeErrorMessage(deleteError, 'Unable to delete this item.')); return }
     onRefresh()
   }
 

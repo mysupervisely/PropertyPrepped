@@ -7,6 +7,7 @@
 
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { toSafeErrorMessage } from '../../lib/user-facing-errors'
 
 export const OWNERSHIP_TYPES = ['Individual', 'LLC', 'Trust', 'Partnership', 'Other'] as const
 
@@ -53,7 +54,7 @@ export function PropertyOwnershipPanel({
       purchase_price: draft.purchasePrice ? Number(draft.purchasePrice) : null,
       notes: draft.notes.trim() || null,
     })
-    if (saveError) setError(saveError.message)
+    if (saveError) setError(toSafeErrorMessage(saveError, 'Unable to save this ownership record.'))
     else { setShowForm(false); setDraft(emptyDraft); onRefresh() }
     setBusy(false)
   }
@@ -61,7 +62,7 @@ export function PropertyOwnershipPanel({
   async function remove(id: string) {
     if (!supabase) return
     const { error: deleteError } = await supabase.from('property_ownership').delete().eq('id', id)
-    if (deleteError) setError(deleteError.message)
+    if (deleteError) setError(toSafeErrorMessage(deleteError, 'Unable to delete this ownership record.'))
     else onRefresh()
   }
 

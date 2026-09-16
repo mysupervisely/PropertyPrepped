@@ -36,6 +36,8 @@ import type { User } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { AuthHeader } from '../../components/AuthHeader'
+import { SignInRequiredCard } from '../../components/SignInRequiredCard'
+import { toSafeErrorMessage } from '../../lib/user-facing-errors'
 import { RENT_PAYMENT_METHODS } from '../../lib/property-categories'
 import { periodFromDate, periodStart, shiftPeriod, formatPeriodLabel, shouldDeleteLinkedTransaction, type RentPeriod, type RentStatus } from '../../lib/rent-ledger/status'
 import { buildRentLedgerRows, summarizeRentLedgerRows, type RentLedgerRow } from '../../lib/rent-ledger/ledger'
@@ -79,21 +81,12 @@ function defaultDraft() {
 }
 
 export default function RentLedgerPage() {
-  const { user, ready } = useAuthUser()
+  const { user, ready, sessionExpired } = useAuthUser()
 
   if (!ready) return <main className="authShell"><div className="loadingState">Loading Rent Ledger…</div></main>
 
   if (!user) {
-    return (
-      <main className="authShell">
-        <section className="authCard">
-          <p className="eyebrow">PROPROSTER</p>
-          <h1>Sign in required</h1>
-          <p className="authIntro">Sign in to view your Rent Ledger.</p>
-          <Link className="primary authSubmit" href="/">Go to sign in</Link>
-        </section>
-      </main>
-    )
+    return <SignInRequiredCard what="Rent Ledger" sessionExpired={sessionExpired} />
   }
 
   return <RentLedgerWorkspace user={user} />
@@ -128,7 +121,7 @@ function RentLedgerWorkspace({ user }: { user: User }) {
       supabase.from('rent_payments').select('*').order('date_received', { ascending: false }),
     ])
     const err = e1 || e2 || e3
-    if (err) setError(err.message)
+    if (err) setError(toSafeErrorMessage(err, 'Unable to load your Rent Ledger.'))
     setProperties((propertyRows || []) as PropertyRef[])
     setLeases((leaseRows || []) as LeaseRef[])
     setPayments((paymentRows || []) as PaymentRow[])

@@ -8,6 +8,7 @@
 
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { toSafeErrorMessage } from '../../lib/user-facing-errors'
 
 export const SYSTEM_TYPES = [
   'Roof', 'HVAC', 'Water Heater', 'Electrical', 'Plumbing', 'Refrigerator',
@@ -110,7 +111,7 @@ export function PropertySystemsPanel({
       ? await supabase.from('property_systems').update(payload).eq('id', editingId)
       : await supabase.from('property_systems').insert(payload)
     if (saveError) {
-      setError(saveError.message)
+      setError(toSafeErrorMessage(saveError, 'Unable to save this system.'))
     } else {
       setShowForm(false)
       onRefresh()
@@ -122,7 +123,7 @@ export function PropertySystemsPanel({
     if (!supabase) return
     setBusy(true)
     const { error: deleteError } = await supabase.from('property_systems').delete().eq('id', id)
-    if (deleteError) setError(deleteError.message)
+    if (deleteError) setError(toSafeErrorMessage(deleteError, 'Unable to delete this system.'))
     else onRefresh()
     setBusy(false)
   }

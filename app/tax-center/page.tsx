@@ -43,6 +43,7 @@ import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { AuthHeader } from '../../components/AuthHeader'
+import { SignInRequiredCard } from '../../components/SignInRequiredCard'
 import { Wordmark } from '../../components/Wordmark'
 import { SCHEDULE_E_REFERENCE, SCHEDULE_E_CAPEX_NOTE, SCHEDULE_E_MORTGAGE_NOTE } from '../../lib/tax-center/categories'
 import { computePortfolioTaxSummary, computePropertyTaxSummary, filterTransactionsForYear, getAvailableTaxYears } from '../../lib/tax-center/aggregate'
@@ -59,6 +60,7 @@ import { beginReadingFileBytes, toDurableUploadableFile } from '../../lib/upload
 import { uploadReceiptDocument } from '../../lib/documents/upload-receipt'
 import { HomeIcon, WrenchIcon, ReceiptIcon } from '../../components/icons/NavIcons'
 import { trackEvent } from '../../lib/analytics'
+import { toSafeErrorMessage } from '../../lib/user-facing-errors'
 import type { CustomTaxItemInput, MaintenanceRecordInput, PropertyInput, PropertyTaxSummary, ReadinessStatus, TaxRecordInput, TransactionInput } from '../../lib/tax-center/types'
 
 // Section 2 of this milestone's own spec: "+ Add Expense" is for
@@ -139,21 +141,12 @@ function sourceLabel(source: CategoryValue['source']): string {
 }
 
 export default function TaxCenterPage() {
-  const { user, ready } = useAuthUser()
+  const { user, ready, sessionExpired } = useAuthUser()
 
   if (!ready) return <main className="authShell"><div className="loadingState">Loading Tax Center…</div></main>
 
   if (!user) {
-    return (
-      <main className="authShell">
-        <section className="authCard">
-          <p className="eyebrow">PROPROSTER</p>
-          <h1>Sign in required</h1>
-          <p className="authIntro">Sign in to view your Tax Center.</p>
-          <Link className="primary authSubmit" href="/">Go to sign in</Link>
-        </section>
-      </main>
-    )
+    return <SignInRequiredCard what="Tax Center" sessionExpired={sessionExpired} />
   }
 
   return <TaxCenterWorkspace />
@@ -224,7 +217,7 @@ function TaxCenterWorkspace() {
       supabase.from('rent_payments').select('id,financial_transaction_id'),
     ])
     const firstError = propsRes.error || txRes.error || maintRes.error || docsRes.error || taxRes.error || customItemsRes.error || rentRes.error
-    if (firstError) setError(firstError.message)
+    if (firstError) setError(toSafeErrorMessage(firstError, 'Unable to load your Tax Center data.'))
     setProperties(((propsRes.data as PropertyInput[]) || []).filter((p) => p.property_type === 'Rental Property'))
     setTransactions((txRes.data as TransactionInput[]) || [])
     setFeedTransactions((txRes.data as TaxCenterFeedTransactionInput[]) || [])
@@ -372,7 +365,7 @@ function TaxCenterWorkspace() {
           removeFile: async (path) => { await supabase!.storage.from('property-documents').remove([path]) },
         })
         if (!uploadResult.ok) {
-          setExpenseError(`Expense not saved — the receipt could not be uploaded (${uploadResult.error}). Try again, or save without a receipt.`)
+          setExpenseError(`Expense not saved — the receipt could not be uploaded. ${toSafeErrorMessage(uploadResult.error, 'Try again, or save without a receipt.')}`)
           setExpenseSaving(false)
           return
         }
@@ -399,13 +392,13 @@ function TaxCenterWorkspace() {
         is_recurring: false,
       })
       if (insertError) {
-        setExpenseError(insertError.message)
+        setExpenseError(toSafeErrorMessage(insertError, 'Unable to save this expense.'))
         return
       }
       setShowAddExpense(false)
       await load()
     } catch (unexpected) {
-      setExpenseError(unexpected instanceof Error ? unexpected.message : 'Something went wrong saving this expense. Please try again.')
+      setExpenseError(toSafeErrorMessage(unexpected, 'Something went wrong saving this expense. Please try again.'))
     } finally {
       setExpenseSaving(false)
     }
@@ -437,17 +430,17 @@ function TaxCenterWorkspace() {
         removeFile: async (path) => { await supabase!.storage.from('property-documents').remove([path]) },
       })
       if (!uploadResult.ok) {
-        setAttachReceiptError({ id: item.id, message: uploadResult.error })
+        setAttachReceiptError({ id: item.id, message: toSafeErrorMessage(uploadResult.error, 'Unable to upload this receipt.') })
         return
       }
       const { error: updateError } = await supabase.from('financial_transactions').update({ document_id: uploadResult.documentId }).eq('id', item.id)
       if (updateError) {
-        setAttachReceiptError({ id: item.id, message: updateError.message })
+        setAttachReceiptError({ id: item.id, message: toSafeErrorMessage(updateError, 'Unable to attach this receipt.') })
         return
       }
       await load()
     } catch (unexpected) {
-      setAttachReceiptError({ id: item.id, message: unexpected instanceof Error ? unexpected.message : 'Something went wrong attaching this receipt. Please try again.' })
+      setAttachReceiptError({ id: item.id, message: toSafeErrorMessage(unexpected, 'Something went wrong attaching this receipt. Please try again.') })
     } finally {
       setAttachingReceiptId(null)
     }

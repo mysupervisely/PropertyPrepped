@@ -48,13 +48,15 @@
 // page.
 //
 // Deliberately OMITTED vs. the approved visual reference: a "Remember me"
-// checkbox and a "Forgot password?" link. Neither a persistent-session
-// toggle nor a password-reset flow exists anywhere in this codebase
-// (Supabase Auth session persistence is already always-on via
-// lib/supabase.ts's persistSession:true, and there is no
-// resetPasswordForEmail call/route anywhere) — adding either control here
-// would be a checkbox with no effect or a link to a screen that doesn't
-// exist.
+// checkbox. Session persistence is already always-on via
+// lib/supabase.ts's persistSession:true, so the toggle would have no
+// effect.
+//
+// Launch Essentials V1 added the "Forgot password?" link and its
+// request-a-reset panel below (authMode: 'reset'), using the same
+// supabase.auth.resetPasswordForEmail call every other Supabase-Auth
+// project uses — see app/reset-password/page.tsx for the other half of
+// the flow (the page Supabase's recovery email links back to).
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -64,6 +66,8 @@ import { PLANS, PUBLIC_PLAN_ORDER, PLAN_FEATURE_HIGHLIGHTS, EARLY_ACCESS_PRICING
 import { postSignupRedirectPath, INTENDED_ROLE_STORAGE_KEY, type IntendedRole } from '../lib/tenant-connect/onboarding'
 import { useScrollReveal } from '../lib/homepage/use-scroll-reveal'
 import { trackEvent } from '../lib/analytics'
+import { toSafeErrorMessage } from '../lib/user-facing-errors'
+import { LegalFooter } from './LegalFooter'
 
 function HouseIcon() {
   return (
@@ -336,15 +340,26 @@ function HeroProductPreview() {
   )
 }
 
-export default function LandingPage() {
+export default function LandingPage({ sessionExpired = false }: { sessionExpired?: boolean } = {}) {
   const [authOpen, setAuthOpen] = useState(false)
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
+  const [authMode, setAuthMode] = useState<'signin' | 'signup' | 'reset'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [authMessage, setAuthMessage] = useState('')
+
+  // Launch Essentials V1 — app/page.tsx passes sessionExpired=true when a
+  // real session just disappeared on its own (not an explicit Log out —
+  // see lib/auth/session-signal.ts). Opens straight to the sign-in panel
+  // with a clear explanation, rather than leaving the visitor to wonder
+  // why they're suddenly looking at the marketing page again.
+  useEffect(() => {
+    if (!sessionExpired) return
+    setAuthMode('signin')
+    setAuthOpen(true)
+  }, [sessionExpired])
   // Tenant-Facing Experience V1 — "How will you use PropRoster?" (signup
   // only; irrelevant once signing back in to an existing account, which
   // may already hold either or both contexts — see onboarding.ts's own
@@ -387,21 +402,21 @@ export default function LandingPage() {
   const finalCtaReveal = useScrollReveal<HTMLElement>()
 
   async function submitAuth() {
-    if (!supabase || !email.trim() || password.length < 6) return
+    if (!supabase || authMode === 'reset' || !email.trim() || password.length < 6) return
     setBusy(true)
     setAuthMessage('')
     setError('')
     if (authMode === 'signin') {
       const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
       if (signInError) {
-        setError(signInError.message)
+        setError(toSafeErrorMessage(signInError, signInError.message))
       } else {
         trackEvent('login_completed')
       }
     } else {
       const { data, error: signUpError } = await supabase.auth.signUp({ email: email.trim(), password })
       if (signUpError) {
-        setError(signUpError.message)
+        setError(toSafeErrorMessage(signUpError, signUpError.message))
       } else {
         // Fired here, once, the moment Supabase confirms the account
         // itself was genuinely created — regardless of which branch
@@ -429,7 +444,37 @@ export default function LandingPage() {
     setBusy(false)
   }
 
-  function switchMode(mode: 'signin' | 'signup') {
+  // Launch Essentials V1 — the standard Supabase password-reset request.
+  // Deliberately shows the SAME neutral confirmation whether or not the
+  // email belongs to an account: resetPasswordForEmail's own success
+  // response (`data: {}`) never reveals that either way, and nothing here
+  // branches on account existence, so there is nothing left to leak.
+  // redirectTo is derived from the browser's own origin (never hardcoded)
+  // so this works unchanged in production and in every deploy-preview
+  // environment — see app/reset-password/page.tsx for the landing side
+  // of this link.
+  async function submitReset() {
+    if (!supabase || !email.trim()) return
+    setBusy(true)
+    setError('')
+    setAuthMessage('')
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
+    if (resetError) {
+      setError(toSafeErrorMessage(resetError, resetError.message))
+    } else {
+      setAuthMessage("If an account exists for that email, you'll receive password reset instructions shortly.")
+    }
+    setBusy(false)
+  }
+
+  function submitActiveForm() {
+    if (authMode === 'reset') void submitReset()
+    else void submitAuth()
+  }
+
+  function switchMode(mode: 'signin' | 'signup' | 'reset') {
     setAuthMode(mode)
     setError('')
     setAuthMessage('')
@@ -695,18 +740,33 @@ export default function LandingPage() {
         <button type="button" className="primary landingCtaPrimary" onClick={() => openAuth('signup')}>Start Free</button>
       </section>
 
+      <LegalFooter />
+
       {authOpen && (
         <div className="overlay landingAuthOverlay" onMouseDown={(e) => e.target === e.currentTarget && closeAuth()}>
           <div className="modal landingAuthModal" role="dialog" aria-modal="true" aria-labelledby="landing-auth-title">
             <div className="landingSignInCard">
               <div className="landingSignInCardTop">
                 <div>
-                  <p className="eyebrow">{authMode === 'signin' ? 'WELCOME BACK' : 'CREATE YOUR ACCOUNT'}</p>
-                  <h2 id="landing-auth-title">{authMode === 'signin' ? 'Sign in to PropRoster' : 'Create your PropRoster account'}</h2>
+                  <p className="eyebrow">{authMode === 'signin' ? 'WELCOME BACK' : authMode === 'signup' ? 'CREATE YOUR ACCOUNT' : 'RESET PASSWORD'}</p>
+                  <h2 id="landing-auth-title">{authMode === 'signin' ? 'Sign in to PropRoster' : authMode === 'signup' ? 'Create your PropRoster account' : 'Reset your password'}</h2>
                 </div>
                 <button type="button" className="iconButton" aria-label="Close" onClick={closeAuth}>&times;</button>
               </div>
-              <p className="landingCardSub">{authMode === 'signin' ? 'Access your properties, documents, financials and investment tools.' : 'Free to start. Organize your first property in minutes.'}</p>
+              <p className="landingCardSub">
+                {authMode === 'signin' ? 'Access your properties, documents, financials and investment tools.'
+                  : authMode === 'signup' ? 'Free to start. Organize your first property in minutes.'
+                  : "Enter your account email and we'll send you a link to reset your password."}
+              </p>
+
+              {/* Launch Essentials V1 — shown only when app/page.tsx sent
+                  us here because a real session expired on its own (never
+                  for a first visit or an explicit Log out). Independent of
+                  error/authMessage below so switching modes or retrying
+                  doesn't clear it prematurely. */}
+              {sessionExpired && authMode === 'signin' && !error && !authMessage && (
+                <div className="statusMessage errorMessage" role="alert">Your session has expired. Please sign in again.</div>
+              )}
 
               {authMode === 'signup' && (
                 <div className="landingRoleChoice">
@@ -727,42 +787,55 @@ export default function LandingPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="email"
+                  onKeyDown={(e) => e.key === 'Enter' && submitActiveForm()}
                   placeholder="Enter your email"
                 />
               </div>
 
-              <label htmlFor="landing-password">Password</label>
-              <div className="landingInputField">
-                <LockIcon />
-                <input
-                  id="landing-password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete={authMode === 'signin' ? 'current-password' : 'new-password'}
-                  onKeyDown={(e) => e.key === 'Enter' && void submitAuth()}
-                  placeholder="Enter your password"
-                />
-                <button
-                  type="button"
-                  className="landingPasswordToggle"
-                  onClick={() => setShowPassword((v) => !v)}
-                  aria-pressed={showPassword}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  <EyeIcon off={showPassword} />
-                </button>
-              </div>
+              {authMode !== 'reset' && (
+                <>
+                  <label htmlFor="landing-password">Password</label>
+                  <div className="landingInputField">
+                    <LockIcon />
+                    <input
+                      id="landing-password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete={authMode === 'signin' ? 'current-password' : 'new-password'}
+                      onKeyDown={(e) => e.key === 'Enter' && submitActiveForm()}
+                      placeholder="Enter your password"
+                    />
+                    <button
+                      type="button"
+                      className="landingPasswordToggle"
+                      onClick={() => setShowPassword((v) => !v)}
+                      aria-pressed={showPassword}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      <EyeIcon off={showPassword} />
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {authMode === 'signin' && (
+                <button type="button" className="forgotPasswordLink" onClick={() => switchMode('reset')}>Forgot password?</button>
+              )}
 
               {error && <div className="statusMessage errorMessage" role="alert">{error}</div>}
               {authMessage && <div className="statusMessage successMessage" role="status">{authMessage}</div>}
 
-              <button className="primary landingSubmit" disabled={busy} onClick={() => void submitAuth()}>
-                {busy ? 'Working…' : authMode === 'signin' ? 'Sign in' : 'Create account'}
+              <button className="primary landingSubmit" disabled={busy} onClick={submitActiveForm}>
+                {busy ? 'Working…' : authMode === 'signin' ? 'Sign in' : authMode === 'signup' ? 'Create account' : 'Send reset link'}
               </button>
-              <button className="authSwitch" onClick={() => switchMode(authMode === 'signin' ? 'signup' : 'signin')}>
-                {authMode === 'signin' ? 'New to PropRoster? Create an account' : 'Already have an account? Sign in'}
-              </button>
+              {authMode === 'reset' ? (
+                <button className="authSwitch" onClick={() => switchMode('signin')}>Back to sign in</button>
+              ) : (
+                <button className="authSwitch" onClick={() => switchMode(authMode === 'signin' ? 'signup' : 'signin')}>
+                  {authMode === 'signin' ? 'New to PropRoster? Create an account' : 'Already have an account? Sign in'}
+                </button>
+              )}
             </div>
           </div>
         </div>

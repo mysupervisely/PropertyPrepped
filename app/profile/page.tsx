@@ -21,6 +21,7 @@ import { validateImageFile } from '../../lib/uploads/image-file'
 import { beginReadingFileBytes, toDurableUploadableFile } from '../../lib/uploads/durable-file'
 import { logUploadDiagnostic, safeErrorSummary, initialUploadDebugState, type UploadDebugState } from '../../lib/uploads/diagnostics'
 import { UploadDebugPanel } from '../../components/uploads/UploadDebugPanel'
+import { toSafeErrorMessage } from '../../lib/user-facing-errors'
 
 // Launch Polish: same path-sanitizing helper app/page.tsx already uses
 // for property photo/document uploads — not exported from there (a
@@ -80,7 +81,7 @@ export default function ProfilePage() {
     setLoading(true)
     supabase.from('user_profiles').select('*').eq('id', user.id).maybeSingle().then(({ data, error: fetchError }) => {
       if (fetchError) {
-        setError(fetchError.message)
+        setError(toSafeErrorMessage(fetchError, 'Unable to load your profile.'))
       } else {
         setProfile(data as UserProfile | null)
         setDraft(draftFromProfile(data as UserProfile | null))
@@ -264,7 +265,7 @@ export default function ProfilePage() {
     }).select('*').single()
 
     if (saveError) {
-      setError(saveError.message)
+      setError(toSafeErrorMessage(saveError, 'Unable to save your profile.'))
     } else {
       setProfile(data as UserProfile)
       setSaved(true)
@@ -367,7 +368,10 @@ export default function ProfilePage() {
           </div>
         </div>
         {photoError && <p className="errorMessage">{photoError}</p>}
-        {photoDebug && <UploadDebugPanel state={photoDebug} />}
+        {/* Launch Essentials V1 — see app/page.tsx's own comment on this
+            same gate: this "temporary" debug panel renders raw storage/DB
+            error text and must not ship to production visitors. */}
+        {process.env.NODE_ENV !== 'production' && photoDebug && <UploadDebugPanel state={photoDebug} />}
       </section>
 
       <div className="editPropertyFooter compactActions">

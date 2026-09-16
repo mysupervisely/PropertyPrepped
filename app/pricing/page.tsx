@@ -46,6 +46,7 @@ import { startCheckout } from '../../lib/billing/client'
 import { PricingNavLink } from '../../components/PricingNavLink'
 import { Wordmark } from '../../components/Wordmark'
 import { AuthHeader } from '../../components/AuthHeader'
+import { LegalFooter } from '../../components/LegalFooter'
 
 const LEGACY_PLAN_IDS = new Set(['investor', 'portfolio', 'portfolio_pro'])
 
@@ -225,6 +226,8 @@ export default function PricingPage() {
           {' '}AI-powered document analysis (Smart Upload, Portfolio Import, and Document Intelligence) is included on every plan, with a shared 50-analysis monthly limit to keep the service reliable for everyone.
         </p>
       </section>
+
+      <LegalFooter />
     </main>
   )
 }
