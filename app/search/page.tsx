@@ -20,6 +20,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { AuthHeader } from '../../components/AuthHeader'
 import { normalizeSearchWords, buildOrFilter } from '../../lib/search/query'
+import { trackEvent } from '../../lib/analytics'
 import {
   searchProperties, searchDocuments, searchContacts, searchSystems, searchMaintenance,
   searchFinancials, searchNotes, searchLeases, searchMortgages, searchInsurance, searchRentPayments,
@@ -83,6 +84,11 @@ function SearchWorkspace() {
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
+  // Production Readiness & Product Analytics V1 — distinct from
+  // "searched and genuinely found nothing" (see runSearch's own
+  // comment: previously a failed search rendered identically to a
+  // real zero-result search, with no way to tell them apart).
+  const [searchFailed, setSearchFailed] = useState(false)
   const [properties, setProperties] = useState<PropertyRef[]>([])
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const requestIdRef = useRef(0)
@@ -102,61 +108,96 @@ function SearchWorkspace() {
     if (!words.length || words.join('').length < MIN_QUERY_LENGTH || !supabase) {
       setResults([])
       setSearched(false)
+      setSearchFailed(false)
       return
     }
     const requestId = ++requestIdRef.current
     setLoading(true)
+    setSearchFailed(false)
     const client = supabase
 
-    const [
-      { data: propRows }, { data: docRows }, { data: contactRows }, { data: linkRows },
-      { data: systemRows }, { data: maintRows }, { data: txRows }, { data: noteRows },
-      { data: leaseRows }, { data: mortgageRows }, { data: insuranceRows }, { data: paymentRows },
-    ] = await Promise.all([
-      client.from('properties').select('id,address,city,property_type').or(buildOrFilter(PROPERTY_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
-      client.from('property_documents').select('id,property_id,name,category,document_type').or(buildOrFilter(DOCUMENT_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
-      client.from('property_contacts').select('id,property_id,name,business_name,role,phone,email').or(buildOrFilter(CONTACT_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
-      client.from('property_contact_links').select('contact_id,property_id'),
-      client.from('property_systems').select('id,property_id,system_type,name,manufacturer,model,serial_number').or(buildOrFilter(SYSTEM_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
-      client.from('maintenance_records').select('id,property_id,description,category,vendor').or(buildOrFilter(MAINTENANCE_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
-      client.from('financial_transactions').select('id,property_id,description,category,vendor').or(buildOrFilter(FINANCIAL_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
-      client.from('property_notes').select('id,property_id,body').or(buildOrFilter(NOTE_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
-      client.from('leases').select('id,property_id,tenant_name,tenant_email,tenant_phone').or(buildOrFilter(LEASE_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
-      client.from('mortgages').select('id,property_id,lender,loan_number').or(buildOrFilter(MORTGAGE_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
-      client.from('insurance_policies').select('id,property_id,carrier,policy_number').or(buildOrFilter(INSURANCE_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
-      client.from('rent_payments').select('id,property_id,reference_number,amount,date_received').or(buildOrFilter(RENT_PAYMENT_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
-    ])
+    // Production Readiness & Product Analytics V1 — this used to
+    // destructure only `data` from each of the 12 queries, so a real
+    // backend/network failure (RLS denial, timeout, transient error)
+    // silently rendered as "No results" — indistinguishable from a
+    // genuine zero-match search. Every query's `error` is now captured
+    // too, and a try/catch covers a hard-thrown exception (a real
+    // network failure, not a returned {error}) — previously that case
+    // left `loading` stuck true forever (the "Searching…" indicator
+    // never cleared, `searched` never became true, so not even the
+    // "No results" fallback would ever show).
+    try {
+      const responses = await Promise.all([
+        client.from('properties').select('id,address,city,property_type').or(buildOrFilter(PROPERTY_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
+        client.from('property_documents').select('id,property_id,name,category,document_type').or(buildOrFilter(DOCUMENT_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
+        client.from('property_contacts').select('id,property_id,name,business_name,role,phone,email').or(buildOrFilter(CONTACT_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
+        client.from('property_contact_links').select('contact_id,property_id'),
+        client.from('property_systems').select('id,property_id,system_type,name,manufacturer,model,serial_number').or(buildOrFilter(SYSTEM_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
+        client.from('maintenance_records').select('id,property_id,description,category,vendor').or(buildOrFilter(MAINTENANCE_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
+        client.from('financial_transactions').select('id,property_id,description,category,vendor').or(buildOrFilter(FINANCIAL_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
+        client.from('property_notes').select('id,property_id,body').or(buildOrFilter(NOTE_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
+        client.from('leases').select('id,property_id,tenant_name,tenant_email,tenant_phone').or(buildOrFilter(LEASE_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
+        client.from('mortgages').select('id,property_id,lender,loan_number').or(buildOrFilter(MORTGAGE_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
+        client.from('insurance_policies').select('id,property_id,carrier,policy_number').or(buildOrFilter(INSURANCE_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
+        client.from('rent_payments').select('id,property_id,reference_number,amount,date_received').or(buildOrFilter(RENT_PAYMENT_SEARCH_COLUMNS, words)).limit(PER_TABLE_LIMIT),
+      ])
 
-    // A stale, slower request finishing after a newer one must never
-    // clobber it — only the most recent keystroke's results ever render.
-    if (requestId !== requestIdRef.current) return
+      // A stale, slower request finishing after a newer one must never
+      // clobber it — only the most recent keystroke's results ever render.
+      if (requestId !== requestIdRef.current) return
 
-    const propertyById = new Map(properties.map((p) => [p.id, p]))
-    // Same union-of-primary-plus-links rule components/PropCrewPanel.tsx
-    // already uses for "which properties does this provider serve."
-    const propertyCountByContact = new Map<string, number>()
-    ;(contactRows || []).forEach((c: { id: string; property_id: string }) => {
-      const ids = new Set<string>([c.property_id])
-      ;(linkRows || []).forEach((l: { contact_id: string; property_id: string }) => { if (l.contact_id === c.id) ids.add(l.property_id) })
-      propertyCountByContact.set(c.id, ids.size)
-    })
+      const anyError = responses.some((r) => r.error)
+      if (anyError) {
+        console.error('Global search: one or more queries failed', responses.filter((r) => r.error).map((r) => r.error))
+        setResults([])
+        setSearched(true)
+        setSearchFailed(true)
+        return
+      }
 
-    const combined: SearchResult[] = [
-      ...searchProperties(propRows || [], words),
-      ...searchDocuments(docRows || [], words, propertyById),
-      ...searchContacts(contactRows || [], words, propertyCountByContact),
-      ...searchSystems(systemRows || [], words, propertyById),
-      ...searchMaintenance(maintRows || [], words, propertyById),
-      ...searchFinancials(txRows || [], words, propertyById),
-      ...searchNotes(noteRows || [], words, propertyById),
-      ...searchLeases(leaseRows || [], words, propertyById),
-      ...searchMortgages(mortgageRows || [], words, propertyById),
-      ...searchInsurance(insuranceRows || [], words, propertyById),
-      ...searchRentPayments(paymentRows || [], words, propertyById),
-    ]
-    setResults(combined)
-    setSearched(true)
-    setLoading(false)
+      const [
+        { data: propRows }, { data: docRows }, { data: contactRows }, { data: linkRows },
+        { data: systemRows }, { data: maintRows }, { data: txRows }, { data: noteRows },
+        { data: leaseRows }, { data: mortgageRows }, { data: insuranceRows }, { data: paymentRows },
+      ] = responses
+
+      const propertyById = new Map(properties.map((p) => [p.id, p]))
+      // Same union-of-primary-plus-links rule components/PropCrewPanel.tsx
+      // already uses for "which properties does this provider serve."
+      const propertyCountByContact = new Map<string, number>()
+      ;(contactRows || []).forEach((c: { id: string; property_id: string }) => {
+        const ids = new Set<string>([c.property_id])
+        ;(linkRows || []).forEach((l: { contact_id: string; property_id: string }) => { if (l.contact_id === c.id) ids.add(l.property_id) })
+        propertyCountByContact.set(c.id, ids.size)
+      })
+
+      const combined: SearchResult[] = [
+        ...searchProperties(propRows || [], words),
+        ...searchDocuments(docRows || [], words, propertyById),
+        ...searchContacts(contactRows || [], words, propertyCountByContact),
+        ...searchSystems(systemRows || [], words, propertyById),
+        ...searchMaintenance(maintRows || [], words, propertyById),
+        ...searchFinancials(txRows || [], words, propertyById),
+        ...searchNotes(noteRows || [], words, propertyById),
+        ...searchLeases(leaseRows || [], words, propertyById),
+        ...searchMortgages(mortgageRows || [], words, propertyById),
+        ...searchInsurance(insuranceRows || [], words, propertyById),
+        ...searchRentPayments(paymentRows || [], words, propertyById),
+      ]
+      setResults(combined)
+      setSearched(true)
+      // Fired only on a genuinely completed search (no query errored) —
+      // never records the query text itself, just that search was used.
+      trackEvent('global_search_used')
+    } catch (unexpected) {
+      if (requestId !== requestIdRef.current) return
+      console.error('Global search: unexpected exception', unexpected)
+      setResults([])
+      setSearched(true)
+      setSearchFailed(true)
+    } finally {
+      if (requestId === requestIdRef.current) setLoading(false)
+    }
   }
 
   function handleChange(next: string) {
@@ -195,7 +236,14 @@ function SearchWorkspace() {
         <p className="muted searchHint">Search across your properties, documents, PropCrew, systems, maintenance, financials and more.</p>
       )}
 
-      {searched && !loading && results.length === 0 && (
+      {searched && !loading && searchFailed && (
+        <div className="emptyState searchEmptyState">
+          <strong>Search couldn&apos;t complete</strong>
+          <span>Something went wrong. Please try again in a moment.</span>
+        </div>
+      )}
+
+      {searched && !loading && !searchFailed && results.length === 0 && (
         <div className="emptyState searchEmptyState">
           <strong>No results for &ldquo;{query.trim()}&rdquo;</strong>
           <span>Try searching by property address, provider name, document name, or a maintenance keyword.</span>

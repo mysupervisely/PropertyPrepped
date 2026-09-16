@@ -67,6 +67,7 @@ import { logUploadDiagnostic, initialUploadDebugState, type UploadDebugState } f
 import { UploadDebugPanel } from '../components/uploads/UploadDebugPanel'
 import { logPhotoUploadDiagnostic, safeFileSummary, safeFileListSummary, safeErrorSummary } from '../lib/property-photos/diagnostics'
 import { friendlyPortfolioLoadMessage } from '../lib/dashboard/portfolio-load-status'
+import { trackEvent } from '../lib/analytics'
 import {
   buildAttentionDismissalKey, buildVacancyDismissalKey, filterDismissedAttentionItems,
   buildOpenMaintenanceDismissalKey, filterDismissedOpenMaintenanceItems,
@@ -1666,6 +1667,16 @@ export default function Home() {
         return
       }
 
+      // Production Readiness & Product Analytics V1 — fired the moment
+      // the property row itself is durably persisted, regardless of
+      // what happens with the optional cover photo below (a failed
+      // photo upload still means the property was genuinely created —
+      // see the existing "Property saved, but the cover photo..."
+      // messages a few lines down). Reuses the exact isFirstProperty
+      // capture Onboarding & First-Run Experience V2 already made —
+      // never a second "is this the first one" calculation.
+      trackEvent(isFirstProperty ? 'first_property_created' : 'property_created')
+
       if (coverFile) {
         // M2.1 review pass (Part 5) — this upload's error used to be
         // silently discarded: the property still saved, but a failed
@@ -1969,6 +1980,11 @@ export default function Home() {
       } else {
         logUploadDiagnostic('upload-multiple', 'UPLOAD_DB_SUCCESS', {})
         patchFileDebug(index, { databaseRecord: 'success', renderUrl: 'success' })
+        // Production Readiness & Product Analytics V1 — fired once per
+        // file that genuinely finished (storage upload AND its
+        // property_documents row both succeeded), never on a failed or
+        // skipped file in the same batch.
+        trackEvent('document_uploaded')
       }
     }
     await loadPortfolio()
@@ -2525,6 +2541,10 @@ export default function Home() {
     })
     if (insertError) setError(insertError.message)
     else {
+      // Production Readiness & Product Analytics V1 — Expense-only,
+      // matching the funnel's own "expense_created" naming; an Income
+      // transaction through this same form never fires it.
+      if (transactionDraft.type === 'Expense') trackEvent('expense_created')
       setShowTransaction(false)
       setTransactionDraft({ date: new Date().toISOString().slice(0, 10), type: 'Expense', category: 'Repairs', vendor: '', description: '', amount: '', documentId: '', recurring: false })
       await loadPortfolio()
