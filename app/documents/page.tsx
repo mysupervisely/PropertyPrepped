@@ -33,9 +33,11 @@ import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { AuthHeader } from '../../components/AuthHeader'
+import { SignInRequiredCard } from '../../components/SignInRequiredCard'
 import { filterDocuments, sortDocumentsNewestFirst, propertyLabelFor, type DocumentFilter } from '../../lib/documents/filter'
 import { findDocumentLinks } from '../../lib/documents/document-links'
 import { reassignDocumentToProperty } from '../../lib/documents/reassign'
+import { toSafeErrorMessage } from '../../lib/user-facing-errors'
 
 type PropertyRef = { id: string; address: string; city: string }
 type DocRow = {
@@ -52,21 +54,12 @@ type DocRow = {
 const FILTERS: DocumentFilter[] = ['All', 'Unassigned', 'Assigned']
 
 export default function DocumentsPage() {
-  const { user, ready } = useAuthUser()
+  const { user, ready, sessionExpired } = useAuthUser()
 
   if (!ready) return <main className="authShell"><div className="loadingState">Loading Documents…</div></main>
 
   if (!user) {
-    return (
-      <main className="authShell">
-        <section className="authCard">
-          <p className="eyebrow">PROPROSTER</p>
-          <h1>Sign in required</h1>
-          <p className="authIntro">Sign in to view your Documents library.</p>
-          <Link className="primary authSubmit" href="/">Go to sign in</Link>
-        </section>
-      </main>
-    )
+    return <SignInRequiredCard what="Documents library" sessionExpired={sessionExpired} />
   }
 
   return <DocumentsWorkspace />
@@ -91,8 +84,8 @@ function DocumentsWorkspace() {
       supabase.from('properties').select('id,address,city').order('address'),
       supabase.from('property_documents').select('id,property_id,name,category,storage_path,created_at,document_type,analysis_status').order('created_at', { ascending: false }),
     ])
-    if (propsRes.error) setError(propsRes.error.message)
-    else if (docsRes.error) setError(docsRes.error.message)
+    if (propsRes.error) setError(toSafeErrorMessage(propsRes.error, 'Unable to load your Documents library.'))
+    else if (docsRes.error) setError(toSafeErrorMessage(docsRes.error, 'Unable to load your Documents library.'))
     setProperties((propsRes.data as PropertyRef[]) || [])
     setDocuments((docsRes.data as DocRow[]) || [])
     setLoaded(true)
@@ -183,7 +176,7 @@ function DocumentsWorkspace() {
     const { data, error: urlError } = await supabase.storage.from('property-documents').createSignedUrl(doc.storage_path, 60)
     if (urlError || !data?.signedUrl) {
       newTab?.close()
-      setError(urlError?.message || 'Unable to open this document. Please try again.')
+      setError(toSafeErrorMessage(urlError, 'Unable to open this document. Please try again.'))
       return
     }
     if (newTab) {

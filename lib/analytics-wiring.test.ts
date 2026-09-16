@@ -26,7 +26,11 @@ describe('sign_up_completed / login_completed — components/LandingPage.tsx', (
     const start = landingSource.indexOf("if (authMode === 'signin')")
     const end = landingSource.indexOf('signInWithPassword', start) + 400
     const slice = landingSource.slice(start, end)
-    expect(slice).toMatch(/if \(signInError\) \{\s*setError\(signInError\.message\)\s*\} else \{\s*trackEvent\('login_completed'\)/)
+    // Launch Essentials V1 routes this through the safe-error helper
+    // (lib/user-facing-errors.ts) instead of showing signInError.message
+    // directly — still only reached on failure, still never on the
+    // success branch below.
+    expect(slice).toMatch(/if \(signInError\) \{\s*setError\(toSafeErrorMessage\(signInError, signInError\.message\)\)\s*\} else \{\s*trackEvent\('login_completed'\)/)
   })
 
   it('sign_up_completed fires only after signUp succeeds (no signUpError) — never inside the signUpError branch', () => {

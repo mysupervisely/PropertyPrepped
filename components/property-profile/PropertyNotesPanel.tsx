@@ -8,6 +8,7 @@
 
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { toSafeErrorMessage } from '../../lib/user-facing-errors'
 
 export type PropertyNote = {
   id: string
@@ -42,7 +43,7 @@ export function PropertyNotesPanel({
     setBusy(true)
     setError('')
     const { error: saveError } = await supabase.from('property_notes').insert({ owner_id: ownerId, property_id: propertyId, body: draft.trim() })
-    if (saveError) setError(saveError.message)
+    if (saveError) setError(toSafeErrorMessage(saveError, 'Unable to save this note.'))
     else { setDraft(''); onRefresh() }
     setBusy(false)
   }
@@ -50,14 +51,14 @@ export function PropertyNotesPanel({
   async function togglePin(note: PropertyNote) {
     if (!supabase) return
     const { error: saveError } = await supabase.from('property_notes').update({ is_pinned: !note.is_pinned, updated_at: new Date().toISOString() }).eq('id', note.id)
-    if (saveError) setError(saveError.message)
+    if (saveError) setError(toSafeErrorMessage(saveError, 'Unable to update this note.'))
     else onRefresh()
   }
 
   async function removeNote(id: string) {
     if (!supabase) return
     const { error: deleteError } = await supabase.from('property_notes').delete().eq('id', id)
-    if (deleteError) setError(deleteError.message)
+    if (deleteError) setError(toSafeErrorMessage(deleteError, 'Unable to delete this note.'))
     else onRefresh()
   }
 

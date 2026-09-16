@@ -47,15 +47,27 @@ declare global {
   }
 }
 
+// Launch Essentials V1 — the previous audit found this tag loading in
+// local development too, meaning every `next dev` session was reported
+// to GA4 as real traffic. This is the exact reliable, already-relied-on
+// signal lib/analytics.ts's own isAnalyticsEnabled() already uses for
+// the same purpose — Next.js sets NODE_ENV to 'production' only for a
+// real production build/start, never for `next dev` — so gating on it
+// here costs nothing new and can't regress the real production tag,
+// which still loads and fires exactly as before.
+const isProductionBuild = process.env.NODE_ENV === 'production'
+
 export function GoogleAnalytics() {
   const pathname = usePathname()
 
   useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.gtag !== 'function') return
+    if (!isProductionBuild || typeof window === 'undefined' || typeof window.gtag !== 'function') return
     // Every client-side route change after the initial load re-reports
     // the new path as its own pageview — see top comment.
     window.gtag('config', GA_MEASUREMENT_ID, { page_path: pathname })
   }, [pathname])
+
+  if (!isProductionBuild) return null
 
   return (
     <>

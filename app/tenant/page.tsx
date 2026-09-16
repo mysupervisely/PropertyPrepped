@@ -41,6 +41,7 @@ import Link from 'next/link'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
+import { markExplicitSignOut } from '../../lib/auth/session-signal'
 import { Wordmark } from '../../components/Wordmark'
 import type { TenantRequest } from '../../lib/tenant-connect/types'
 import type { TenantPropertyAccess, PropertyMessage } from '../../lib/tenant-connect/types'
@@ -221,7 +222,7 @@ function TenantPortal({ userId }: { userId: string }) {
         <span className="brand"><Wordmark /></span>
         <span className="tenantPortalHeaderLabel">Tenant Portal</span>
         {hasOwnedProperties && <Link href="/" className="secondary tenantPortalSwitchContext">Landlord Dashboard</Link>}
-        <button type="button" className="secondary tenantPortalLogout" onClick={() => void supabase?.auth.signOut()}>Log out</button>
+        <button type="button" className="secondary tenantPortalLogout" onClick={() => { markExplicitSignOut(); void supabase?.auth.signOut() }}>Log out</button>
       </header>
 
       {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}

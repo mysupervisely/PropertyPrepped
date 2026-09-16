@@ -34,6 +34,7 @@ import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthUser } from '../lib/useAuthUser'
+import { markExplicitSignOut } from '../lib/auth/session-signal'
 // Simplification + Maintenance Workspace V2, Phase D.2: the profile
 // photo moved out to its own, separate ProfileEntryButton — see that
 // component's header comment for why "me" and "PropRoster tools" are
@@ -177,7 +178,7 @@ export function AuthNavMenu({ onDashboardNavigate, open, onOpenChange }: { onDas
           )}
           <Link href="/?add=property" className="authNavMenuAction" onClick={() => onOpenChange(false)}>+ Add Property</Link>
           <div className="authNavMenuDivider" role="separator" />
-          <button type="button" className="authNavMenuLogout" onClick={() => { onOpenChange(false); void supabase?.auth.signOut() }}>Log out</button>
+          <button type="button" className="authNavMenuLogout" onClick={() => { onOpenChange(false); markExplicitSignOut(); void supabase?.auth.signOut() }}>Log out</button>
         </nav>
       )}
     </div>

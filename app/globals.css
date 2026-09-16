@@ -801,6 +801,14 @@ h2, h3, p { margin-top: 0; }
 .authCard input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
 .authSubmit { width: 100%; margin-top: 18px; }
 .authSwitch { width: 100%; border: 0; background: transparent; color: var(--brand); font-weight: 650; padding: 14px 6px 0; }
+/* Launch Essentials V1 — reset-password's own new-password fields, same
+   .authCard input styling with a Show/Hide toggle inset on the right
+   (text label, not an icon, to avoid pulling in LandingPage's SVG icons
+   for this one small, unrelated page). */
+.authPasswordField { position: relative; }
+.authPasswordField input { padding-right: 64px; }
+.authPasswordToggle { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); border: 0; background: transparent; color: var(--muted); font-size: 13px; font-weight: 650; padding: 6px 8px; cursor: pointer; }
+.authPasswordToggle:hover { color: var(--text); }
 .statusMessage { margin-top: 14px; border-radius: 10px; padding: 11px 12px; font-size: 13px; line-height: 1.45; }
 .errorMessage, .globalError { background: #fff2f1; border: 1px solid #efcbc7; color: #862d27; }
 .successMessage { background: var(--brand-soft); border: 1px solid #cadfd4; color: var(--brand); }
@@ -1401,6 +1409,29 @@ h2, h3, p { margin-top: 0; }
 .pricingCard .primary, .pricingCard .secondary { width: 100%; text-align: center; text-decoration: none; }
 .pricingFooterNote { max-width: 720px; margin: 8px 0 40px; }
 
+/* Launch Essentials V1 — shared legal-page chrome (Privacy Policy, Terms
+   of Service) and the small footer that links to them from the landing
+   and pricing pages. Reuses .shell/.investmentShell/.intro/.topbar for
+   the page frame (Phase 15/16: "fit the existing visual language, do not
+   redesign") — only these three rules are new. */
+.legalReviewBanner { background: #fff8e6; border: 1px solid #f0dfa8; color: #6b5410; border-radius: 12px; padding: 14px 16px; font-size: 13.5px; line-height: 1.5; font-weight: 650; margin-bottom: 32px; }
+.legalBody { max-width: 760px; }
+.legalBody h2 { font-size: 18px; margin: 28px 0 8px; }
+.legalBody h2:first-child { margin-top: 0; }
+.legalBody p { color: var(--text); line-height: 1.6; margin: 0 0 4px; }
+.legalFooter { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; max-width: 1100px; margin: 48px auto 0; padding: 20px 0 40px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+.legalFooter nav { display: flex; gap: 18px; }
+.legalFooter a { color: var(--muted); }
+.legalFooter a:hover { color: var(--brand); }
+/* .shell/.investmentShell (pricing, Privacy, Terms) already contributes
+   28px of horizontal padding to everything inside it; the landing page
+   has no such wrapper, so the footer needs its own gutter there only. */
+.landingPage .legalFooter { padding-left: 28px; padding-right: 28px; }
+@media (max-width: 480px) {
+  .legalFooter { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .legalFooter nav { gap: 14px; flex-wrap: wrap; }
+}
+
 .pricingFeatureList { list-style: none; margin: 2px 0 10px; padding: 0; display: grid; gap: 6px; font-size: 13.5px; }
 .pricingFeatureList li { padding-left: 20px; position: relative; }
 .pricingFeatureList li::before { content: '✓'; position: absolute; left: 0; color: var(--brand); font-weight: 800; }
@@ -1780,6 +1811,12 @@ h2, h3, p { margin-top: 0; }
 .landingPasswordToggle { border: 0; background: transparent; color: var(--muted); padding: 6px; border-radius: 8px; display: grid; place-items: center; cursor: pointer; flex-shrink: 0; }
 .landingPasswordToggle:hover { color: var(--text); }
 .landingSubmit { width: 100%; margin-top: 18px; }
+/* Launch Essentials V1 — Forgot password?, right-aligned under the
+   password field, same quiet brand-text treatment as .authSwitch below
+   it (no border/background) so it reads as a secondary action, not a
+   second button competing with Sign in. */
+.forgotPasswordLink { display: block; margin: 8px 0 0 auto; border: 0; background: transparent; color: var(--brand); font-weight: 650; font-size: 13px; padding: 4px 2px; cursor: pointer; }
+.forgotPasswordLink:hover { text-decoration: underline; }
 
 /* Tenant-Facing Experience V1 — signup-only role choice. */
 .landingRoleChoice { margin-top: 4px; }

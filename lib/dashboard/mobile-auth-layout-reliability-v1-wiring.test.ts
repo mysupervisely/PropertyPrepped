@@ -36,7 +36,11 @@ describe('Auth bootstrap — a session-validation failure is never treated as a 
     // (redirectIfIntendedTenant()) — a self-clearing, no-op-unless-flag-
     // set call (see that function's own header), so the fast path
     // itself (setUser/setAuthReady) is still exactly what it was.
-    expect(body).toContain('if (data.user) {\n        setUser(data.user)\n        setAuthReady(true)\n        redirectIfIntendedTenant()\n        return\n      }')
+    // Launch Essentials V1 added one more line before it
+    // (hadUserRef.current = true), the session-expiration-vs-explicit-
+    // logout signal (lib/auth/session-signal.ts) — also self-contained,
+    // never altering whether/when setUser itself is called.
+    expect(body).toContain('if (data.user) {\n        hadUserRef.current = true\n        setUser(data.user)\n        setAuthReady(true)\n        redirectIfIntendedTenant()\n        return\n      }')
   })
 
   it('a real getUser() error (not "no session at all") gets exactly ONE refreshSession() recovery attempt — a genuine Supabase refresh-token exchange, never a local bypass of validation', () => {
@@ -69,7 +73,19 @@ describe('Auth bootstrap — a session-validation failure is never treated as a 
     // self-clearing, no-op-unless-flag-set redirectIfIntendedTenant()
     // call) — still never touches what setUser/setSelectedId themselves
     // decide based on the library's own session value.
-    expect(pageSource).toContain('const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {\n      setUser(session?.user ?? null)\n      setSelectedId(null)\n      if (session?.user) redirectIfIntendedTenant()\n    })')
+    //
+    // Launch Essentials V1 added session-expiration detection (reading
+    // the event name Supabase's own listener already passes — never
+    // renamed to `_event` to discard it, since this fix needs it) purely
+    // to drive a UI message; `setUser(session?.user ?? null)` remains the
+    // one and only thing that decides the actual signed-in/out state.
+    const idx = pageSource.indexOf('const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {')
+    const end = pageSource.indexOf('\n    })', idx)
+    const body = pageSource.slice(idx, end)
+    expect(idx).toBeGreaterThan(-1)
+    expect(body).toContain('setUser(session?.user ?? null)')
+    expect(body).toContain('setSelectedId(null)')
+    expect(body).toContain('if (session?.user) {\n        setSessionExpired(false)\n        redirectIfIntendedTenant()\n      }')
   })
 })
 
@@ -130,7 +146,10 @@ describe('A first-load query failure never renders a false "0 properties" dashbo
   })
 
   it('both new gates are placed AFTER the signed-out check and BEFORE the property-workspace view, so they only ever apply to a genuinely authenticated session, and never once a load has succeeded even once', () => {
-    const signedOutIdx = pageSource.indexOf('if (!user) {\n    return <LandingPage />\n  }')
+    // Launch Essentials V1 passes sessionExpired through to LandingPage
+    // (so it can show "your session expired" instead of the generic
+    // signed-out state) — still the exact same signed-out gate/return.
+    const signedOutIdx = pageSource.indexOf('if (!user) {\n    return <LandingPage sessionExpired={sessionExpired} />\n  }')
     const loadingGateIdx = pageSource.indexOf('if (!hasLoadedPortfolio && busy) {')
     const failedGateIdx = pageSource.indexOf('if (!hasLoadedPortfolio && portfolioLoadFailed) {')
     const selectedGateIdx = pageSource.indexOf('if (selected) {')
