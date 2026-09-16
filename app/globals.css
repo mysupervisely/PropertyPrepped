@@ -1581,11 +1581,18 @@ h2, h3, p { margin-top: 0; }
 .landingHeroGrid { position: relative; z-index: 1; }
 .landingHeroProduct { display: none; }
 
-/* HeroProductPreview's own card — deliberately reuses .sceneStage's
-   exact card treatment (light fill, rounded, restrained shadow) so this
-   reads as "the same interface" the product-story scenes below already
-   show, not a new visual system invented for the hero. */
-.heroProductPanel { background: var(--surface); border-radius: var(--radius-card); border: 1px solid var(--line); box-shadow: 0 40px 80px -44px rgba(20, 35, 28, .4); padding: 28px; }
+/* Public Landing Page Polish & Privacy Fix — the hero product preview is
+   now framed as a browser window (Step 5's own suggestion) rather than a
+   bare card: a restrained chrome bar (three dots + a URL pill, no real
+   domain claim beyond "this is the app") on top of the same Portfolio
+   Snapshot content the previous version showed. The frame owns the
+   border/radius/shadow; .heroProductPanel is just the content area
+   inside it now. */
+.heroProductFrame { background: var(--surface); border-radius: var(--radius-card); border: 1px solid var(--line); box-shadow: 0 40px 80px -44px rgba(20, 35, 28, .4); overflow: hidden; }
+.heroProductChrome { display: flex; align-items: center; gap: 7px; padding: 12px 16px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.heroProductDot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.heroProductChromeUrl { margin-left: 10px; padding: 4px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); font-size: 11.5px; font-weight: 600; }
+.heroProductPanel { padding: 26px 28px; }
 .heroProductHead { margin-bottom: 4px; }
 .heroProductMetrics { margin-top: 16px; padding-top: 16px; }
 .heroProductProperties { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); display: grid; gap: 10px; }
@@ -1595,126 +1602,108 @@ h2, h3, p { margin-top: 0; }
 .heroProductPropertyRent { font-size: 13px; color: var(--muted); flex-shrink: 0; }
 .heroProductPropertyFlag { flex-shrink: 0; font-size: 11px; padding: 3px 9px; }
 
-/* Dynamic Homepage V1 — the shared reveal primitive (see
-   lib/homepage/use-scroll-reveal.ts): every scene's text and stage use
-   this SAME pair of classes, so the motion language (distance/duration/
-   easing) is defined exactly once. A restrained fade + slight rise +
-   barely-there scale — enough to read as "settling into place," never a
-   flashy entrance. */
+/* The shared reveal primitive (see lib/homepage/use-scroll-reveal.ts):
+   every section below uses one of these two equivalent forms, so the
+   motion language (distance/duration/easing) is defined exactly once. A
+   restrained fade + slight rise + barely-there scale — enough to read as
+   "settling into place," never a flashy entrance. .sceneReveal is used
+   by the <Reveal> wrapper where a component needs its own ref; the
+   [data-reveal] attribute form is used directly on full sections (every
+   section from Story through Final CTA) so their className strings stay
+   stable for tests to anchor on. */
 .sceneReveal { opacity: 0; transform: translateY(28px) scale(.98); transition: opacity .7s cubic-bezier(.2,.8,.2,1), transform .7s cubic-bezier(.2,.8,.2,1); }
 .sceneReveal--visible { opacity: 1; transform: translateY(0) scale(1); }
-/* The same reveal, expressed as a data attribute instead of a class, for
-   the handful of sections below the scenes (Secondary/Pricing/Privacy/
-   Final CTA) whose exact className strings several pre-existing tests
-   already anchor on literally — a data attribute leaves those class
-   strings byte-for-byte untouched. */
 [data-reveal] { opacity: 0; transform: translateY(24px) scale(.99); transition: opacity .7s cubic-bezier(.2,.8,.2,1), transform .7s cubic-bezier(.2,.8,.2,1); }
 [data-reveal="true"] { opacity: 1; transform: translateY(0) scale(1); }
 
-/* Dynamic Homepage V1 — the product story. Replaces the old four-icon
-   .landingPillars grid AND the separate three-step "How it works"
-   section with one continuous sequence of "scenes," each pairing a
-   short text moment with a real-UI-concept stage (never a laptop
-   mockup, never a stock photo, never another bordered feature card).
-   Desktop: text + stage side by side. Mobile (see the ≤900px block
-   below): stacked, in document order, each revealing as it individually
-   scrolls into view — no sticky/tall-wrapper behavior at all. */
-.landingScenes { max-width: 1120px; margin: 0 auto; padding: 8px 28px 0; }
-.landingScene { padding: 72px 0; }
-.landingScene + .landingScene { border-top: 1px solid var(--line); }
-.landingSceneInner { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 56px; align-items: center; }
-.landingSceneInner--reverse { grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); }
-.landingSceneInner--reverse .landingSceneText { order: 2; }
-.landingSceneInner--reverse .landingSceneStageWrap { order: 1; }
-.landingSceneHeadline { font-size: clamp(34px, 4.4vw, 52px); letter-spacing: -0.02em; line-height: 1.05; margin: 0 0 14px; }
-.landingSceneBody { color: var(--muted); font-size: 16px; line-height: 1.6; margin: 0; max-width: 420px; }
-.landingSceneNote { color: var(--muted); font-size: 13px; line-height: 1.55; margin: 14px 0 0; max-width: 420px; }
+/* Shared section-heading typography — Story/Showcase/Tenant Connect/Tax
+   Center all use this SAME pair of classes so their headlines/body copy
+   read as one consistent voice rather than each section inventing its
+   own type scale. */
+.landingSceneHeadline { font-size: clamp(28px, 3.6vw, 42px); letter-spacing: -0.02em; line-height: 1.12; margin: 0 0 14px; }
+.landingSceneBody { color: var(--muted); font-size: 16px; line-height: 1.6; margin: 0; max-width: 460px; }
 
-/* The stage: one shared quiet card treatment (light fill, rounded, no
-   heavy border/shadow — the same restrained visual language the real
-   authenticated Property/Portfolio Snapshot cards already use) that
-   every scene's UI mockup renders inside, so all four read as "the same
-   interface" evolving rather than four unrelated screenshots. */
-.sceneStage { background: var(--surface); border-radius: var(--radius-card); border: 1px solid var(--line); box-shadow: 0 32px 64px -40px rgba(20, 35, 28, .35); padding: 26px; }
+/* Story: editorial, text-led, no card — deliberately the one section on
+   this page that is NOT a box, per the "reduce box fatigue" direction.
+   Centered, generous measure for readability, quiet off-white band so it
+   reads as a distinct beat without a border. */
+.landingStory { background: var(--brand-soft); padding: 76px 28px; }
+.landingStoryInner { max-width: 680px; margin: 0 auto; text-align: center; }
+.landingStoryHeadline { font-size: clamp(26px, 3.4vw, 38px); letter-spacing: -0.02em; line-height: 1.2; margin: 10px 0 18px; }
+.landingStoryBody { color: var(--text); opacity: .85; font-size: 16.5px; line-height: 1.65; margin: 0; }
 
-/* Scene 1 — Organize. */
-.organizeStageAddress h3 { font-size: 20px; margin: 2px 0 2px; }
-.organizeStageCity { color: var(--muted); font-size: 13.5px; margin: 0; }
-.organizeStageMetrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+/* Product showcase: one large real-UI mockup, text beside it — the same
+   restrained card treatment (light fill, rounded, soft shadow) the
+   authenticated Property/Portfolio Snapshot cards already use, so this
+   reads as "the real interface," never a new visual system invented for
+   marketing. */
+.landingShowcase { max-width: 1120px; margin: 0 auto; padding: 88px 28px; }
+.landingShowcaseInner { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 56px; align-items: center; }
+.showcasePanel { background: var(--surface); border-radius: var(--radius-card); border: 1px solid var(--line); box-shadow: 0 32px 64px -40px rgba(20, 35, 28, .35); padding: 26px; }
+.showcasePanelAddress h3 { font-size: 20px; margin: 2px 0 2px; }
+.showcasePanelCity { color: var(--muted); font-size: 13.5px; margin: 0; }
+.showcasePanelMetrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.showcasePanelDocs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
 .organizeMetric { display: flex; flex-direction: column; gap: 2px; }
 .organizeMetric strong { font-size: 18px; letter-spacing: -0.01em; }
 .organizeMetric span { color: var(--muted); font-size: 12.5px; }
-.organizeStageDocs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.organizeStageMetrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
 .organizeStageDocChip { background: var(--brand-soft); color: var(--brand); border-radius: 999px; padding: 5px 12px; font-size: 12.5px; font-weight: 650; }
+.understandPortfolioGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
-/* Scene 2 — Coordinate: a vertical sequence, each row entering with a
-   small stagger (--i, set inline per row) driven by the SAME single
-   .sceneReveal--visible toggle on the stage wrapper — one observer per
-   scene, not one per row. */
-.coordinateStage { display: grid; gap: 4px; }
+/* Capabilities: a clean structured grid — the section variety this page
+   needed instead of every idea getting its own bordered card. Cards here
+   are deliberately quieter than .showcasePanel/.heroProductFrame (no
+   shadow, hairline border only) so the grid reads as reference material,
+   not another hero-weight visual. */
+.landingCapabilities { max-width: 1120px; margin: 0 auto; padding: 20px 28px 88px; text-align: center; }
+.landingCapabilitiesEyebrow { margin-bottom: 28px; }
+.landingCapabilitiesGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; text-align: left; margin-bottom: 36px; }
+.landingCapabilityCard { border: 1px solid var(--line); border-radius: var(--radius-card); padding: 22px 20px; background: var(--surface); }
+.landingCapabilityCard .landingIconBadge { margin-bottom: 14px; }
+.landingCapabilityCard h3 { font-size: 15.5px; margin: 0 0 6px; letter-spacing: -.01em; }
+.landingCapabilityCard p { color: var(--muted); font-size: 13.5px; line-height: 1.55; margin: 0; }
+.landingEvaluatorLink { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; background: var(--surface); color: var(--text); font-size: 13.5px; font-weight: 600; }
+.landingEvaluatorLink:hover { border-color: var(--brand); color: var(--brand); }
+
+/* Tenant Connect: a distinct workflow section, not another grid tile.
+   Reuses .coordinateStep/.coordinateStepDot/.coordinateStepBody's exact
+   step-row treatment (previously only used inside the old Coordinate
+   scene) including its stagger-in motion, now triggered by the
+   [data-reveal="true"] attribute this section itself carries instead of
+   a .sceneReveal--visible wrapper. */
+.landingTenantConnect { background: var(--brand-soft); padding: 88px 28px; }
+.landingTenantConnectInner { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 56px; align-items: center; }
+.landingTenantConnectPlanned { display: flex; align-items: center; gap: 10px; margin: 20px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; max-width: 440px; }
+.landingTenantConnectSteps { position: relative; background: var(--surface); border-radius: var(--radius-card); border: 1px solid var(--line); box-shadow: 0 32px 64px -40px rgba(20, 35, 28, .35); padding: 26px 26px 14px; display: grid; gap: 4px; }
+.landingTenantConnectLiveBadge { position: absolute; top: -13px; left: 22px; }
 .coordinateStep { display: flex; align-items: flex-start; gap: 14px; padding: 11px 0; opacity: 0; transform: translateX(-8px); transition: opacity .5s ease, transform .5s ease; transition-delay: calc(var(--i, 0) * 90ms); }
-.sceneReveal--visible .coordinateStep { opacity: 1; transform: translateX(0); }
+.sceneReveal--visible .coordinateStep,
+[data-reveal="true"] .coordinateStep { opacity: 1; transform: translateX(0); }
 .coordinateStepDot { flex-shrink: 0; width: 9px; height: 9px; border-radius: 50%; background: var(--brand); margin-top: 6px; }
 .coordinateStepBody { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .coordinateStepBody strong { font-size: 14.5px; }
 .coordinateStepBody span { color: var(--muted); font-size: 13px; }
+.pillMuted { background: #eef2ef; color: var(--muted); }
 
-/* Scene 3 — Automate: the same stagger technique as Coordinate, but each
-   row's checkmark badge also fills in (background flips from a neutral
-   ring to solid brand) as it reveals — a small, specific motion that
-   communicates "this step just completed," not decoration for its own
-   sake. */
-.automateStageHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--line); font-weight: 650; font-size: 14.5px; }
-.automateStageList { display: grid; gap: 4px; margin-top: 14px; }
-.automateStep { display: flex; align-items: center; gap: 12px; padding: 9px 0; font-size: 14px; opacity: 0; transform: translateY(6px); transition: opacity .45s ease, transform .45s ease; transition-delay: calc(var(--i, 0) * 140ms); }
-.sceneReveal--visible .automateStep { opacity: 1; transform: translateY(0); }
-.automateStepCheck { flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%; background: var(--line); display: grid; place-items: center; transition: background .3s ease; transition-delay: calc(var(--i, 0) * 140ms); }
-.sceneReveal--visible .automateStepCheck { background: var(--brand); }
-
-/* Scene 4 — Understand: see UnderstandStage's own header comment in
-   LandingPage.tsx for the two-marker crossfade this powers.
-   .landingSceneTall is only tall (creating room to scroll through while
-   the stage stays pinned) at desktop widths — the ≤900px block further
-   down collapses it back to a normal-height, non-sticky, stacked
-   layout. */
-.landingSceneTall .landingSceneInner { position: relative; }
-.landingSceneStageWrap.landingSceneStageStickyWrap { position: relative; }
-.landingSceneMarker { position: absolute; left: 0; width: 1px; height: 1px; pointer-events: none; }
-.landingSceneMarkerTop { top: 0; }
-.landingSceneMarkerBottom { top: 60vh; }
-.understandStage { position: relative; min-height: 220px; }
-.understandPanel { transition: opacity .6s ease, transform .6s ease; }
-.understandPanelProperty { opacity: 1; transform: translateY(0) scale(1); }
-.understandPanelProperty.understandPanelHidden { opacity: 0; transform: translateY(-14px) scale(.97); position: absolute; inset: 26px; pointer-events: none; }
-.understandPanelPortfolio { opacity: 0; transform: translateY(14px) scale(.97); position: absolute; inset: 26px; pointer-events: none; }
-.understandPanelPortfolio.understandPanelVisible { opacity: 1; transform: translateY(0) scale(1); position: relative; inset: auto; pointer-events: auto; }
-.understandMetrics { margin-top: 14px; padding-top: 0; border-top: 0; }
-.understandPortfolioGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Tax Center: a dedicated callout (previously absent from this page
+   entirely) — same icon+text row pattern .landingPrivacyNote already
+   uses below, so it reads as part of the same trust/reassurance rhythm
+   rather than a new visual system. */
+.landingTaxCenter { max-width: 900px; margin: 0 auto; padding: 88px 28px; }
+.landingTaxCenterInner { display: flex; align-items: flex-start; gap: 20px; }
+.landingTaxCenterDisclaimer { color: var(--muted); font-size: 13px; line-height: 1.55; margin: 14px 0 0; font-style: italic; }
 
 @media (min-width: 901px) {
-  .landingSceneTall { min-height: 100vh; display: flex; align-items: flex-start; }
-  .landingSceneTall .landingSceneInner { width: 100%; align-items: start; min-height: 112vh; }
-  .landingSceneTextSticky { position: sticky; top: 140px; align-self: start; }
-  .landingSceneStageSticky { position: sticky; top: 140px; }
-
-  /* Desktop Homepage V4 — hero recomposition (see LandingPage.tsx's own
-     comment on the hero section for the full rationale). The house
-     background photo is fully hidden at desktop widths — real-device
-     feedback specifically asked for the ACTUAL product to become the
-     visual anchor, not a subtler house, so this isn't a "make it more
-     faint" tweak, it's removed from the desktop composition entirely.
-     (Mobile is untouched: .landingHeroBg keeps rendering exactly as
-     before below this breakpoint.) */
+  /* Desktop Homepage V4 — hero recomposition. The house background
+     photo is fully hidden at desktop widths so the framed product
+     preview becomes the visual anchor; mobile keeps the photo background
+     exactly as before (see .landingHeroBg's own rendering, untouched
+     below this breakpoint). */
   .landingHeroBg { display: none; }
   .landingHero { background: var(--bg); padding: 88px 40px 76px; overflow: visible; }
   .landingHeroGrid { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); gap: 64px; align-items: center; max-width: 1220px; margin: 0 auto; }
   .landingHeroInner { max-width: 540px; }
-  /* Stronger desktop presence per real-device feedback ("undersized
-     relative to the available canvas") — the mobile-relevant lower
-     bound (32px) and the vw-scaling behavior are unchanged; only the
-     desktop ceiling moved (54px -> 60px) and the vw multiplier is
-     slightly higher so it actually reaches closer to that ceiling on a
-     real MacBook width instead of asymptoting well below it. */
   .landingHeroInner h1 { font-size: clamp(32px, 4.6vw, 60px); }
   .landingHeroProduct {
     display: block;
@@ -1725,39 +1714,43 @@ h2, h3, p { margin-top: 0; }
   .landingHeroProduct[data-ready="true"] { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Dynamic Homepage V1 — reduced motion. "The entire page must remain
-   understandable without animation" and "do not hide content when
-   reduced motion is enabled": every element below is already visible in
-   its own DOM position with real content (useScrollReveal sets
-   visible=true immediately for these visitors — see that hook's own
-   comment — so .sceneReveal--visible/.understandPanelVisible etc. are
-   already applied); this block only strips the MOTION itself —
-   transitions, the hero's entrance, the breathing background, and the
-   staggered per-row delays — so nothing moves, fades through an
-   in-between state, or waits on a transition-delay before appearing. */
+@media (max-width: 900px) {
+  .landingShowcaseInner,
+  .landingTenantConnectInner { grid-template-columns: 1fr; gap: 32px; }
+  .landingCapabilitiesGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .landingTaxCenterInner { flex-direction: column; }
+}
+
+@media (max-width: 560px) {
+  .landingCapabilitiesGrid { grid-template-columns: 1fr; }
+  .landingStory,
+  .landingShowcase,
+  .landingTenantConnect,
+  .landingTaxCenter { padding-left: 20px; padding-right: 20px; }
+}
+
+/* Reduced motion. "The entire page must remain understandable without
+   animation" and "do not hide content when reduced motion is enabled":
+   every element below is already visible in its own DOM position with
+   real content (useScrollReveal sets visible=true immediately for these
+   visitors — see that hook's own comment — so .sceneReveal--visible/
+   [data-reveal="true"] are already applied); this block only strips the
+   MOTION itself — transitions, the hero's entrance, the breathing
+   background, and the staggered per-row delays — so nothing moves,
+   fades through an in-between state, or waits on a transition-delay
+   before appearing. */
 @media (prefers-reduced-motion: reduce) {
   .sceneReveal,
   [data-reveal],
   .landingHeroInner,
   .landingHeroProduct,
   .landingHeroBgImage,
-  .coordinateStep,
-  .automateStep,
-  .automateStepCheck,
-  .understandPanel {
+  .coordinateStep {
     transition: none !important;
     animation: none !important;
     transition-delay: 0s !important;
   }
 }
-
-/* Section 6/9: one quiet secondary-capabilities section — deliberately
-   not a second feature grid. */
-.landingSecondary { max-width: 760px; margin: 0 auto; padding: 40px 28px; text-align: center; }
-.landingSecondary h2 { font-size: clamp(20px, 2.2vw, 24px); letter-spacing: -.3px; margin: 0 0 14px; }
-.landingSecondaryList { color: var(--muted); font-size: 14px; line-height: 1.7; margin: 0 0 20px; }
-.landingEvaluatorLink { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; background: var(--surface); color: var(--text); font-size: 13.5px; font-weight: 600; }
-.landingEvaluatorLink:hover { border-color: var(--brand); color: var(--brand); }
 
 /* Section 7: compact pricing section. Reuses .pricingGrid/.pricingCard/
    .pricingBadge/.pricingTagline/.pricingPrice/.pricingFeatureList/
@@ -1826,28 +1819,6 @@ h2, h3, p { margin-top: 0; }
 .landingRoleChoiceOptions button.active { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
 .landingSignInCard .authSwitch { width: 100%; border: 0; background: transparent; color: var(--brand); font-weight: 650; padding: 14px 6px 0; cursor: pointer; }
 
-@media (max-width: 900px) {
-  /* Dynamic Homepage V1: no sticky/tall-wrapper behavior at all on
-     tablet/mobile — "do not force complex desktop sticky/parallax
-     behavior onto mobile." Every scene becomes one stacked column
-     (text, then its stage), each revealing independently as it
-     scrolls into view; Understand's own crossfade still works exactly
-     the same way (the two markers still fire via IntersectionObserver
-     in normal document flow) — it just happens while scrolling past a
-     normal-height section instead of a pinned one. */
-  .landingSceneInner, .landingSceneInner--reverse { grid-template-columns: 1fr; gap: 32px; }
-  .landingSceneInner--reverse .landingSceneText, .landingSceneInner--reverse .landingSceneStageWrap { order: initial; }
-  .landingScene { padding: 48px 0; }
-  .landingSceneBody, .landingSceneNote { max-width: none; }
-  .landingSceneTall, .landingSceneTall .landingSceneInner { min-height: 0; display: block; }
-  .landingSceneMarker { position: static; width: 0; height: 0; }
-  /* Same reveal-on-scroll pattern every other element on this page
-     already uses — always in normal document flow (so its own space is
-     reserved, never a layout jump when it appears), just invisible/
-     offset until .understandPanelVisible is added. */
-  .understandPanelProperty.understandPanelHidden, .understandPanelPortfolio { position: static; inset: auto; margin-top: 20px; }
-}
-
 @media (max-width: 980px) {
   .landingPricing { padding: 0 22px; }
 
@@ -1894,12 +1865,9 @@ h2, h3, p { margin-top: 0; }
      rule lives only inside this ≤560px block. */
   .landingHeroCtas { justify-content: center; }
   .landingHeroFreeNote { text-align: center; }
-  .landingScenes { padding: 8px 16px 0; }
-  .landingScene { padding: 40px 0; }
-  .landingSceneHeadline { font-size: clamp(28px, 8vw, 38px); }
-  .sceneStage { padding: 20px; }
+  .landingSceneHeadline { font-size: clamp(24px, 8vw, 34px); }
+  .showcasePanel { padding: 20px; }
   .organizeStageMetrics { grid-template-columns: 1fr 1fr; gap: 14px 16px; }
-  .landingSecondary { padding: 32px 16px; }
   .landingPrivacyNote { padding: 0 16px; }
   .landingFinalCta { padding: 4px 16px 56px; }
   .landingPricing { padding: 0 16px; margin: 6px auto 44px; }
