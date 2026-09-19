@@ -25,22 +25,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createAdminClient } from '../../../../lib/supabase-server'
-import { getStripeClient, isStripeConfigured } from '../../../../lib/billing/stripe'
-import { processStripeEvent, type StripeSubscriptionLike, type WebhookDeps } from '../../../../lib/billing/webhook-handlers'
+import { getStripeClient, isStripeConfigured, toSubscriptionLike } from '../../../../lib/billing/stripe'
+import { processStripeEvent, type WebhookDeps } from '../../../../lib/billing/webhook-handlers'
 
 export const runtime = 'nodejs'
-
-function toSubscriptionLike(sub: Stripe.Subscription): StripeSubscriptionLike {
-  const firstItem = sub.items.data[0]
-  return {
-    id: sub.id,
-    customer: typeof sub.customer === 'string' ? sub.customer : sub.customer.id,
-    status: sub.status,
-    cancel_at_period_end: sub.cancel_at_period_end,
-    current_period_end: firstItem?.current_period_end ?? null,
-    items: { data: sub.items.data.map((item) => ({ price: { id: item.price.id } })) },
-  }
-}
 
 export async function POST(req: NextRequest) {
   if (!isStripeConfigured() || !process.env.STRIPE_WEBHOOK_SECRET) {

@@ -8,6 +8,15 @@
 // subscription data is read RLS-scoped (the caller's own row); the portal
 // session itself is created server-side after verifying the caller's
 // identity (see app/api/billing/portal/route.ts).
+//
+// Subscription Management milestone: adds self-service cancel (always
+// scheduled for the end of the current paid period, behind an explicit
+// confirmation step — never immediate, never hidden) and resume, plus a
+// lightweight payment-method/invoice summary. The cancel/resume actions
+// themselves call app/api/billing/cancel and .../resume, which derive the
+// Stripe subscription id from the caller's own RLS-scoped row server-side
+// (see lib/billing/subscription-actions.ts) — this page never sends a
+// Stripe id anywhere.
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
@@ -15,7 +24,7 @@ import { isSupabaseConfigured, supabase } from '../../../lib/supabase'
 import { useAuthUser } from '../../../lib/useAuthUser'
 import { useSubscription } from '../../../lib/useSubscription'
 import { PLANS, PUBLIC_PLAN_ORDER } from '../../../lib/billing/plans'
-import { openBillingPortal } from '../../../lib/billing/client'
+import { openBillingPortal, scheduleCancellation, resumeSubscription, fetchBillingSummary, type BillingSummary } from '../../../lib/billing/client'
 import { buildCheckoutSyncSchedule, shouldContinueCheckoutSync } from '../../../lib/billing/checkout-sync'
 import { AuthHeader } from '../../../components/AuthHeader'
 
@@ -42,6 +51,10 @@ export default function BillingPage() {
   const [propertyCount, setPropertyCount] = useState<number | null>(null)
   const [portalBusy, setPortalBusy] = useState(false)
   const [error, setError] = useState('')
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  const [cancelBusy, setCancelBusy] = useState(false)
+  const [resumeBusy, setResumeBusy] = useState(false)
+  const [summary, setSummary] = useState<BillingSummary>({ paymentMethod: null, invoices: [] })
   // Read manually (rather than next/navigation's useSearchParams) so this
   // client-only page never needs a Suspense boundary just to check for a
   // Checkout redirect flag.
@@ -54,6 +67,22 @@ export default function BillingPage() {
     if (!supabase || !user) return
     supabase.from('properties').select('id', { count: 'exact', head: true }).then(({ count }) => setPropertyCount(count ?? 0))
   }, [user?.id])
+
+  // Payment method summary + recent invoices — a lightweight inline view
+  // only; full management still lives in the Stripe Customer Portal
+  // ("Manage Subscription" below). Never fetched for Free/owner accounts,
+  // which have no Stripe customer.
+  useEffect(() => {
+    if (!supabase || !user || plan === 'free' || plan === 'owner') return
+    let cancelled = false
+    void fetchBillingSummary(supabase).then((result) => {
+      if (!cancelled) setSummary(result)
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, plan])
 
   // Issue 5 fix: a single fixed-delay retry raced the Stripe webhook and,
   // once it lost that race, never tried again — the page could show a
@@ -91,6 +120,33 @@ export default function BillingPage() {
       setError(result.error)
       setPortalBusy(false)
     }
+  }
+
+  async function handleConfirmCancel() {
+    if (!supabase) return
+    setError('')
+    setCancelBusy(true)
+    const result = await scheduleCancellation(supabase)
+    setCancelBusy(false)
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+    setShowCancelConfirm(false)
+    void refresh()
+  }
+
+  async function handleResume() {
+    if (!supabase) return
+    setError('')
+    setResumeBusy(true)
+    const result = await resumeSubscription(supabase)
+    setResumeBusy(false)
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+    void refresh()
   }
 
   if (!isSupabaseConfigured) {
@@ -189,8 +245,33 @@ export default function BillingPage() {
         {plan !== 'free' && plan !== 'owner' && (
           <div className="recordRows">
             <div><span>Renews / current period ends</span><strong>{formatDate(details?.current_period_end ?? null)}</strong></div>
-            <div><span>Cancel at period end</span><strong>{details?.cancel_at_period_end ? 'Yes — access continues until the date above' : 'No'}</strong></div>
           </div>
+        )}
+
+        {/* Cancellation: always scheduled for the end of the paid period,
+            never immediate — the action is always visible here (never
+            hidden behind support or a hard-to-find setting), and once
+            scheduled it's replaced by clear status text plus a Resume
+            action rather than just disappearing. */}
+        {plan !== 'free' && plan !== 'owner' && details?.status !== 'canceled' && (
+          <div className="billingCancelRow">
+            {details?.cancel_at_period_end ? (
+              <>
+                <p className="muted">
+                  Your subscription is scheduled to cancel on <strong>{formatDate(details?.current_period_end ?? null)}</strong>. You&rsquo;ll keep full access until then — no data is deleted.
+                </p>
+                <button className="secondary" disabled={resumeBusy} onClick={() => void handleResume()}>
+                  {resumeBusy ? 'Resuming…' : 'Resume Subscription'}
+                </button>
+              </>
+            ) : (
+              <button className="dangerLink" onClick={() => setShowCancelConfirm(true)}>Cancel Subscription</button>
+            )}
+          </div>
+        )}
+
+        {details?.status === 'canceled' && (
+          <p className="muted">Your subscription has ended. <Link href="/pricing">Choose a plan</Link> to subscribe again.</p>
         )}
 
         {usedProperties >= maxProperties && (
@@ -201,9 +282,61 @@ export default function BillingPage() {
         )}
       </section>
 
+      {plan !== 'free' && plan !== 'owner' && (summary.paymentMethod || summary.invoices.length > 0) && (
+        <section className="billingCard">
+          <div className="recordTop">
+            <div>
+              <h3>Payment &amp; invoices</h3>
+              <p>Full payment-method and invoice management is available in the Stripe Customer Portal above.</p>
+            </div>
+          </div>
+          {summary.paymentMethod && (
+            <div className="recordRows">
+              <div><span>Payment method</span><strong>{summary.paymentMethod.brand.toUpperCase()} •••• {summary.paymentMethod.last4}</strong></div>
+            </div>
+          )}
+          {summary.invoices.length > 0 && (
+            <div className="recordRows">
+              {summary.invoices.map((invoice) => (
+                <div key={invoice.id}>
+                  <span>{formatDate(invoice.created)}</span>
+                  <strong>
+                    ${invoice.amountPaid.toFixed(2)} · {invoice.status === 'paid' ? 'Paid' : invoice.status || '—'}
+                    {invoice.hostedInvoiceUrl && <> · <a href={invoice.hostedInvoiceUrl} target="_blank" rel="noreferrer">View</a></>}
+                  </strong>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       <section className="billingLinksSection">
         <Link href="/pricing" className="secondary">View All Plans</Link>
       </section>
+
+      {showCancelConfirm && (
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowCancelConfirm(false)}>
+          <div className="modal">
+            <div className="modalTop">
+              <div>
+                <p className="eyebrow">CANCEL SUBSCRIPTION</p>
+                <h2>Cancel your {def.name} plan?</h2>
+              </div>
+              <button className="iconButton" onClick={() => setShowCancelConfirm(false)}>×</button>
+            </div>
+            <p className="deleteWarning">
+              Your subscription will stay active and you&rsquo;ll keep full access through <strong>{formatDate(details?.current_period_end ?? null)}</strong> — the end of your current paid period. You won&rsquo;t be charged again after that date. Your properties, tenants, maintenance history, tax records, and documents are never deleted or affected.
+            </p>
+            <div className="modalActions">
+              <button className="secondary" onClick={() => setShowCancelConfirm(false)}>Keep my subscription</button>
+              <button className="primary" disabled={cancelBusy} onClick={() => void handleConfirmCancel()}>
+                {cancelBusy ? 'Canceling…' : 'Yes, cancel subscription'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

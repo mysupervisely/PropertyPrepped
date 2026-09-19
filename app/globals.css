@@ -1469,6 +1469,16 @@ h2, h3, p { margin-top: 0; }
 
 .billingCard { background: white; border: 1px solid var(--line); border-radius: 16px; padding: 22px; margin-bottom: 20px; }
 .billingLinksSection { margin-bottom: 40px; }
+/* Subscription Management milestone: the cancel/resume row directly on
+   the billing card — never hidden behind a menu or a support request. */
+.billingCancelRow { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 18px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.billingCancelRow p { margin: 0; font-size: 12px; max-width: 480px; }
+.billingCancelRow .dangerLink { border: 0; background: transparent; color: #8a3d35; padding: 0; text-decoration: underline; text-underline-offset: 2px; font-size: 13px; cursor: pointer; }
+.billingCancelRow .dangerLink:disabled { opacity: .6; cursor: default; }
+/* Admin Billing / Subscriptions view: reuses .recordCard/.recordTop/
+   .recordRows/.statusPill/.financialStats/.financialStat as-is — only
+   this one list gap rule is new. */
+.adminSubList { display: grid; gap: 14px; }
 @media (max-width: 620px) { .pricingGrid { grid-template-columns: 1fr; } }
 
 /* Public Homepage V2 (Product Story + Pricing Simplification): signed-out

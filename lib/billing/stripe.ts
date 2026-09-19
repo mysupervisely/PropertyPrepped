@@ -5,6 +5,7 @@
 
 import Stripe from 'stripe'
 import type { PlanId, PurchasablePlanId } from './plans'
+import type { StripeSubscriptionLike } from './webhook-handlers'
 
 let cachedClient: Stripe | null = null
 
@@ -94,4 +95,24 @@ export function planForPriceId(priceId: string | null | undefined, env: Record<s
   if (priceId === env[PRICE_ENV_VAR_LEGACY.portfolio]) return 'portfolio'
   if (priceId === env[PRICE_ENV_VAR_LEGACY.portfolio_pro]) return 'portfolio_pro'
   return 'free'
+}
+
+/**
+ * Maps a real Stripe Subscription object to the plain shape
+ * lib/billing/webhook-handlers.ts's pure functions operate on — shared by
+ * the webhook route and the cancel/resume routes (Subscription Management
+ * milestone) so there is exactly one place that knows the installed
+ * Stripe API version's quirk of reading current_period_end off the
+ * subscription ITEM rather than the subscription itself.
+ */
+export function toSubscriptionLike(sub: Stripe.Subscription): StripeSubscriptionLike {
+  const firstItem = sub.items.data[0]
+  return {
+    id: sub.id,
+    customer: typeof sub.customer === 'string' ? sub.customer : sub.customer.id,
+    status: sub.status,
+    cancel_at_period_end: sub.cancel_at_period_end,
+    current_period_end: firstItem?.current_period_end ?? null,
+    items: { data: sub.items.data.map((item) => ({ price: { id: item.price.id } })) },
+  }
 }
