@@ -5,12 +5,15 @@
 //
 // - NOT in the public/customer navigation — reachable only by direct URL,
 //   same convention as app/admin/realtor-leads/page.tsx.
-// - Authorization is the SAME internal 'owner' plan check used
-//   everywhere else in this codebase (app/admin/realtor-leads/page.tsx,
-//   app/account/billing/page.tsx, app/pricing/page.tsx). The client-side
-//   check below is UX only — the REAL enforcement is server-side, in
-//   app/api/admin/subscriptions/route.ts, which re-verifies the caller's
-//   own plan before ever reading another account's data.
+// - Platform Admin Authorization Fix: authorization is the dedicated
+//   platform_admins mechanism (lib/admin/usePlatformAdmin.ts,
+//   supabase/milestone-33-platform-admin.sql) — deliberately NOT a
+//   billing-plan check. A customer's subscription plan (free, paid, or
+//   even the internal 'owner' plan) never by itself grants access to
+//   this page. The client-side check below is UX only — the REAL
+//   enforcement is server-side, in app/api/admin/subscriptions/route.ts,
+//   which independently re-verifies the caller's own platform_admins row
+//   before ever reading another account's data.
 // - All cross-account data comes from that one API route — this page
 //   never queries user_subscriptions/user_profiles directly (RLS would
 //   only return the caller's own row anyway).
@@ -19,7 +22,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../../lib/supabase'
 import { useAuthUser } from '../../../lib/useAuthUser'
-import { useSubscription } from '../../../lib/useSubscription'
+import { usePlatformAdmin } from '../../../lib/admin/usePlatformAdmin'
 import { AuthHeader } from '../../../components/AuthHeader'
 import type { AdminStatusLabel, AdminSubscriptionRow, AdminSubscriptionSummary } from '../../../lib/billing/admin-subscriptions'
 
@@ -47,13 +50,13 @@ function formatMoney(amount: number) {
 
 export default function AdminSubscriptionsPage() {
   const { user, ready } = useAuthUser()
-  const { plan, loading: planLoading } = useSubscription(user)
+  const { isPlatformAdmin, loading: adminLoading } = usePlatformAdmin(user)
   const [rows, setRows] = useState<AdminSubscriptionRow[]>([])
   const [summary, setSummary] = useState<AdminSubscriptionSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const authorized = plan === 'owner'
+  const authorized = isPlatformAdmin
 
   async function load() {
     if (!supabase) return
@@ -84,7 +87,7 @@ export default function AdminSubscriptionsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authorized])
 
-  if (!ready || (user && planLoading)) return <main className="authShell"><div className="loadingState">Loading…</div></main>
+  if (!ready || (user && adminLoading)) return <main className="authShell"><div className="loadingState">Loading…</div></main>
 
   if (!user) {
     return (

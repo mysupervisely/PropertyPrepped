@@ -19,14 +19,18 @@ import { createRequestClient } from '../../../../lib/supabase-server'
 import { handleAnalyzeRequest } from '../../../../lib/document-intelligence/analyze-request'
 import { analyzeDocument } from '../../../../lib/document-intelligence/analyze-document'
 import { getDocumentIntelligenceProvider, isDocumentIntelligenceConfigured } from '../../../../lib/document-intelligence/provider'
-// TEMPORARY M8 DIAGNOSTIC (Netlify function-log outage) — remove these two
-// imports and the `diagnosticsAuthorized` block below once the new
-// production failure is diagnosed. resolveEffectivePlan/entitlements is
-// the SAME internal-'owner'-plan check already used elsewhere in this
-// codebase (e.g. Tenant Connect gating) — nothing about the plan's
-// semantics changes; this just adds one more consumer of the existing,
-// database-controlled, client-unwritable entitlement.
 import { resolveEffectivePlan, entitlementsFor, aiAllowanceRemaining } from '../../../../lib/billing/entitlements'
+// TEMPORARY M8 DIAGNOSTIC (Netlify function-log outage) — remove this
+// import and the `diagnosticsAuthorized` line below once the new
+// production failure is diagnosed. Platform Admin Authorization Fix:
+// this gate used to be effectivePlan === 'owner' — a billing-plan check
+// being used as an authorization credential, the exact conflation that
+// milestone eliminated. It now uses isCallerPlatformAdmin(), the same
+// mechanism as every other admin surface in the app. The entitlements
+// computation just above/below this import (resolveEffectivePlan,
+// entitlementsFor — the real AI-allowance gate) is completely untouched;
+// only this diagnostics flag's source changed.
+import { isCallerPlatformAdmin } from '../../../../lib/admin/platform-admin'
 
 export const runtime = 'nodejs'
 
@@ -53,19 +57,16 @@ export async function POST(req: NextRequest) {
     // Resolved ONCE, here, from a fresh RLS-scoped read of the caller's
     // OWN subscription row — never a client-supplied flag, never trusted
     // from request input. Same resolveEffectivePlan() used everywhere
-    // else in this app (billing page, entitlement checks); 'owner' is an
-    // internal-only plan a client can never self-assign (see
-    // supabase/milestone-9-subscriptions.sql).
-    //
-    // Launch Pricing (capability-based relaunch): also the ONE place
-    // this route resolves entitlements for the AI-allowance gate below —
-    // reused, not a second query, for the pre-existing M8 diagnostics
-    // check too (this does not broaden what 'owner' grants elsewhere, it
-    // only adds this narrowly-scoped consumer of the same existing check).
+    // else in this app (billing page, entitlement checks) — purely a
+    // billing/product computation, the real AI-allowance gate below.
     const { data: subForEntitlements } = await supabase.from('user_subscriptions').select('plan,status').eq('owner_id', ownerId).maybeSingle()
     const effectivePlan = resolveEffectivePlan(subForEntitlements)
     const entitlements = entitlementsFor(effectivePlan)
-    const diagnosticsAuthorized = effectivePlan === 'owner'
+    // Platform Admin Authorization Fix: independent of the entitlements
+    // query above — a separate, RLS-scoped check against platform_admins
+    // (supabase/milestone-33-platform-admin.sql), never the caller's
+    // billing plan. See this file's import comment for the full history.
+    const diagnosticsAuthorized = await isCallerPlatformAdmin(supabase, ownerId)
 
     const payload = (await req.json().catch(() => ({}))) as { documentId?: unknown; documentType?: unknown }
     const configured = isDocumentIntelligenceConfigured()

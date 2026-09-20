@@ -66,15 +66,24 @@ describe('Security guardrail: cancel/resume never derive the subscription id fro
 })
 
 describe('Admin billing view: authorization + non-exposure to normal accounts', () => {
-  it('the admin route checks the caller\'s OWN plan === owner before ever touching the admin (service-role) client', () => {
-    const gateIdx = adminRoute.indexOf("own?.plan !== 'owner'")
+  // Platform Admin Authorization Fix: authorization was moved off
+  // user_subscriptions.plan === 'owner' onto a dedicated platform_admins
+  // mechanism (lib/admin/platform-admin.ts, supabase/milestone-33-
+  // platform-admin.sql) — see lib/admin/platform-admin-authorization-
+  // fix-v1-wiring.test.ts for the full guardrail suite covering that
+  // change. These two assertions are updated in place (not deleted) so
+  // this file keeps asserting "authorization happens before the
+  // service-role client is touched" and "the page uses a real admin
+  // gate," just against the corrected mechanism.
+  it('the admin route checks platform-admin status before ever touching the admin (service-role) client', () => {
+    const gateIdx = adminRoute.indexOf('isCallerPlatformAdmin(')
     const adminClientIdx = adminRoute.indexOf('createAdminClient()')
     expect(gateIdx).toBeGreaterThan(-1)
     expect(adminClientIdx).toBeGreaterThan(gateIdx)
   })
 
-  it('the admin page uses the same internal owner-plan gate idiom as the existing realtor-leads admin page', () => {
-    expect(adminPage).toContain("plan === 'owner'")
+  it('the admin page gates on the dedicated platform-admin hook, not a billing plan', () => {
+    expect(adminPage).toContain('usePlatformAdmin')
     expect(adminPage).toContain("This page isn’t available on your account.")
   })
 

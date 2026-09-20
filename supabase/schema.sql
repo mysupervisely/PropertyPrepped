@@ -2249,12 +2249,11 @@ using (bucket_id = 'profile-photos' and (storage.foldername(name))[1] = (select 
 --     INSERT a lead only through the intended server-side path" true at
 --     the database level, not just by convention.
 --   - NO select policy is granted to anon or a normal authenticated
---     user. Only the internal 'owner' plan (the exact same
---     `user_subscriptions.plan = 'owner'` check already used by
---     app/api/document-intelligence/analyze/route.ts's diagnostics gate,
---     app/account/billing/page.tsx, and app/pricing/page.tsx — a plan a
---     client can never self-assign, see milestone-9-subscriptions.sql)
---     may select/update rows, via a subquery against user_subscriptions.
+--     user. Only a platform admin (originally the internal 'owner' plan
+--     check, migrated by Platform Admin Authorization Fix to a dedicated
+--     platform_admins membership table — see the policy definitions
+--     below and supabase/milestone-33-platform-admin.sql) may
+--     select/update rows, via a subquery against platform_admins.
 --     This lets the admin Lead Center (app/admin/realtor-leads/page.tsx)
 --     read/update leads through the caller's own normal RLS-scoped
 --     client — no service-role key needed in that page at all.
@@ -2308,13 +2307,20 @@ alter table public.realtor_leads enable row level security;
 -- see this file's top comment. RLS with zero matching policies denies
 -- by default, which is exactly the intended "not a public lead table."
 
+-- Platform Admin Authorization Fix: this block originally checked
+-- us.plan = 'owner' (a billing-plan value) for admin access — the exact
+-- conflation that milestone eliminated. Corrected here to match the live
+-- policy replacement in supabase/milestone-33-platform-admin.sql (this
+-- file is a reference snapshot, not re-run against the live database —
+-- production's actual policy came from the sequence of standalone
+-- milestone files actually executed, which milestone-33 supersedes
+-- directly; kept in sync here anyway since this is a security-relevant
+-- duplicate, not general schema drift).
 drop policy if exists "realtor_leads_admin_select" on public.realtor_leads;
 create policy "realtor_leads_admin_select" on public.realtor_leads for select to authenticated using (
   exists (
-    select 1 from public.user_subscriptions us
-    where us.owner_id = (select auth.uid())
-      and us.plan = 'owner'
-      and us.status in ('active', 'trialing', 'past_due')
+    select 1 from public.platform_admins pa
+    where pa.owner_id = (select auth.uid())
   )
 );
 
@@ -2322,18 +2328,14 @@ drop policy if exists "realtor_leads_admin_update" on public.realtor_leads;
 create policy "realtor_leads_admin_update" on public.realtor_leads for update to authenticated
 using (
   exists (
-    select 1 from public.user_subscriptions us
-    where us.owner_id = (select auth.uid())
-      and us.plan = 'owner'
-      and us.status in ('active', 'trialing', 'past_due')
+    select 1 from public.platform_admins pa
+    where pa.owner_id = (select auth.uid())
   )
 )
 with check (
   exists (
-    select 1 from public.user_subscriptions us
-    where us.owner_id = (select auth.uid())
-      and us.plan = 'owner'
-      and us.status in ('active', 'trialing', 'past_due')
+    select 1 from public.platform_admins pa
+    where pa.owner_id = (select auth.uid())
   )
 );
 
