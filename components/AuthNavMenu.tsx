@@ -34,6 +34,7 @@ import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthUser } from '../lib/useAuthUser'
+import { usePlatformAdmin } from '../lib/admin/usePlatformAdmin'
 import { markExplicitSignOut } from '../lib/auth/session-signal'
 // Simplification + Maintenance Workspace V2, Phase D.2: the profile
 // photo moved out to its own, separate ProfileEntryButton — see that
@@ -102,6 +103,19 @@ const ACCOUNT_LINKS: { href: string; label: string }[] = [
 export function AuthNavMenu({ onDashboardNavigate, open, onOpenChange }: { onDashboardNavigate?: () => void; open: boolean; onOpenChange: (open: boolean) => void }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const { user } = useAuthUser()
+
+  // Admin Navigation V1: a platform admin (public.platform_admins —
+  // lib/admin/usePlatformAdmin.ts, supabase/milestone-33-platform-
+  // admin.sql) gets one extra link into /admin here, the same account/
+  // tools menu every other account-level destination already lives in
+  // — never the primary bottom nav (MobileBottomNav), which stays
+  // exactly four landlord-workflow destinations for every account type.
+  // This is UX only: usePlatformAdmin is an RLS-scoped read of the
+  // caller's own platform_admins row, and the real enforcement is
+  // server-side/RLS on every /admin/* page and API route regardless of
+  // whether this link is ever rendered — a non-admin who guesses the
+  // URL still gets the existing fail-closed "Not available" screen.
+  const { isPlatformAdmin } = usePlatformAdmin(user)
 
   // Tenant-Facing Experience V1 (dual-role) — Owner and Tenant are not
   // mutually exclusive account types, so a landlord account that ALSO
@@ -175,6 +189,9 @@ export function AuthNavMenu({ onDashboardNavigate, open, onOpenChange }: { onDas
           ))}
           {hasTenantAccess && (
             <Link href="/tenant" className="authNavMenuSecondary" onClick={() => onOpenChange(false)}>Tenant Portal</Link>
+          )}
+          {isPlatformAdmin && (
+            <Link href="/admin" className="authNavMenuSecondary" onClick={() => onOpenChange(false)}>Admin</Link>
           )}
           <Link href="/?add=property" className="authNavMenuAction" onClick={() => onOpenChange(false)}>+ Add Property</Link>
           <div className="authNavMenuDivider" role="separator" />
