@@ -67,6 +67,51 @@ export type WebhookDeps = {
 export type CheckoutSessionObject = { customer: string | null; subscription: string | null; client_reference_id: string | null }
 export type InvoiceObject = { customer: string | null; subscription: string | null }
 
+// Raw shape of a customer.subscription.* webhook event's data.object — the
+// same shape Stripe returns from a live subscription retrieve at the
+// installed API version, where current_period_end lives on the
+// SUBSCRIPTION ITEM, never as a flat field on the subscription itself
+// (there is no such top-level field in this API version at all).
+export type RawSubscriptionEventObject = {
+  id: string
+  customer: string
+  status: string
+  cancel_at_period_end: boolean
+  items: { data: { price: { id: string }; current_period_end?: number | null }[] }
+}
+
+/**
+ * Bug fix (Subscription Management follow-up — Platform Admin
+ * Authorization Fix milestone): normalizes a raw customer.subscription.*
+ * webhook payload into StripeSubscriptionLike, reading current_period_end
+ * from items.data[0].current_period_end — mirroring exactly what
+ * lib/billing/stripe.ts's toSubscriptionLike() already does for a live
+ * Stripe.Subscription object (checkout.session.completed and invoice.*
+ * both go through that path via deps.fetchSubscription and were never
+ * affected).
+ *
+ * Root cause this replaces: the customer.subscription.* branch used to
+ * cast the raw event payload directly to StripeSubscriptionLike, which
+ * reads current_period_end as a flat field. That field does not exist on
+ * the raw payload at this API version — it's always undefined there — so
+ * every customer.subscription.created/updated/deleted delivery silently
+ * persisted current_period_end: null, even though status and
+ * cancel_at_period_end (which genuinely are flat fields) stayed correct.
+ * This is why an active, correctly-billed subscription could show a
+ * correct status while "Renews / current period ends" rendered "—".
+ */
+export function normalizeSubscriptionEventObject(raw: RawSubscriptionEventObject): StripeSubscriptionLike {
+  const firstItem = raw.items.data[0]
+  return {
+    id: raw.id,
+    customer: raw.customer,
+    status: raw.status,
+    cancel_at_period_end: raw.cancel_at_period_end,
+    current_period_end: firstItem?.current_period_end ?? null,
+    items: { data: raw.items.data.map((item) => ({ price: { id: item.price.id } })) },
+  }
+}
+
 // Deliberately NOT a discriminated union keyed on `type`: Stripe's real
 // event catalog has dozens of types we never act on (see the `default`
 // branch below), and callers — including tests — construct these from
@@ -103,7 +148,7 @@ export async function processStripeEvent(event: StripeEventLike, deps: WebhookDe
     case 'customer.subscription.created':
     case 'customer.subscription.updated':
     case 'customer.subscription.deleted': {
-      const subscription = event.data.object as StripeSubscriptionLike
+      const subscription = normalizeSubscriptionEventObject(event.data.object as RawSubscriptionEventObject)
       const ownerId = await deps.findOwnerIdByCustomerId(subscription.customer)
       if (!ownerId) return { handled: false, reason: 'no PropPrepped account mapped to this Stripe customer yet' }
       await deps.upsertSubscription(buildSubscriptionRow({ ownerId, customerId: subscription.customer, subscription }))

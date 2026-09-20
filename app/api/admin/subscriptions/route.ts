@@ -2,13 +2,15 @@
 // view data source.
 //
 // - Same bearer-token auth pattern as every other billing route.
-// - Admin authorization is enforced HERE, server-side, before any
-//   cross-account data is ever read: the caller's OWN plan is checked via
-//   an RLS-scoped read of their OWN user_subscriptions row (the same
-//   internal-only 'owner' plan gate already used by
-//   app/admin/realtor-leads/page.tsx and the document-intelligence
-//   diagnostics route) — a non-owner gets 403 and the admin client below
-//   is never touched.
+// - Platform Admin Authorization Fix: admin authorization is enforced
+//   HERE, server-side, before any cross-account data is ever read — via
+//   isCallerPlatformAdmin(), an RLS-scoped read of the caller's OWN row
+//   in the dedicated platform_admins table (supabase/milestone-33-
+//   platform-admin.sql). This is intentionally NOT a check of the
+//   caller's billing plan: a customer's subscription plan (free, paid, or
+//   even the internal 'owner' plan) must never by itself grant admin
+//   access — platform administration and billing are separate concepts.
+//   A non-admin gets 403 and the admin client below is never touched.
 // - Only once that check passes does this reach for the service-role
 //   admin client to read every account's subscription row — the same
 //   "no per-row RLS policy needed" pattern the Stripe webhook and the
@@ -22,6 +24,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRequestClient, createAdminClient } from '../../../../lib/supabase-server'
 import { isStripeConfigured, getStripeClient } from '../../../../lib/billing/stripe'
+import { isCallerPlatformAdmin } from '../../../../lib/admin/platform-admin'
 import { buildAdminSubscriptionRow, summarizeAdminSubscriptions, type RawProfile, type RawSubscriptionRow } from '../../../../lib/billing/admin-subscriptions'
 
 export const runtime = 'nodejs'
@@ -46,13 +49,7 @@ export async function GET(req: NextRequest) {
     }
     const user = userData.user
 
-    const { data: own } = await supabase
-      .from('user_subscriptions')
-      .select('plan')
-      .eq('owner_id', user.id)
-      .maybeSingle()
-
-    if (own?.plan !== 'owner') {
+    if (!(await isCallerPlatformAdmin(supabase, user.id))) {
       // Same friendly, non-revealing message as the realtor-leads admin
       // page — never confirms/denies the existence of admin data to a
       // non-admin caller beyond "not available."

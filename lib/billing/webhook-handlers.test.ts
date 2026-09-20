@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildSubscriptionRow, processStripeEvent, type StripeSubscriptionLike, type WebhookDeps } from './webhook-handlers'
+import { buildSubscriptionRow, normalizeSubscriptionEventObject, processStripeEvent, type RawSubscriptionEventObject, type StripeSubscriptionLike, type WebhookDeps } from './webhook-handlers'
 
 const ENV = {
   STRIPE_INVESTOR_PRICE_ID: 'price_investor',
@@ -15,6 +15,23 @@ function fakeSubscription(overrides: Partial<StripeSubscriptionLike> = {}): Stri
     cancel_at_period_end: false,
     current_period_end: 1750000000,
     items: { data: [{ price: { id: 'price_investor' } }] },
+    ...overrides,
+  }
+}
+
+// The RAW shape a customer.subscription.* webhook event actually delivers
+// at the installed Stripe API version — current_period_end lives ONLY on
+// the item, never as a flat field. This is what event.data.object really
+// looks like on the wire; fakeSubscription() above (flat current_period_end)
+// is the ALREADY-NORMALIZED shape used elsewhere (deps.fetchSubscription's
+// return value), never the raw webhook payload.
+function fakeRawSubscriptionEvent(overrides: Partial<RawSubscriptionEventObject> = {}): RawSubscriptionEventObject {
+  return {
+    id: 'sub_1',
+    customer: 'cus_1',
+    status: 'active',
+    cancel_at_period_end: false,
+    items: { data: [{ price: { id: 'price_investor' }, current_period_end: 1750000000 }] },
     ...overrides,
   }
 }
@@ -76,7 +93,7 @@ describe('processStripeEvent — idempotency', () => {
   it('processes a new event', async () => {
     const deps = baseDeps()
     const result = await processStripeEvent(
-      { id: 'evt_1', type: 'customer.subscription.updated', data: { object: fakeSubscription() } },
+      { id: 'evt_1', type: 'customer.subscription.updated', data: { object: fakeRawSubscriptionEvent() } },
       deps,
     )
     expect(result.handled).toBe(true)
@@ -86,7 +103,7 @@ describe('processStripeEvent — idempotency', () => {
   it('skips a duplicate event without touching the database further', async () => {
     const deps = baseDeps({ claimEvent: vi.fn().mockResolvedValue(false) })
     const result = await processStripeEvent(
-      { id: 'evt_1', type: 'customer.subscription.updated', data: { object: fakeSubscription() } },
+      { id: 'evt_1', type: 'customer.subscription.updated', data: { object: fakeRawSubscriptionEvent() } },
       deps,
     )
     expect(result.handled).toBe(false)
@@ -97,7 +114,7 @@ describe('processStripeEvent — idempotency', () => {
 
   it('claims the event exactly once even when processing does real work', async () => {
     const deps = baseDeps()
-    await processStripeEvent({ id: 'evt_1', type: 'customer.subscription.updated', data: { object: fakeSubscription() } }, deps)
+    await processStripeEvent({ id: 'evt_1', type: 'customer.subscription.updated', data: { object: fakeRawSubscriptionEvent() } }, deps)
     expect(deps.claimEvent).toHaveBeenCalledTimes(1)
     expect(deps.claimEvent).toHaveBeenCalledWith('evt_1')
   })
@@ -136,7 +153,7 @@ describe('processStripeEvent — customer.subscription.* ', () => {
   it('created/updated/deleted all resolve owner by stripe_customer_id and upsert', async () => {
     for (const type of ['customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted'] as const) {
       const deps = baseDeps()
-      const result = await processStripeEvent({ id: `evt_${type}`, type, data: { object: fakeSubscription() } }, deps)
+      const result = await processStripeEvent({ id: `evt_${type}`, type, data: { object: fakeRawSubscriptionEvent() } }, deps)
       expect(result.handled).toBe(true)
       expect(deps.findOwnerIdByCustomerId).toHaveBeenCalledWith('cus_1')
       expect(deps.upsertSubscription).toHaveBeenCalledTimes(1)
@@ -146,7 +163,7 @@ describe('processStripeEvent — customer.subscription.* ', () => {
   it('does nothing if no PropPrepped account is mapped to the Stripe customer yet', async () => {
     const deps = baseDeps({ findOwnerIdByCustomerId: vi.fn().mockResolvedValue(null) })
     const result = await processStripeEvent(
-      { id: 'evt_4', type: 'customer.subscription.updated', data: { object: fakeSubscription() } },
+      { id: 'evt_4', type: 'customer.subscription.updated', data: { object: fakeRawSubscriptionEvent() } },
       deps,
     )
     expect(result.handled).toBe(false)
@@ -156,10 +173,59 @@ describe('processStripeEvent — customer.subscription.* ', () => {
   it('a cancellation (subscription.deleted, status canceled) still upserts — the row is updated to reflect cancellation, never deleted', async () => {
     const deps = baseDeps()
     await processStripeEvent(
-      { id: 'evt_5', type: 'customer.subscription.deleted', data: { object: fakeSubscription({ status: 'canceled' }) } },
+      { id: 'evt_5', type: 'customer.subscription.deleted', data: { object: fakeRawSubscriptionEvent({ status: 'canceled' }) } },
       deps,
     )
     expect(deps.upsertSubscription).toHaveBeenCalledWith(expect.objectContaining({ status: 'canceled' }))
+  })
+
+  it('BUG FIX REGRESSION: reads current_period_end from the item, not a (nonexistent) flat field on the raw payload — the exact production symptom (Active status + correct invoices, but "—" for renewal date)', async () => {
+    const deps = baseDeps()
+    await processStripeEvent(
+      { id: 'evt_regression', type: 'customer.subscription.updated', data: { object: fakeRawSubscriptionEvent({ items: { data: [{ price: { id: 'price_investor' }, current_period_end: 1800000000 }] } }) } },
+      deps,
+    )
+    expect(deps.upsertSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({ current_period_end: new Date(1800000000 * 1000).toISOString() }),
+    )
+  })
+
+  it('never derives current_period_end from a flat field even if one were somehow present on the raw payload — items is the only source of truth', async () => {
+    const deps = baseDeps()
+    const rawWithStrayFlatField = { ...fakeRawSubscriptionEvent(), current_period_end: 999 } as unknown as RawSubscriptionEventObject
+    await processStripeEvent(
+      { id: 'evt_regression_2', type: 'customer.subscription.updated', data: { object: rawWithStrayFlatField } },
+      deps,
+    )
+    expect(deps.upsertSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({ current_period_end: new Date(1750000000 * 1000).toISOString() }),
+    )
+  })
+
+  it('resolves to null (not a crash) when the item genuinely has no current_period_end', async () => {
+    const deps = baseDeps()
+    await processStripeEvent(
+      { id: 'evt_6b', type: 'customer.subscription.updated', data: { object: fakeRawSubscriptionEvent({ items: { data: [{ price: { id: 'price_investor' } }] } }) } },
+      deps,
+    )
+    expect(deps.upsertSubscription).toHaveBeenCalledWith(expect.objectContaining({ current_period_end: null }))
+  })
+})
+
+describe('normalizeSubscriptionEventObject', () => {
+  it('extracts current_period_end from items.data[0], never from a flat field', () => {
+    const result = normalizeSubscriptionEventObject(fakeRawSubscriptionEvent())
+    expect(result.current_period_end).toBe(1750000000)
+  })
+
+  it('preserves id/customer/status/cancel_at_period_end verbatim', () => {
+    const result = normalizeSubscriptionEventObject(fakeRawSubscriptionEvent({ status: 'past_due', cancel_at_period_end: true }))
+    expect(result).toMatchObject({ id: 'sub_1', customer: 'cus_1', status: 'past_due', cancel_at_period_end: true })
+  })
+
+  it('maps items down to the price-id-only shape buildSubscriptionRow expects', () => {
+    const result = normalizeSubscriptionEventObject(fakeRawSubscriptionEvent())
+    expect(result.items).toEqual({ data: [{ price: { id: 'price_investor' } }] })
   })
 })
 
