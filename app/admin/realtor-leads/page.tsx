@@ -6,13 +6,16 @@
 // - NOT in the public/customer navigation (AuthNavMenu) — reachable only
 //   by typing the URL, matching the spec's "Do not expose it in the
 //   normal public navigation."
-// - Authorization is the SAME internal 'owner' plan check already used
-//   by app/api/document-intelligence/analyze/route.ts's diagnostics
-//   gate, app/account/billing/page.tsx, and app/pricing/page.tsx — never
-//   a new admin-role system. The client-side check below is UX only; the
-//   REAL enforcement is the RLS policy on realtor_leads itself
-//   (supabase/milestone-21-realtor-connect.sql) — a non-owner querying
-//   this table gets zero rows back regardless of what this page does.
+// - Platform Admin Authorization Fix: authorization is the dedicated
+//   platform_admins mechanism (lib/admin/usePlatformAdmin.ts,
+//   supabase/milestone-33-platform-admin.sql) — deliberately NOT a
+//   billing-plan check (this page previously reused the internal 'owner'
+//   PlanId, the exact conflation that milestone fixed). The client-side
+//   check below is UX only; the REAL enforcement is the RLS policy on
+//   realtor_leads itself (supabase/milestone-21-realtor-connect.sql,
+//   updated by milestone-33 to check platform_admins instead of
+//   plan = 'owner') — a non-admin querying this table gets zero rows
+//   back regardless of what this page does.
 // - Reads/writes go through the caller's own normal RLS-scoped
 //   `supabase` client, same as every other authenticated page in this
 //   app (rent-ledger, account/billing, etc.) — no service-role key here.
@@ -21,7 +24,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../../lib/supabase'
 import { useAuthUser } from '../../../lib/useAuthUser'
-import { useSubscription } from '../../../lib/useSubscription'
+import { usePlatformAdmin } from '../../../lib/admin/usePlatformAdmin'
 import { AuthHeader } from '../../../components/AuthHeader'
 import { LEAD_STATUSES, type LeadStatus, type RealtorLeadRow } from '../../../lib/realtor-leads/types'
 
@@ -49,7 +52,7 @@ function draftFromLead(lead: RealtorLeadRow): EditDraft {
 
 export default function RealtorLeadCenterPage() {
   const { user, ready } = useAuthUser()
-  const { plan, loading: planLoading } = useSubscription(user)
+  const { isPlatformAdmin, loading: adminLoading } = usePlatformAdmin(user)
   const [leads, setLeads] = useState<RealtorLeadRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -57,7 +60,7 @@ export default function RealtorLeadCenterPage() {
   const [draft, setDraft] = useState<EditDraft | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const authorized = plan === 'owner'
+  const authorized = isPlatformAdmin
 
   async function load() {
     if (!supabase) return
@@ -116,7 +119,7 @@ export default function RealtorLeadCenterPage() {
     setSaving(false)
   }
 
-  if (!ready || (user && planLoading)) return <main className="authShell"><div className="loadingState">Loading…</div></main>
+  if (!ready || (user && adminLoading)) return <main className="authShell"><div className="loadingState">Loading…</div></main>
 
   if (!user) {
     return (

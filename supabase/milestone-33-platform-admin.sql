@@ -49,3 +49,37 @@ create policy "platform_admins_select_own" on public.platform_admins
 -- it names a specific person's account, which does not belong in
 -- source control. See the milestone completion report for the exact
 -- statement to run.
+
+-- ==================================================================
+-- Migrate realtor_leads' admin RLS policies off plan = 'owner' onto
+-- platform_admins (Section 3 of the follow-up: "eliminate subscription-
+-- plan-as-admin authorization throughout PropRoster"). This REPLACES the
+-- two policies originally created in
+-- supabase/milestone-21-realtor-connect.sql — same table, same select/
+-- update shape, same "admin only" intent — only the membership check
+-- changes. Nothing about realtor_leads' columns, data, or non-admin
+-- access (there is none — see that file's own top comment: "Deliberately
+-- NO insert/select policy for anon or authenticated") is touched.
+-- ==================================================================
+drop policy if exists "realtor_leads_admin_select" on public.realtor_leads;
+create policy "realtor_leads_admin_select" on public.realtor_leads for select to authenticated using (
+  exists (
+    select 1 from public.platform_admins pa
+    where pa.owner_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "realtor_leads_admin_update" on public.realtor_leads;
+create policy "realtor_leads_admin_update" on public.realtor_leads for update to authenticated
+using (
+  exists (
+    select 1 from public.platform_admins pa
+    where pa.owner_id = (select auth.uid())
+  )
+)
+with check (
+  exists (
+    select 1 from public.platform_admins pa
+    where pa.owner_id = (select auth.uid())
+  )
+);
