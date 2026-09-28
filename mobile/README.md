@@ -166,9 +166,9 @@ npx cap open android   # requires Android Studio
 
 Requires a Mac. None of this can be done from this Linux environment.
 
-1. Install Xcode (App Store) and CocoaPods (`sudo gem install cocoapods`, or `brew install cocoapods`).
+1. Install Xcode (App Store). CocoaPods is **not** needed — this project's Capacitor version uses Swift Package Manager for iOS plugin dependencies (confirmed: no `Podfile` anywhere in the generated project or the installed `@capacitor/ios`/`@capacitor/cli` packages); Xcode resolves the `CapApp-SPM` local package automatically when it opens the project.
 2. Clone this branch, `cd mobile && npm install`.
-3. `npx cap open ios` — opens `mobile/ios/App/App.xcworkspace` in Xcode.
+3. `npx cap open ios` — opens `mobile/ios/App/App.xcodeproj` in Xcode (confirmed via the installed `@capacitor/cli` source: it opens the `.xcworkspace` only when CocoaPods is in use; this project's package manager is SPM, so it opens the `.xcodeproj` directly).
 4. In Xcode: select the `App` target → *Signing & Capabilities* → choose your own (free) Apple ID team so it can sign a debug build. (A paid Apple Developer account is only needed for TestFlight/App Store — not for running on your own device.)
 5. Plug in your iPhone, select it as the run destination, hit Run (▶). First launch will ask you to trust the developer certificate on the phone (Settings → General → VPN & Device Management).
 6. The app boots straight to `https://proproster.com` and behaves like the live site — sign in with your real PropRoster account.
