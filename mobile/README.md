@@ -119,14 +119,11 @@ this environment. Confirming it live is real M3 work.
 
 ## Known gaps flagged for M3/M4 (not fixed in M2 — scope stayed to the shell)
 
-- **Android hardware/gesture back button**: no `@capacitor/app`
-  `backButton` listener is installed yet. Without one, Android's back
-  button may exit the app instead of navigating back through
-  PropRoster's own screen history. Needs `@capacitor/app` + a small
-  listener calling `window.history.back()` (falling back to exit at the
-  true root) — real estate of a future milestone, not implemented here
-  to keep this shell minimal, and impossible to verify without an
-  Android device/emulator regardless.
+- **Android hardware/gesture back button** — resolved in M3. See
+  `lib/mobile/backButton.ts` + `components/mobile/NativeBackButtonHandler.tsx`
+  in the web app root: navigates history back when possible, exits the
+  app only when there is nowhere left to go. Still not verified on a
+  real Android device/emulator (none available in this environment).
 - **Photo/file uploads**: the web app's existing `<input type="file">`
   based upload flows (Smart Upload, document/photo upload) should work
   through the native WebView's own built-in file-picker support on both
@@ -162,7 +159,9 @@ npx cap open ios       # requires Xcode, macOS only
 npx cap open android   # requires Android Studio
 ```
 
-## Getting this on your iPhone (TestFlight/App Store signing NOT covered — that's M11/M13)
+## Getting this on your iPhone
+
+### Path A — local Mac + Xcode (device build, no TestFlight)
 
 Requires a Mac. None of this can be done from this Linux environment.
 
@@ -174,3 +173,22 @@ Requires a Mac. None of this can be done from this Linux environment.
 6. The app boots straight to `https://proproster.com` and behaves like the live site — sign in with your real PropRoster account.
 
 Android equivalent: install Android Studio, `npx cap open android`, connect a device with USB debugging enabled (or use an emulator), Run.
+
+### Path B — cloud build → TestFlight (no local Mac/Xcode needed) — M4
+
+See `codemagic.yaml` at the repository root. Codemagic was chosen over
+Apple's own Xcode Cloud specifically because Xcode Cloud's *first*
+workflow must be configured from inside the local Xcode app (Apple's
+own documentation: "Use Xcode to initially configure your project...
+to use Xcode Cloud") — not an option here. Codemagic builds entirely
+from a YAML config on a cloud macOS runner and needs no local Xcode at
+any point.
+
+This requires, in order: an Apple Developer Program membership, the
+`com.proproster.app` bundle ID registered, an App Store Connect app
+record created, and a Codemagic account connected to this repository
+with an App Store Connect API key added as an encrypted variable group
+named `appstore_credentials` (`APP_STORE_CONNECT_ISSUER_ID`,
+`APP_STORE_CONNECT_KEY_IDENTIFIER`, `APP_STORE_CONNECT_PRIVATE_KEY`) —
+none of that is stored in this repository. See the M4 milestone report
+for the exact one-at-a-time setup steps.
