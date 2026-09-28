@@ -3,6 +3,7 @@ import './globals.css'
 import { GoogleAnalytics } from '../components/GoogleAnalytics'
 import { ServiceWorkerRegistration } from '../components/ServiceWorkerRegistration'
 import { InstallPrompt } from '../components/InstallPrompt'
+import { NativeBackButtonHandler } from '../components/mobile/NativeBackButtonHandler'
 
 // PWA/Mobile Installability V1 additions below — everything else in
 // this metadata object is unchanged.
@@ -77,6 +78,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       {/* PWA/Mobile Installability V1 — renders nothing visible by
           default; see the component's own top comment. */}
       <ServiceWorkerRegistration />
+      {/* Mobile M3 — a no-op on every ordinary web visit; only registers
+          Android's hardware back-button handler when actually running
+          inside the Capacitor native shell. See the component's own
+          top comment. */}
+      <NativeBackButtonHandler />
     </html>
   )
 }
