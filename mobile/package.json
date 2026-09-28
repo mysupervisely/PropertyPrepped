@@ -1,0 +1,25 @@
+{
+  "name": "proproster-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PropRoster native mobile shell (Capacitor) — wraps the live PropRoster web application at https://proproster.com. Contains no application/business logic of its own; the Next.js app in the repository root remains the single source of truth.",
+  "scripts": {
+    "sync": "cap sync",
+    "sync:ios": "cap sync ios",
+    "sync:android": "cap sync android",
+    "open:ios": "cap open ios",
+    "open:android": "cap open android",
+    "doctor": "cap doctor",
+    "assets": "capacitor-assets generate"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.2",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/ios": "8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "3.0.5",
+    "@capacitor/cli": "8.5.2"
+  }
+}
