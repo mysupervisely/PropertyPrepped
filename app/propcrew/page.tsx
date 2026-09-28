@@ -8,12 +8,12 @@
 // (PropCrewPanel is also rendered there, scoped to that one property —
 // same component, same data, two views).
 
-import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { AuthHeader } from '../../components/AuthHeader'
 import { PropCrewPanel } from '../../components/PropCrewPanel'
+import { SignInRequiredCard } from '../../components/SignInRequiredCard'
 
 type PropertyRef = { id: string; address: string; city: string }
 
@@ -36,16 +36,7 @@ export default function PropCrewPage() {
   }
 
   if (!user) {
-    return (
-      <main className="authShell">
-        <section className="authCard">
-          <p className="eyebrow">PROPROSTER</p>
-          <h1>Sign in required</h1>
-          <p className="authIntro">Sign in to view your PropCrew directory.</p>
-          <Link className="primary authSubmit" href="/">Go to sign in</Link>
-        </section>
-      </main>
-    )
+    return <SignInRequiredCard what="PropCrew directory" />
   }
 
   return (

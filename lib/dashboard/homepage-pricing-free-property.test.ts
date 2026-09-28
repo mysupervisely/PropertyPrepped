@@ -391,7 +391,7 @@ describe('Mobile pricing layout — no horizontal scroll at iPhone widths (360/3
   })
 
   it('nothing in the landing-page CSS sets a fixed pixel width wide enough to force horizontal scroll on a 360px viewport', () => {
-    const blockMatch = css.match(/\/\* Public Homepage V2[\s\S]*?\.landingSignInCard \{ padding: 24px 18px; border-radius: 18px; \}\n\}/)
+    const blockMatch = css.match(/\/\* Public Homepage V2[\s\S]*?\.landingSignInCard \{\s*height: 100%;[\s\S]*?\n  \}\n\}/)
     expect(blockMatch).not.toBeNull()
     const block = blockMatch![0]
     // Excludes both max-width and min-width — those are constraints/media

@@ -153,6 +153,11 @@ button { cursor: pointer; }
    route entirely, not just from this page's own content. */
 .shell { max-width: 1220px; margin: 0 auto; padding: 0 28px 70px; overflow-x: hidden; }
 .workspaceShell { max-width: 1280px; }
+/* Mobile Preview harness (app/preview/) only — a persistent, impossible-
+   to-miss banner so fixture data can never be mistaken for a real
+   account, even mid-scroll. Not used by any production page. */
+.previewRoot { position: relative; }
+.previewBanner { position: sticky; top: 0; z-index: 30; background: #7a3b12; color: white; text-align: center; font-size: 12px; font-weight: 700; letter-spacing: .02em; padding: 8px 12px; padding-top: max(8px, env(safe-area-inset-top)); }
 .topbar { min-height: 86px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); }
 .brand { font-size: 25px; font-weight: 750; letter-spacing: -0.7px; display: block; }
 /* Wordmark two-tone treatment (components/Wordmark.tsx) — "Prop" stays the
@@ -796,6 +801,11 @@ h2, h3, p { margin-top: 0; }
 .accountActions > span { color: var(--muted); font-size: 12px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .authShell { min-height: 100vh; padding: 28px; display: grid; place-items: center; background: var(--bg); }
 .authCard { width: min(460px, 100%); background: white; border: 1px solid var(--line); border-radius: 22px; padding: 32px; }
+/* Mobile auth polish pass: AuthBackHeader, rendered above the card by
+   SignInRequiredCard/Billing's gate. Hidden here — only switched on
+   inside the ≤760px block below, so desktop's existing look (already
+   fine, per the mobile-preview review) is untouched. */
+.authShellBrand { display: none; }
 .authCard h1 { font-size: 40px; margin-bottom: 12px; }
 .authBrand { padding-bottom: 30px; margin-bottom: 30px; border-bottom: 1px solid var(--line); }
 .authIntro { color: var(--muted); line-height: 1.55; margin-bottom: 24px; }
@@ -871,8 +881,25 @@ h2, h3, p { margin-top: 0; }
   .accountActions > span { display: none; }
   .accountActions { gap: 6px; }
   .accountActions .primary, .accountActions .secondary { padding: 9px 10px; font-size: 12px; }
-  .authShell { padding: 16px; }
-  .authCard { padding: 24px; }
+  /* Mobile-preview finding: every sign-in gate (.authShell/.authCard)
+     dead-centered its card in a mostly-empty viewport with no branding
+     or way back — read as "a bare web form," not part of an app. This
+     switches the mobile layout to top-aligned with a small branded
+     back header (AuthBackHeader, hidden on desktop above) instead of
+     changing the card's own design. */
+  .authShell {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    min-height: 100vh;
+    min-height: 100dvh;
+    gap: 18px;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  }
+  .authShellBrand { display: flex; align-items: center; gap: 8px; padding: 6px 2px; color: var(--text); text-decoration: none; font-weight: 650; }
+  .authShellBrand .authBackArrow { font-size: 18px; line-height: 1; color: var(--muted); }
+  .authShellBrand .brand { font-size: 17px; letter-spacing: -0.3px; display: inline; }
+  .authCard { width: 100%; padding: 24px; }
 }
 
 /* Milestone 4: Financials */
@@ -1885,6 +1912,26 @@ h2, h3, p { margin-top: 0; }
   .landingFinalCta { padding: 4px 16px 56px; }
   .landingPricing { padding: 0 16px; margin: 6px auto 44px; }
   .landingSignInCard { padding: 24px 18px; border-radius: 18px; }
+  /* Mobile auth polish pass, item 6: on mobile widths the sign-in/sign-up
+     modal becomes a full-screen sheet instead of a floating card with
+     the marketing page still visible/scrollable behind it (a mobile-
+     preview finding) — a CSS-only change to the existing .overlay/.modal
+     classes this modal already uses, not a second auth system. The
+     existing "×" close button (.iconButton, already in the markup)
+     is the back affordance here. */
+  .landingAuthOverlay { padding: 0; place-items: stretch; }
+  .landingAuthModal { width: 100%; max-width: 100%; height: 100%; max-height: 100vh; max-height: 100dvh; }
+  .landingSignInCard {
+    height: 100%;
+    min-height: 100%;
+    border-radius: 0;
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow-y: auto;
+    padding: max(24px, env(safe-area-inset-top)) 22px max(24px, env(safe-area-inset-bottom));
+  }
 }
 
 /* Bugfix (found while diagnosing the mobile Document Intelligence modal

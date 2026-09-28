@@ -11,9 +11,9 @@
 // changing it is a separate, more sensitive flow this milestone doesn't
 // build.
 
-import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { SignInRequiredCard } from '../../components/SignInRequiredCard'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { AuthHeader } from '../../components/AuthHeader'
 import { COMMON_TIMEZONES, type UserProfile } from '../../lib/user-profile/types'
@@ -278,16 +278,7 @@ export default function ProfilePage() {
   }
 
   if (!user) {
-    return (
-      <main className="authShell">
-        <section className="authCard">
-          <p className="eyebrow">PROPROSTER</p>
-          <h1>Sign in required</h1>
-          <p className="authIntro">Sign in to view and edit your profile.</p>
-          <Link className="primary authSubmit" href="/">Go to sign in</Link>
-        </section>
-      </main>
-    )
+    return <SignInRequiredCard what="profile" />
   }
 
   return (

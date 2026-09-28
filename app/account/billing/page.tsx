@@ -27,6 +27,7 @@ import { PLANS, PUBLIC_PLAN_ORDER } from '../../../lib/billing/plans'
 import { openBillingPortal, scheduleCancellation, resumeSubscription, fetchBillingSummary, type BillingSummary } from '../../../lib/billing/client'
 import { buildCheckoutSyncSchedule, shouldContinueCheckoutSync } from '../../../lib/billing/checkout-sync'
 import { AuthHeader } from '../../../components/AuthHeader'
+import { AuthBackHeader } from '../../../components/auth/AuthBackHeader'
 
 const STATUS_LABEL: Record<string, string> = {
   active: 'Active',
@@ -152,6 +153,7 @@ export default function BillingPage() {
   if (!isSupabaseConfigured) {
     return (
       <main className="authShell">
+        <AuthBackHeader />
         <section className="authCard setupCard">
           <h1>Account &amp; Billing</h1>
           <p>Supabase is not configured for this deployment yet.</p>
@@ -165,6 +167,7 @@ export default function BillingPage() {
   if (!user) {
     return (
       <main className="authShell">
+        <AuthBackHeader />
         <section className="authCard setupCard">
           <h1>Account &amp; Billing</h1>
           <p>Sign in to view your plan and billing details.</p>

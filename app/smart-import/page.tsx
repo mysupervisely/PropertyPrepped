@@ -16,11 +16,11 @@
 // queries apart.
 
 import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { useSubscription } from '../../lib/useSubscription'
 import { AuthHeader } from '../../components/AuthHeader'
+import { SignInRequiredCard } from '../../components/SignInRequiredCard'
 import type { ApplyFields, DocumentAnalysisOutput } from '../../lib/document-intelligence/schemas'
 import type { DocumentType } from '../../lib/document-intelligence/types'
 import type { SmartUploadContact, SmartUploadProperty, SmartUploadSystem } from '../../lib/smart-upload/types'
@@ -72,16 +72,7 @@ export default function SmartImportPage() {
   if (!ready || (user && planLoading)) return <main className="authShell"><div className="loadingState">Loading Portfolio Import…</div></main>
 
   if (!user) {
-    return (
-      <main className="authShell">
-        <section className="authCard">
-          <p className="eyebrow">PROPROSTER</p>
-          <h1>Sign in required</h1>
-          <p className="authIntro">Sign in to import existing property records.</p>
-          <Link className="primary authSubmit" href="/">Go to sign in</Link>
-        </section>
-      </main>
-    )
+    return <SignInRequiredCard what="Portfolio Import" />
   }
 
   // Property Overview + Pricing Polish V1, Stage 1: Portfolio Import is
