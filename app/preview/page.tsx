@@ -17,7 +17,7 @@ import { GridIcon, WrenchIcon, PeopleIcon, ReceiptIcon } from '../../components/
 import {
   FIXTURE_LANDLORD, FIXTURE_PROPERTIES, FIXTURE_STATS, FIXTURE_MAINTENANCE,
   FIXTURE_PROPCREW, FIXTURE_TAX_SUMMARY, FIXTURE_BILLING, FIXTURE_DOCUMENTS,
-  type FixtureProperty,
+  FIXTURE_ATTENTION_ITEMS, type FixtureProperty, type FixtureAttentionNav,
 } from './_lib/fixtures'
 
 const money = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -46,6 +46,7 @@ export default function PreviewApp() {
   const [selectedMaintenanceId, setSelectedMaintenanceId] = useState<string | null>(null)
   const [navMenuOpen, setNavMenuOpen] = useState(false)
   const [newRequestOpen, setNewRequestOpen] = useState(false)
+  const [attentionSheetOpen, setAttentionSheetOpen] = useState(false)
 
   function goDashboard() {
     setScreen('dashboard')
@@ -56,6 +57,24 @@ export default function PreviewApp() {
     setSelectedPropertyId(id)
     setPropertyTab('overview')
     setScreen('property')
+  }
+  // Needs Attention V2 (preview): mirrors the real app's
+  // goToNav/NavTarget mechanism — each fixture item's own `nav` says
+  // exactly which existing preview screen/record it concerns, so
+  // tapping it both closes the sheet and routes there in one motion,
+  // never a duplicate resolution workflow inside the sheet itself.
+  function goToAttentionItem(nav: FixtureAttentionNav) {
+    setAttentionSheetOpen(false)
+    if (nav.screen === 'maintenance') {
+      setSelectedMaintenanceId(nav.maintenanceId)
+      setScreen('maintenance')
+    } else if (nav.screen === 'taxcenter') {
+      setScreen('taxcenter')
+    } else {
+      setSelectedPropertyId(nav.propertyId)
+      setPropertyTab(nav.tab)
+      setScreen('property')
+    }
   }
 
   const selectedProperty = FIXTURE_PROPERTIES.find((p) => p.id === selectedPropertyId) || null
@@ -103,7 +122,33 @@ export default function PreviewApp() {
       )}
 
       {screen === 'dashboard' && (
-        <DashboardScreen onOpenProperty={openProperty} />
+        <DashboardScreen onOpenProperty={openProperty} onOpenAttention={() => setAttentionSheetOpen(true)} />
+      )}
+
+      {attentionSheetOpen && (
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setAttentionSheetOpen(false)}>
+          <div className="modal needsAttentionModal">
+            <div className="modalTop">
+              <h2>Needs Attention</h2>
+              <button type="button" className="iconButton" aria-label="Close" onClick={() => setAttentionSheetOpen(false)}>&times;</button>
+            </div>
+            {FIXTURE_ATTENTION_ITEMS.length === 0 ? (
+              <p className="muted needsAttentionEmpty">You&apos;re all caught up.</p>
+            ) : (
+              <div className="dashboardItemList">
+                {FIXTURE_ATTENTION_ITEMS.map((item) => (
+                  <button key={item.id} type="button" className="dashboardItemRow" onClick={() => goToAttentionItem(item.nav)}>
+                    <span className={`statusPill ${item.category === 'Maintenance' ? 'pillWarn' : item.category === 'Missing Receipt' ? 'pillBad' : 'pillNeutral'}`}>{item.category}</span>
+                    <span className="dashboardItemBody">
+                      <strong>{item.title}</strong>
+                      <span className="muted">{item.propertyLabel}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {screen === 'property' && selectedProperty && (
@@ -211,7 +256,7 @@ function PreviewBottomNav({ screen, onNavigate }: { screen: Screen; onNavigate: 
   )
 }
 
-function DashboardScreen({ onOpenProperty }: { onOpenProperty: (id: string) => void }) {
+function DashboardScreen({ onOpenProperty, onOpenAttention }: { onOpenProperty: (id: string) => void; onOpenAttention: () => void }) {
   return (
     <>
       <section className="intro">
@@ -219,11 +264,23 @@ function DashboardScreen({ onOpenProperty }: { onOpenProperty: (id: string) => v
         <h1>Good afternoon, {FIXTURE_LANDLORD.name.split(' ')[0]}.</h1>
       </section>
 
+      {/* Needs Attention V2 (preview): Occupied is replaced with the
+          same compact, interactive tile the real dashboard now uses —
+          count only, tap to open the full aggregated list. Occupancy
+          itself remains visible elsewhere (each property card's own
+          badge, below). */}
       <section className="stats">
         <div className="stat"><span>Portfolio Value</span><strong>{money(FIXTURE_STATS.portfolioValue)}</strong></div>
         <div className="stat"><span>Monthly Rent</span><strong>{money(FIXTURE_STATS.monthlyRent)}</strong></div>
         <div className="stat"><span>Properties</span><strong>{FIXTURE_STATS.properties}</strong></div>
-        <div className="stat"><span>Occupied</span><strong>{FIXTURE_STATS.occupied}/{FIXTURE_STATS.properties}</strong></div>
+        <button type="button" className="stat" style={{ cursor: 'pointer', textAlign: 'left', border: 0 }} onClick={onOpenAttention}>
+          <span className="needsAttentionSnapshotHead">
+            <span>Needs Attention</span>
+            {FIXTURE_ATTENTION_ITEMS.length === 0
+              ? <strong className="needsAttentionSnapshotCount needsAttentionSnapshotCountZero">0 <span aria-hidden="true">✓</span></strong>
+              : <strong className="needsAttentionSnapshotCount">{FIXTURE_ATTENTION_ITEMS.length}</strong>}
+          </span>
+        </button>
       </section>
 
       <div className="sectionHead">

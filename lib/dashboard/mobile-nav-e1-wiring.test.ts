@@ -174,10 +174,15 @@ describe('Dashboard: Needs Your Attention replaces the old standalone PropWatch 
     expect(pageSource).not.toContain('<h3>Upcoming</h3>')
   })
 
-  it('"View all" only renders when there is more than the compact preview subset — never a dead/no-op action', () => {
-    expect(pageSource).toContain('const NEEDS_ATTENTION_PREVIEW_LIMIT = 3')
-    expect(pageSource).toContain('attentionRows.length > NEEDS_ATTENTION_PREVIEW_LIMIT &&')
-    expect(pageSource).toContain("{showAllAttention ? 'Show less' : 'View all'}")
+  // Needs Attention V2: the compact preview subset / "View all" toggle
+  // was replaced by a compact snapshot tile that opens a modal showing
+  // the full attentionRows list directly — see
+  // lib/dashboard/needs-attention-compact-card-wiring.test.ts for this
+  // redesign's own dedicated coverage.
+  it('the compact snapshot tile opens a modal with the full attentionRows list — no partial preview subset left to expand', () => {
+    expect(pageSource).toContain('className="portfolioSnapshotMetric needsAttentionSnapshotTile"')
+    expect(pageSource).toContain('onClick={() => setAttentionSheetOpen(true)}')
+    expect(pageSource).not.toContain('NEEDS_ATTENTION_PREVIEW_LIMIT')
   })
 
   it('a real, calm compact empty state when nothing needs attention — not a large empty card', () => {

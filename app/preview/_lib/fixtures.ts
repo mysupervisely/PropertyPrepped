@@ -130,6 +130,49 @@ export const FIXTURE_MAINTENANCE: FixtureMaintenanceRequest[] = [
   },
 ]
 
+// Needs Attention V2 (preview): aggregates existing fixture items the
+// same way the real app's Needs Attention modal aggregates real
+// attentionItems/vacancyItems/openMaintenanceItems — never invented
+// data of its own. Each item's `nav` mirrors the real NavTarget
+// mechanism (lib/dashboard/attention.ts): enough to route the preview
+// to the exact existing screen/record it concerns.
+export type FixtureAttentionNav =
+  | { screen: 'maintenance'; maintenanceId: string }
+  | { screen: 'taxcenter' }
+  | { screen: 'property'; propertyId: string; tab: 'overview' | 'documents' | 'tenant' }
+
+export type FixtureAttentionItem = {
+  id: string
+  category: 'Maintenance' | 'Missing Receipt' | 'Tenant Connect'
+  title: string
+  propertyLabel: string
+  nav: FixtureAttentionNav
+}
+
+export const FIXTURE_ATTENTION_ITEMS: FixtureAttentionItem[] = [
+  {
+    id: 'attn-1',
+    category: 'Maintenance',
+    title: 'Kitchen sink leak',
+    propertyLabel: '123 Harbor Lane',
+    nav: { screen: 'maintenance', maintenanceId: 'maint-1' },
+  },
+  {
+    id: 'attn-2',
+    category: 'Missing Receipt',
+    title: '$286 repair expense',
+    propertyLabel: '842 Palm Avenue',
+    nav: { screen: 'taxcenter' },
+  },
+  {
+    id: 'attn-3',
+    category: 'Tenant Connect',
+    title: 'New message from Sam Whitfield',
+    propertyLabel: '842 Palm Avenue',
+    nav: { screen: 'property', propertyId: 'prop-palm-avenue', tab: 'tenant' },
+  },
+]
+
 export type FixtureProCrewContact = {
   id: string
   name: string
