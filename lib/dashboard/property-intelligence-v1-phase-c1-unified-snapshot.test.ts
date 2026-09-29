@@ -58,15 +58,11 @@ describe('Phase C.1: Investment Analysis reads as secondary, not equal-weight wi
     expect(actionsSlice).not.toContain('<Link className="secondary"')
   })
 
-  it('.heroInvestmentLink reuses the existing .needsAttentionViewAll quiet-text-link pattern (brand color, no border/box, small trailing chevron) rather than inventing a new visual treatment', () => {
+  it('.heroInvestmentLink uses a quiet brand-color text-link treatment (no border/box, small trailing chevron) rather than a bordered button', () => {
     const rule = cssSource.match(/\.heroInvestmentLink\s*\{[^}]*\}/)?.[0] || ''
-    const precedent = cssSource.match(/\.needsAttentionViewAll\s*\{[^}]*\}/)?.[0] || ''
     expect(rule).toContain('border: 0')
     expect(rule).toContain('background: transparent')
     expect(rule).toContain('color: var(--brand)')
-    expect(precedent).toContain('border: 0')
-    expect(precedent).toContain('background: transparent')
-    expect(precedent).toContain('color: var(--brand)')
     expect(cssSource).toMatch(/\.heroInvestmentLink::after \{ content: '›';/)
   })
 

@@ -24,6 +24,7 @@ import { supabase } from '../../../lib/supabase'
 import { useAuthUser } from '../../../lib/useAuthUser'
 import { usePlatformAdmin } from '../../../lib/admin/usePlatformAdmin'
 import { AuthHeader } from '../../../components/AuthHeader'
+import { SignInRequiredCard } from '../../../components/SignInRequiredCard'
 import type { AdminStatusLabel, AdminSubscriptionRow, AdminSubscriptionSummary } from '../../../lib/billing/admin-subscriptions'
 
 const STATUS_PILL_CLASS: Record<AdminStatusLabel, string> = {
@@ -90,16 +91,7 @@ export default function AdminSubscriptionsPage() {
   if (!ready || (user && adminLoading)) return <main className="authShell"><div className="loadingState">Loading…</div></main>
 
   if (!user) {
-    return (
-      <main className="authShell">
-        <section className="authCard">
-          <p className="eyebrow">PROPROSTER</p>
-          <h1>Sign in required</h1>
-          <p className="authIntro">Sign in to continue.</p>
-          <Link className="primary authSubmit" href="/">Go to sign in</Link>
-        </section>
-      </main>
-    )
+    return <SignInRequiredCard what="admin tools" />
   }
 
   if (!authorized) {

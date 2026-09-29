@@ -50,28 +50,32 @@ describe('goToNav — the one function every attention-item click goes through',
 })
 
 describe('Needs Your Attention rows — every group still navigates via goToNav', () => {
-  const attentionRowsBody = sliceFunction('const attentionRows = [', 'const NEEDS_ATTENTION_PREVIEW_LIMIT')
+  const attentionRowsBody = sliceFunction('const attentionRows = [', '\n  return (')
+
+  // Needs Attention V2: onOpen now also closes the sheet
+  // (setAttentionSheetOpen(false)) before calling goToNav — a tap both
+  // routes to the real workflow and dismisses the modal in one motion,
+  // rather than leaving it open behind the newly-navigated page.
+  const ON_OPEN = 'onOpen={() => { setAttentionSheetOpen(false); goToNav(item.propertyId, item.nav) }}'
 
   it('date-driven attention items (Lease/Insurance/Mortgage/Maintenance/Rent/System/TenantRequest) navigate via goToNav, now through DismissibleAttentionRow\'s onOpen', () => {
-    expect(attentionRowsBody).toMatch(/attentionItems\.map\(\(item\) => \{[\s\S]*?<DismissibleAttentionRow[\s\S]*?onOpen=\{\(\) => goToNav\(item\.propertyId, item\.nav\)\}/)
+    expect(attentionRowsBody).toMatch(/attentionItems\.map\(\(item\) => \{[\s\S]*?<DismissibleAttentionRow[\s\S]*?onOpen=\{\(\) => \{ setAttentionSheetOpen\(false\); goToNav\(item\.propertyId, item\.nav\) \}\}/)
   })
 
   it('vacancy items navigate via goToNav, same onOpen mechanism, no separate routing', () => {
-    expect(attentionRowsBody).toMatch(/vacancyItems\.map\(\(item: VacancyItem\) => \{[\s\S]*?<DismissibleAttentionRow[\s\S]*?onOpen=\{\(\) => goToNav\(item\.propertyId, item\.nav\)\}/)
+    expect(attentionRowsBody).toMatch(/vacancyItems\.map\(\(item: VacancyItem\) => \{[\s\S]*?<DismissibleAttentionRow[\s\S]*?onOpen=\{\(\) => \{ setAttentionSheetOpen\(false\); goToNav\(item\.propertyId, item\.nav\) \}\}/)
   })
 
   it('open maintenance items (now dismissible too — see the approved follow-up) navigate via goToNav, same onOpen mechanism as the other two groups', () => {
-    expect(attentionRowsBody).toMatch(/openMaintenanceItems\.map\(\(item\) => \{[\s\S]*?<DismissibleAttentionRow[\s\S]*?onOpen=\{\(\) => goToNav\(item\.propertyId, item\.nav\)\}/)
+    expect(attentionRowsBody).toMatch(/openMaintenanceItems\.map\(\(item\) => \{[\s\S]*?<DismissibleAttentionRow[\s\S]*?onOpen=\{\(\) => \{ setAttentionSheetOpen\(false\); goToNav\(item\.propertyId, item\.nav\) \}\}/)
   })
 
-  it('no new routing architecture was introduced — goToNav/openProperty remain the only property-navigation path from the dashboard', () => {
-    // All three dismissible groups' onOpen go through goToNav — never a
-    // raw route change, a new Link, or a second navigation helper.
-    const onOpenCalls = attentionRowsBody.match(/onOpen=\{[^}]*\}/g) || []
-    expect(onOpenCalls.length).toBe(3) // attentionItems + vacancyItems + openMaintenanceItems
-    for (const call of onOpenCalls) {
-      expect(call).toMatch(/onOpen=\{\(\) => goToNav\(item\.propertyId, item\.nav\)\}/)
-    }
+  it('no new routing architecture was introduced — goToNav/openProperty remain the only property-navigation path from the dashboard, and every group also closes the Needs Attention sheet on open', () => {
+    // All three dismissible groups' onOpen go through goToNav (via the
+    // exact same literal onOpen body) — never a raw route change, a new
+    // Link, or a second navigation helper.
+    const occurrences = attentionRowsBody.split(ON_OPEN).length - 1
+    expect(occurrences).toBe(3) // attentionItems + vacancyItems + openMaintenanceItems
   })
 })
 
@@ -113,9 +117,12 @@ describe('Dismissal is implemented (approved follow-up) — high-level presence 
 })
 
 describe('Existing Dashboard behavior this milestone must not change', () => {
-  it('the preview/expand/hide behavior for Needs Your Attention is untouched', () => {
-    expect(pageSource).toContain("const [attentionVisible, setAttentionVisible] = useState(true)")
-    expect(pageSource).toContain('NEEDS_ATTENTION_PREVIEW_LIMIT')
+  // Needs Attention V2 deliberately replaced the old preview/expand/hide
+  // presentation states (a compact tile + modal now, see
+  // lib/dashboard/needs-attention-compact-card-wiring.test.ts) — this
+  // block now only asserts what genuinely stays true across that
+  // redesign: the calm empty-state copy, unchanged verbatim.
+  it('the calm "all caught up" empty-state copy is unchanged', () => {
     expect(pageSource).toContain("You&apos;re all caught up.")
   })
 

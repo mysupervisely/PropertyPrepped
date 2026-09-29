@@ -19,6 +19,7 @@ import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { AuthHeader } from '../../components/AuthHeader'
+import { SignInRequiredCard } from '../../components/SignInRequiredCard'
 import { normalizeSearchWords, buildOrFilter } from '../../lib/search/query'
 import { trackEvent } from '../../lib/analytics'
 import {
@@ -64,16 +65,7 @@ export default function SearchPage() {
   if (!ready) return <main className="authShell"><div className="loadingState">Loading Search…</div></main>
 
   if (!user) {
-    return (
-      <main className="authShell">
-        <section className="authCard">
-          <p className="eyebrow">PROPROSTER</p>
-          <h1>Sign in required</h1>
-          <p className="authIntro">Sign in to search your PropRoster portfolio.</p>
-          <Link className="primary authSubmit" href="/">Go to sign in</Link>
-        </section>
-      </main>
-    )
+    return <SignInRequiredCard what="PropRoster portfolio" />
   }
 
   return <SearchWorkspace />

@@ -35,11 +35,11 @@
 // a landlord-only internal note).
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { AuthHeader } from '../../components/AuthHeader'
+import { SignInRequiredCard } from '../../components/SignInRequiredCard'
 import { MaintenanceCaseDetail } from '../../components/maintenance/MaintenanceCaseDetail'
 import { NewMaintenanceRequestModal } from '../../components/maintenance/NewMaintenanceRequestModal'
 import type { NewMaintenanceRequestPayload } from '../../lib/maintenance/new-request'
@@ -70,16 +70,7 @@ export default function MaintenancePage() {
   if (!ready) return <main className="authShell"><div className="loadingState">Loading Maintenance Command Center…</div></main>
 
   if (!user) {
-    return (
-      <main className="authShell">
-        <section className="authCard">
-          <p className="eyebrow">PROPROSTER</p>
-          <h1>Sign in required</h1>
-          <p className="authIntro">Sign in to view your Maintenance Command Center.</p>
-          <Link className="primary authSubmit" href="/">Go to sign in</Link>
-        </section>
-      </main>
-    )
+    return <SignInRequiredCard what="Maintenance Command Center" />
   }
 
   return <MaintenanceCommandCenter user={user} />

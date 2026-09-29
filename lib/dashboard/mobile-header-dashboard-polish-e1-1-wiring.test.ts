@@ -20,29 +20,17 @@ function readFile(relativePath: string): string {
 const pageSource = readFile('app/page.tsx')
 const globalsCss = readFile('app/globals.css')
 
-describe('"View all" is a quiet text action, not a bordered button (Section 5)', () => {
-  it('the button uses the new needsAttentionViewAll class, not .secondary', () => {
-    expect(pageSource).toContain('<button className="needsAttentionViewAll" onClick={() => setShowAllAttention((v) => !v)}>{showAllAttention ? \'Show less\' : \'View all\'}</button>')
-    expect(pageSource).not.toContain('<button className="secondary" onClick={() => setShowAllAttention((v) => !v)}>')
-  })
-
-  it('the CSS gives it no border/background and a real color, with a small chevron affordance', () => {
-    const rule = globalsCss.match(/\.needsAttentionViewAll \{[^}]*\}/)?.[0] || ''
-    expect(rule).toContain('border: 0')
-    expect(rule).toContain('background: transparent')
-    expect(rule).toContain('color: var(--brand)')
-    expect(globalsCss).toContain(".needsAttentionViewAll::after { content: '›';")
-  })
-
-  it('still preserves the expand/show-all behavior — same state, same full-list reveal', () => {
-    expect(pageSource).toContain('const [showAllAttention, setShowAllAttention] = useState(false)')
-    expect(pageSource).toContain('const visibleAttentionRows = showAllAttention ? attentionRows : attentionRows.slice(0, NEEDS_ATTENTION_PREVIEW_LIMIT)')
-  })
-})
+// Needs Attention V2 replaced the "View all" quiet-text toggle (and the
+// showAllAttention preview/expand state it drove) with a compact
+// snapshot tile that opens a modal showing the full list directly — see
+// lib/dashboard/needs-attention-compact-card-wiring.test.ts for that
+// redesign's own dedicated coverage. The row-density pass below still
+// applies, just rescoped from the old always-expanded section to the
+// new modal.
 
 describe('Needs Your Attention row density pass (Section 6) — scoped to this section only', () => {
-  it('reduces .dashboardItemRow padding only inside .needsAttentionSection, leaving the shared class (and Recent Activity, which reuses it) untouched', () => {
-    expect(globalsCss).toContain('.needsAttentionSection .dashboardItemRow { padding: 10px 14px; }')
+  it('reduces .dashboardItemRow padding only inside .needsAttentionModal, leaving the shared class (and Recent Activity, which reuses it) untouched', () => {
+    expect(globalsCss).toContain('.needsAttentionModal .dashboardItemRow { padding: 10px 14px; }')
     // The shared base rule keeps its original, more generous padding —
     // Recent Activity and any other list using .dashboardItemRow is
     // unaffected by this scoped override.
@@ -51,7 +39,7 @@ describe('Needs Your Attention row density pass (Section 6) — scoped to this s
 
   it('no information was removed from the row — title/pill/property/date all still render from the same attentionRows JSX', () => {
     const idx = pageSource.indexOf('const attentionRows = [')
-    const body = pageSource.slice(idx, pageSource.indexOf('const NEEDS_ATTENTION_PREVIEW_LIMIT'))
+    const body = pageSource.slice(idx, pageSource.indexOf('\n  return (', idx))
     expect(body).toContain('statusPill')
     expect(body).toContain('dashboardItemBody')
     expect(body).toContain('item.propertyLabel')
@@ -60,7 +48,7 @@ describe('Needs Your Attention row density pass (Section 6) — scoped to this s
 
   it('no new color/visual treatment was introduced — same statusPill/pillWarn/pillBad/pillNeutral classes as before', () => {
     const idx = pageSource.indexOf('const attentionRows = [')
-    const body = pageSource.slice(idx, pageSource.indexOf('const NEEDS_ATTENTION_PREVIEW_LIMIT'))
+    const body = pageSource.slice(idx, pageSource.indexOf('\n  return (', idx))
     expect(body).toMatch(/pillWarn|pillBad|pillNeutral/)
   })
 })

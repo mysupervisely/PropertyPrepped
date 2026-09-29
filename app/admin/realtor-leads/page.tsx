@@ -26,6 +26,7 @@ import { supabase } from '../../../lib/supabase'
 import { useAuthUser } from '../../../lib/useAuthUser'
 import { usePlatformAdmin } from '../../../lib/admin/usePlatformAdmin'
 import { AuthHeader } from '../../../components/AuthHeader'
+import { SignInRequiredCard } from '../../../components/SignInRequiredCard'
 import { LEAD_STATUSES, type LeadStatus, type RealtorLeadRow } from '../../../lib/realtor-leads/types'
 
 const STATUS_ORDER: Record<LeadStatus, number> = { New: 0, Contacted: 1, Referred: 2, Closed: 3, Archived: 4 }
@@ -122,16 +123,7 @@ export default function RealtorLeadCenterPage() {
   if (!ready || (user && adminLoading)) return <main className="authShell"><div className="loadingState">Loading…</div></main>
 
   if (!user) {
-    return (
-      <main className="authShell">
-        <section className="authCard">
-          <p className="eyebrow">PROPROSTER</p>
-          <h1>Sign in required</h1>
-          <p className="authIntro">Sign in to continue.</p>
-          <Link className="primary authSubmit" href="/">Go to sign in</Link>
-        </section>
-      </main>
-    )
+    return <SignInRequiredCard what="admin tools" />
   }
 
   if (!authorized) {

@@ -9,12 +9,14 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "latest",
+    "@capacitor/app": "8.1.1",
+    "@capacitor/core": "8.5.2",
     "@supabase/supabase-js": "latest",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
     "stripe": "^22.5.0",
-    "@anthropic-ai/sdk": "latest",
     "zod": "^3.24.1"
   },
   "devDependencies": {

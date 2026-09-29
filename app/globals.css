@@ -153,6 +153,11 @@ button { cursor: pointer; }
    route entirely, not just from this page's own content. */
 .shell { max-width: 1220px; margin: 0 auto; padding: 0 28px 70px; overflow-x: hidden; }
 .workspaceShell { max-width: 1280px; }
+/* Mobile Preview harness (app/preview/) only — a persistent, impossible-
+   to-miss banner so fixture data can never be mistaken for a real
+   account, even mid-scroll. Not used by any production page. */
+.previewRoot { position: relative; }
+.previewBanner { position: sticky; top: 0; z-index: 30; background: #7a3b12; color: white; text-align: center; font-size: 12px; font-weight: 700; letter-spacing: .02em; padding: 8px 12px; padding-top: max(8px, env(safe-area-inset-top)); }
 .topbar { min-height: 86px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); }
 .brand { font-size: 25px; font-weight: 750; letter-spacing: -0.7px; display: block; }
 /* Wordmark two-tone treatment (components/Wordmark.tsx) — "Prop" stays the
@@ -296,7 +301,10 @@ h2, h3, p { margin-top: 0; }
 .cardActions button, .rowActions button { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 8px 10px; font-size: 12px; color: var(--text); }
 .cardAlertBadge { display: block; width: 100%; text-align: left; border: 1px solid #e7c9a9; background: #fdf3e7; color: #8a5a1f; border-radius: 8px; padding: 8px 10px; font-size: 12px; font-weight: 650; margin-top: 12px; }
 .overlay { position: fixed; inset: 0; background: rgba(13, 24, 19, .42); display: grid; place-items: center; padding: 22px; z-index: 10; }
-.modal { width: min(700px, 100%); max-height: 92vh; overflow: auto; background: white; border-radius: 20px; padding: 24px; }
+/* Mobile M3: dvh redeclared after the vh fallback so mobile Safari's
+   collapsing toolbar doesn't clip modal content/buttons mid-session —
+   same pattern already used by .docIntelModal below. */
+.modal { width: min(700px, 100%); max-height: 92vh; max-height: 92dvh; overflow: auto; background: white; border-radius: 20px; padding: 24px; }
 .modalTop { display: flex; justify-content: space-between; align-items: start; }
 .modalTop h2 { margin-bottom: 18px; }
 .iconButton { border: 0; background: transparent; font-size: 28px; color: var(--muted); }
@@ -793,6 +801,11 @@ h2, h3, p { margin-top: 0; }
 .accountActions > span { color: var(--muted); font-size: 12px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .authShell { min-height: 100vh; padding: 28px; display: grid; place-items: center; background: var(--bg); }
 .authCard { width: min(460px, 100%); background: white; border: 1px solid var(--line); border-radius: 22px; padding: 32px; }
+/* Mobile auth polish pass: AuthBackHeader, rendered above the card by
+   SignInRequiredCard/Billing's gate. Hidden here — only switched on
+   inside the ≤760px block below, so desktop's existing look (already
+   fine, per the mobile-preview review) is untouched. */
+.authShellBrand { display: none; }
 .authCard h1 { font-size: 40px; margin-bottom: 12px; }
 .authBrand { padding-bottom: 30px; margin-bottom: 30px; border-bottom: 1px solid var(--line); }
 .authIntro { color: var(--muted); line-height: 1.55; margin-bottom: 24px; }
@@ -868,8 +881,25 @@ h2, h3, p { margin-top: 0; }
   .accountActions > span { display: none; }
   .accountActions { gap: 6px; }
   .accountActions .primary, .accountActions .secondary { padding: 9px 10px; font-size: 12px; }
-  .authShell { padding: 16px; }
-  .authCard { padding: 24px; }
+  /* Mobile-preview finding: every sign-in gate (.authShell/.authCard)
+     dead-centered its card in a mostly-empty viewport with no branding
+     or way back — read as "a bare web form," not part of an app. This
+     switches the mobile layout to top-aligned with a small branded
+     back header (AuthBackHeader, hidden on desktop above) instead of
+     changing the card's own design. */
+  .authShell {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    min-height: 100vh;
+    min-height: 100dvh;
+    gap: 18px;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  }
+  .authShellBrand { display: flex; align-items: center; gap: 8px; padding: 6px 2px; color: var(--text); text-decoration: none; font-weight: 650; }
+  .authShellBrand .authBackArrow { font-size: 18px; line-height: 1; color: var(--muted); }
+  .authShellBrand .brand { font-size: 17px; letter-spacing: -0.3px; display: inline; }
+  .authCard { width: 100%; padding: 24px; }
 }
 
 /* Milestone 4: Financials */
@@ -960,6 +990,18 @@ h2, h3, p { margin-top: 0; }
    render with no extra line, so this never adds clutter to a clean
    number. */
 .portfolioSnapshotCoverageNote { font-size: 10.5px; color: var(--muted); }
+/* Needs Attention V2: the one interactive tile in this otherwise-
+   informational grid — spans every column (1 / -1 works whether the
+   grid is 4-wide on desktop or 2-wide on mobile) so it reads as a
+   deliberate full-width action row rather than a quarter-tile
+   competing for the same visual weight as Properties/Portfolio Value/
+   Monthly Rent/YTD NOI. */
+.needsAttentionSnapshotTile { grid-column: 1 / -1; border: 0; cursor: pointer; text-align: left; font: inherit; color: inherit; }
+.needsAttentionSnapshotHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.needsAttentionSnapshotHead > span:first-child { font-size: 12px; color: var(--muted); font-weight: var(--weight-medium); }
+.needsAttentionSnapshotCount { font-size: 20px; font-weight: 700; letter-spacing: -.3px; color: var(--text); }
+.needsAttentionSnapshotCountZero { color: var(--brand); font-size: 16px; }
+.needsAttentionModal { width: min(560px, 100%); }
 @media (max-width: 760px) {
   .portfolioSnapshotGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -1033,45 +1075,20 @@ h2, h3, p { margin-top: 0; }
 .recentActivityDetails[open] .recentActivitySummary::after { content: 'Hide'; }
 .recentActivityBody { margin-top: 14px; }
 
-/* Simplification + Maintenance Workspace V2, Phase E1: replaces the old
-   two-panel, bordered-card PropWatch section (propWatchCard/propWatchGrid/
-   propWatchPanel*) with ONE clean, unboxed section — no card border, no
-   internal grid/dividers, just a heading, a quiet count, and the same
-   .dashboardItemList/.dashboardItemRow rows every other dashboard list
-   already uses. "Fewer boxes," per this phase's own design principle. */
-.needsAttentionSection .sectionHead { margin-bottom: 4px; }
-.needsAttentionCount { margin: 0 0 10px; font-size: 13px; }
+/* Needs Attention V2: the modal opened by the compact snapshot tile
+   above. Replaces the old always-expanded inline section (Simplification
+   + Maintenance Workspace V2, Phase E1/E1.2's own Hide/Show/View all
+   controls, removed — a modal has no "collapsed" state of its own to
+   persist) — same .dashboardItemList/.dashboardItemRow rows every other
+   dashboard list already uses, just inside .modal instead of a bare
+   section. */
 .needsAttentionEmpty { margin: 0; font-size: 14px; }
-/* Phase E1.2: the count and the quiet text actions (View all/Show
-   less, Hide) share one row — count left, actions right — instead of
-   crowding the heading itself. Wraps on very narrow widths rather than
-   clipping/overlapping. */
-.needsAttentionMetaRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-.needsAttentionMetaRow .needsAttentionCount { margin: 0; }
-.needsAttentionActions { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
-/* Phase E1.1: "View all" was a bordered .secondary button — competed
-   too much with the heading for a secondary action. Plain brand-color
-   text with a small trailing chevron instead, same pattern as
-   .snapshotToggle's own quiet treatment, just brand-colored (not
-   muted) since this one IS meant to read as tappable/actionable.
-   Padding keeps a real tap target without looking like a box. */
-.needsAttentionViewAll { flex-shrink: 0; border: 0; background: transparent; padding: 6px 2px; color: var(--brand); font-weight: 650; font-size: 13px; display: inline-flex; align-items: center; gap: 1px; }
-.needsAttentionViewAll::after { content: '›'; font-size: 15px; line-height: 1; }
-.needsAttentionViewAll:hover { text-decoration: underline; }
-/* Phase E1.2: Hide/Show — the third quiet action, same treatment as
-   View all (no border/box, brand-color text) so the two never compete
-   for attention as differently-styled controls. No chevron (it isn't
-   "reveal a nested list," it's collapsing the whole section). */
-.needsAttentionHideToggle { flex-shrink: 0; border: 0; background: transparent; padding: 6px 2px; color: var(--brand); font-weight: 650; font-size: 13px; }
-.needsAttentionHideToggle:hover { text-decoration: underline; }
-/* Phase E1.1 (Section 6 — a small density pass): the shared
-   .dashboardItemRow padding (13px/14px) reads slightly tall stacked
-   three-deep on the dashboard — scoped to THIS section only, so
-   Recent Activity's own rows (same shared class) are untouched.
-   Title/pill/property/date/tap-target all stay exactly as they are;
-   only the row's own breathing room shrinks a little. */
-.needsAttentionSection .dashboardItemRow { padding: 10px 14px; }
-.needsAttentionSection .dashboardItemList { gap: 6px; }
+/* A small density pass, same reasoning as the old section's own
+   (removed) rule: the shared .dashboardItemRow padding reads slightly
+   tall stacked several deep inside a modal — scoped to THIS modal only,
+   so Recent Activity's own rows (same shared class) are untouched. */
+.needsAttentionModal .dashboardItemRow { padding: 10px 14px; }
+.needsAttentionModal .dashboardItemList { gap: 6px; }
 
 /* Milestone 5: leases, mortgage, insurance & maintenance */
 .moduleWorkspace { padding-bottom: 44px; }
@@ -1882,6 +1899,26 @@ h2, h3, p { margin-top: 0; }
   .landingFinalCta { padding: 4px 16px 56px; }
   .landingPricing { padding: 0 16px; margin: 6px auto 44px; }
   .landingSignInCard { padding: 24px 18px; border-radius: 18px; }
+  /* Mobile auth polish pass, item 6: on mobile widths the sign-in/sign-up
+     modal becomes a full-screen sheet instead of a floating card with
+     the marketing page still visible/scrollable behind it (a mobile-
+     preview finding) — a CSS-only change to the existing .overlay/.modal
+     classes this modal already uses, not a second auth system. The
+     existing "×" close button (.iconButton, already in the markup)
+     is the back affordance here. */
+  .landingAuthOverlay { padding: 0; place-items: stretch; }
+  .landingAuthModal { width: 100%; max-width: 100%; height: 100%; max-height: 100vh; max-height: 100dvh; }
+  .landingSignInCard {
+    height: 100%;
+    min-height: 100%;
+    border-radius: 0;
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow-y: auto;
+    padding: max(24px, env(safe-area-inset-top)) 22px max(24px, env(safe-area-inset-bottom));
+  }
 }
 
 /* Bugfix (found while diagnosing the mobile Document Intelligence modal

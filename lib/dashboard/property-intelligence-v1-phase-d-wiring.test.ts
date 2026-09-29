@@ -210,8 +210,8 @@ describe('Phase D: visual language matches the design system — quiet tiles, no
 })
 
 describe('Phase D: existing Dashboard sections are untouched (out of scope)', () => {
-  it('Needs Your Attention, maintenance/action rows, and My Properties are all still present and structurally unchanged', () => {
-    expect(pageSource).toContain('<h2>Needs Your Attention</h2>')
+  it('Needs Attention (now a compact tile + modal — see lib/dashboard/needs-attention-compact-card-wiring.test.ts) and My Properties are both still present', () => {
+    expect(pageSource).toContain('needsAttentionSnapshotTile')
     expect(pageSource).toContain('<h2>My Properties</h2>')
   })
 

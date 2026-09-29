@@ -461,15 +461,6 @@ const compactMoney = (n: number) => {
 // existing user-preferences table to hang it on), just localStorage.
 const SNAPSHOT_EXPANDED_STORAGE_KEY = 'proproster:portfolioSnapshotExpanded'
 
-// Simplification + Maintenance Workspace V2, Phase E1.2: Needs Your
-// Attention's own Hide/Show preference — same lightweight, non-
-// sensitive, localStorage-only pattern as Portfolio Snapshot above
-// (reused, not reinvented). Presentation only: hiding this section
-// never touches attentionItems/vacancyItems/openMaintenanceItems or
-// any other computed data, and never writes anything to the server —
-// it only decides whether the already-computed list is shown.
-const NEEDS_ATTENTION_VISIBLE_STORAGE_KEY = 'proproster:needsAttentionVisible'
-
 
 function EmptyModule({ title, text, action, onClick }: { title: string; text: string; action: string; onClick: () => void }) {
   return <div className="emptyModule"><strong>{title}</strong><span>{text}</span><button className="primary" onClick={onClick}>+ {action}</button></div>
@@ -715,46 +706,16 @@ export default function Home() {
       return next
     })
   }
-  // Simplification + Maintenance Workspace V2, Phase E1: the old
-  // whole-card PropWatch Hide/Show preference (propWatchExpanded) was
-  // replaced by this section's own "View all" subset toggle — show
-  // more of the SAME list, never a persisted preference on its own.
+  // Needs Attention V2 (mobile-preview follow-up): the dashboard now
+  // shows one compact, always-visible card (count only, or "0 ✓" when
+  // clear) instead of an inline list with its own Hide/Show/View all
+  // states — replacing the Phase E1/E1.2 presentation states above.
+  // Tapping the card opens a modal with the full, unfiltered list
+  // (attentionRows, unchanged) — there is no longer a "preview subset"
+  // to expand, so there is nothing left to persist as a preference.
   // attentionItems/vacancyItems/openMaintenanceItems/upcomingItems and
-  // how they're derived are completely unchanged — only this section's
-  // presentation is.
-  const [showAllAttention, setShowAllAttention] = useState(false)
-  // Phase E1.2: a THIRD presentation state — fully collapsing the
-  // section (distinct from showAllAttention's preview/expanded split).
-  // Same lightweight localStorage pattern as Portfolio Snapshot's own
-  // toggle above (see NEEDS_ATTENTION_VISIBLE_STORAGE_KEY's own
-  // comment). Presentation only — never touches the underlying
-  // attention data.
-  const [attentionVisible, setAttentionVisible] = useState(true)
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(NEEDS_ATTENTION_VISIBLE_STORAGE_KEY)
-      if (stored !== null) setAttentionVisible(stored !== 'false')
-    } catch {
-      // Storage unavailable (private browsing, disabled storage, etc.) —
-      // fall back to the default visible state, never throw.
-    }
-  }, [])
-  function toggleAttentionVisible() {
-    // Tapping Show always lands back in the PREVIEW state, never
-    // whatever expand state was active before Hide — reset
-    // showAllAttention here so hidden -> Show is always preview, per
-    // this phase's own spec.
-    setShowAllAttention(false)
-    setAttentionVisible((prev) => {
-      const next = !prev
-      try {
-        window.localStorage.setItem(NEEDS_ATTENTION_VISIBLE_STORAGE_KEY, String(next))
-      } catch {
-        // Best-effort persistence only — the toggle still works this session either way.
-      }
-      return next
-    })
-  }
+  // how they're derived are completely unchanged — only presentation.
+  const [attentionSheetOpen, setAttentionSheetOpen] = useState(false)
   // Property + Attention Usability V1, Part 3-C: dismissal is
   // presentation filtering only, loaded once per portfolio load
   // alongside everything else (see loadPortfolio()) — never touches any
@@ -3059,9 +3020,9 @@ export default function Home() {
                 </div>
               </div>
               {/* Investment Analysis is a related but secondary action next
-                  to Edit — the same quiet brand-color text-link treatment
-                  as .needsAttentionViewAll (Simplification + Maintenance
-                  Workspace V2, Phase E1.1) so it no longer competes
+                  to Edit — a quiet brand-color text-link treatment (no
+                  border/box, small trailing chevron — see
+                  .heroInvestmentLink below) so it no longer competes
                   equal-weight with Edit for attention. Functionality and
                   destination are unchanged. */}
               <div className="heroInfoActions"><button className="secondary" onClick={() => openEditProperty(selected)}>Edit</button><Link className="heroInvestmentLink" href={`/investment-tools/property-evaluator?propertyId=${selected.id}`}>Investment Analysis</Link></div>
@@ -3896,7 +3857,7 @@ export default function Home() {
       return (
         <DismissibleAttentionRow
           key={`attn-${item.type}-${item.id}`}
-          onOpen={() => goToNav(item.propertyId, item.nav)}
+          onOpen={() => { setAttentionSheetOpen(false); goToNav(item.propertyId, item.nav) }}
           onClear={() => void clearAttentionItem(key, item.propertyId, key.split(':')[0] as DismissibleAttentionKind)}
           clearLabel={`Clear: ${item.label} at ${item.propertyLabel}`}
         >
@@ -3914,7 +3875,7 @@ export default function Home() {
       return (
         <DismissibleAttentionRow
           key={`vac-${item.id}`}
-          onOpen={() => goToNav(item.propertyId, item.nav)}
+          onOpen={() => { setAttentionSheetOpen(false); goToNav(item.propertyId, item.nav) }}
           onClear={() => void clearAttentionItem(key, item.propertyId, 'vacancy')}
           clearLabel={`Clear: Vacant at ${item.propertyLabel}`}
         >
@@ -3931,7 +3892,7 @@ export default function Home() {
       return (
         <DismissibleAttentionRow
           key={`maint-${item.id}`}
-          onOpen={() => goToNav(item.propertyId, item.nav)}
+          onOpen={() => { setAttentionSheetOpen(false); goToNav(item.propertyId, item.nav) }}
           onClear={() => void clearAttentionItem(key, item.propertyId, 'open-maintenance')}
           clearLabel={`Clear: ${item.description} at ${item.propertyLabel}`}
         >
@@ -3945,12 +3906,6 @@ export default function Home() {
       )
     }),
   ]
-  // A "small useful subset," not a second giant feed — View all reveals
-  // the rest of this SAME already-computed list in place (no new page,
-  // matching "let View all expose... the appropriate existing fuller
-  // experience"); only shown when there is actually more to reveal.
-  const NEEDS_ATTENTION_PREVIEW_LIMIT = 3
-  const visibleAttentionRows = showAllAttention ? attentionRows : attentionRows.slice(0, NEEDS_ATTENTION_PREVIEW_LIMIT)
 
   return (
     <main className="shell">
@@ -3998,71 +3953,61 @@ export default function Home() {
               <span>{new Date().getFullYear()} YTD NOI</span>
               {portfolioCoverageNote(portfolioPerformance.noiYtd, 'with YTD data') && <span className="portfolioSnapshotCoverageNote">{portfolioCoverageNote(portfolioPerformance.noiYtd, 'with YTD data')}</span>}
             </div>
+            {/* Needs Attention V2: replaces the old always-expanded
+                inline list (Simplification + Maintenance Workspace V2,
+                Phase E1/E1.2, removed below) with one compact,
+                interactive tile in the SAME snapshot grid — "the
+                dashboard itself should remain compact." A full-width
+                grid row of its own (needsAttentionSnapshotTile spans
+                every column) rather than a quarter-width tile: unlike
+                the other four, this one is actionable, not just
+                informational, and a fifth quarter-tile would leave an
+                orphaned half-empty row on the 2-column mobile grid.
+                attentionRows is the exact same already-computed list
+                (attentionItems/vacancyItems/openMaintenanceItems) the
+                old section rendered — presentation change only. */}
+            <button
+              type="button"
+              className="portfolioSnapshotMetric needsAttentionSnapshotTile"
+              onClick={() => setAttentionSheetOpen(true)}
+            >
+              <span className="needsAttentionSnapshotHead">
+                <span>Needs Attention</span>
+                {attentionRows.length === 0
+                  ? <strong className="needsAttentionSnapshotCount needsAttentionSnapshotCountZero">0 <span aria-hidden="true">✓</span></strong>
+                  : <strong className="needsAttentionSnapshotCount">{attentionRows.length}</strong>}
+              </span>
+            </button>
           </div>
         ) : (
           <p className="snapshotCollapsedSummary">{properties.length} propert{properties.length === 1 ? 'y' : 'ies'}</p>
         )}
       </section>
 
-      {/* Simplification + Maintenance Workspace V2, Phase E1: the old
-          two-panel PropWatch card (Needs Your Attention + Upcoming, each
-          with its own subsections, inside a branded "PropWatch" section)
-          is gone in favor of ONE clean, compact section — "fewer boxes,
-          fewer competing actions." attentionItems/vacancyItems/
-          openMaintenanceItems are the exact same computed arrays
-          (see attentionRows above); this is a presentation change only.
-          upcomingItems is intentionally not shown here anymore — it is
-          still fully computed, just not part of the dashboard's
-          simplified surface (see attentionRows' own comment).
-
-          Phase E1.2: three presentation states — preview (the compact
-          subset + "View all"), expanded (the full list + "Show less"),
-          and hidden (just this compact row + "Show", no cards rendered
-          at all). "Hide" is presentation only: it never touches
-          attentionRows/attentionItems/vacancyItems/openMaintenanceItems
-          — the exact same data still computes every render, this only
-          decides whether it's shown. The empty state ("You're all
-          caught up") has no Hide/Show/View all controls at all — there
-          is nothing to hide or expand, matching this milestone's own
-          "no action that does nothing" rule. */}
-      <section className="commandCenterSection needsAttentionSection">
-        <div className="sectionHead">
-          <div><h2>Needs Your Attention</h2></div>
-          {/* HIDDEN state only: "Show" sits beside the heading itself,
-              since there's no count/actions row to anchor it to once
-              the cards are gone — matches the collapsed mock's
-              "Needs Your Attention    Show" single row. */}
-          {!attentionVisible && attentionRows.length > 0 && (
-            <button className="needsAttentionHideToggle" onClick={toggleAttentionVisible}>Show</button>
-          )}
-        </div>
-        {attentionRows.length === 0 ? (
-          // Calm compact empty state, not a large empty card.
-          <p className="muted needsAttentionEmpty">You&apos;re all caught up.</p>
-        ) : !attentionVisible ? (
-          // HIDDEN: the count stays visible (so collapsing never hides
-          // the fact that something needs a look) but no cards render.
-          <p className="muted needsAttentionCount">{attentionRows.length} item{attentionRows.length === 1 ? '' : 's'}</p>
-        ) : (
-          <>
-            <div className="needsAttentionMetaRow">
-              <p className="muted needsAttentionCount">{attentionRows.length} item{attentionRows.length === 1 ? '' : 's'}</p>
-              <div className="needsAttentionActions">
-                {/* "View all"/"Show less" only appears when there is
-                    actually more to reveal — an action that does
-                    nothing is worse than no action. Expands in place
-                    (the exact same already-computed list), never a
-                    second page/route. */}
-                {attentionRows.length > NEEDS_ATTENTION_PREVIEW_LIMIT && (
-                  <button className="needsAttentionViewAll" onClick={() => setShowAllAttention((v) => !v)}>{showAllAttention ? 'Show less' : 'View all'}</button>
-                )}
-                <button className="needsAttentionHideToggle" onClick={toggleAttentionVisible}>Hide</button>
-              </div>
+      {/* Needs Attention V2: the sheet the compact tile above opens —
+          the exact same attentionRows list the old always-expanded
+          section rendered, now shown in full (no preview-limit/View
+          all split; opening this modal IS "view all") inside the
+          existing .overlay/.modal pattern every other PropRoster modal
+          already uses, rather than a new sheet component. Each row's
+          onOpen already closes this modal before navigating (see
+          attentionRows above), so tapping an item both routes to the
+          real workflow and dismisses the sheet in one motion. */}
+      {attentionSheetOpen && (
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setAttentionSheetOpen(false)}>
+          <div className="modal needsAttentionModal">
+            <div className="modalTop">
+              <h2>Needs Attention</h2>
+              <button type="button" className="iconButton" aria-label="Close" onClick={() => setAttentionSheetOpen(false)}>&times;</button>
             </div>
-            <div className="dashboardItemList">{visibleAttentionRows}</div>
-          </>
-        )}
-      </section>
+            {attentionRows.length === 0 ? (
+              <p className="muted needsAttentionEmpty">You&apos;re all caught up.</p>
+            ) : (
+              <div className="dashboardItemList">{attentionRows}</div>
+            )}
+          </div>
+        </div>
+      )}
 
       <section><div className="sectionHead"><div><h2>My Properties</h2><p>{busy && !properties.length ? 'Loading your portfolio…' : `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} in your portfolio`}</p></div><button className="primary" onClick={() => openAddProperty()}>+ Add Property</button></div>
         {/* Property-First UX Cleanup: property cards are the dashboard's

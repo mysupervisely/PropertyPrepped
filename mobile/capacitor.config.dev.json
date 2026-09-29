@@ -1,0 +1,12 @@
+{
+  "$note": "PropRoster Mobile — DEVELOPMENT configuration. NOT used by default. Every `cap` command uses capacitor.config.ts (production, https://proproster.com) unless you explicitly pass --config mobile/capacitor.config.dev.json. This file exists purely so a developer can point the native shell at a local `next dev` server without ever touching the production config — do not delete this separation, and do not reference this file from any production build script.",
+  "appId": "com.proproster.app",
+  "appName": "PropRoster (Dev)",
+  "webDir": "www",
+  "server": {
+    "$note2": "Edit the URL below for your own machine before use. iOS Simulator can usually reach a Mac host at http://localhost:3000. Android Emulator must use http://10.0.2.2:3000 to reach the host machine, not localhost. A physical device needs your machine's LAN IP instead of either.",
+    "url": "http://localhost:3000",
+    "cleartext": true,
+    "androidScheme": "http"
+  }
+}
