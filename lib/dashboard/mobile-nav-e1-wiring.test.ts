@@ -15,63 +15,39 @@ function readFile(relativePath: string): string {
   return readFileSync(join(ROOT, relativePath), 'utf8')
 }
 
-const navSource = readFile('components/MobileBottomNav.tsx')
 const headerSource = readFile('components/AuthHeader.tsx')
 const authNavMenuSource = readFile('components/AuthNavMenu.tsx')
 const profileButtonSource = readFile('components/ProfileEntryButton.tsx')
 const pageSource = readFile('app/page.tsx')
 const globalsCss = readFile('app/globals.css')
 
-describe('Mobile bottom nav is exactly four destinations', () => {
-  it('Dashboard, Maintenance, PropCrew, Tax Center — in that order, nothing else', () => {
-    const labels = [...navSource.matchAll(/<span>([^<]+)<\/span>/g)].map((m) => m[1])
-    expect(labels).toEqual(['Dashboard', 'Maintenance', 'PropCrew', 'Tax Center'])
+// Mobile V2 (navigation simplification) removed the fixed mobile
+// bottom nav this describe block originally tested in detail
+// (components/MobileBottomNav.tsx — Dashboard/Maintenance/PropCrew/
+// Tax Center, exactly four destinations) — the component is deleted,
+// so there is nothing left to assert about ITS internal logic
+// (active-state matching, icon imports, the onDashboardNavigate
+// single-page-app mechanism, etc). What actually matters —
+// reachability of those four destinations — is covered by the
+// "Removed destinations are mobile-primary-nav-only" describe block
+// below (unchanged by this revision) and by
+// lib/dashboard/mobile-header-dashboard-polish-e1-1-wiring.test.ts's
+// own guard against AuthNavMenu's NAV_LINKS.
+describe('The fixed mobile bottom nav is gone (Mobile V2), not merely restyled', () => {
+  it('components/MobileBottomNav.tsx no longer exists', () => {
+    expect(() => readFile('components/MobileBottomNav.tsx')).toThrow()
   })
 
-  it('Properties is gone as a distinct destination — Dashboard now covers "/" unconditionally, no hasSelectedProperty split', () => {
-    expect(navSource).not.toMatch(/>Properties</)
-    expect(navSource).not.toContain('isProperties')
-    expect(navSource).not.toContain('hasSelectedProperty')
-    expect(navSource).toContain("const isDashboard = pathname === '/'")
+  it('AuthHeader no longer imports or renders it (a historical mention in a comment explaining the removal is fine)', () => {
+    expect(headerSource).not.toMatch(/import \{ MobileBottomNav \}/)
+    expect(headerSource).not.toMatch(/<MobileBottomNav/)
   })
 
-  it('Documents is gone as a bottom-nav destination (the route itself is untouched elsewhere — see the routes-not-deleted describe block below)', () => {
-    expect(navSource).not.toMatch(/>Documents</)
-    expect(navSource).not.toContain("href=\"/documents\"")
-  })
-
-  it('More is gone — no onMoreClick/moreOpen props, no sheet-trigger button in this component at all', () => {
-    expect(navSource).not.toMatch(/>More</)
-    expect(navSource).not.toContain('onMoreClick')
-    expect(navSource).not.toContain('moreOpen')
-  })
-
-  it('routes to the real, existing, unchanged pages — /, /maintenance, /propcrew, /tax-center', () => {
-    expect(navSource).toContain('href="/"')
-    expect(navSource).toContain('href="/maintenance"')
-    expect(navSource).toContain('href="/propcrew"')
-    expect(navSource).toContain('href="/tax-center"')
-  })
-
-  it('active-state logic: each of the four items lights up on its own exact pathname, no cross-contamination', () => {
-    expect(navSource).toContain("const isMaintenance = pathname === '/maintenance'")
-    expect(navSource).toContain("const isPropCrew = pathname === '/propcrew'")
-    expect(navSource).toContain("const isTaxCenter = pathname === '/tax-center'")
-  })
-
-  it('Dashboard still reuses the onDashboardNavigate/onBrandClick single-page-app mechanism (clicking it while already on "/" clears selectedId, not a same-route no-op)', () => {
-    expect(navSource).toContain('if (onDashboardNavigate && pathname === \'/\') { e.preventDefault(); onDashboardNavigate() }')
-  })
-
-  it('uses hand-authored line icons, not emoji, for every destination', () => {
-    expect(navSource).toContain("import { GridIcon, WrenchIcon, PeopleIcon, ReceiptIcon } from './icons/NavIcons'")
-    expect(navSource).not.toMatch(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u)
-  })
-})
-
-describe('AuthHeader no longer threads bottom-nav-specific props into MobileBottomNav (Phase E1, unchanged by E1.1)', () => {
-  it('MobileBottomNav is called with just onDashboardNavigate', () => {
-    expect(headerSource).toContain('<MobileBottomNav onDashboardNavigate={onBrandClick} />')
+  it('the hideMobileNav prop (a no-op once the bar it hid no longer exists) is gone from AuthHeader and every call site', () => {
+    expect(headerSource).not.toContain('hideMobileNav')
+    for (const page of ['app/pricing/page.tsx', 'app/privacy/page.tsx', 'app/terms/page.tsx', 'app/admin/realtor-leads/page.tsx', 'app/admin/subscriptions/page.tsx']) {
+      expect(readFile(page)).not.toContain('hideMobileNav')
+    }
   })
 })
 
@@ -273,18 +249,25 @@ describe('No horizontal overflow / tenant-provider-public isolation (unchanged i
     expect(globalsCss).toContain('.shell { max-width: 1220px; margin: 0 auto; padding: 0 28px 70px; overflow-x: hidden; }')
   })
 
-  it('MobileBottomNav is only ever mounted from AuthHeader — tenant/provider/public pages never import it directly', () => {
+  // Superseded by Mobile V2 — MobileBottomNav is deleted, so there is
+  // no longer anything for tenant/provider/public pages to NOT import;
+  // this now just confirms the removal is total (no stray reference
+  // left anywhere outside this file's own historical comments).
+  it('no page imports or references the deleted MobileBottomNav component', () => {
     const tenantSource = readFile('app/tenant/page.tsx')
     const providerSource = readFile('app/provider/[token]/page.tsx')
     expect(tenantSource).not.toContain('MobileBottomNav')
     expect(providerSource).not.toContain('MobileBottomNav')
+    expect(pageSource).not.toContain('MobileBottomNav')
   })
 })
 
 describe('No em dash in E1\'s new/modified user-facing copy', () => {
-  it('the new Needs Your Attention / Recent Activity / bottom-nav copy uses no em dash', () => {
+  // navSource (components/MobileBottomNav.tsx) is gone — its four
+  // labels now live in AuthNavMenu's NAV_LINKS instead, checked there.
+  it('the new Needs Your Attention / Recent Activity / hamburger-nav copy uses no em dash', () => {
     for (const label of ['Needs Your Attention', 'Recent Activity', 'View all', 'Show less', 'Dashboard', 'Maintenance', 'PropCrew', 'Tax Center']) {
-      expect(pageSource + navSource).not.toContain(`${label}—`)
+      expect(pageSource + authNavMenuSource).not.toContain(`${label}—`)
     }
   })
 })

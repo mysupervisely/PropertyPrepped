@@ -153,7 +153,7 @@ export default function RealtorLeadCenterPage() {
           internal admin tool is not one of the five primary landlord
           destinations this bottom nav describes — excluded, same as
           Pricing. */}
-      <AuthHeader hideMobileNav />
+      <AuthHeader />
 
       <section className="intro">
         <p className="eyebrow">REALTOR LEAD CENTER</p>

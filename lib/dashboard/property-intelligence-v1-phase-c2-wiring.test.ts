@@ -184,8 +184,19 @@ describe('Phase C.2, Part 4 (superseded by Phase C.3 follow-up, 2nd real-device 
     expect(cssSource).not.toContain('hasInstallHint')
   })
 
-  it('the bottom-nav clearance CSS custom property is still kept — it is independently required for the shell\'s own padding and is unrelated to the install-hint fix', () => {
-    expect(cssSource).toContain('var(--bottom-nav-height, 64px)')
+  // Mobile V2 (navigation simplification) later removed the fixed
+  // mobile bottom nav entirely (components/MobileBottomNav.tsx,
+  // deleted) — the --bottom-nav-height custom property, the
+  // body.hasBottomNav .shell/.installHint clearance rules, and the
+  // ResizeObserver that measured and published that height all went
+  // with it, since none of them has anything left to clear. .shell's
+  // mobile padding is now a plain, unmeasured value (see its own rule
+  // in app/globals.css) that still explicitly adds
+  // env(safe-area-inset-bottom). The three guards below are updated to
+  // confirm that removal instead of the old clearance mechanism they
+  // originally protected.
+  it('the --bottom-nav-height custom property and its ResizeObserver are gone — .shell no longer needs to clear a fixed bar that no longer exists', () => {
+    expect(cssSource).not.toContain('--bottom-nav-height')
   })
 
   it('.installHint is no longer position: fixed — it is an ordinary flex block using normal margin (including safe-area-aware trailing margin), not a fixed-position offset', () => {
@@ -196,17 +207,12 @@ describe('Phase C.2, Part 4 (superseded by Phase C.3 follow-up, 2nd real-device 
     expect(rule).toContain('env(safe-area-inset-')
   })
 
-  it('a plain, static (not measured) trailing margin gives the banner breathing room above the fixed bottom nav on narrow viewports — deliberately not exact, since normal in-flow whitespace costs nothing', () => {
-    expect(cssSource).toContain('body.hasBottomNav .installHint { margin-bottom: calc(70px')
+  it('the old body.hasBottomNav .installHint extra clearance is gone — the base .installHint rule\'s own safe-area-aware margin is sufficient now that there is no fixed bar to clear', () => {
+    expect(cssSource).not.toMatch(/body\.hasBottomNav\s*\.\w+\s*\{/)
   })
 
-  it('MobileBottomNav publishes its own real rendered height via ResizeObserver, not a guess — unaffected by the install-banner fix', () => {
-    const navSource = readFile('components/MobileBottomNav.tsx')
-    expect(navSource).toContain('new ResizeObserver(')
-    expect(navSource).toContain("document.documentElement.style.setProperty('--bottom-nav-height'")
-    expect(navSource).toContain('getBoundingClientRect().height')
-    // Cleans up on unmount — no stale clearance left behind.
-    expect(navSource).toContain("document.documentElement.style.removeProperty('--bottom-nav-height')")
+  it('components/MobileBottomNav.tsx no longer exists — removed by Mobile V2, not merely left unmeasuring', () => {
+    expect(() => readFile('components/MobileBottomNav.tsx')).toThrow()
   })
 
   it('InstallPrompt no longer measures itself or toggles any body class — no ResizeObserver, no --install-hint-height, no hasInstallHint anywhere in its source', () => {
@@ -243,13 +249,14 @@ describe('Phase C.2, Part 4 (superseded by Phase C.3 follow-up, 2nd real-device 
     expect(installSource).toContain('className="installHintDismiss"')
   })
 
-  it('bottom navigation itself is never redesigned — same 4 destinations, same classes', () => {
-    const navSource = readFile('components/MobileBottomNav.tsx')
-    expect(navSource).toContain('className="mobileBottomNav"')
-    expect(navSource).toContain('>Dashboard</span>')
-    expect(navSource).toContain('>Maintenance</span>')
-    expect(navSource).toContain('>PropCrew</span>')
-    expect(navSource).toContain('>Tax Center</span>')
+  // Superseded by Mobile V2 — the fixed mobile bottom nav this guard
+  // originally protected (components/MobileBottomNav.tsx) was later
+  // removed entirely, not merely left unredesigned. Its four
+  // destinations remain reachable via the hamburger menu (AuthNavMenu's
+  // NAV_LINKS) instead — covered by
+  // lib/dashboard/mobile-header-dashboard-polish-e1-1-wiring.test.ts.
+  it('the deleted bottom nav stays deleted', () => {
+    expect(() => readFile('components/MobileBottomNav.tsx')).toThrow()
   })
 })
 

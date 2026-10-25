@@ -107,8 +107,10 @@ describe('Mobile Property section selector, bottom navigation, and font stack ar
     expect(cssSource).toMatch(/\.mobilePropertyNav \{ display: none; \}/)
   })
 
-  it('mobile bottom navigation is untouched', () => {
-    expect(readFile('app/globals.css')).toContain('.mobileBottomNav { display: none; }')
+  // Superseded by Mobile V2, which intentionally removed the fixed
+  // mobile bottom navigation bar entirely — not merely left untouched.
+  it('mobile bottom navigation stays removed', () => {
+    expect(readFile('app/globals.css')).not.toMatch(/\.mobileBottomNav\s*\{/)
   })
 
   it('the global body font-family stack is byte-for-byte unchanged', () => {

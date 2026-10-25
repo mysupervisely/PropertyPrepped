@@ -79,10 +79,19 @@ describe('Search stays a compact circular icon control (Section 4) — unchanged
 })
 
 describe('Maintenance/PropCrew/Tax Center/Documents functionality untouched (Section 7 scope protection)', () => {
-  it('the four-item bottom nav is unchanged by this phase', () => {
-    const navSource = readFile('components/MobileBottomNav.tsx')
-    const labels = [...navSource.matchAll(/<span>([^<]+)<\/span>/g)].map((m) => m[1])
-    expect(labels).toEqual(['Dashboard', 'Maintenance', 'PropCrew', 'Tax Center'])
+  // Mobile V2 (navigation simplification) removed the fixed mobile
+  // bottom nav this test originally read (components/
+  // MobileBottomNav.tsx, deleted) in favor of the hamburger menu as
+  // the sole mobile navigation mechanism — AuthNavMenu's own NAV_LINKS
+  // already listed all four of these destinations (plus Documents and
+  // Investment Tools) before the bar was removed, so reachability is
+  // unaffected. This guard now checks that list instead.
+  it('Dashboard/Maintenance/Tax Center/PropCrew remain real navigation destinations, reachable via the hamburger menu', () => {
+    const navMenuSource = readFile('components/AuthNavMenu.tsx')
+    expect(navMenuSource).toContain("{ href: '/', label: 'Dashboard' }")
+    expect(navMenuSource).toContain("{ href: '/maintenance', label: 'Maintenance' }")
+    expect(navMenuSource).toContain("{ href: '/tax-center', label: 'Tax Center' }")
+    expect(navMenuSource).toContain("{ href: '/propcrew', label: 'PropCrew' }")
   })
 
   it('MaintenanceCaseDetail and the maintenance filter row were not touched by this commit', () => {

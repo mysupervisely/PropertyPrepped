@@ -11,9 +11,9 @@
 // from a live Supabase client with no seam to swap in fixture data
 // safely — see the milestone report for why that tradeoff was made).
 
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { Wordmark } from '../../components/Wordmark'
-import { GridIcon, WrenchIcon, PeopleIcon, ReceiptIcon, DollarIcon, UploadIcon, PersonIcon, HomeIcon, ChatIcon } from '../../components/icons/NavIcons'
+import { WrenchIcon, PeopleIcon, ReceiptIcon, DollarIcon, UploadIcon, PersonIcon, HomeIcon, ChatIcon } from '../../components/icons/NavIcons'
 import { resolveInitials } from '../../lib/user-profile/greeting'
 import {
   QUICK_ACTION_IDS, QUICK_ACTION_LABELS, QUICK_ACTION_SELECTION_SIZE, DEFAULT_QUICK_ACTIONS,
@@ -399,63 +399,13 @@ export default function PreviewApp() {
         </div>
       )}
 
-      <PreviewBottomNav screen={screen} onNavigate={(s) => { setScreen(s); setSelectedPropertyId(null); setNavMenuOpen(false) }} />
+      {/* Mobile V2 (navigation simplification) removed the fixed mobile
+          bottom navigation bar — both here and in the real app (see
+          components/AuthHeader.tsx's own comment; the real
+          components/MobileBottomNav.tsx this preview used to mirror is
+          deleted). The avatar/hamburger menu above is now the only
+          mobile navigation entry point, exactly matching production. */}
     </main>
-  )
-}
-
-// Visually identical to the real components/MobileBottomNav.tsx (same
-// classNames, same icons) but with onClick screen-switching instead of
-// next/link hrefs — the real component's links point at actual routes
-// (/maintenance, /propcrew, /tax-center), which would navigate this
-// single-page preview away to those real, backend-less pages instead of
-// switching its internal view. Not used by, or reachable from, any real
-// page — components/MobileBottomNav.tsx itself is unchanged and is
-// still exactly what production renders.
-function PreviewBottomNav({ screen, onNavigate }: { screen: Screen; onNavigate: (s: Screen) => void }) {
-  const navRef = useRef<HTMLElement>(null)
-
-  // Same two effects as the real components/MobileBottomNav.tsx — the
-  // body.hasBottomNav class and the measured --bottom-nav-height custom
-  // property are what .shell's own mobile CSS uses to keep the page's
-  // last real content clear of this fixed bar. Reproduced here (not
-  // imported) so that CSS interaction is actually exercised in the
-  // preview, not just the bar's visual appearance.
-  useEffect(() => {
-    document.body.classList.add('hasBottomNav')
-    return () => { document.body.classList.remove('hasBottomNav') }
-  }, [])
-  useEffect(() => {
-    const el = navRef.current
-    if (!el || typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(() => {
-      document.documentElement.style.setProperty('--bottom-nav-height', `${el.getBoundingClientRect().height}px`)
-    })
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
-
-  const items: { id: Screen; label: string; icon: React.ReactNode }[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: <GridIcon /> },
-    { id: 'maintenance', label: 'Maintenance', icon: <WrenchIcon /> },
-    { id: 'propcrew', label: 'PropCrew', icon: <PeopleIcon /> },
-    { id: 'taxcenter', label: 'Tax Center', icon: <ReceiptIcon /> },
-  ]
-  return (
-    <nav ref={navRef} className="mobileBottomNav" aria-label="Primary">
-      {items.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          aria-current={screen === item.id ? 'page' : undefined}
-          className={`mobileBottomNavItem${screen === item.id ? ' active' : ''}`}
-          onClick={() => onNavigate(item.id)}
-        >
-          {item.icon}
-          <span>{item.label}</span>
-        </button>
-      ))}
-    </nav>
   )
 }
 

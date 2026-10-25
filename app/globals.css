@@ -326,6 +326,29 @@ h2, h3, p { margin-top: 0; }
 .formGrid label, .uploadControls > label:first-child { font-size: 13px; font-weight: 650; }
 .formGrid input, .formGrid select, .uploadControls select { width: 100%; margin-top: 7px; border: 1px solid var(--line); border-radius: 9px; padding: 11px 12px; background: white; color: var(--text); outline: none; }
 .formGrid input:focus, .formGrid select:focus, .uploadControls select:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+/* Mobile V2, Section 5 — the shared currency-prefixed amount field.
+   Used by Tax Center's Add Expense amount and Smart Upload's expense
+   review amount (the only two places money is actually typed into a
+   plain decimal input in this app) — one implementation, not two, so
+   they can never visually drift apart.
+
+   The "$" is a fixed sibling span, absolutely positioned against the
+   WRAPPER (.currencyField), never against the input's own box — this
+   is what keeps it from moving as the user types (an input's own
+   ::before/content isn't a thing, and a character actually prepended
+   to the input's value would move the user's cursor and get submitted
+   as part of the amount, which is wrong). margin-top moves from the
+   input (the ordinary .formGrid input rule above) to this wrapper
+   instead, so the wrapper's own box is exactly the input's rendered
+   height with no extra margin inside it to throw off top: 50%. The
+   input keeps every other .formGrid input style (border/radius/focus
+   ring/background) via that same selector above — only its left
+   padding changes, here, to make room for the symbol without
+   overlapping typed digits. */
+.currencyField { position: relative; margin-top: 7px; }
+.currencyField input { margin-top: 0; padding-left: 28px; }
+.currencyFieldPrefix { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: inherit; line-height: 1; pointer-events: none; }
+.currencyField:focus-within .currencyFieldPrefix { color: var(--text); }
 .modalActions { display: flex; justify-content: flex-end; gap: 9px; padding-top: 22px; }
 
 .propertyHero { display: grid; grid-template-columns: minmax(300px, .9fr) 1.3fr; gap: 34px; align-items: center; padding: 34px 0 28px; }
@@ -710,7 +733,16 @@ h2, h3, p { margin-top: 0; }
   .photoGallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 760px) {
-  .shell { padding: 0 17px 50px; }
+  /* Mobile V2 — with the fixed bottom navigation bar removed (see the
+     AuthNavMenu comment above), .shell no longer needs the old
+     body.hasBottomNav rule's generous ~150px reserved clearance for it
+     — the page's own last real content can now sit much closer to the
+     bottom of the viewport. Still explicitly adds
+     env(safe-area-inset-bottom) on top of the existing 50px, though,
+     so content never sits flush against a notched iPhone's home-
+     indicator area now that there's no bar providing that clearance
+     implicitly. */
+  .shell { padding: 0 17px calc(50px + env(safe-area-inset-bottom)); }
   /* Mobile V2 — above-the-fold pass: 76px -> 64px. The header's own
      content (wordmark + the circular avatar button) is unaffected —
      both are vertically centered by .topbar's own align-items: center
@@ -2320,60 +2352,18 @@ h2, h3, p { margin-top: 0; }
   }
   .authNavMenuPanel a, .authNavMenuLogout { padding: 13px 14px; font-size: 15px; }
 }
-/* Phase E1 removed the bottom nav's own "More" item (Dashboard/
-   Maintenance/PropCrew/Tax Center only now — see MobileBottomNav.tsx's
-   own header comment), making the header's own trigger the only way to
-   reach this panel on every width, mobile included. Phase E1.1 made the
-   profile avatar (ProfileEntryButton) that trigger on mobile; Property
-   Overview + Pricing Polish V1 made it the trigger on desktop too,
-   removing the separate hamburger button that used to sit next to it
-   there. Documents/Investment Tools/Pricing/+Add Property/Log out are
-   reachable on every width via the avatar. */
-
-/* Simplification + Maintenance Workspace V2, Phase D.1 — persistent
-   mobile GLOBAL navigation (components/MobileBottomNav.tsx). Hidden
-   entirely at desktop widths (existing app breakpoint, matching .tabs'
-   own mobile/desktop split), light rather than a heavy toolbar (no
-   shadow beyond a hairline top border, generous but not oversized tap
-   targets), and always clears the iPhone home-indicator safe area. */
-.mobileBottomNav { display: none; }
-@media (max-width: 760px) {
-  .mobileBottomNav {
-    display: flex; align-items: stretch; justify-content: space-between;
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 8;
-    background: rgba(255, 255, 255, .96); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-    border-top: 1px solid var(--line);
-    padding: 4px max(6px, env(safe-area-inset-left)) env(safe-area-inset-bottom) max(6px, env(safe-area-inset-right));
-  }
-  .mobileBottomNavItem {
-    flex: 1 1 0%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-    border: 0; background: transparent; color: var(--muted); text-decoration: none;
-    padding: 6px 2px; min-height: 52px; border-radius: 10px; font-size: 10.5px; font-weight: var(--weight-medium);
-  }
-  .mobileBottomNavItem svg { width: 22px; height: 22px; }
-  .mobileBottomNavItem.active { color: var(--brand); }
-  .mobileBottomNavItem:active { background: var(--brand-soft); }
-}
-/* z-index 8 (above ordinary content, below .overlay's 10) — an open
-   modal's own dim backdrop covers this bar rather than the bar
-   floating on top of a dialog, per "must not overlap dialogs/modals." */
-
-/* Extra bottom clearance so a page's own last real content is never
-   hidden behind the FIXED bottom nav bar — scoped to body.hasBottomNav,
-   the class MobileBottomNav itself toggles only while mounted, so pages
-   that never render it (Pricing, the admin tool) are completely
-   unaffected. MobileBottomNav publishes its own real rendered height via
-   a ResizeObserver, as --bottom-nav-height on <html>, so this reads the
-   measured value rather than a guess — Dynamic Type/font-size settings
-   can wrap the nav's labels taller than any fixed constant would assume.
-   The px fallback only covers the brief instant before the first
-   measurement lands (or a browser without ResizeObserver). This rule is
-   independent of the install hint below — the install hint is no longer
-   a fixed overlay that needs its own clearance calculation at all (see
-   its own rule's comment). */
-@media (max-width: 760px) {
-  body.hasBottomNav .shell { padding-bottom: calc(var(--bottom-nav-height, 64px) + env(safe-area-inset-bottom) + 24px); }
-}
+/* The header's own trigger (ProfileEntryButton, the avatar) is the only
+   way to reach this panel, at every width. Documents/Investment Tools/
+   Pricing/+Add Property/Log out are reachable on every width via it.
+   Mobile V2 (navigation simplification): a fixed mobile bottom
+   navigation bar (components/MobileBottomNav.tsx — Dashboard/
+   Maintenance/PropCrew/Tax Center) used to ALSO duplicate four of these
+   destinations; it was removed as redundant with this menu and the
+   Dashboard's own customizable Quick Actions. Its CSS rules (the bar's
+   own container/item classes, plus body.hasBottomNav's extra .shell
+   clearance) were removed with it — see the "above-the-fold" mobile
+   .shell padding
+   below for its replacement, which no longer needs to clear a fixed bar. */
 
 /* Sub-tabs (Property / Documents / People second-level navigation) —
    a smaller pill-style nav distinct from .tabs so a five-top-level-tab
@@ -2850,16 +2840,6 @@ h2, h3, p { margin-top: 0; }
      stretched across a desktop viewport — a modest max-width, centered,
      keeps it feeling like a compact suggestion rather than a banner ad. */
   .installHint { max-width: 640px; margin-left: auto; margin-right: auto; }
-}
-@media (max-width: 760px) {
-  /* Plain, static clearance from the fixed bottom nav — not a measured
-     value, deliberately: this is ordinary trailing margin on the last
-     thing in the page, so being generous rather than exact costs
-     nothing (a little extra whitespace at the very bottom of a
-     scrollable page, never content hidden behind the nav). No
-     ResizeObserver, no CSS custom property, no ordering dependency on
-     anything else having measured itself first. */
-  body.hasBottomNav .installHint { margin-bottom: calc(70px + env(safe-area-inset-bottom) + 16px); }
 }
 @media (max-width: 480px) {
   .installHint { font-size: 12.5px; padding: 9px 12px; }
@@ -3521,6 +3501,11 @@ h2, h3, p { margin-top: 0; }
 .maintenanceAssignField, .maintenanceStatusField { display: grid; gap: 5px; font-size: 13px; font-weight: var(--weight-medium); }
 .maintenanceAssignField select, .maintenanceStatusField select { font-weight: 400; padding: 10px; border-radius: var(--radius-control); border: 1px solid var(--line); }
 .maintenanceAssignedNote, .maintenanceNextAction { font-size: 12px; margin: 0; }
+/* Mobile V2, Section 4 audit: the new inline link to /propcrew inside
+   these two existing notes — brand-colored rather than the browser
+   default blue/underline, matching this app's own link-free-by-default
+   visual language elsewhere. */
+.maintenanceAssignedNote a, .maintenanceOutreachStatus a { color: var(--brand); font-weight: 650; text-decoration: underline; }
 .maintenanceMarkCompleted { width: 100%; }
 
 /* Simplification + Maintenance Workspace V2, Phase C — the one

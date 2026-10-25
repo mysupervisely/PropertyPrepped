@@ -35,21 +35,15 @@ import Link from 'next/link'
 import { Wordmark } from './Wordmark'
 import { AuthNavMenu } from './AuthNavMenu'
 import { ProfileEntryButton } from './ProfileEntryButton'
-import { MobileBottomNav } from './MobileBottomNav'
 import { SmartUploadButton } from './SmartUploadButton'
 import { SmartUploadModal } from './SmartUpload/SmartUploadModal'
 
 export function AuthHeader({
-  onBrandClick, onSmartUploadCompleted, registerSmartUploadTrigger, hideMobileNav,
+  onBrandClick, onSmartUploadCompleted, registerSmartUploadTrigger,
 }: {
   onBrandClick?: () => void
   onSmartUploadCompleted?: () => void
   registerSmartUploadTrigger?: (fn: () => void) => void
-  // Pricing (a public/marketing surface even when the visitor happens
-  // to be signed in) and the internal admin tool are not primary
-  // landlord destinations this bottom nav's items describe — see each
-  // call site for the explicit opt-out.
-  hideMobileNav?: boolean
 }) {
   const [smartUploadOpen, setSmartUploadOpen] = useState(false)
   // Phase D.1 lifted this out of AuthNavMenu itself so the mobile
@@ -89,7 +83,7 @@ export function AuthHeader({
 
   return (
     <>
-      <header className={`topbar authHeader${hideMobileNav ? '' : ' authHeaderWithBottomNav'}`}>
+      <header className="topbar authHeader">
         <div className="topbarBrandGroup">
           {/* Phase D.2: the landlord's own profile entry point ("me").
               Property Overview + Pricing Polish V1: also the single
@@ -117,15 +111,17 @@ export function AuthHeader({
           <SmartUploadButton onClick={() => setSmartUploadOpen(true)} />
         </div>
       </header>
-      {/* Simplification + Maintenance Workspace V2, Phase D.1: GLOBAL
-          mobile navigation — hidden on desktop entirely via CSS, and
-          not rendered at all on pricing/the admin tool (hideMobileNav).
-          Phase E1: down to four destinations (Dashboard/Maintenance/
-          PropCrew/Tax Center) — see MobileBottomNav's own header
-          comment. "More" is gone from this bar; the header's profile
-          avatar above is the one way to reach that panel now, on
-          every width. */}
-      {!hideMobileNav && <MobileBottomNav onDashboardNavigate={onBrandClick} />}
+      {/* Mobile V2 (Quick Actions + navigation simplification): the
+          fixed mobile bottom navigation bar (Dashboard/Maintenance/
+          PropCrew/Tax Center — formerly components/MobileBottomNav.tsx,
+          now deleted) was removed. It had become redundant with the
+          Dashboard's own customizable Quick Actions and this exact
+          hamburger menu, which already lists every one of those four
+          destinations (plus Documents and Investment Tools) in
+          AuthNavMenu's own NAV_LINKS — removing the bar loses zero
+          navigation reach. The avatar above is now the single mobile
+          navigation entry point, at every breakpoint, the same as
+          desktop already was. */}
       <SmartUploadModal open={smartUploadOpen} onClose={() => setSmartUploadOpen(false)} onCompleted={onSmartUploadCompleted} />
     </>
   )

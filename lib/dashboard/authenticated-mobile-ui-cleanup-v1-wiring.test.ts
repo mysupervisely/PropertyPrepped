@@ -109,7 +109,14 @@ describe('Guardrails: no font/typography change, no billing/entitlement/schema c
     expect(pageSource).not.toMatch(/create table|alter table|create policy/i)
   })
 
-  it('mobile bottom navigation is untouched', () => {
-    expect(cssSource).toContain('.mobileBottomNav { display: none; }')
+  // Mobile V2 (navigation simplification) intentionally removed the
+  // fixed mobile bottom navigation bar entirely — components/
+  // MobileBottomNav.tsx is deleted, and .mobileBottomNav no longer
+  // exists in app/globals.css. This guard's original "untouched by
+  // THIS milestone" scope check is superseded; it now just confirms
+  // the bar stays gone rather than regressing by reappearing.
+  it('mobile bottom navigation stays removed (superseded by Mobile V2 — it is no longer present at all, not merely untouched)', () => {
+    expect(cssSource).not.toMatch(/\.mobileBottomNav\s*\{/)
+    expect(cssSource).not.toMatch(/\.mobileBottomNavItem\b/)
   })
 })
