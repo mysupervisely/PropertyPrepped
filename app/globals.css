@@ -153,6 +153,11 @@ button { cursor: pointer; }
    route entirely, not just from this page's own content. */
 .shell { max-width: 1220px; margin: 0 auto; padding: 0 28px 70px; overflow-x: hidden; }
 .workspaceShell { max-width: 1280px; }
+/* Mobile preview harness (app/preview) — a sticky banner making it
+   unmistakable this is fictional fixture data, never real account
+   content. */
+.previewRoot { position: relative; }
+.previewBanner { position: sticky; top: 0; z-index: 30; background: #7a3b12; color: white; text-align: center; font-size: 12px; font-weight: 700; letter-spacing: .02em; padding: 8px 12px; padding-top: max(8px, env(safe-area-inset-top)); }
 .topbar { min-height: 86px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); }
 .brand { font-size: 25px; font-weight: 750; letter-spacing: -0.7px; display: block; }
 /* Wordmark two-tone treatment (components/Wordmark.tsx) — "Prop" stays the
@@ -296,7 +301,10 @@ h2, h3, p { margin-top: 0; }
 .cardActions button, .rowActions button { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 8px 10px; font-size: 12px; color: var(--text); }
 .cardAlertBadge { display: block; width: 100%; text-align: left; border: 1px solid #e7c9a9; background: #fdf3e7; color: #8a5a1f; border-radius: 8px; padding: 8px 10px; font-size: 12px; font-weight: 650; margin-top: 12px; }
 .overlay { position: fixed; inset: 0; background: rgba(13, 24, 19, .42); display: grid; place-items: center; padding: 22px; z-index: 10; }
-.modal { width: min(700px, 100%); max-height: 92vh; overflow: auto; background: white; border-radius: 20px; padding: 24px; }
+/* Mobile M3: dvh redeclared after the vh fallback so mobile Safari's
+   collapsing toolbar doesn't clip modal content/buttons mid-session —
+   same pattern already used by .docIntelModal below. */
+.modal { width: min(700px, 100%); max-height: 92vh; max-height: 92dvh; overflow: auto; background: white; border-radius: 20px; padding: 24px; }
 .modalTop { display: flex; justify-content: space-between; align-items: start; }
 .modalTop h2 { margin-bottom: 18px; }
 .iconButton { border: 0; background: transparent; font-size: 28px; color: var(--muted); }
@@ -960,8 +968,39 @@ h2, h3, p { margin-top: 0; }
    render with no extra line, so this never adds clutter to a clean
    number. */
 .portfolioSnapshotCoverageNote { font-size: 10.5px; color: var(--muted); }
+/* Mobile Dashboard Grid V2: the compact, tappable Needs Attention tile
+   — a mobile-only fifth tile in this same grid (hidden on desktop
+   below), sized and styled exactly like its siblings via the shared
+   .portfolioSnapshotMetric base class, just as a real <button> instead
+   of a <div>. */
+.needsAttentionSnapshotTile { display: none; border: 0; width: 100%; cursor: pointer; text-align: left; font: inherit; color: inherit; }
+.needsAttentionSnapshotHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; }
+.needsAttentionSnapshotHead > span:first-child { font-size: 12px; color: var(--muted); font-weight: var(--weight-medium); }
+.needsAttentionSnapshotCount { font-size: 20px; font-weight: 700; letter-spacing: -.3px; color: var(--text); }
+.needsAttentionSnapshotCountZero { color: var(--brand); font-size: 16px; }
+.needsAttentionModal { width: min(560px, 100%); }
+.needsAttentionModal .dashboardItemRow { padding: 10px 14px; }
+.needsAttentionModal .dashboardItemList { gap: 6px; }
 @media (max-width: 760px) {
+  /* Exactly four compact cards, 2 columns x 2 rows: Portfolio Value |
+     Monthly Rent on top, Properties | Needs Attention on the bottom.
+     YTD NOI is desktop-only here (still fully computed either way —
+     see portfolioPerformance above — just not part of this mobile
+     set); Needs Attention is mobile-only (desktop keeps its existing
+     full Needs Your Attention section below, untouched). order values
+     only take effect once grid-template-columns above is 2 — desktop's
+     DOM order (Properties, Portfolio Value, Monthly Rent, YTD NOI)
+     stays exactly as rendered. */
   .portfolioSnapshotGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .portfolioSnapshotMetricValue { order: 1; }
+  .portfolioSnapshotMetricRent { order: 2; }
+  .portfolioSnapshotMetricProperties { order: 3; }
+  .needsAttentionSnapshotTile { display: flex; order: 4; }
+  .portfolioSnapshotMetricNOI { display: none; }
+  /* The desktop Needs Your Attention section below is fully replaced,
+     on mobile, by the compact card + sheet above — same attentionRows
+     data, same DismissibleAttentionRow components either way. */
+  .needsAttentionSection { display: none; }
 }
 @media (max-width: 460px) {
   /* Mobile Dashboard Spacing Micro-Fix: 18px top margin -> 8px on
@@ -2173,8 +2212,9 @@ h2, h3, p { margin-top: 0; }
 .profileEntryButton { display: block; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; border: 0; padding: 0; cursor: pointer; background: transparent; }
 .profileEntryButton:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .profileEntryAvatarImg { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
-.profileEntryFallback { width: 100%; height: 100%; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); border: 1px solid var(--line); box-sizing: border-box; }
-.profileEntryFallback svg { width: 20px; height: 20px; }
+/* Mobile Header Avatar V1: initials, not a generic icon — same circle,
+   same brand-soft/brand coloring, just real text now. */
+.profileEntryFallback { width: 100%; height: 100%; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); border: 1px solid var(--line); box-sizing: border-box; font-size: 13px; font-weight: 700; letter-spacing: .01em; text-transform: uppercase; }
 .authNavMenuPanel { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; min-width: 200px; background: white; border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 12px 28px rgba(15, 30, 24, .12); display: grid; }
 .authNavMenuPanel a { display: block; padding: 10px 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 14px; font-weight: var(--weight-medium); white-space: nowrap; }
 .authNavMenuPanel a:hover { background: var(--brand-soft); color: var(--brand); }
@@ -3022,8 +3062,21 @@ h2, h3, p { margin-top: 0; }
 .taxCenterReadinessSummary a { color: var(--brand); font-weight: 650; }
 
 @media (max-width: 760px) {
-  .taxCenterAddExpense { width: 100%; justify-self: stretch; }
+  /* Mobile Tax Center Polish V1: order: -1 on the button alone (no DOM
+     change, same single element/onClick the wiring test already
+     checks for) moves it visually above the summary strip, matching
+     "+ Add Expense near the top on mobile" without touching desktop's
+     DOM order or layout at all. */
+  .taxCenterAddExpense { width: 100%; justify-self: stretch; order: -1; }
   .taxCenterFilters { grid-template-columns: 1fr 1fr; }
+  /* Income | Expenses on top, Net beneath (full width, set apart with
+     its own divider — the one number that matters most here), Receipts
+     last (still visible, just de-emphasized — nothing removed). */
+  .taxCenterSummaryStrip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .taxCenterSummaryTileIncome { order: 1; }
+  .taxCenterSummaryTileExpenses { order: 2; }
+  .taxCenterSummaryTileNet { order: 3; grid-column: 1 / -1; border-left: 0; padding-left: 0; padding-top: 10px; border-top: 1px solid var(--line); }
+  .taxCenterSummaryTileReceipts { order: 4; grid-column: 1 / -1; border-left: 0; padding-left: 0; }
 }
 @media (max-width: 430px) {
   .taxCenterSummaryStrip { padding: 12px 10px; gap: 6px; }

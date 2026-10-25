@@ -556,12 +556,20 @@ function TaxCenterWorkspace() {
               tables, Property Detail) are all still below, completely
               unchanged — this doesn't replace any of them, it just puts
               the simple answer first. */}
+          {/* Mobile Tax Center Polish V1: on mobile, "+ Add Expense" moves
+              ABOVE the summary strip via CSS order (same button, same
+              existing openAddExpense() modal, same production backend —
+              presentation-order change only, see .taxCenterAddExpense's
+              mobile order rule below), and the strip itself reflows into
+              Income | Expenses on top, Net beneath (full width),
+              Receipts last. Desktop keeps the original DOM order (strip,
+              then button) and one-row-of-four layout, untouched. */}
           <section className="noPrint taxCenterSummarySection">
             <div className="taxCenterSummaryStrip">
-              <div className="taxCenterSummaryTile"><span>Income</span><strong>{money(yearSummary.income)}</strong></div>
-              <div className="taxCenterSummaryTile"><span>Expenses</span><strong>{money(yearSummary.expenses)}</strong></div>
+              <div className="taxCenterSummaryTile taxCenterSummaryTileIncome"><span>Income</span><strong>{money(yearSummary.income)}</strong></div>
+              <div className="taxCenterSummaryTile taxCenterSummaryTileExpenses"><span>Expenses</span><strong>{money(yearSummary.expenses)}</strong></div>
               <div className="taxCenterSummaryTile taxCenterSummaryTileNet"><span>Net</span><strong>{money(yearSummary.net)}</strong></div>
-              <div className="taxCenterSummaryTile"><span>Receipts</span><strong>{yearSummary.receiptCount}</strong></div>
+              <div className="taxCenterSummaryTile taxCenterSummaryTileReceipts"><span>Receipts</span><strong>{yearSummary.receiptCount}</strong></div>
             </div>
             <button type="button" className="primary taxCenterAddExpense" onClick={openAddExpense}>+ Add Expense</button>
           </section>

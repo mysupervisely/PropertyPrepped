@@ -730,6 +730,13 @@ export default function Home() {
   // comment). Presentation only — never touches the underlying
   // attention data.
   const [attentionVisible, setAttentionVisible] = useState(true)
+  // Mobile Dashboard Grid V2: the compact Needs Attention card's own
+  // sheet — mobile-only entry point into the exact same attentionRows
+  // list desktop's needsAttentionSection renders inline. Simple session
+  // state, no persistence (unlike attentionVisible/showAllAttention
+  // above, there is nothing to remember between visits — the sheet is
+  // always closed on load).
+  const [attentionSheetOpen, setAttentionSheetOpen] = useState(false)
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(NEEDS_ATTENTION_VISIBLE_STORAGE_KEY)
@@ -3962,16 +3969,32 @@ export default function Home() {
           Dashboard's own "how is my portfolio doing?" answer, in the
           same quiet tile language the individual Property Snapshot
           already uses (light neutral fill, rounded, no border/shadow) —
-          not a second, heavier design. Properties / Portfolio Value /
-          Monthly Rent / YTD NOI, in that order: what am I managing, what
-          is it worth, what's the current contractual rent picture, how
-          is this year actually going. Every value is portfolioPerformance
-          (computed above via computePortfolioPerformance) — no arithmetic
-          written in this JSX. A quiet coverage note appears only when a
-          tile is genuinely partial; complete coverage and "—" (fully
-          unavailable) both render cleanly with no extra line. No charts,
-          no gauges, no trend arrows, no portfolio score — Phase D is
-          glanceable, not an analytics panel. */}
+          not a second, heavier design. Every value is
+          portfolioPerformance (computed above via
+          computePortfolioPerformance) — no arithmetic written in this
+          JSX. A quiet coverage note appears only when a tile is
+          genuinely partial; complete coverage and "—" (fully
+          unavailable) both render cleanly with no extra line. No
+          charts, no gauges, no trend arrows, no portfolio score — Phase
+          D is glanceable, not an analytics panel.
+
+          Mobile Dashboard Grid V2: on desktop this is still the
+          original four-tile row (Properties / Portfolio Value /
+          Monthly Rent / YTD NOI) — completely unchanged. At mobile
+          widths (<=760px) it becomes exactly four compact cards in a
+          2x2 grid — Portfolio Value | Monthly Rent on top, Properties
+          | Needs Attention on the bottom — per modifier classes
+          (.portfolioSnapshotMetricValue/Rent/Properties) reordered in
+          CSS and YTD NOI (.portfolioSnapshotMetricNOI) hidden there
+          only; nothing is removed from the DOM or from desktop. The
+          fifth tile, Needs Attention, is mobile-only (hidden on
+          desktop via CSS) — it replaces the old always-expanded
+          Needs Your Attention list below with one compact, tappable
+          card: a live count (attentionRows is the exact same
+          attentionItems/vacancyItems/openMaintenanceItems array that
+          list always rendered — presentation change only) that opens
+          the sheet below, where every row still uses its own existing
+          onOpen navigation and onClear dismissal, unchanged. */}
       <section className="portfolioSnapshot">
         <div className="portfolioSnapshotHead">
           <h2>Portfolio Snapshot</h2>
@@ -3979,30 +4002,62 @@ export default function Home() {
         </div>
         {snapshotExpanded ? (
           <div className="portfolioSnapshotGrid">
-            <div className="portfolioSnapshotMetric">
+            <div className="portfolioSnapshotMetric portfolioSnapshotMetricProperties">
               <strong>{portfolioPerformance.propertyCount}</strong>
               <span>{portfolioPerformance.propertyCount === 1 ? 'Property' : 'Properties'}</span>
             </div>
-            <div className="portfolioSnapshotMetric">
+            <div className="portfolioSnapshotMetric portfolioSnapshotMetricValue">
               <strong>{metricCompactMoney(portfolioPerformance.portfolioValue)}</strong>
               <span>Portfolio Value</span>
               {portfolioCoverageNote(portfolioPerformance.portfolioValue, 'valued') && <span className="portfolioSnapshotCoverageNote">{portfolioCoverageNote(portfolioPerformance.portfolioValue, 'valued')}</span>}
             </div>
-            <div className="portfolioSnapshotMetric">
+            <div className="portfolioSnapshotMetric portfolioSnapshotMetricRent">
               <strong>{metricMoney(portfolioPerformance.monthlyRent, '/mo')}</strong>
               <span>Monthly Rent</span>
               {portfolioCoverageNote(portfolioPerformance.monthlyRent, 'with rent') && <span className="portfolioSnapshotCoverageNote">{portfolioCoverageNote(portfolioPerformance.monthlyRent, 'with rent')}</span>}
             </div>
-            <div className="portfolioSnapshotMetric">
+            <div className="portfolioSnapshotMetric portfolioSnapshotMetricNOI">
               <strong>{metricMoney(portfolioPerformance.noiYtd)}</strong>
               <span>{new Date().getFullYear()} YTD NOI</span>
               {portfolioCoverageNote(portfolioPerformance.noiYtd, 'with YTD data') && <span className="portfolioSnapshotCoverageNote">{portfolioCoverageNote(portfolioPerformance.noiYtd, 'with YTD data')}</span>}
             </div>
+            <button type="button" className="portfolioSnapshotMetric needsAttentionSnapshotTile" onClick={() => setAttentionSheetOpen(true)}>
+              <span className="needsAttentionSnapshotHead">
+                <span>Needs Attention</span>
+                {attentionRows.length === 0
+                  ? <strong className="needsAttentionSnapshotCount needsAttentionSnapshotCountZero">0 <span aria-hidden="true">✓</span></strong>
+                  : <strong className="needsAttentionSnapshotCount">{attentionRows.length}</strong>}
+              </span>
+            </button>
           </div>
         ) : (
           <p className="snapshotCollapsedSummary">{properties.length} propert{properties.length === 1 ? 'y' : 'ies'}</p>
         )}
       </section>
+
+      {/* Mobile Dashboard Grid V2: the sheet the compact card above
+          opens on mobile. attentionRows is the exact same list the
+          desktop section below also renders — same data, same
+          DismissibleAttentionRow components (so onOpen navigation and
+          onClear dismissal both keep working unchanged), just also
+          reachable from this compact entry point. Desktop never opens
+          this (the tile that triggers it is hidden there), so desktop's
+          experience is untouched. */}
+      {attentionSheetOpen && (
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setAttentionSheetOpen(false)}>
+          <div className="modal needsAttentionModal">
+            <div className="modalTop">
+              <h2>Needs Attention</h2>
+              <button type="button" className="iconButton" aria-label="Close" onClick={() => setAttentionSheetOpen(false)}>&times;</button>
+            </div>
+            {attentionRows.length === 0 ? (
+              <p className="muted needsAttentionEmpty">You&apos;re all caught up.</p>
+            ) : (
+              <div className="dashboardItemList">{attentionRows}</div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Simplification + Maintenance Workspace V2, Phase E1: the old
           two-panel PropWatch card (Needs Your Attention + Upcoming, each
@@ -4014,6 +4069,13 @@ export default function Home() {
           upcomingItems is intentionally not shown here anymore — it is
           still fully computed, just not part of the dashboard's
           simplified surface (see attentionRows' own comment).
+
+          Mobile Dashboard Grid V2: this full section is now desktop-
+          only (hidden at mobile widths via CSS, see .needsAttentionSection's
+          own rule) — mobile reaches the exact same attentionRows list
+          through the compact card + sheet above instead. Desktop's
+          three presentation states (preview + "View all", expanded +
+          "Show less", hidden + "Show") are completely unchanged.
 
           Phase E1.2: three presentation states — preview (the compact
           subset + "View all"), expanded (the full list + "Show less"),

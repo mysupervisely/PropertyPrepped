@@ -55,15 +55,17 @@ describe('Profile avatar is the single trigger for the shared account/tools menu
     expect(profileEntryButtonSource).not.toContain('NAV_LINKS')
   })
 
-  it('falls back to a neutral person icon (never a broken image, never emoji) when no profile photo is saved', () => {
-    expect(profileEntryButtonSource).toContain('PersonIcon')
+  it('Mobile Header Avatar V1: falls back to the user\'s own initials (never a broken image, never emoji, never a generic icon) when no profile photo is saved', () => {
+    expect(profileEntryButtonSource).toContain('{initials}')
+    expect(profileEntryButtonSource).not.toContain('PersonIcon')
     expect(profileEntryButtonSource).not.toMatch(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u)
   })
 
-  it('the avatar photo lookup lives in one shared hook, not duplicated between components', () => {
-    expect(profileEntryButtonSource).toContain("import { useProfileAvatarUrl } from '../lib/user-profile/use-profile-avatar'")
-    expect(useProfileAvatarSource).toContain("supabase.from('user_profiles').select('photo_path')")
+  it('the avatar photo + initials lookup lives in one shared hook, not duplicated between components', () => {
+    expect(profileEntryButtonSource).toContain("import { useProfileAvatarInfo } from '../lib/user-profile/use-profile-avatar'")
+    expect(useProfileAvatarSource).toContain("supabase.from('user_profiles').select('photo_path, first_name, last_name, display_name')")
     expect(useProfileAvatarSource).toContain("supabase!.storage.from('profile-photos').createSignedUrl(path, 3600)")
+    expect(useProfileAvatarSource).toContain('resolveInitials(row, user.email)')
   })
 })
 

@@ -1,0 +1,72 @@
+## PropRoster Mobile M4 — cloud iOS build → TestFlight (internal testing only).
+##
+## Why Codemagic and not Apple's own Xcode Cloud: Xcode Cloud's *first*
+## workflow must be configured from inside the local Xcode app (Apple's
+## own documentation, "Configuring your first Xcode Cloud workflow":
+## "Use Xcode to initially configure your project or workspace to use
+## Xcode Cloud"). There is no local Mac/Xcode available for this
+## project, so that bootstrap step is not possible. Codemagic builds
+## entirely from this YAML file on a cloud macOS runner and never
+## requires opening Xcode.
+##
+## No secrets live in this file. The three App Store Connect API key
+## values below are read from a Codemagic-managed encrypted variable
+## group (Team settings → Environment variables → group
+## "appstore_credentials"), created once in the Codemagic UI, never
+## committed here. See mobile/README.md's "Path B" section.
+##
+## This workflow is NOT wired to auto-trigger on push (no `triggering:`
+## block) — for M4 it is started manually from the Codemagic dashboard,
+## deliberately, while this is still a first-build/bring-up milestone.
+
+workflows:
+  ios-testflight:
+    name: PropRoster iOS — TestFlight (internal)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      groups:
+        - appstore_credentials
+      vars:
+        XCODE_PROJECT: "mobile/ios/App/App.xcodeproj"
+        XCODE_SCHEME: "App"
+        BUNDLE_ID: "com.proproster.app"
+      node: 20.19.0
+      xcode: latest
+
+    scripts:
+      - name: Install web app dependencies
+        script: npm ci
+
+      - name: Install mobile shell dependencies
+        script: |
+          cd mobile
+          npm ci
+
+      - name: Capacitor sync (iOS)
+        script: |
+          cd mobile
+          npx cap sync ios
+
+      - name: Build and archive signed .ipa
+        # DEVELOPMENT_TEAM ($APPLE_TEAM_ID, from the same
+        # "appstore_credentials" group) is required for automatic
+        # signing to resolve a team — the project's own
+        # CODE_SIGN_STYLE=Automatic has no team baked in, deliberately,
+        # since no signing identity is stored in this repository.
+        script: |
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME" \
+            --archive-flags="CURRENT_PROJECT_VERSION=$BUILD_NUMBER DEVELOPMENT_TEAM=$APPLE_TEAM_ID"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        submit_to_testflight: true

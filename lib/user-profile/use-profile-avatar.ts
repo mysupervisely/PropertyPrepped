@@ -16,24 +16,42 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabase'
 import { useAuthUser } from '../useAuthUser'
+import { resolveInitials } from './greeting'
 
 export function useProfileAvatarUrl(): string | null {
+  return useProfileAvatarInfo().avatarUrl
+}
+
+export type ProfileAvatarInfo = { avatarUrl: string | null; initials: string }
+
+/**
+ * Mobile Header Avatar V1: extends the same photo_path query this hook
+ * already ran with the three name fields resolveInitials() needs — one
+ * query, not two — so the header avatar's fallback can show real
+ * initials instead of a generic icon whenever no photo is on file.
+ * useProfileAvatarUrl() above is unchanged for any caller that only
+ * ever wanted the photo.
+ */
+export function useProfileAvatarInfo(): ProfileAvatarInfo {
   const { user } = useAuthUser()
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [initials, setInitials] = useState<string>('')
 
   useEffect(() => {
-    if (!supabase || !user) { setAvatarUrl(null); return }
+    if (!supabase || !user) { setAvatarUrl(null); setInitials(''); return }
     let cancelled = false
-    supabase.from('user_profiles').select('photo_path').eq('id', user.id).maybeSingle().then(({ data }) => {
+    supabase.from('user_profiles').select('photo_path, first_name, last_name, display_name').eq('id', user.id).maybeSingle().then(({ data }) => {
       if (cancelled) return
-      const path = (data as { photo_path?: string | null } | null)?.photo_path
+      const row = data as { photo_path: string | null; first_name: string | null; last_name: string | null; display_name: string | null } | null
+      setInitials(resolveInitials(row, user.email))
+      const path = row?.photo_path
       if (!path) { setAvatarUrl(null); return }
       supabase!.storage.from('profile-photos').createSignedUrl(path, 3600).then(({ data: signed }) => {
         if (!cancelled) setAvatarUrl(signed?.signedUrl || null)
       })
     })
     return () => { cancelled = true }
-  }, [user?.id])
+  }, [user?.id, user?.email])
 
-  return avatarUrl
+  return { avatarUrl, initials }
 }

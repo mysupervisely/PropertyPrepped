@@ -106,7 +106,7 @@ describe('Phase D: primary four metrics — Properties / Portfolio Value / Month
 
   it('Portfolio Value uses the compact abbreviation helper (matching the individual Property Snapshot\'s own large-figure convention) — never the exact-figure helper', () => {
     const tileIdx = snapshotSlice.indexOf('Portfolio Value')
-    const tileStart = snapshotSlice.lastIndexOf('<div className="portfolioSnapshotMetric">', tileIdx)
+    const tileStart = snapshotSlice.lastIndexOf('<div className="portfolioSnapshotMetric portfolioSnapshotMetricValue">', tileIdx)
     const tile = snapshotSlice.slice(tileStart, tileIdx)
     expect(tile).toContain('metricCompactMoney(portfolioPerformance.portfolioValue)')
   })

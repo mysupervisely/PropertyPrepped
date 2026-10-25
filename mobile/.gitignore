@@ -1,0 +1,28 @@
+# PropRoster Mobile — scoped to this directory only (nested .gitignore,
+# deliberately not merged into the repo root .gitignore so the existing
+# web app's ignore rules stay untouched).
+
+node_modules/
+
+# iOS build artifacts / CocoaPods (Podfile.lock IS committed — standard
+# CocoaPods practice, pins pod versions for reproducible builds).
+ios/App/Pods/
+ios/App/build/
+ios/App/DerivedData/
+ios/.build/
+*.xcuserstate
+xcuserdata/
+
+# Android build artifacts / local SDK path files.
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/*.iml
+android/app/*.iml
+android/captures/
+
+# Never commit a signing keystore or its credentials.
+android/app/*.keystore
+android/app/*.jks
