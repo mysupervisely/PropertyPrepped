@@ -33,18 +33,18 @@
 // Card surface (Show QR Code/Share My Card/Edit Card/Account &
 // Settings) to live behind this SAME button later — not built here.
 
-import { PersonIcon } from './icons/NavIcons'
-import { useProfileAvatarUrl } from '../lib/user-profile/use-profile-avatar'
+import { useProfileAvatarInfo } from '../lib/user-profile/use-profile-avatar'
 
 export function ProfileEntryButton({ menuOpen, onOpenMenu }: { menuOpen: boolean; onOpenMenu: () => void }) {
-  const avatarUrl = useProfileAvatarUrl()
+  const { avatarUrl, initials } = useProfileAvatarInfo()
 
+  // Mobile Header Avatar V1: the fallback (no photo on file yet) is now
+  // the landlord's own initials — a real, personal identity marker,
+  // never a generic silhouette icon and never a broken image.
   const avatarContent = avatarUrl ? (
     <img src={avatarUrl} alt="" className="profileEntryAvatarImg" />
   ) : (
-    // Safe fallback when no profile photo is saved yet — a plain
-    // neutral silhouette, never a broken image and never emoji.
-    <span className="profileEntryFallback"><PersonIcon /></span>
+    <span className="profileEntryFallback" aria-hidden="true">{initials}</span>
   )
 
   return (

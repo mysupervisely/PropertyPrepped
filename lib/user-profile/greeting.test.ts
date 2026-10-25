@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { greetingTimeOfDay, resolveGreetingName } from './greeting'
+import { greetingTimeOfDay, resolveGreetingName, resolveInitials } from './greeting'
 import type { UserProfile } from './types'
 
 function profile(overrides: Partial<UserProfile> = {}): UserProfile {
@@ -45,6 +45,40 @@ describe('resolveGreetingName — display name -> first name -> email prefix -> 
   it('handles an email with dots/underscores/hyphens in the local part', () => {
     expect(resolveGreetingName(null, 'j.smith@example.com')).toBe('J')
     expect(resolveGreetingName(null, '_jam_@example.com')).toBe('Jam')
+  })
+})
+
+describe('resolveInitials — first+last initial -> display_name words -> first_name words -> email prefix -> "?"', () => {
+  it('prefers first+last name initials over display_name', () => {
+    expect(resolveInitials(profile({ first_name: 'Jamie', last_name: 'Rivera', display_name: 'Jam' }), 'jamie.rivera@example.com')).toBe('JR')
+  })
+
+  it('falls back to display_name words when last_name is not set', () => {
+    expect(resolveInitials(profile({ display_name: 'Jamie Rivera' }), 'jamie.rivera@example.com')).toBe('JR')
+  })
+
+  it('takes the first two letters of a single-word display_name', () => {
+    expect(resolveInitials(profile({ display_name: 'Jam' }), 'jamie@example.com')).toBe('JA')
+  })
+
+  it('falls back to first_name alone when no last_name or display_name is set', () => {
+    expect(resolveInitials(profile({ first_name: 'Jamie' }), 'jamie@example.com')).toBe('JA')
+  })
+
+  it('falls back to the first two letters of the email prefix when no profile name is set', () => {
+    expect(resolveInitials(profile(), 'jamie.rivera@example.com')).toBe('JA')
+  })
+
+  it('falls back to "?" when there is no profile and no email', () => {
+    expect(resolveInitials(null, null)).toBe('?')
+  })
+
+  it('treats a whitespace-only name field as not set', () => {
+    expect(resolveInitials(profile({ first_name: '  ', last_name: '  ' }), 'jamie@example.com')).toBe('JA')
+  })
+
+  it('always uppercases, regardless of input case', () => {
+    expect(resolveInitials(profile({ first_name: 'jamie', last_name: 'rivera' }), 'jamie@example.com')).toBe('JR')
   })
 })
 
