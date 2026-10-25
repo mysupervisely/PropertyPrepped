@@ -90,8 +90,14 @@ describe('Add Property — first-property activation moment', () => {
   })
 
   it('returning to the dashboard (breadcrumb or brand click) also clears the one-time note, so it never resurfaces on a later revisit', () => {
-    expect(pageSource).toContain("onClick={() => { setSelectedId(null); setShowFirstPropertyNotice(false) }}")
-    expect(pageSource).toContain("<button className=\"breadcrumbBack\" onClick={() => { setSelectedId(null); setShowFirstPropertyNotice(false) }}>")
+    // Mobile V2 — Area E: both now go through the shared closeProperty()
+    // helper (history-aware back navigation) instead of calling
+    // setSelectedId(null) inline, but it still clears the one-time note
+    // itself, same as before.
+    expect(pageSource).toContain('function closeProperty() {')
+    expect(pageSource).toContain('setShowFirstPropertyNotice(false)')
+    expect(pageSource).toContain('<AuthHeader onBrandClick={closeProperty}')
+    expect(pageSource).toContain('<button className="breadcrumbBack" onClick={closeProperty}>')
   })
 
   it('the note never claims anything about tax/deductibility or invents a completion score — just a plain next-step hint', () => {

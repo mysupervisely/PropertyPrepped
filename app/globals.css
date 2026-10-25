@@ -752,6 +752,8 @@ h2, h3, p { margin-top: 0; }
   .mobilePropertyNavMenu button { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; border-radius: 8px; padding: 11px 10px; background: transparent; color: var(--text); font-weight: var(--weight-medium); font-size: 14.5px; text-align: left; }
   .mobilePropertyNavMenu button.active { background: var(--brand-soft); color: var(--brand); font-weight: 700; }
   .mobilePropertyNavCheck { display: inline-block; width: 14px; color: var(--brand); font-size: 13px; flex-shrink: 0; }
+  /* Mobile V2: Maintenance's open-case count, in the same dropdown row. */
+  .mobilePropertyNavBadge { margin-left: auto; background: var(--brand); color: white; border-radius: 999px; font-size: 11px; font-weight: 700; padding: 1px 7px; flex-shrink: 0; }
   .uploadControls { grid-template-columns: 1fr; }
   .documentRow { grid-template-columns: 42px minmax(0, 1fr); }
   .rowActions { grid-column: 2; }
@@ -1001,6 +1003,21 @@ h2, h3, p { margin-top: 0; }
      on mobile, by the compact card + sheet above — same attentionRows
      data, same DismissibleAttentionRow components either way. */
   .needsAttentionSection { display: none; }
+}
+/* Mobile V2 — Dashboard Quick Actions: mobile-only (desktop already
+   reaches all four from their normal places and didn't ask for this
+   row) — hidden by default, shown only inside the <=760px block below. */
+.mobileQuickActions { display: none; }
+.mobileQuickActionsHeading { font-size: 13px; font-weight: var(--weight-medium); color: var(--muted); margin: 0 0 10px; text-transform: uppercase; letter-spacing: .02em; }
+.mobileQuickActionsGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.mobileQuickAction { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; text-decoration: none; color: var(--text); font-size: 13px; font-weight: var(--weight-medium); cursor: pointer; text-align: left; font-family: inherit; }
+.mobileQuickAction:active { background: var(--bg); }
+.mobileQuickActionIcon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); font-size: 15px; font-weight: 700; }
+@media (max-width: 760px) {
+  .mobileQuickActions { display: block; margin-bottom: 30px; }
+}
+@media (max-width: 430px) {
+  .mobileQuickAction { padding: 12px; font-size: 12.5px; }
 }
 @media (max-width: 460px) {
   /* Mobile Dashboard Spacing Micro-Fix: 18px top margin -> 8px on
@@ -2097,6 +2114,16 @@ h2, h3, p { margin-top: 0; }
   .tenantConnectThreadModal { max-height: 94vh; }
   .tenantConnectThread { max-height: 38vh; }
   .tenantConnectBubble { max-width: 92%; }
+  /* Mobile V2: the SAME compose controls (same textarea, same file
+     input, same sendReply()/sendMessage() call) — just stacked full-
+     width instead of a cramped side-by-side row, so both "Attach
+     photo" and "Reply" are comfortable, unambiguous tap targets on a
+     phone. No change to what gets sent, uploaded, or how it's
+     authorized. */
+  .tenantConnectCompose textarea { min-height: 72px; }
+  .tenantConnectComposeRow { flex-direction: column; align-items: stretch; }
+  .tenantConnectAttachLabel { max-width: none; text-align: center; padding: 11px 14px; }
+  .tenantConnectComposeRow .primary { padding: 12px 14px; }
 }
 
 /* Investment Tools 2.0 — AddressAutocomplete (shared everywhere PropRoster

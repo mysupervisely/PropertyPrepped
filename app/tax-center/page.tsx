@@ -245,6 +245,23 @@ function TaxCenterWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Mobile Dashboard Quick Actions V1: reuses the exact same one-shot
+  // query-flag pattern app/page.tsx's own "?add=property" already
+  // established (see that file's own comment) — the dashboard's "Add
+  // Expense" quick action links to "/tax-center?add=expense", this
+  // reads it once properties have loaded (openAddExpense() needs them
+  // for emptyExpenseDraft), opens the exact same modal the page's own
+  // "+ Add Expense" button uses, then strips the flag so a refresh or
+  // back-navigation doesn't re-open it.
+  useEffect(() => {
+    if (!loaded) return
+    if (typeof window === 'undefined') return
+    if (new URLSearchParams(window.location.search).get('add') !== 'expense') return
+    window.history.replaceState(null, '', window.location.pathname)
+    openAddExpense()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded])
+
   const availableYears = useMemo(() => getAvailableTaxYears(transactions), [transactions])
 
   // Default intelligently to the current year, but if the current year

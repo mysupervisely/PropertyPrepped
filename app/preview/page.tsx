@@ -56,16 +56,23 @@ export default function PreviewApp() {
   const [navMenuOpen, setNavMenuOpen] = useState(false)
   const [newRequestOpen, setNewRequestOpen] = useState(false)
   const [attentionSheetOpen, setAttentionSheetOpen] = useState(false)
+  // Mobile V2 — Quick Actions' Invite Tenant (preview parity): same
+  // zero/one/many branching as app/page.tsx's startInviteTenantQuickAction.
+  const [inviteTenantPickerOpen, setInviteTenantPickerOpen] = useState(false)
 
   function goDashboard() {
     setScreen('dashboard')
     setSelectedPropertyId(null)
     setNavMenuOpen(false)
   }
-  function openProperty(id: string) {
+  function openProperty(id: string, tab: PropertyTab = 'overview') {
     setSelectedPropertyId(id)
-    setPropertyTab('overview')
+    setPropertyTab(tab)
     setScreen('property')
+  }
+  function startInviteTenantQuickAction() {
+    if (FIXTURE_PROPERTIES.length === 1) { openProperty(FIXTURE_PROPERTIES[0].id, 'tenant'); return }
+    setInviteTenantPickerOpen(true)
   }
   // Needs Attention V2 (preview): mirrors the real app's
   // goToNav/NavTarget mechanism — each fixture item's own `nav` says
@@ -138,7 +145,34 @@ export default function PreviewApp() {
       )}
 
       {screen === 'dashboard' && (
-        <DashboardScreen onOpenProperty={openProperty} onOpenAttention={() => setAttentionSheetOpen(true)} />
+        <DashboardScreen
+          onOpenProperty={openProperty}
+          onOpenAttention={() => setAttentionSheetOpen(true)}
+          onAddExpense={() => setScreen('taxcenter')}
+          onViewMaintenance={() => setScreen('maintenance')}
+          onInviteTenant={startInviteTenantQuickAction}
+        />
+      )}
+
+      {/* Mobile V2 — Quick Actions' Invite Tenant picker (preview parity):
+          same .overlay/.modal/.dashboardItemList classes as app/page.tsx's
+          picker, shown only when there's more than one fixture property. */}
+      {inviteTenantPickerOpen && (
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setInviteTenantPickerOpen(false)}>
+          <div className="modal">
+            <div className="modalTop">
+              <h2>Invite a tenant — which property?</h2>
+              <button type="button" className="iconButton" aria-label="Close" onClick={() => setInviteTenantPickerOpen(false)}>&times;</button>
+            </div>
+            <div className="dashboardItemList">
+              {FIXTURE_PROPERTIES.map((p) => (
+                <button key={p.id} type="button" className="dashboardItemRow" onClick={() => { setInviteTenantPickerOpen(false); openProperty(p.id, 'tenant') }}>
+                  <span className="dashboardItemBody"><strong>{p.address}</strong><span className="muted">{p.city}, {p.state}</span></span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
       {attentionSheetOpen && (
@@ -272,12 +306,46 @@ function PreviewBottomNav({ screen, onNavigate }: { screen: Screen; onNavigate: 
   )
 }
 
-function DashboardScreen({ onOpenProperty, onOpenAttention }: { onOpenProperty: (id: string) => void; onOpenAttention: () => void }) {
+function DashboardScreen({ onOpenProperty, onOpenAttention, onAddExpense, onViewMaintenance, onInviteTenant }: {
+  onOpenProperty: (id: string) => void
+  onOpenAttention: () => void
+  onAddExpense: () => void
+  onViewMaintenance: () => void
+  onInviteTenant: () => void
+}) {
   return (
     <>
       <section className="intro">
         <p className="eyebrow">DASHBOARD</p>
         <h1>Good afternoon, {FIXTURE_LANDLORD.name.split(' ')[0]}.</h1>
+      </section>
+
+      {/* Mobile V2 — Quick Actions (preview parity): same
+          .mobileQuickActions/.mobileQuickActionsGrid/.mobileQuickAction
+          classes as app/page.tsx, hidden above the mobile breakpoint by
+          the same CSS rule. Add Property stays decorative (no onClick),
+          matching the "+ Add Property" button below — this preview has
+          no write backend for either. */}
+      <section className="mobileQuickActions">
+        <p className="mobileQuickActionsHeading">Quick Actions</p>
+        <div className="mobileQuickActionsGrid">
+          <button type="button" className="mobileQuickAction" onClick={onAddExpense}>
+            <span className="mobileQuickActionIcon" aria-hidden="true">$</span>
+            Add Expense
+          </button>
+          <button type="button" className="mobileQuickAction">
+            <span className="mobileQuickActionIcon" aria-hidden="true">+</span>
+            Add Property
+          </button>
+          <button type="button" className="mobileQuickAction" onClick={onViewMaintenance}>
+            <span className="mobileQuickActionIcon" aria-hidden="true">🔧</span>
+            View Maintenance
+          </button>
+          <button type="button" className="mobileQuickAction" onClick={onInviteTenant}>
+            <span className="mobileQuickActionIcon" aria-hidden="true">👤</span>
+            Invite Tenant
+          </button>
+        </div>
       </section>
 
       {/* Mobile Dashboard Grid V2 (preview parity): the real app's

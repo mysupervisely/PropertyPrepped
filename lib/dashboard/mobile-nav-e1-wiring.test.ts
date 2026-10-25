@@ -184,16 +184,23 @@ describe('Dashboard: Needs Your Attention replaces the old standalone PropWatch 
     expect(pageSource).toContain('<p className="muted needsAttentionEmpty">You&apos;re all caught up.</p>')
   })
 
-  // Scoped to the dashboard's own JSX (from attentionRows through the
-  // end of the file) rather than the whole large file — the property
-  // WORKSPACE view (a completely different branch of this same
-  // component, for a single selected property) has its own long-
-  // standing, unrelated "QUICK ACTIONS" eyebrow (Documents/Photos/
-  // Maintenance/Add transaction shortcuts inside one property), which
-  // this guard must not flag.
-  it('no Quick Actions section was added to the dashboard (Section 7 — explicitly out of scope)', () => {
-    const dashboardSource = pageSource.slice(pageSource.indexOf('const attentionRows = ['))
-    expect(dashboardSource).not.toMatch(/Quick Actions/i)
+  // Section 7 originally kept a dashboard Quick Actions row explicitly
+  // out of scope. Mobile V2 Area A reverses that scoping decision on
+  // purpose — a mobile-only Quick Actions row (Add Expense/Add
+  // Property/View Maintenance/Invite Tenant) was added to the
+  // dashboard, each one routing to an existing workflow rather than
+  // inventing a new one. This guard now checks the opposite of what it
+  // used to: that the row exists, is CSS-scoped to mobile (hidden by
+  // default, shown only under the mobile breakpoint), and that none of
+  // its four actions duplicate backend logic that already exists
+  // elsewhere in this file.
+  it('a mobile-only dashboard Quick Actions row exists (Mobile V2 Area A) and reuses existing workflows rather than duplicating them', () => {
+    expect(pageSource).toContain('<section className="mobileQuickActions">')
+    expect(globalsCss).toContain('.mobileQuickActions { display: none; }')
+    expect(pageSource).toContain('<Link href="/?add=property"')
+    expect(pageSource).toContain('<Link href="/tax-center?add=expense"')
+    expect(pageSource).toContain('<Link href="/maintenance"')
+    expect(pageSource).toContain('startInviteTenantQuickAction()')
   })
 })
 

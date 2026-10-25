@@ -737,6 +737,10 @@ export default function Home() {
   // above, there is nothing to remember between visits — the sheet is
   // always closed on load).
   const [attentionSheetOpen, setAttentionSheetOpen] = useState(false)
+  // Mobile V2 — Quick Actions' Invite Tenant: only needs its own state
+  // for the "which property" picker (more than one property). Zero or
+  // one property never opens this — see startInviteTenantQuickAction().
+  const [inviteTenantPickerOpen, setInviteTenantPickerOpen] = useState(false)
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(NEEDS_ATTENTION_VISIBLE_STORAGE_KEY)
@@ -1322,6 +1326,12 @@ export default function Home() {
   const selectedTaxCustomItems = taxCustomItems.filter((row) => row.property_id === selectedId)
   const selectedContacts = contacts.filter((row) => row.property_id === selectedId)
   const selectedRequests = maintenanceRequests.filter((row) => row.property_id === selectedId)
+  // Mobile V2 — Property Navigation: an open-case count for the mobile
+  // section selector's Maintenance row (see .mobilePropertyNav below) —
+  // the exact same selectedRequests this file's own Maintenance tab
+  // already renders, just counted. "Open" mirrors that tab's own
+  // definition (not yet Completed), not a new status concept.
+  const selectedOpenMaintenanceCount = selectedRequests.filter((r) => r.status !== 'Completed').length
   // Maintenance Coordination M2.1 review pass (Part 4) — maintenance_requests
   // itself has no category column (only tenant_requests does); reuse the
   // portfolio-wide tenantRequests already fetched for PropWatch above to
@@ -1880,6 +1890,14 @@ export default function Home() {
   }
 
   const openProperty = (id: string, tab: Tab = 'Overview', docsSubTab?: DocumentsSubTab, propSubTab?: PropertySubTab, rentSubTab?: RentSubTab) => {
+    // Mobile V2 — Area E: give the dashboard-to-property transition its own
+    // history entry so the native/browser back gesture returns to the
+    // dashboard instead of leaving the app. Only pushed when we're actually
+    // leaving the dashboard (selectedId null); switching tabs/properties
+    // while one is already open reuses that same entry.
+    if (selectedId === null && typeof window !== 'undefined') {
+      window.history.pushState({ proproster: 'property' }, '', window.location.pathname)
+    }
     setSelectedId(id)
     setActiveTab(tab)
     if (docsSubTab) setDocumentsSubTab(docsSubTab)
@@ -1889,6 +1907,50 @@ export default function Home() {
     // Phase B.1: also resets horizontal position — same reasoning as
     // surfaceError() above.
     window.scrollTo({ left: 0, top: 0, behavior: 'smooth' })
+  }
+
+  // Mobile V2 — Area E: the "← All Properties" breadcrumb and header logo
+  // both close the open property the same way a back gesture does, so they
+  // pop the entry openProperty() pushed (if we're actually sitting on it)
+  // rather than clearing selectedId out from under it — otherwise the next
+  // real back-press would be a silent no-op (popstate firing on an already-
+  // null selectedId) before it actually left the page.
+  function closeProperty() {
+    if (typeof window !== 'undefined' && (window.history.state as { proproster?: string } | null)?.proproster === 'property') {
+      window.history.back()
+    } else {
+      setSelectedId(null)
+    }
+    setShowFirstPropertyNotice(false)
+  }
+
+  // Mobile V2 — Area E: the other half of openProperty()'s history.pushState
+  // above. A back gesture (browser back, or the Capacitor hardware back
+  // button via NativeBackButtonHandler, which already defers to real
+  // history entries — see lib/mobile/backButton.ts) fires `popstate`; if a
+  // property is open at that point, this just closes it and returns to the
+  // dashboard instead of leaving the whole app on the first back-press.
+  // Only acts while a property is actually open, so it never interferes
+  // with any other history traffic (e.g. a future route change).
+  useEffect(() => {
+    const onPopState = () => {
+      setSelectedId((current) => (current === null ? current : null))
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  // Mobile V2 — Quick Actions' Invite Tenant: no new invite mechanism,
+  // just routing to the one that already exists (TenantConnectStatusCard
+  // on a property's Rent > Tenant tab). Zero properties: nothing to
+  // invite a tenant to yet, so fall back to Add Property. Exactly one:
+  // skip the picker and deep-link straight there, same openProperty()
+  // call the picker's own rows use. More than one: open the picker,
+  // since there is no way to guess which property without asking.
+  function startInviteTenantQuickAction() {
+    if (properties.length === 0) { openAddProperty(); return }
+    if (properties.length === 1) { openProperty(properties[0].id, 'Rent', undefined, undefined, 'Tenant'); return }
+    setInviteTenantPickerOpen(true)
   }
 
   // Smart Upload Foundation: a "PrepareOnly" item (lease/insurance/
@@ -3026,7 +3088,7 @@ export default function Home() {
 
     return (
       <main className="shell workspaceShell">
-        <AuthHeader onBrandClick={() => { setSelectedId(null); setShowFirstPropertyNotice(false) }} onSmartUploadCompleted={() => void loadPortfolio()} registerSmartUploadTrigger={(fn) => { smartUploadTriggerRef.current = fn }} />
+        <AuthHeader onBrandClick={closeProperty} onSmartUploadCompleted={() => void loadPortfolio()} registerSmartUploadTrigger={(fn) => { smartUploadTriggerRef.current = fn }} />
         {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
         {/* Onboarding & First-Run Experience V2 — the one-time activation
             note (see addProperty()'s isFirstProperty branch). Plain,
@@ -3045,7 +3107,7 @@ export default function Home() {
             "these are contextual property actions, not global
             navigation... do not make users open the hamburger just to
             edit the property they are currently viewing"). */}
-        <button className="breadcrumbBack" onClick={() => { setSelectedId(null); setShowFirstPropertyNotice(false) }}>← All Properties</button>
+        <button className="breadcrumbBack" onClick={closeProperty}>← All Properties</button>
 
         <section className="propertyHero">
           <div className="heroPhoto">{selected.coverUrl ? <img src={selected.coverUrl} alt={selected.address} /> : <div className="heroPlaceholder"><span>Property photo</span><small>Add photos in the Photos tab</small></div>}</div>
@@ -3118,6 +3180,13 @@ export default function Home() {
                   <button type="button" className={activeTab === tab ? 'active' : ''} onClick={() => { setActiveTab(tab); setMobileTabMenuOpen(false) }}>
                     <span className="mobilePropertyNavCheck" aria-hidden="true">{activeTab === tab ? '✓' : ''}</span>
                     {tab}
+                    {/* Mobile V2: an open-case count on Maintenance only —
+                        the same selectedRequests this property's own
+                        Maintenance tab renders, just surfaced one tap
+                        earlier so a landlord knows where to look. */}
+                    {tab === 'Maintenance' && selectedOpenMaintenanceCount > 0 && (
+                      <span className="mobilePropertyNavBadge">{selectedOpenMaintenanceCount}</span>
+                    )}
                   </button>
                 </li>
               ))}
@@ -4055,6 +4124,81 @@ export default function Home() {
             ) : (
               <div className="dashboardItemList">{attentionRows}</div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Mobile V2 — Mobile Dashboard Quick Actions: four of the most
+          common landlord actions, one tap away, mobile-only (hidden on
+          desktop via CSS — desktop already has all four reachable from
+          their normal places and didn't ask for this row). Every
+          action reuses an existing mechanism, nothing new:
+            - Add Property: the exact "/?add=property" one-shot flag
+              the account menu's own "+ Add Property" link already uses
+              (see that effect's own comment, above).
+            - Add Expense: the brand-new identical "?add=expense" flag
+              on /tax-center, opening the SAME openAddExpense() modal
+              that page's own button uses — same backend, same data
+              model, just a second entry point.
+            - View Maintenance: a plain Link to the existing /maintenance
+              page — no new screen.
+            - Invite Tenant: reuses openProperty()'s existing
+              Rent-tab/Tenant-sub-tab deep link (the exact one
+              landlordRequestLink() in lib/tenant-connect/notify.ts
+              already generates for email notifications) — one property
+              goes straight there; more than one opens a plain picker
+              (just an address list, tapping one calls the same
+              openProperty()) since there's no way to guess which
+              property without asking; zero properties falls back to
+              Add Property instead, since that has to happen first. */}
+      <section className="mobileQuickActions">
+        <h2 className="mobileQuickActionsHeading">Quick Actions</h2>
+        <div className="mobileQuickActionsGrid">
+          <Link href="/?add=property" className="mobileQuickAction">
+            <span className="mobileQuickActionIcon" aria-hidden="true">+</span>
+            <span>Add Property</span>
+          </Link>
+          <Link href="/tax-center?add=expense" className="mobileQuickAction">
+            <span className="mobileQuickActionIcon" aria-hidden="true">$</span>
+            <span>Add Expense</span>
+          </Link>
+          <Link href="/maintenance" className="mobileQuickAction">
+            <span className="mobileQuickActionIcon" aria-hidden="true">🔧</span>
+            <span>View Maintenance</span>
+          </Link>
+          <button type="button" className="mobileQuickAction" onClick={() => void startInviteTenantQuickAction()}>
+            <span className="mobileQuickActionIcon" aria-hidden="true">👤</span>
+            <span>Invite Tenant</span>
+          </button>
+        </div>
+      </section>
+
+      {/* Mobile V2: the property picker Invite Tenant opens when there's
+          more than one property to choose from — a plain address list,
+          nothing more; tapping one reuses the exact same openProperty()
+          deep link a single property would have gone to directly. */}
+      {inviteTenantPickerOpen && (
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setInviteTenantPickerOpen(false)}>
+          <div className="modal" style={{ width: 'min(420px, 100%)' }}>
+            <div className="modalTop">
+              <h2>Invite Tenant — choose a property</h2>
+              <button type="button" className="iconButton" aria-label="Close" onClick={() => setInviteTenantPickerOpen(false)}>&times;</button>
+            </div>
+            <div className="dashboardItemList">
+              {properties.map((p) => (
+                <button
+                  type="button"
+                  key={p.id}
+                  className="dashboardItemRow"
+                  onClick={() => { setInviteTenantPickerOpen(false); openProperty(p.id, 'Rent', undefined, undefined, 'Tenant') }}
+                >
+                  <span className="dashboardItemBody">
+                    <strong>{p.address}</strong>
+                    <span className="muted">{p.city}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
