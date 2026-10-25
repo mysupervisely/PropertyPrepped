@@ -3771,3 +3771,49 @@ $$;
 -- Trigger itself is unchanged (still fires before update, same
 -- function name) — no drop/re-create needed for the trigger object,
 -- only the function body, which create or replace already updated.
+
+-- ============================================================
+-- Milestone 30: Property Overview + Pricing Polish V1, Stage 1 —
+-- owner_has_tenant_connect() plan-list fix
+-- (mirrors supabase/milestone-30-property-overview-pricing-polish-v1-
+-- stage1.sql exactly, appended here for a single fresh-project run.
+-- APPLIED TO PRODUCTION 2026-10-25 — see that file's own header for
+-- the full Finding #1/#2 rationale and post-apply verification.)
+--
+-- NOTE: migrations 27, 28, 29, 31, 32, and 33 are also applied in
+-- production as of this date but are NOT yet mirrored into this file
+-- — that is a pre-existing gap in schema.sql predating this change,
+-- not something this edit attempts to close. A fresh project built
+-- from this file alone would currently get Milestone 26 and this
+-- Milestone 30 fix, but not 27-29/31-33's tables/policies/views.
+-- ============================================================
+create or replace function public.owner_has_tenant_connect(p_owner_id uuid)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_plan text;
+  v_status text;
+begin
+  select us.plan, us.status into v_plan, v_status
+  from public.user_subscriptions us
+  where us.owner_id = p_owner_id;
+
+  -- Mirrors resolveEffectivePlan() in lib/billing/entitlements.ts
+  -- exactly, branch for branch: no row, no plan, or no status → 'free';
+  -- a stored plan of 'free' short-circuits to 'free' regardless of
+  -- status; otherwise a non-entitled status also falls back to 'free'.
+  if v_plan is null or v_status is null then
+    v_plan := 'free';
+  elsif v_plan = 'free' then
+    v_plan := 'free';
+  elsif v_status not in ('active', 'trialing', 'past_due') then
+    v_plan := 'free';
+  end if;
+
+  return v_plan in ('free', 'organize', 'manage', 'automate', 'portfolio', 'portfolio_pro', 'owner');
+end;
+$$;
