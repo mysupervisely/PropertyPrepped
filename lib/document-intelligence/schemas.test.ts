@@ -192,15 +192,22 @@ describe('Production-hardening pass — Anthropic union AND optional-parameter l
     return count
   }
 
-  // 37, not 36: Smart Upload Foundation added one more nullable field
-  // (applyFields.propertyAddress) to ApplyFieldsSchema, so the OLD
-  // (never-sent) internal shape now has one more nullable/union field
-  // than it did when Incident 1 was fixed. Still documents the same
-  // fact — the provider-facing schema actually sent to Anthropic
-  // (tested immediately below) stays at ZERO regardless of this number.
-  it('the OLD internal-shaped request would have produced exactly 37 union parameters (documents Incident 1\'s root cause, does not regress it — this schema is never sent to Anthropic directly anymore)', () => {
+  // 2, not 37: after the zod 3 -> zod 4 upgrade, zod's JSON-Schema
+  // generator encodes a plain `.nullable()` field (string/boolean/etc.)
+  // as `"type": ["string", "null"]` instead of `anyOf: [{...}, {type:
+  // "null"}]` — only fields with an additional constraint (the
+  // `confidence` enum's description, `sourcePage`'s integer min/max)
+  // still produce `anyOf`, because the non-null branch itself needs a
+  // description Anthropic's schema format doesn't carry inline on a
+  // bare type array entry. Same underlying nullable-field count as
+  // before (zod 4 didn't remove or add fields), just a different, more
+  // compact JSON-Schema encoding of "nullable" — still documents the
+  // same fact either way: the provider-facing schema actually sent to
+  // Anthropic (tested immediately below) stays at ZERO regardless of
+  // this number.
+  it('the OLD internal-shaped request would have produced only a couple of union parameters (documents Incident 1\'s root cause, does not regress it — this schema is never sent to Anthropic directly anymore)', () => {
     const format = zodOutputFormat(DocumentAnalysisSchema)
-    expect(countAnyOf(format.schema)).toBe(37)
+    expect(countAnyOf(format.schema)).toBe(2)
   })
 
   it('the provider-facing schema actually sent to Anthropic produces ZERO union parameters (Incident 1 stays fixed)', () => {
