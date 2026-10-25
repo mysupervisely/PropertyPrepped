@@ -7,7 +7,12 @@
 -- own comment for the full reasoning; this migration is the ONE
 -- database-layer consequence of that decision.
 --
--- NOT YET APPLIED TO PRODUCTION. Review before running.
+-- APPLIED TO PRODUCTION 2026-10-25. Verified post-apply: the function
+-- body now contains the 'organize' plan and the no-row-means-free
+-- fallback branch, and a direct call with a nonexistent owner_id (no
+-- user_subscriptions row) correctly returns true. See the migration
+-- 26-33 structural verification script's migration-30 check for the
+-- exact query used.
 --
 -- ===================================================================
 -- FINDING #1 (same shape as schema.sql's own "SECTION E" — the
