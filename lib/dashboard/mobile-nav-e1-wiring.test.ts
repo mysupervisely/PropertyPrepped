@@ -194,13 +194,38 @@ describe('Dashboard: Needs Your Attention replaces the old standalone PropWatch 
   // default, shown only under the mobile breakpoint), and that none of
   // its four actions duplicate backend logic that already exists
   // elsewhere in this file.
-  it('a mobile-only dashboard Quick Actions row exists (Mobile V2 Area A) and reuses existing workflows rather than duplicating them', () => {
+  //
+  // Mobile V2 (Quick Actions redesign): the four rendered shortcuts are
+  // no longer hardcoded JSX — they're data-driven from quickActions
+  // (persisted, customizable, defaulting to DEFAULT_QUICK_ACTIONS) via
+  // renderQuickAction()/quickActionNav() above. This guard now checks
+  // that layer: the row exists, is CSS-scoped to mobile, is backed by
+  // the shared lib/dashboard/quick-actions.ts catalog (not a second,
+  // page-local one), and that every one of quickActionNav()'s own
+  // branches points at a real, pre-existing route or handler rather
+  // than inventing new navigation.
+  it('a mobile-only, customizable dashboard Quick Actions row exists (Mobile V2) and every catalog action reuses an existing workflow rather than duplicating one', () => {
     expect(pageSource).toContain('<section className="mobileQuickActions">')
     expect(globalsCss).toContain('.mobileQuickActions { display: none; }')
-    expect(pageSource).toContain('<Link href="/?add=property"')
-    expect(pageSource).toContain('<Link href="/tax-center?add=expense"')
-    expect(pageSource).toContain('<Link href="/maintenance"')
-    expect(pageSource).toContain('startInviteTenantQuickAction()')
+    expect(pageSource).toContain("from '../lib/dashboard/quick-actions'")
+    expect(pageSource).toContain('{quickActions.map((id) => renderQuickAction(id))}')
+    expect(pageSource).toContain('function quickActionNav(id: QuickActionId)')
+    expect(pageSource).toContain("case 'add_expense': return { kind: 'link', href: '/tax-center?add=expense' }")
+    expect(pageSource).toContain("case 'tax_center': return { kind: 'link', href: '/tax-center' }")
+    expect(pageSource).toContain("case 'maintenance': return { kind: 'link', href: '/maintenance' }")
+    expect(pageSource).toContain("case 'propcrew': return { kind: 'link', href: '/propcrew' }")
+    expect(pageSource).toContain("case 'add_property': return { kind: 'link', href: '/?add=property' }")
+    expect(pageSource).toContain("case 'smart_upload': return { kind: 'button', onClick: openSmartUpload }")
+    expect(pageSource).toContain("case 'invite_tenant': return { kind: 'button', onClick: startTenantConnectQuickAction }")
+    expect(pageSource).toContain("case 'tenant_messages': return { kind: 'button', onClick: startTenantConnectQuickAction }")
+  })
+
+  it('a "Customize" control opens a sheet requiring exactly 4 selections, with a Restore Defaults option, and never renders the default set until a save actually succeeds', () => {
+    expect(pageSource).toContain('<button type="button" className="mobileQuickActionsCustomize" onClick={openQuickActionsCustomize}>Customize</button>')
+    expect(pageSource).toContain('disabled={quickActionsSaving || quickActionsDraft.length !== QUICK_ACTION_SELECTION_SIZE}')
+    expect(pageSource).toContain('onClick={restoreDefaultQuickActions}')
+    expect(pageSource).toContain('setQuickActions(next)')
+    expect(pageSource).toContain('setQuickActionsCustomizeOpen(false)')
   })
 })
 

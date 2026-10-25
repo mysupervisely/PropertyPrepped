@@ -13,13 +13,32 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Wordmark } from '../../components/Wordmark'
-import { GridIcon, WrenchIcon, PeopleIcon, ReceiptIcon } from '../../components/icons/NavIcons'
+import { GridIcon, WrenchIcon, PeopleIcon, ReceiptIcon, DollarIcon, UploadIcon, PersonIcon, HomeIcon, ChatIcon } from '../../components/icons/NavIcons'
 import { resolveInitials } from '../../lib/user-profile/greeting'
+import {
+  QUICK_ACTION_IDS, QUICK_ACTION_LABELS, QUICK_ACTION_SELECTION_SIZE, DEFAULT_QUICK_ACTIONS,
+  isValidQuickActionSelection, type QuickActionId,
+} from '../../lib/dashboard/quick-actions'
 import {
   FIXTURE_LANDLORD, FIXTURE_PROPERTIES, FIXTURE_STATS, FIXTURE_MAINTENANCE,
   FIXTURE_PROPCREW, FIXTURE_TAX_SUMMARY, FIXTURE_BILLING, FIXTURE_DOCUMENTS,
   FIXTURE_ATTENTION_ITEMS, type FixtureProperty, type FixtureAttentionNav,
 } from './_lib/fixtures'
+
+// Mobile V2 — Quick Actions (preview parity): the SAME catalog/icon
+// pairing app/page.tsx uses, not a second hand-maintained list — only
+// the navigation underneath differs (this preview switches an internal
+// `screen` instead of real routes/Supabase writes).
+const QUICK_ACTION_ICON_COMPONENTS: Record<QuickActionId, (props: { className?: string }) => React.ReactElement> = {
+  add_expense: DollarIcon,
+  smart_upload: UploadIcon,
+  maintenance: WrenchIcon,
+  invite_tenant: PersonIcon,
+  tax_center: ReceiptIcon,
+  propcrew: PeopleIcon,
+  add_property: HomeIcon,
+  tenant_messages: ChatIcon,
+}
 
 const money = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
 
@@ -56,9 +75,29 @@ export default function PreviewApp() {
   const [navMenuOpen, setNavMenuOpen] = useState(false)
   const [newRequestOpen, setNewRequestOpen] = useState(false)
   const [attentionSheetOpen, setAttentionSheetOpen] = useState(false)
-  // Mobile V2 — Quick Actions' Invite Tenant (preview parity): same
-  // zero/one/many branching as app/page.tsx's startInviteTenantQuickAction.
+  // Mobile V2 — Quick Actions' Invite Tenant/Tenant Messages (preview
+  // parity): same zero/one/many branching as app/page.tsx's
+  // startTenantConnectQuickAction, and the same single destination for
+  // both ids (the Tenant Connect tab handles invite AND messaging).
   const [inviteTenantPickerOpen, setInviteTenantPickerOpen] = useState(false)
+  // Mobile V2 — customizable Dashboard Quick Actions (preview parity).
+  // Plain component state, not persisted anywhere — matches every other
+  // interaction in this preview (navMenuOpen, selected screens, etc.),
+  // all of which already reset on reload. The real app's persistence
+  // (public.quick_action_preferences, RLS-scoped) has nothing to do
+  // with this fictional harness.
+  const [quickActions, setQuickActions] = useState<QuickActionId[]>(DEFAULT_QUICK_ACTIONS)
+  const [quickActionsCustomizeOpen, setQuickActionsCustomizeOpen] = useState(false)
+  const [quickActionsDraft, setQuickActionsDraft] = useState<QuickActionId[]>(DEFAULT_QUICK_ACTIONS)
+  // Smart Upload / Add Property (preview parity): neither has a fictional
+  // screen of its own to navigate to (Smart Upload's document-
+  // intelligence pipeline and Add Property's form are both real-
+  // backend flows with nothing to simulate safely here) — a small
+  // decorative confirmation dialog, same "fictional, no real write"
+  // convention as the New Maintenance Request modal below, lets a
+  // reviewer still see that the shortcut does something distinct.
+  const [smartUploadPreviewOpen, setSmartUploadPreviewOpen] = useState(false)
+  const [addPropertyPreviewOpen, setAddPropertyPreviewOpen] = useState(false)
 
   function goDashboard() {
     setScreen('dashboard')
@@ -70,9 +109,52 @@ export default function PreviewApp() {
     setPropertyTab(tab)
     setScreen('property')
   }
-  function startInviteTenantQuickAction() {
+  function startTenantConnectQuickAction() {
     if (FIXTURE_PROPERTIES.length === 1) { openProperty(FIXTURE_PROPERTIES[0].id, 'tenant'); return }
     setInviteTenantPickerOpen(true)
+  }
+
+  function openQuickActionsCustomize() {
+    setQuickActionsDraft(quickActions)
+    setQuickActionsCustomizeOpen(true)
+  }
+  function toggleQuickActionDraft(id: QuickActionId) {
+    setQuickActionsDraft((current) => {
+      if (current.includes(id)) return current.filter((x) => x !== id)
+      if (current.length >= QUICK_ACTION_SELECTION_SIZE) return current
+      return [...current, id]
+    })
+  }
+  function saveQuickActions(next: QuickActionId[]) {
+    if (!isValidQuickActionSelection(next)) return
+    setQuickActions(next)
+    setQuickActionsCustomizeOpen(false)
+  }
+  function restoreDefaultQuickActions() {
+    saveQuickActions(DEFAULT_QUICK_ACTIONS)
+  }
+  function quickActionNav(id: QuickActionId): { kind: 'screen'; screen: Screen } | { kind: 'button'; onClick: () => void } {
+    switch (id) {
+      case 'add_expense': return { kind: 'screen', screen: 'taxcenter' }
+      case 'tax_center': return { kind: 'screen', screen: 'taxcenter' }
+      case 'maintenance': return { kind: 'screen', screen: 'maintenance' }
+      case 'propcrew': return { kind: 'screen', screen: 'propcrew' }
+      case 'add_property': return { kind: 'button', onClick: () => setAddPropertyPreviewOpen(true) }
+      case 'smart_upload': return { kind: 'button', onClick: () => setSmartUploadPreviewOpen(true) }
+      case 'invite_tenant': return { kind: 'button', onClick: startTenantConnectQuickAction }
+      case 'tenant_messages': return { kind: 'button', onClick: startTenantConnectQuickAction }
+    }
+  }
+  function renderQuickAction(id: QuickActionId) {
+    const Icon = QUICK_ACTION_ICON_COMPONENTS[id]
+    const nav = quickActionNav(id)
+    const onClick = nav.kind === 'screen' ? () => setScreen(nav.screen) : nav.onClick
+    return (
+      <button key={id} type="button" className="mobileQuickAction" onClick={onClick}>
+        <span className="mobileQuickActionIcon" aria-hidden="true"><Icon /></span>
+        <span className="mobileQuickActionLabel">{QUICK_ACTION_LABELS[id]}</span>
+      </button>
+    )
   }
   // Needs Attention V2 (preview): mirrors the real app's
   // goToNav/NavTarget mechanism — each fixture item's own `nav` says
@@ -148,20 +230,21 @@ export default function PreviewApp() {
         <DashboardScreen
           onOpenProperty={openProperty}
           onOpenAttention={() => setAttentionSheetOpen(true)}
-          onAddExpense={() => setScreen('taxcenter')}
-          onViewMaintenance={() => setScreen('maintenance')}
-          onInviteTenant={startInviteTenantQuickAction}
+          quickActions={quickActions}
+          renderQuickAction={renderQuickAction}
+          onCustomizeQuickActions={openQuickActionsCustomize}
         />
       )}
 
-      {/* Mobile V2 — Quick Actions' Invite Tenant picker (preview parity):
-          same .overlay/.modal/.dashboardItemList classes as app/page.tsx's
-          picker, shown only when there's more than one fixture property. */}
+      {/* Mobile V2 — Quick Actions' Invite Tenant/Tenant Messages picker
+          (preview parity): same .overlay/.modal/.dashboardItemList
+          classes as app/page.tsx's picker, shown only when there's more
+          than one fixture property. */}
       {inviteTenantPickerOpen && (
         <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setInviteTenantPickerOpen(false)}>
           <div className="modal">
             <div className="modalTop">
-              <h2>Invite a tenant — which property?</h2>
+              <h2>Tenant Connect — choose a property</h2>
               <button type="button" className="iconButton" aria-label="Close" onClick={() => setInviteTenantPickerOpen(false)}>&times;</button>
             </div>
             <div className="dashboardItemList">
@@ -171,6 +254,76 @@ export default function PreviewApp() {
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile V2 — Quick Actions Customize sheet (preview parity): same
+          pick-exactly-4/Restore Defaults interaction as app/page.tsx's
+          sheet, saving straight to local state (no network — see
+          saveQuickActions() above). */}
+      {quickActionsCustomizeOpen && (
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setQuickActionsCustomizeOpen(false)}>
+          <div className="modal quickActionsCustomizeModal">
+            <div className="modalTop">
+              <h2>Customize Quick Actions</h2>
+              <button type="button" className="iconButton" aria-label="Close" onClick={() => setQuickActionsCustomizeOpen(false)}>&times;</button>
+            </div>
+            <p className="muted quickActionsCustomizeHint">Choose {QUICK_ACTION_SELECTION_SIZE} shortcuts for your mobile dashboard. Selected: {quickActionsDraft.length} of {QUICK_ACTION_SELECTION_SIZE}.</p>
+            <div className="dashboardItemList quickActionsPickerList">
+              {QUICK_ACTION_IDS.map((id) => {
+                const Icon = QUICK_ACTION_ICON_COMPONENTS[id]
+                const selected = quickActionsDraft.includes(id)
+                const disabled = !selected && quickActionsDraft.length >= QUICK_ACTION_SELECTION_SIZE
+                return (
+                  <button
+                    type="button"
+                    key={id}
+                    className={`dashboardItemRow quickActionsPickerRow${selected ? ' active' : ''}`}
+                    aria-pressed={selected}
+                    disabled={disabled}
+                    onClick={() => toggleQuickActionDraft(id)}
+                  >
+                    <span className="quickActionsPickerIcon" aria-hidden="true"><Icon /></span>
+                    <span className="dashboardItemBody"><strong>{QUICK_ACTION_LABELS[id]}</strong></span>
+                    {selected && <span className="quickActionsPickerCheck" aria-hidden="true">✓</span>}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="modalActions quickActionsCustomizeActions">
+              <button type="button" className="secondary" onClick={restoreDefaultQuickActions}>Restore Defaults</button>
+              <button type="button" className="primary" disabled={quickActionsDraft.length !== QUICK_ACTION_SELECTION_SIZE} onClick={() => saveQuickActions(quickActionsDraft)}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile V2 — Smart Upload/Add Property decorative preview
+          dialogs: see the state declarations above for why these two
+          ids get a small confirmation dialog instead of a fictional
+          screen. */}
+      {smartUploadPreviewOpen && (
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setSmartUploadPreviewOpen(false)}>
+          <div className="modal" style={{ width: 'min(420px, 100%)' }}>
+            <div className="modalTop">
+              <h2>Smart Upload</h2>
+              <button type="button" className="iconButton" aria-label="Close" onClick={() => setSmartUploadPreviewOpen(false)}>&times;</button>
+            </div>
+            <p className="muted">In the live app, this opens PropRoster&apos;s Smart Upload modal — drop a lease, insurance policy, mortgage statement, or receipt and it&apos;s automatically classified and filed. Fictional preview only; no document-intelligence pipeline runs here.</p>
+            <div className="modalActions"><button type="button" className="primary" onClick={() => setSmartUploadPreviewOpen(false)}>Close</button></div>
+          </div>
+        </div>
+      )}
+      {addPropertyPreviewOpen && (
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setAddPropertyPreviewOpen(false)}>
+          <div className="modal" style={{ width: 'min(420px, 100%)' }}>
+            <div className="modalTop">
+              <h2>Add Property</h2>
+              <button type="button" className="iconButton" aria-label="Close" onClick={() => setAddPropertyPreviewOpen(false)}>&times;</button>
+            </div>
+            <p className="muted">In the live app, this opens the same Add Property form as the dashboard&apos;s own &quot;+ Add Property&quot; button. Fictional preview only; no property is created here.</p>
+            <div className="modalActions"><button type="button" className="primary" onClick={() => setAddPropertyPreviewOpen(false)}>Close</button></div>
           </div>
         </div>
       )}
@@ -306,45 +459,41 @@ function PreviewBottomNav({ screen, onNavigate }: { screen: Screen; onNavigate: 
   )
 }
 
-function DashboardScreen({ onOpenProperty, onOpenAttention, onAddExpense, onViewMaintenance, onInviteTenant }: {
+function DashboardScreen({ onOpenProperty, onOpenAttention, quickActions, renderQuickAction, onCustomizeQuickActions }: {
   onOpenProperty: (id: string) => void
   onOpenAttention: () => void
-  onAddExpense: () => void
-  onViewMaintenance: () => void
-  onInviteTenant: () => void
+  quickActions: QuickActionId[]
+  renderQuickAction: (id: QuickActionId) => React.ReactElement
+  onCustomizeQuickActions: () => void
 }) {
   return (
     <>
-      <section className="intro">
-        <p className="eyebrow">DASHBOARD</p>
+      {/* Mobile V2 — above-the-fold parity fix: the real dashboard greeting
+          uses "intro welcomeIntro" (smaller h1, tighter padding) with no
+          eyebrow label — this preview was rendering the larger, more
+          heavily padded base .intro instead, which made the whole
+          dashboard noticeably taller here than in the real app and
+          understated how much the above-the-fold spacing pass actually
+          gains. Matches app/page.tsx's own dashboard intro exactly now,
+          subtitle included. */}
+      <section className="intro welcomeIntro">
         <h1>Good afternoon, {FIXTURE_LANDLORD.name.split(' ')[0]}.</h1>
+        <p>Here&apos;s your portfolio at a glance.</p>
       </section>
 
-      {/* Mobile V2 — Quick Actions (preview parity): same
-          .mobileQuickActions/.mobileQuickActionsGrid/.mobileQuickAction
-          classes as app/page.tsx, hidden above the mobile breakpoint by
-          the same CSS rule. Add Property stays decorative (no onClick),
-          matching the "+ Add Property" button below — this preview has
-          no write backend for either. */}
+      {/* Mobile V2 — Quick Actions redesign (preview parity): same
+          compact single-row .mobileQuickActions/.mobileQuickActionsRow/
+          .mobileQuickAction classes as app/page.tsx, hidden above the
+          mobile breakpoint by the same CSS rule. quickActions is
+          landlord-chosen (Customize sheet below) and defaults to the
+          same DEFAULT_QUICK_ACTIONS the real app does. */}
       <section className="mobileQuickActions">
-        <p className="mobileQuickActionsHeading">Quick Actions</p>
-        <div className="mobileQuickActionsGrid">
-          <button type="button" className="mobileQuickAction" onClick={onAddExpense}>
-            <span className="mobileQuickActionIcon" aria-hidden="true">$</span>
-            Add Expense
-          </button>
-          <button type="button" className="mobileQuickAction">
-            <span className="mobileQuickActionIcon" aria-hidden="true">+</span>
-            Add Property
-          </button>
-          <button type="button" className="mobileQuickAction" onClick={onViewMaintenance}>
-            <span className="mobileQuickActionIcon" aria-hidden="true">🔧</span>
-            View Maintenance
-          </button>
-          <button type="button" className="mobileQuickAction" onClick={onInviteTenant}>
-            <span className="mobileQuickActionIcon" aria-hidden="true">👤</span>
-            Invite Tenant
-          </button>
+        <div className="mobileQuickActionsHead">
+          <h2 className="mobileQuickActionsHeading">Quick Actions</h2>
+          <button type="button" className="mobileQuickActionsCustomize" onClick={onCustomizeQuickActions}>Customize</button>
+        </div>
+        <div className="mobileQuickActionsRow">
+          {quickActions.map((id) => renderQuickAction(id))}
         </div>
       </section>
 

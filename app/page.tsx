@@ -1,6 +1,6 @@
 'use client'
 
-import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { ChangeEvent, DragEvent, ReactElement, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { isAuthSessionMissingError, type User } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
@@ -25,6 +25,11 @@ import type { NormalizedAddress } from '../lib/address/types'
 import { deriveTimeline } from '../lib/property-timeline/derive-timeline'
 import { resolveGreetingName, greetingTimeOfDay } from '../lib/user-profile/greeting'
 import type { UserProfile } from '../lib/user-profile/types'
+import {
+  QUICK_ACTION_IDS, QUICK_ACTION_LABELS, QUICK_ACTION_SELECTION_SIZE, DEFAULT_QUICK_ACTIONS,
+  isValidQuickActionSelection, normalizeQuickActionSelection, type QuickActionId,
+} from '../lib/dashboard/quick-actions'
+import { DollarIcon, UploadIcon, WrenchIcon, PersonIcon, ReceiptIcon, PeopleIcon, HomeIcon, ChatIcon } from '../components/icons/NavIcons'
 import { DOCUMENT_TYPES } from '../lib/document-intelligence/types'
 import { findDocumentLinks } from '../lib/documents/document-links'
 import {
@@ -470,6 +475,21 @@ const SNAPSHOT_EXPANDED_STORAGE_KEY = 'proproster:portfolioSnapshotExpanded'
 // it only decides whether the already-computed list is shown.
 const NEEDS_ATTENTION_VISIBLE_STORAGE_KEY = 'proproster:needsAttentionVisible'
 
+// Mobile V2 — Dashboard Quick Actions: one icon per catalog entry
+// (lib/dashboard/quick-actions.ts's QUICK_ACTION_IDS), shared by both
+// the compact row and the Customize sheet's picker list below. Module
+// scope — every icon is a plain, stateless component, nothing here
+// closes over anything from inside Home().
+const QUICK_ACTION_ICON_COMPONENTS: Record<QuickActionId, (props: { className?: string }) => ReactElement> = {
+  add_expense: DollarIcon,
+  smart_upload: UploadIcon,
+  maintenance: WrenchIcon,
+  invite_tenant: PersonIcon,
+  tax_center: ReceiptIcon,
+  propcrew: PeopleIcon,
+  add_property: HomeIcon,
+  tenant_messages: ChatIcon,
+}
 
 function EmptyModule({ title, text, action, onClick }: { title: string; text: string; action: string; onClick: () => void }) {
   return <div className="emptyModule"><strong>{title}</strong><span>{text}</span><button className="primary" onClick={onClick}>+ {action}</button></div>
@@ -737,10 +757,24 @@ export default function Home() {
   // above, there is nothing to remember between visits — the sheet is
   // always closed on load).
   const [attentionSheetOpen, setAttentionSheetOpen] = useState(false)
-  // Mobile V2 — Quick Actions' Invite Tenant: only needs its own state
-  // for the "which property" picker (more than one property). Zero or
-  // one property never opens this — see startInviteTenantQuickAction().
+  // Mobile V2 — Quick Actions' Invite Tenant/Tenant Messages: only needs
+  // its own state for the "which property" picker (more than one
+  // property). Zero or one property never opens this — see
+  // startTenantConnectQuickAction().
   const [inviteTenantPickerOpen, setInviteTenantPickerOpen] = useState(false)
+  // Mobile V2 — customizable Dashboard Quick Actions.
+  // quickActions: the SAVED, currently-rendered selection (always exactly
+  // 4 valid ids once normalizeQuickActionSelection() has run — see
+  // loadPortfolio()'s own wiring below). quickActionsDraft: the
+  // Customize sheet's own in-progress picks, seeded from quickActions
+  // when the sheet opens (openQuickActionsCustomize()) and discarded on
+  // close without saving — the saved selection is never mutated until
+  // "Save" actually succeeds.
+  const [quickActions, setQuickActions] = useState<QuickActionId[]>(DEFAULT_QUICK_ACTIONS)
+  const [quickActionsCustomizeOpen, setQuickActionsCustomizeOpen] = useState(false)
+  const [quickActionsDraft, setQuickActionsDraft] = useState<QuickActionId[]>(DEFAULT_QUICK_ACTIONS)
+  const [quickActionsSaving, setQuickActionsSaving] = useState(false)
+  const [quickActionsError, setQuickActionsError] = useState('')
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(NEEDS_ATTENTION_VISIBLE_STORAGE_KEY)
@@ -1037,6 +1071,7 @@ export default function Home() {
       setPropertySystems([])
       setPropertyNotes([])
       setPropertyOwnership([])
+      setQuickActions(DEFAULT_QUICK_ACTIONS)
     }
   }, [user?.id])
 
@@ -1429,6 +1464,7 @@ export default function Home() {
       { data: availabilityWindowRows },
       { data: appointmentRows },
       { data: dismissalRows },
+      { data: quickActionPreferencesRow },
     ] = await Promise.all([
       client.from('properties').select('*').order('created_at', { ascending: true }),
       client.from('property_documents').select('*').order('created_at', { ascending: false }),
@@ -1473,6 +1509,14 @@ export default function Home() {
       // loading; a query error here simply means "nothing dismissed
       // yet" rather than a hard failure.
       client.from('attention_dismissals').select('dismissal_key'),
+      // Mobile V2 — Dashboard Quick Actions customization. Same
+      // defensive "may legitimately not exist yet" exclusion from
+      // firstError as attention_dismissals/tenant_requests/etc above —
+      // supabase/milestone-34-mobile-quick-action-preferences.sql is not
+      // yet applied everywhere; a missing table/row here simply means
+      // "not customized yet", handled by normalizeQuickActionSelection()
+      // below exactly the same as an explicit null would be.
+      client.from('quick_action_preferences').select('selected_actions').eq('owner_id', user.id).maybeSingle(),
     ])
     const firstError = propertyError || docError || photoError || transactionError || leaseError || mortgageError || insuranceError || maintenanceError || contactError || requestError || systemError || noteError || ownershipError || rentPaymentError || taxRecordError || taxCustomItemError
     if (firstError) {
@@ -1567,6 +1611,11 @@ export default function Home() {
     setPropertyOwnership((ownershipRows || []) as PropertyOwnership[])
     setUserProfile((profileRow || null) as UserProfile | null)
     setProfileReady(true)
+    // Mobile V2 — Dashboard Quick Actions: normalizeQuickActionSelection()
+    // is the one place that decides "defaults" vs. "this landlord's own
+    // selection" — a missing row, a null column, and a genuinely corrupt
+    // value are all handled the same safe way there.
+    setQuickActions(normalizeQuickActionSelection((quickActionPreferencesRow as { selected_actions: unknown } | null)?.selected_actions))
     setMaintenanceRequests((requestRows || []) as MaintenanceRequest[])
     // Tenant Connect V1: deliberately NOT included in firstError above —
     // this migration is not yet applied to production (see the
@@ -1940,17 +1989,96 @@ export default function Home() {
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
-  // Mobile V2 — Quick Actions' Invite Tenant: no new invite mechanism,
-  // just routing to the one that already exists (TenantConnectStatusCard
-  // on a property's Rent > Tenant tab). Zero properties: nothing to
-  // invite a tenant to yet, so fall back to Add Property. Exactly one:
-  // skip the picker and deep-link straight there, same openProperty()
-  // call the picker's own rows use. More than one: open the picker,
-  // since there is no way to guess which property without asking.
-  function startInviteTenantQuickAction() {
+  // Mobile V2 — Quick Actions' Invite Tenant AND Tenant Messages: no new
+  // tenant-relationship mechanism for either — both route to the one
+  // screen that already exists (the Rent > Tenant Connect tab, which
+  // itself shows TenantConnectStatusCard's invite/status card when there
+  // is no tenant yet and TenantRequestsPanel's own conversation thread
+  // when there is — see that tab's own render block). Zero properties:
+  // nothing to invite a tenant to or message yet, so fall back to Add
+  // Property. Exactly one: skip the picker and deep-link straight there,
+  // same openProperty() call the picker's own rows use. More than one:
+  // open the picker, since there is no way to guess which property
+  // without asking.
+  function startTenantConnectQuickAction() {
     if (properties.length === 0) { openAddProperty(); return }
     if (properties.length === 1) { openProperty(properties[0].id, 'Rent', undefined, undefined, 'Tenant'); return }
     setInviteTenantPickerOpen(true)
+  }
+
+  // Mobile V2 — Dashboard Quick Actions customization.
+  function openQuickActionsCustomize() {
+    setQuickActionsDraft(quickActions)
+    setQuickActionsError('')
+    setQuickActionsCustomizeOpen(true)
+  }
+
+  function toggleQuickActionDraft(id: QuickActionId) {
+    setQuickActionsDraft((current) => {
+      if (current.includes(id)) return current.filter((x) => x !== id)
+      // A 5th tap while 4 are already picked is a no-op — the Customize
+      // sheet's own UI already disables an unselected option once the
+      // draft is full, this is just the defensive backstop.
+      if (current.length >= QUICK_ACTION_SELECTION_SIZE) return current
+      return [...current, id]
+    })
+  }
+
+  // Requires exactly 4 before saving (isValidQuickActionSelection), and
+  // never optimistically updates the rendered quickActions until the
+  // save itself actually succeeds — a failed save leaves the sheet open
+  // with an inline error instead of silently reverting a UI that looked
+  // like it already changed (Mobile V2: "Handle loading and save
+  // failures gracefully").
+  async function saveQuickActions(next: QuickActionId[]) {
+    if (!supabase || !user) return
+    if (!isValidQuickActionSelection(next)) return
+    setQuickActionsSaving(true)
+    setQuickActionsError('')
+    const { error: saveError } = await supabase
+      .from('quick_action_preferences')
+      .upsert({ owner_id: user.id, selected_actions: next, updated_at: new Date().toISOString() })
+    setQuickActionsSaving(false)
+    if (saveError) {
+      setQuickActionsError('Unable to save your Quick Actions right now. Please try again.')
+      return
+    }
+    setQuickActions(next)
+    setQuickActionsCustomizeOpen(false)
+  }
+
+  // "Restore Defaults" writes the product defaults back through the
+  // exact same save path (an explicit selection, not a row delete) so
+  // a landlord who customized and later wants the original four back
+  // gets the identical save/error-handling behavior as any other change.
+  function restoreDefaultQuickActions() {
+    void saveQuickActions(DEFAULT_QUICK_ACTIONS)
+  }
+
+  // Mobile V2 — Dashboard Quick Actions: the one place that maps a
+  // catalog id to its real destination. Every branch reuses an existing
+  // mechanism already defined elsewhere in this file or routed by a real
+  // page — see lib/dashboard/quick-actions.ts's own header comment for
+  // exactly which existing workflow each id reuses and why.
+  function quickActionNav(id: QuickActionId): { kind: 'link'; href: string } | { kind: 'button'; onClick: () => void } {
+    switch (id) {
+      case 'add_expense': return { kind: 'link', href: '/tax-center?add=expense' }
+      case 'tax_center': return { kind: 'link', href: '/tax-center' }
+      case 'maintenance': return { kind: 'link', href: '/maintenance' }
+      case 'propcrew': return { kind: 'link', href: '/propcrew' }
+      case 'add_property': return { kind: 'link', href: '/?add=property' }
+      case 'smart_upload': return { kind: 'button', onClick: openSmartUpload }
+      case 'invite_tenant': return { kind: 'button', onClick: startTenantConnectQuickAction }
+      case 'tenant_messages': return { kind: 'button', onClick: startTenantConnectQuickAction }
+    }
+  }
+
+  function renderQuickAction(id: QuickActionId) {
+    const Icon = QUICK_ACTION_ICON_COMPONENTS[id]
+    const nav = quickActionNav(id)
+    const inner = <><span className="mobileQuickActionIcon" aria-hidden="true"><Icon /></span><span className="mobileQuickActionLabel">{QUICK_ACTION_LABELS[id]}</span></>
+    if (nav.kind === 'link') return <Link key={id} href={nav.href} className="mobileQuickAction">{inner}</Link>
+    return <button key={id} type="button" className="mobileQuickAction" onClick={nav.onClick}>{inner}</button>
   }
 
   // Smart Upload Foundation: a "PrepareOnly" item (lease/insurance/
@@ -4030,7 +4158,12 @@ export default function Home() {
 
   return (
     <main className="shell">
-      <AuthHeader onSmartUploadCompleted={() => void loadPortfolio()} />
+      {/* Mobile V2 — Dashboard Quick Actions' Smart Upload: registers the
+          exact same openSmartUpload() trigger the property-workspace
+          header already wires below, so this view's Quick Action can
+          open AuthHeader's own SmartUploadModal too — no second upload
+          path, no second modal. */}
+      <AuthHeader onSmartUploadCompleted={() => void loadPortfolio()} registerSmartUploadTrigger={(fn) => { smartUploadTriggerRef.current = fn }} />
       {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
       <section className="intro welcomeIntro"><h1>Good {greetingTimeOfDay()}{profileReady ? `, ${resolveGreetingName(userProfile, user.email)}` : ''}.</h1><p>Here&apos;s your portfolio at a glance.</p></section>
 
@@ -4128,60 +4261,86 @@ export default function Home() {
         </div>
       )}
 
-      {/* Mobile V2 — Mobile Dashboard Quick Actions: four of the most
-          common landlord actions, one tap away, mobile-only (hidden on
-          desktop via CSS — desktop already has all four reachable from
-          their normal places and didn't ask for this row). Every
-          action reuses an existing mechanism, nothing new:
-            - Add Property: the exact "/?add=property" one-shot flag
-              the account menu's own "+ Add Property" link already uses
-              (see that effect's own comment, above).
-            - Add Expense: the brand-new identical "?add=expense" flag
-              on /tax-center, opening the SAME openAddExpense() modal
-              that page's own button uses — same backend, same data
-              model, just a second entry point.
-            - View Maintenance: a plain Link to the existing /maintenance
-              page — no new screen.
-            - Invite Tenant: reuses openProperty()'s existing
-              Rent-tab/Tenant-sub-tab deep link (the exact one
-              landlordRequestLink() in lib/tenant-connect/notify.ts
-              already generates for email notifications) — one property
-              goes straight there; more than one opens a plain picker
-              (just an address list, tapping one calls the same
-              openProperty()) since there's no way to guess which
-              property without asking; zero properties falls back to
-              Add Property instead, since that has to happen first. */}
+      {/* Mobile V2 (Quick Actions redesign): a compact, single-row icon
+          strip — four of the most common landlord actions, one tap
+          away, mobile-only (hidden on desktop via CSS — desktop already
+          has all eight reachable from their normal places and didn't
+          ask for this row). Which four render here is entirely
+          landlord-chosen (quickActions, seeded from
+          DEFAULT_QUICK_ACTIONS and persisted via
+          public.quick_action_preferences — see loadPortfolio() and
+          saveQuickActions() above); every id's actual destination is
+          resolved by quickActionNav()/renderQuickAction() above, each
+          one reusing an existing route or handler, never a new one. */}
       <section className="mobileQuickActions">
-        <h2 className="mobileQuickActionsHeading">Quick Actions</h2>
-        <div className="mobileQuickActionsGrid">
-          <Link href="/?add=property" className="mobileQuickAction">
-            <span className="mobileQuickActionIcon" aria-hidden="true">+</span>
-            <span>Add Property</span>
-          </Link>
-          <Link href="/tax-center?add=expense" className="mobileQuickAction">
-            <span className="mobileQuickActionIcon" aria-hidden="true">$</span>
-            <span>Add Expense</span>
-          </Link>
-          <Link href="/maintenance" className="mobileQuickAction">
-            <span className="mobileQuickActionIcon" aria-hidden="true">🔧</span>
-            <span>View Maintenance</span>
-          </Link>
-          <button type="button" className="mobileQuickAction" onClick={() => void startInviteTenantQuickAction()}>
-            <span className="mobileQuickActionIcon" aria-hidden="true">👤</span>
-            <span>Invite Tenant</span>
-          </button>
+        <div className="mobileQuickActionsHead">
+          <h2 className="mobileQuickActionsHeading">Quick Actions</h2>
+          <button type="button" className="mobileQuickActionsCustomize" onClick={openQuickActionsCustomize}>Customize</button>
+        </div>
+        <div className="mobileQuickActionsRow">
+          {quickActions.map((id) => renderQuickAction(id))}
         </div>
       </section>
 
-      {/* Mobile V2: the property picker Invite Tenant opens when there's
-          more than one property to choose from — a plain address list,
-          nothing more; tapping one reuses the exact same openProperty()
-          deep link a single property would have gone to directly. */}
+      {/* Mobile V2 — the Customize sheet: pick exactly 4 of the 8
+          catalog actions. quickActionsDraft is a local working copy —
+          nothing is saved (and the rendered Quick Actions row doesn't
+          change) until "Save" succeeds; "Cancel"/closing discards it. */}
+      {quickActionsCustomizeOpen && (
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setQuickActionsCustomizeOpen(false)}>
+          <div className="modal quickActionsCustomizeModal" role="dialog" aria-modal="true" aria-labelledby="quick-actions-customize-title">
+            <div className="modalTop">
+              <h2 id="quick-actions-customize-title">Customize Quick Actions</h2>
+              <button type="button" className="iconButton" aria-label="Close" onClick={() => setQuickActionsCustomizeOpen(false)}>&times;</button>
+            </div>
+            <p className="muted quickActionsCustomizeHint">Choose {QUICK_ACTION_SELECTION_SIZE} shortcuts for your mobile dashboard. Selected: {quickActionsDraft.length} of {QUICK_ACTION_SELECTION_SIZE}.</p>
+            <div className="dashboardItemList quickActionsPickerList">
+              {QUICK_ACTION_IDS.map((id) => {
+                const Icon = QUICK_ACTION_ICON_COMPONENTS[id]
+                const selected = quickActionsDraft.includes(id)
+                const disabled = !selected && quickActionsDraft.length >= QUICK_ACTION_SELECTION_SIZE
+                return (
+                  <button
+                    type="button"
+                    key={id}
+                    className={`dashboardItemRow quickActionsPickerRow${selected ? ' active' : ''}`}
+                    aria-pressed={selected}
+                    disabled={disabled}
+                    onClick={() => toggleQuickActionDraft(id)}
+                  >
+                    <span className="quickActionsPickerIcon" aria-hidden="true"><Icon /></span>
+                    <span className="dashboardItemBody"><strong>{QUICK_ACTION_LABELS[id]}</strong></span>
+                    {selected && <span className="quickActionsPickerCheck" aria-hidden="true">✓</span>}
+                  </button>
+                )
+              })}
+            </div>
+            {quickActionsError && <p className="errorMessage quickActionsCustomizeError">{quickActionsError}</p>}
+            <div className="modalActions quickActionsCustomizeActions">
+              <button type="button" className="secondary" onClick={restoreDefaultQuickActions} disabled={quickActionsSaving}>Restore Defaults</button>
+              <button
+                type="button"
+                className="primary"
+                disabled={quickActionsSaving || quickActionsDraft.length !== QUICK_ACTION_SELECTION_SIZE}
+                onClick={() => void saveQuickActions(quickActionsDraft)}
+              >
+                {quickActionsSaving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile V2: the property picker Invite Tenant/Tenant Messages
+          opens when there's more than one property to choose from — a
+          plain address list, nothing more; tapping one reuses the exact
+          same openProperty() deep link a single property would have
+          gone to directly. */}
       {inviteTenantPickerOpen && (
         <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setInviteTenantPickerOpen(false)}>
           <div className="modal" style={{ width: 'min(420px, 100%)' }}>
             <div className="modalTop">
-              <h2>Invite Tenant — choose a property</h2>
+              <h2>Tenant Connect — choose a property</h2>
               <button type="button" className="iconButton" aria-label="Close" onClick={() => setInviteTenantPickerOpen(false)}>&times;</button>
             </div>
             <div className="dashboardItemList">

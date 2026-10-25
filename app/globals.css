@@ -236,8 +236,10 @@ h2, h3, p { margin-top: 0; }
      own 460px rule below, this closes up the visibly wasted gap between
      the greeting line and the Portfolio Snapshot card on mobile
      (14px + 18px combined -> 6px + 8px) without touching desktop, where
-     the original 14px/18px values are untouched. */
-  .welcomeIntro { padding-bottom: 6px; }
+     the original 14px/18px values are untouched.
+     Mobile V2 — above-the-fold pass adds padding-top: 30px -> 20px
+     (desktop's base .welcomeIntro rule is untouched either way). */
+  .welcomeIntro { padding-top: 20px; padding-bottom: 6px; }
 }
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 44px; }
 .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
@@ -709,10 +711,17 @@ h2, h3, p { margin-top: 0; }
 }
 @media (max-width: 760px) {
   .shell { padding: 0 17px 50px; }
-  .topbar { min-height: 76px; }
+  /* Mobile V2 — above-the-fold pass: 76px -> 64px. The header's own
+     content (wordmark + the circular avatar button) is unaffected —
+     both are vertically centered by .topbar's own align-items: center
+     and neither depends on this min-height to stay tappable — this
+     only trims the empty space around them. Applies site-wide (every
+     authenticated page shares .topbar), which is the point: a shorter
+     header helps every mobile page, not just the Dashboard. */
+  .topbar { min-height: 64px; }
   .tagline { display: none; }
   .stats { grid-template-columns: 1fr 1fr; }
-  .grid { grid-template-columns: 1fr; }
+  .grid { grid-template-columns: 1fr; gap: 16px; }
   .formGrid { grid-template-columns: 1fr; }
   .photo { height: 205px; }
   .heroPhoto { height: 245px; }
@@ -1004,30 +1013,77 @@ h2, h3, p { margin-top: 0; }
      data, same DismissibleAttentionRow components either way. */
   .needsAttentionSection { display: none; }
 }
-/* Mobile V2 — Dashboard Quick Actions: mobile-only (desktop already
-   reaches all four from their normal places and didn't ask for this
-   row) — hidden by default, shown only inside the <=760px block below. */
+/* Mobile V2 — Dashboard Quick Actions (redesigned): mobile-only
+   (desktop already reaches all eight from their normal places and
+   didn't ask for this row) — hidden by default, shown only inside the
+   <=760px block below.
+
+   Compact, icon-first, ONE horizontal row of exactly 4 — replaces the
+   original large 2x2 rectangular-card layout, which ate significantly
+   more vertical space than its four shortcuts were worth (see the
+   above-the-fold spacing pass lower in this file). Every button's own
+   tappable area (icon + label together, min-height 58px, flexed width
+   comfortably over 70px at every supported viewport) exceeds the 44x44
+   accessible-touch-target minimum — the 40px icon circle alone is
+   already close, and the label beneath it is part of the same single
+   tap target, not a separate hit area. */
 .mobileQuickActions { display: none; }
-.mobileQuickActionsHeading { font-size: 13px; font-weight: var(--weight-medium); color: var(--muted); margin: 0 0 10px; text-transform: uppercase; letter-spacing: .02em; }
-.mobileQuickActionsGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.mobileQuickAction { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; text-decoration: none; color: var(--text); font-size: 13px; font-weight: var(--weight-medium); cursor: pointer; text-align: left; font-family: inherit; }
-.mobileQuickAction:active { background: var(--bg); }
-.mobileQuickActionIcon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); font-size: 15px; font-weight: 700; }
+.mobileQuickActionsHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.mobileQuickActionsHeading { font-size: 13px; font-weight: var(--weight-medium); color: var(--muted); margin: 0; text-transform: uppercase; letter-spacing: .02em; }
+/* "Customize" — a small, quiet text control beside the heading, same
+   visual weight as .snapshotToggle above (Portfolio Snapshot's own
+   Hide/Show control) rather than a bordered button, so it reads as a
+   secondary affordance next to the row it configures. Still a real
+   44px-tall tap target via padding, even though it looks compact. */
+.mobileQuickActionsCustomize { border: 0; background: transparent; color: var(--brand); font-size: 12.5px; font-weight: 700; padding: 11px 2px; margin: -11px -2px; cursor: pointer; }
+.mobileQuickActionsCustomize:active { opacity: .7; }
+.mobileQuickActionsRow { display: flex; gap: 6px; }
+.mobileQuickAction { flex: 1; min-width: 0; min-height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 8px 2px; background: transparent; border: 0; border-radius: 12px; text-decoration: none; color: var(--text); font-family: inherit; cursor: pointer; text-align: center; }
+.mobileQuickAction:active { background: var(--brand-soft); }
+.mobileQuickActionIcon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); flex-shrink: 0; }
+.mobileQuickActionIcon svg { width: 19px; height: 19px; }
+.mobileQuickActionLabel { font-size: 11px; font-weight: var(--weight-medium); line-height: 1.2; overflow-wrap: break-word; max-width: 100%; }
 @media (max-width: 760px) {
-  .mobileQuickActions { display: block; margin-bottom: 30px; }
-}
-@media (max-width: 430px) {
-  .mobileQuickAction { padding: 12px; font-size: 12.5px; }
+  /* Above-the-fold pass: 30px -> 16px. This row is now a compact single
+     line instead of a two-row card grid, so it no longer needs as much
+     breathing room from "My Properties" below it. */
+  .mobileQuickActions { display: block; margin-bottom: 16px; }
 }
 @media (max-width: 460px) {
-  /* Mobile Dashboard Spacing Micro-Fix: 18px top margin -> 8px on
-     mobile only (desktop keeps 18px via the base .portfolioSnapshot
-     rule above) — paired with .welcomeIntro's 460px rule above to close
-     up the wasted gap after the greeting, without touching the 30px
-     bottom margin (spacing before PropWatch) or any other value. */
-  .portfolioSnapshot { padding: 13px 16px 15px; margin-top: 8px; }
+  /* Mobile Dashboard Spacing Micro-Fix, extended by the Mobile V2
+     above-the-fold pass: 18px top margin -> 8px, and 30px bottom
+     margin -> 18px (desktop keeps both their original base-rule values
+     — this media query never applies above 460px) — the goal across
+     this whole block is the SAME one the original Micro-Fix stated:
+     close up wasted gaps between dashboard sections on mobile so the
+     first property card starts at least partially visible without
+     scrolling on a typical phone. */
+  .portfolioSnapshot { padding: 13px 16px 15px; margin-top: 8px; margin-bottom: 18px; }
   .portfolioSnapshotMetric strong { font-size: 18px; }
+  /* Mobile V2 — above-the-fold pass: 76px -> 68px min-height on the 2x2
+     tile grid only (desktop's 4-across row is untouched — this media
+     query never applies above 460px). Still comfortably fits the 18px
+     value + 12px label at this reduced height; saves ~16px total
+     across the two stacked rows. */
+  .portfolioSnapshotMetric { min-height: 68px; }
 }
+
+/* Mobile V2 — Quick Actions Customize sheet. Reuses .overlay/.modal/
+   .dashboardItemList/.dashboardItemRow/.modalActions as-is; only the
+   picker row's own selected/disabled presentation is new. */
+.quickActionsCustomizeModal { width: min(480px, 100%); }
+.quickActionsCustomizeHint { margin: -4px 0 14px; font-size: 13.5px; }
+.quickActionsPickerList { gap: 6px; }
+.quickActionsPickerRow { grid-template-columns: auto minmax(0, 1fr) auto; }
+.quickActionsPickerRow.active { border-color: var(--brand); background: var(--brand-soft); }
+.quickActionsPickerRow:disabled { opacity: .45; cursor: not-allowed; }
+.quickActionsPickerRow:disabled:hover { border-color: var(--line); }
+.quickActionsPickerIcon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--surface-muted); color: var(--brand); flex-shrink: 0; }
+.quickActionsPickerIcon svg { width: 17px; height: 17px; }
+.quickActionsPickerRow.active .quickActionsPickerIcon { background: white; }
+.quickActionsPickerCheck { color: var(--brand); font-weight: 700; font-size: 15px; }
+.quickActionsCustomizeError { margin-top: 12px; padding: 10px 12px; border-radius: 10px; font-size: 13px; }
+.quickActionsCustomizeActions { justify-content: space-between; }
 
 /* Milestone 16: Landlord Command Center — Needs Attention / Upcoming /
    Open Maintenance / Recent Activity. Reuses .sectionHead, .emptyState,
