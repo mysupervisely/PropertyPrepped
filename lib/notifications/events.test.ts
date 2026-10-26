@@ -13,7 +13,7 @@ const BASE_CTX: NotificationContext = {
 
 function row(partial: Partial<NotificationEventRow>): NotificationEventRow {
   return {
-    id: 'evt-1', event_type: 'tenant_message', property_id: 'prop-1', conversation_id: 'convo-1',
+    id: 'evt-1', seq: 1, event_type: 'tenant_message', property_id: 'prop-1', conversation_id: 'convo-1',
     maintenance_request_id: null, tenant_access_id: null, outreach_id: null, metadata: {},
     read_at: null, created_at: '2026-01-01T00:00:00Z',
     ...partial,
@@ -74,10 +74,13 @@ describe('navHrefForEvent', () => {
 })
 
 describe('buildNotificationFeed', () => {
-  it('sorts newest first', () => {
+  it('sorts newest first, by seq — never by created_at, which can tie between rows inserted in the same transaction', () => {
     const rows = [
-      row({ id: 'old', created_at: '2026-01-01T00:00:00Z' }),
-      row({ id: 'new', created_at: '2026-02-01T00:00:00Z' }),
+      row({ id: 'old', seq: 1, created_at: '2026-01-01T00:00:00Z' }),
+      // Identical created_at on purpose: reproduces the real tie
+      // Postgres produces for two rows in one transaction. If sorting
+      // ever regressed to created_at, this would fail non-deterministically.
+      row({ id: 'new', seq: 2, created_at: '2026-01-01T00:00:00Z' }),
     ]
     expect(buildNotificationFeed(rows, BASE_CTX).map((i) => i.id)).toEqual(['new', 'old'])
   })

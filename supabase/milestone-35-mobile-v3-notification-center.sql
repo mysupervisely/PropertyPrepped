@@ -42,6 +42,24 @@
 
 create table if not exists public.notification_events (
   id uuid primary key default gen_random_uuid(),
+  -- Final-gate audit fix: a strictly monotonic, insertion-order
+  -- identity column. created_at (below) defaults to now(), which is
+  -- transaction_timestamp() in Postgres — frozen for the whole
+  -- transaction, not per-statement. Two notification_events rows
+  -- created moments apart (e.g. a tenant sends two messages back to
+  -- back before a request is ever filed) can legitimately get the
+  -- EXACT SAME created_at if they land in the same transaction or the
+  -- same wall-clock tick, which makes "order by created_at asc limit 1"
+  -- an undefined tiebreak — not a hypothetical, reproduced live against
+  -- Postgres during review. `seq` has none of that ambiguity: a
+  -- GENERATED ... AS IDENTITY column is assigned from a sequence at the
+  -- exact moment each row is inserted, strictly increasing, regardless
+  -- of transaction boundaries or clock resolution. It is the
+  -- authoritative "which of these came first" answer everywhere that
+  -- actually matters (notify_on_tenant_request()'s upgrade-in-place
+  -- logic below) and the app's own chronological feed ordering uses it
+  -- too, for the same reason — created_at stays purely for display.
+  seq bigint generated always as identity,
   owner_id uuid not null references auth.users(id) on delete cascade,
   event_type text not null check (event_type in (
     'tenant_message',
@@ -69,7 +87,7 @@ create table if not exists public.notification_events (
   created_at timestamptz not null default now()
 );
 
-create index if not exists notification_events_owner_idx on public.notification_events(owner_id, created_at desc);
+create index if not exists notification_events_owner_idx on public.notification_events(owner_id, seq desc);
 create index if not exists notification_events_owner_unread_idx on public.notification_events(owner_id) where read_at is null;
 
 alter table public.notification_events enable row level security;
@@ -180,6 +198,13 @@ create trigger notify_on_tenant_message
 --    references — is completely unaffected: this function only ever
 --    touches the one earliest 'tenant_message' row for the exact
 --    conversation_id the new tenant_requests row itself points at.
+--
+--    "Earliest" is determined by `seq`, not `created_at` (final-gate
+--    audit fix) — reproduced live: a tenant sending two messages before
+--    ever filing a request can get two notification_events rows with
+--    the IDENTICAL created_at (transaction_timestamp() is frozen per
+--    transaction), which makes created_at ordering an undefined
+--    tiebreak. `seq` can't tie — see its own column comment above.
 -- ===================================================================
 create or replace function public.notify_on_tenant_request()
 returns trigger
@@ -198,7 +223,7 @@ begin
     select id from public.notification_events
     where conversation_id = new.conversation_id
       and event_type = 'tenant_message'
-    order by created_at asc
+    order by seq asc
     limit 1
   );
   get diagnostics v_updated_count = row_count;

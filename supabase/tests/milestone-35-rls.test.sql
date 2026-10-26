@@ -41,7 +41,8 @@ begin;
 insert into auth.users (id) values
   ('35111111-1111-1111-1111-111111111111'), -- owner 1
   ('35222222-2222-2222-2222-222222222222'), -- owner 2
-  ('35333333-3333-3333-3333-333333333333'); -- owner 1's tenant
+  ('35333333-3333-3333-3333-333333333333'), -- owner 1's tenant
+  ('35444444-4444-4444-4444-444444444444'); -- owner 2's tenant
 
 reset role;
 insert into public.properties (id, owner_id, address, city) values
@@ -50,6 +51,24 @@ insert into public.properties (id, owner_id, address, city) values
 
 insert into public.tenant_property_access (id, property_id, owner_id, tenant_user_id, tenant_email, status, invited_at)
 values ('35b00000-0000-0000-0000-000000000001', '35a00000-0000-0000-0000-000000000001', '35111111-1111-1111-1111-111111111111', '35333333-3333-3333-3333-333333333333', 'tenant@example.test', 'Active', now());
+
+-- Owner 2's OWN tenant/conversation/message (final-gate audit case):
+-- a decoy 'tenant_message' notification that exists the whole time
+-- owner 1's upgrade logic below is running, to prove
+-- notify_on_tenant_request()'s UPDATE — which runs SECURITY DEFINER
+-- and is NOT constrained by RLS at all — can structurally never touch
+-- another owner's row (it's scoped by conversation_id, which is
+-- globally unique per conversation and thus per owner, never by
+-- anything an attacker-adjacent value could collide with).
+insert into public.tenant_property_access (id, property_id, owner_id, tenant_user_id, tenant_email, status, invited_at)
+values ('35b00000-0000-0000-0000-000000000003', '35a00000-0000-0000-0000-000000000002', '35222222-2222-2222-2222-222222222222', '35444444-4444-4444-4444-444444444444', 'owner2-tenant@example.test', 'Active', now());
+insert into public.property_conversations (id, property_id, owner_id, tenant_access_id, subject, conversation_type)
+values ('35c00000-0000-0000-0000-000000000099', '35a00000-0000-0000-0000-000000000002', '35222222-2222-2222-2222-222222222222', '35b00000-0000-0000-0000-000000000003', 'Owner 2''s own issue', 'Maintenance');
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '35444444-4444-4444-4444-444444444444', true);
+insert into public.property_messages (conversation_id, sender_role, message)
+values ('35c00000-0000-0000-0000-000000000099', 'Tenant', 'Owner 2''s own tenant message — must never be touched by anything happening in owner 1''s account.');
+reset role;
 
 -- conversation_type = 'Maintenance' because tenant_requests_insert_tenant's
 -- own WITH CHECK requires the linked conversation to carry that type —
@@ -103,6 +122,64 @@ begin
     raise notice 'PASS: one real guided-intake submission (conversation + opening message + tenant_requests) produces exactly ONE notification, upgraded to tenant_maintenance_request and correctly linked to the real canonical case — not two';
   else
     raise exception 'REGRESSION: expected exactly 1 upgraded tenant_maintenance_request notification for this conversation, got count=%, type=%, event_case=%, real_case=%', v_count, v_event_type, v_event_case, v_linked_case;
+  end if;
+end $$;
+
+-- ===== 1b. UNUSUAL BUT VALID SEQUENCE (final-gate audit case): a
+-- SECOND tenant message arrives BEFORE the tenant_requests row — i.e.
+-- conversation, opening message, a second message, THEN the request.
+-- Both messages land in the same transaction here (reproducing the
+-- real tie Postgres produces on created_at for same-transaction
+-- inserts), so this specifically proves the fix no longer depends on
+-- created_at at all: it must upgrade the EARLIER (opening) message's
+-- notification, by seq, never the later one, regardless of any
+-- timestamp tie. =====
+reset role;
+insert into public.property_conversations (id, property_id, owner_id, tenant_access_id, subject, conversation_type)
+values ('35c00000-0000-0000-0000-000000000003', '35a00000-0000-0000-0000-000000000001', '35111111-1111-1111-1111-111111111111', '35b00000-0000-0000-0000-000000000001', 'Loose cabinet', 'Maintenance');
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '35333333-3333-3333-3333-333333333333', true);
+insert into public.property_messages (conversation_id, sender_role, message)
+values ('35c00000-0000-0000-0000-000000000003', 'Tenant', 'Opening message: cabinet door is loose.');
+insert into public.property_messages (conversation_id, sender_role, message)
+values ('35c00000-0000-0000-0000-000000000003', 'Tenant', 'Second message, before any request exists yet: also a hinge is squeaking.');
+reset role;
+
+do $$
+declare v_opening_notif_seq bigint; v_second_notif_seq bigint;
+begin
+  select seq into v_opening_notif_seq from public.notification_events
+    where conversation_id = '35c00000-0000-0000-0000-000000000003' order by seq asc limit 1;
+  select seq into v_second_notif_seq from public.notification_events
+    where conversation_id = '35c00000-0000-0000-0000-000000000003' order by seq desc limit 1;
+  if v_opening_notif_seq is not null and v_second_notif_seq is not null and v_opening_notif_seq < v_second_notif_seq then
+    raise notice 'PASS: two tenant messages before any request both notified, in true insertion order (seq % then %), regardless of any created_at tie', v_opening_notif_seq, v_second_notif_seq;
+  else
+    raise exception 'REGRESSION: expected two distinct, strictly ordered notification seqs, got opening=%, second=%', v_opening_notif_seq, v_second_notif_seq;
+  end if;
+end $$;
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '35333333-3333-3333-3333-333333333333', true);
+insert into public.tenant_requests (id, property_id, owner_id, tenant_access_id, conversation_id, category, title, description)
+values ('35d00000-0000-0000-0000-000000000003', '35a00000-0000-0000-0000-000000000001', '35111111-1111-1111-1111-111111111111', '35b00000-0000-0000-0000-000000000001', '35c00000-0000-0000-0000-000000000003', 'other', 'Loose cabinet', 'Cabinet door is loose.');
+reset role;
+
+do $$
+declare
+  v_total int;
+  v_upgraded_seq bigint;
+  v_remaining_seq bigint;
+  v_remaining_type text;
+begin
+  select count(*) into v_total from public.notification_events where conversation_id = '35c00000-0000-0000-0000-000000000003';
+  select seq into v_upgraded_seq from public.notification_events where conversation_id = '35c00000-0000-0000-0000-000000000003' and event_type = 'tenant_maintenance_request';
+  select seq, event_type into v_remaining_seq, v_remaining_type from public.notification_events where conversation_id = '35c00000-0000-0000-0000-000000000003' and event_type = 'tenant_message';
+  if v_total = 2 and v_upgraded_seq is not null and v_remaining_seq is not null and v_remaining_type = 'tenant_message' and v_upgraded_seq < v_remaining_seq then
+    raise notice 'PASS: the EARLIER (opening) message''s notification (seq %) was upgraded to tenant_maintenance_request; the LATER second message''s notification (seq %) correctly remains a plain tenant_message — never the reverse', v_upgraded_seq, v_remaining_seq;
+  else
+    raise exception 'REGRESSION: expected the lower-seq notification upgraded and the higher-seq one left as tenant_message; got total=%, upgraded_seq=%, remaining_seq=%, remaining_type=%', v_total, v_upgraded_seq, v_remaining_seq, v_remaining_type;
   end if;
 end $$;
 
@@ -249,6 +326,25 @@ begin
     raise notice 'PASS: accepted_at transitioning null -> timestamp creates exactly one notification; an unrelated later update does not re-fire it';
   else
     raise exception 'REGRESSION: expected exactly 1 tenant_invite_accepted notification, got %', v_count;
+  end if;
+end $$;
+
+-- ===== Owner 2's decoy notification (created at the very start, before
+-- any of owner 1's activity above) is COMPLETELY untouched by every
+-- upgrade-in-place UPDATE that ran for owner 1 in between — proves
+-- notify_on_tenant_request()'s UPDATE, which bypasses RLS entirely as
+-- a SECURITY DEFINER function, is still structurally confined to the
+-- one conversation_id it was given and can never cross into another
+-- owner's row. =====
+reset role;
+do $$
+declare v_count int; v_type text;
+begin
+  select count(*), max(event_type) into v_count, v_type from public.notification_events where conversation_id = '35c00000-0000-0000-0000-000000000099';
+  if v_count = 1 and v_type = 'tenant_message' then
+    raise notice 'PASS: owner 2''s own notification is still exactly one untouched tenant_message row after everything that happened in owner 1''s account — the trigger''s UPDATE never crossed owners';
+  else
+    raise exception 'REGRESSION: owner 2''s decoy notification was modified or lost by activity in owner 1''s account (count=%, type=%)', v_count, v_type;
   end if;
 end $$;
 

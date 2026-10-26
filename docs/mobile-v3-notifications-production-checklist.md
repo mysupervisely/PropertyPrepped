@@ -1,6 +1,6 @@
 # Mobile V3: Notifications & Activity Center — production application checklist
 
-This migration was **not** executed against production. It was verified against a local, stubbed Postgres instance with RLS fully enforced (`supabase/tests/milestone-35-rls.test.sql`, 11/11 checks passing, zero regressions). Apply it manually, in this order, and verify with the read-only SQL below before moving on.
+This migration was **not** executed against production. It was verified against a local, stubbed Postgres instance with RLS fully enforced (`supabase/tests/milestone-35-rls.test.sql`, 17/17 checks passing, zero regressions — expanded during final review to add a `seq` column; see §7 below). Apply it manually, in this order, and verify with the read-only SQL below before moving on.
 
 ## What this migration does
 
@@ -34,6 +34,11 @@ order by event_object_table;
 -- Confirm the table starts empty (no backfill, by design)
 select count(*) from public.notification_events;
 -- expect: 0
+
+-- Confirm the ordering column from the final-review fix exists
+select column_name, data_type from information_schema.columns
+where table_name = 'notification_events' and column_name = 'seq';
+-- expect one row: seq | bigint
 ```
 
 ## 3. Smoke-test with real (not fabricated) activity — optional, read-only
@@ -78,3 +83,13 @@ This is safe at any time: the five trigger functions only ever write to `notific
 
 - Do not add an INSERT policy for `authenticated` on `notification_events` "to make testing easier" — this is the one thing that keeps a client from fabricating or backdating a notification. If a real gap is found later, fix the trigger, don't open the table.
 - Do not backfill historical events. The table is deliberately forward-only.
+
+## 7. Final-review fix: `seq` column (ordering, not security)
+
+During final pre-release review, reproducing an unusual-but-valid write order (a tenant sending two messages before a maintenance request is ever filed) against a real Postgres instance showed that two `notification_events` rows created in the same transaction can get the **identical** `created_at` (Postgres freezes `now()` at transaction start, not per statement). The one place that mattered — `notify_on_tenant_request()`'s "upgrade the earlier message's notification in place" logic — was ordering by `created_at`, which made its tiebreak undefined in that case.
+
+Fixed by adding `seq bigint generated always as identity` to the table and switching every place that needs "which came first" (the upgrade subquery, the app's own feed ordering in `app/notifications/page.tsx` and `lib/notifications/events.ts`) to order by `seq` instead. `seq` is assigned from a sequence at the exact moment of insert — it cannot tie, regardless of transaction boundaries or clock resolution. `created_at` is unchanged and still used for the timestamp shown to the user.
+
+This was **not** a security or isolation issue — RLS, ownership scoping, and the no-INSERT/no-DELETE policy posture are all unaffected. It was purely about which of two notifications correctly earns the "upgrade" when their timing is ambiguous.
+
+This fix landed before the migration was ever applied anywhere, so §1 above already describes the only version you need to run — there is nothing to reconcile. (For the record, if this table already existed and needed `seq` added after the fact, `create table if not exists` would silently do nothing — a real `alter table public.notification_events add column if not exists seq bigint generated always as identity;` would be required. Not a concern here, since nothing has been applied yet.)

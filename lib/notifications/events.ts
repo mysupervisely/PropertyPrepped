@@ -23,6 +23,13 @@ export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number]
 
 export type NotificationEventRow = {
   id: string
+  // Final-gate audit fix: the authoritative chronological-order key.
+  // created_at (below) is still shown to the user, but can tie between
+  // two rows created in the same transaction (Postgres freezes now() at
+  // transaction start) — seq, a bigint identity column, strictly
+  // increases per insert and never does. Sorting/ordering uses this,
+  // never created_at.
+  seq: number
   event_type: NotificationEventType
   property_id: string | null
   conversation_id: string | null
@@ -125,7 +132,7 @@ export function navHrefForEvent(row: NotificationEventRow): string {
 
 export function buildNotificationFeed(rows: NotificationEventRow[], ctx: NotificationContext): NotificationFeedItem[] {
   return [...rows]
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .sort((a, b) => b.seq - a.seq)
     .map((row) => ({
       id: row.id,
       type: row.event_type,

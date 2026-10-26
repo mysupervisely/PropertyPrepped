@@ -90,7 +90,10 @@ function NotificationsWorkspace({ user }: { user: User }) {
       { data: outreachRows },
       { data: contactRows },
     ] = await Promise.all([
-      supabase.from('notification_events').select('*').eq('owner_id', user.id).order('created_at', { ascending: false }),
+      // Ordered by seq, not created_at — see lib/notifications/events.ts's
+      // own comment on NotificationEventRow.seq for why created_at can
+      // tie between two rows and seq never can.
+      supabase.from('notification_events').select('*').eq('owner_id', user.id).order('seq', { ascending: false }),
       supabase.from('properties').select('id,address,city'),
       supabase.from('maintenance_requests').select('id,tenant_name'),
       supabase.from('property_conversations').select('id,tenant_access_id'),
