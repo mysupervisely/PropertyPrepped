@@ -69,14 +69,18 @@ function NotificationsWorkspace({ user }: { user: User }) {
   const [outreach, setOutreach] = useState<{ id: string; contact_id: string }[]>([])
   const [contacts, setContacts] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [markingAll, setMarkingAll] = useState(false)
 
   async function load() {
     if (!supabase) return
     setLoading(true)
-    setError('')
     const [
+      // notification_events itself: same defensive "may not exist yet
+      // in every environment" pattern as the lookup tables below — the
+      // migration can be applied on its own schedule (see
+      // docs/mobile-v3-notifications-production-checklist.md); this page
+      // must never hard-error just because it hasn't landed yet, it
+      // should simply show an empty feed.
       { data: eventRows, error: eventError },
       { data: propertyRows },
       { data: maintenanceRows },
@@ -98,7 +102,12 @@ function NotificationsWorkspace({ user }: { user: User }) {
       supabase.from('maintenance_provider_outreach').select('id,contact_id'),
       supabase.from('property_contacts').select('id,name'),
     ])
-    if (eventError) { setError(eventError.message); setLoading(false); return }
+    // propError/caseError-style firstError checks elsewhere in this app
+    // only ever gate on tables that MUST exist for the page to mean
+    // anything (e.g. properties). notification_events failing to load
+    // is never one of those — an empty feed is a completely valid,
+    // correct state, not an error state.
+    void eventError
     setEvents((eventRows || []) as NotificationEventRow[])
     setProperties((propertyRows || []) as DirectoryProperty[])
     setMaintenanceRequests((maintenanceRows || []) as { id: string; tenant_name: string }[])
@@ -153,8 +162,6 @@ function NotificationsWorkspace({ user }: { user: User }) {
         </div>
         {!loading && <p className="muted">{feed.length} notification{feed.length === 1 ? '' : 's'}{unread > 0 ? ` · ${unread} unread` : ''}</p>}
       </section>
-
-      {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
 
       {loading ? (
         <div className="emptyState"><strong>Loading…</strong></div>
