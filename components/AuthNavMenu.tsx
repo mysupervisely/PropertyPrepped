@@ -69,6 +69,11 @@ const NAV_LINKS: { href: string; label: string }[] = [
   // document library — every property_documents row the caller owns,
   // including ones Smart Upload/Portfolio Import left unassigned.
   { href: '/documents', label: 'Documents' },
+  // Tenant Connect V2.1: the portfolio-wide tenant directory, reusing
+  // the same tenant_property_access/leases tables and invitation
+  // workflow each property workspace's own Rent > Tenant tab already
+  // reads/writes — not a second Tenant Connect data model.
+  { href: '/tenant-connect', label: 'Tenant Connect' },
   // Tenant Connect + Maintenance Coordination M3: portfolio-wide view
   // across every property's maintenance_requests, same table each
   // property workspace's own Rent > Tenant tab already reads/writes —

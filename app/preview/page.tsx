@@ -50,7 +50,7 @@ function previewInitials(fullName: string): string {
   return resolveInitials({ first_name: first || null, last_name: last || null, display_name: null }, FIXTURE_LANDLORD.email)
 }
 
-type Screen = 'dashboard' | 'property' | 'maintenance' | 'propcrew' | 'taxcenter' | 'billing' | 'admin'
+type Screen = 'dashboard' | 'property' | 'maintenance' | 'tenantconnect' | 'propcrew' | 'taxcenter' | 'billing' | 'admin'
 type PropertyTab = 'overview' | 'documents' | 'tenant'
 
 function occupancyPill(p: FixtureProperty) {
@@ -210,7 +210,7 @@ export default function PreviewApp() {
             </div>
             <p className="muted" style={{ marginBottom: 18 }}>{FIXTURE_LANDLORD.email}</p>
             <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {(['dashboard', 'maintenance', 'propcrew', 'taxcenter', 'billing', 'admin'] as Screen[]).map((s) => (
+              {(['dashboard', 'tenantconnect', 'maintenance', 'propcrew', 'taxcenter', 'billing', 'admin'] as Screen[]).map((s) => (
                 <button
                   key={s}
                   type="button"
@@ -218,7 +218,7 @@ export default function PreviewApp() {
                   style={{ textAlign: 'left', border: 0 }}
                   onClick={() => { setScreen(s); setSelectedPropertyId(null); setNavMenuOpen(false) }}
                 >
-                  {({ dashboard: 'Dashboard', maintenance: 'Maintenance', propcrew: 'PropCrew', taxcenter: 'Tax Center', billing: 'Account & Billing', admin: 'Admin', property: 'Property' } as Record<Screen, string>)[s]}
+                  {({ dashboard: 'Dashboard', maintenance: 'Maintenance', tenantconnect: 'Tenant Connect', propcrew: 'PropCrew', taxcenter: 'Tax Center', billing: 'Account & Billing', admin: 'Admin', property: 'Property' } as Record<Screen, string>)[s]}
                 </button>
               ))}
             </nav>
@@ -371,6 +371,7 @@ export default function PreviewApp() {
         />
       )}
 
+      {screen === 'tenantconnect' && <TenantConnectScreen onOpenProperty={openProperty} />}
       {screen === 'propcrew' && <PropCrewScreen />}
       {screen === 'taxcenter' && <TaxCenterScreen />}
       {screen === 'billing' && <BillingScreen />}
@@ -673,6 +674,54 @@ function MaintenanceScreen({ selected, onSelect, onNewRequest }: { selected: Ret
           })}
         </div>
       )}
+    </>
+  )
+}
+
+// Tenant Connect V2.1 (preview parity): the same .tenantDirectoryList/
+// .tenantDirectoryRow classes app/tenant-connect/page.tsx renders, over
+// fixture properties/tenants only — connection status here is a fixed
+// fictional label (no fixture "unread"/"pending" invention beyond what
+// FIXTURE_ATTENTION_ITEMS' own "Tenant Connect" item already implies
+// about Sam Whitfield), purely so the real design can be screenshotted.
+function TenantConnectScreen({ onOpenProperty }: { onOpenProperty: (id: string, tab?: PropertyTab) => void }) {
+  const [search, setSearch] = useState('')
+  const rows = FIXTURE_PROPERTIES
+    .filter((p) => p.tenant)
+    .map((p) => ({ property: p, status: p.occupancy === 'occupied' ? 'Connected' : 'Not connected' }))
+  const filtered = rows.filter((r) => {
+    const q = search.trim().toLowerCase()
+    if (!q) return true
+    return r.property.tenant!.name.toLowerCase().includes(q) || r.property.address.toLowerCase().includes(q)
+  })
+  return (
+    <>
+      <div className="sectionHead">
+        <div>
+          <h2>Tenant Connect</h2>
+          <p>{rows.length} connected · {FIXTURE_PROPERTIES.length - rows.length} not connected</p>
+        </div>
+      </div>
+      <div className="searchInputWrap">
+        <input className="searchInput" type="search" placeholder="Search tenants or properties…" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search the tenant directory" />
+      </div>
+      <div className="tenantDirectoryList">
+        {filtered.map(({ property: p, status }) => (
+          <div key={p.id} className="tenantDirectoryRow">
+            <div className="tenantConnectCardHead">
+              <div className="tenantConnectCardBody">
+                <strong>{p.tenant!.name}</strong>
+                <span className="muted">{p.address}, {p.city}</span>
+                <span className="muted">{p.tenant!.email}</span>
+              </div>
+              <span className={`statusPill ${status === 'Connected' ? 'pillGood' : 'pillMuted'}`}>{status}</span>
+            </div>
+            <div className="tenantDirectoryRowLinks">
+              <button type="button" className="tenantConnectQuietAction" onClick={() => onOpenProperty(p.id, 'tenant')}>View in property &rarr;</button>
+            </div>
+          </div>
+        ))}
+      </div>
     </>
   )
 }
