@@ -93,3 +93,21 @@ export function buildMessageInbox(
 export function summarizeUnreadInbox(rows: MessageInboxRow[]): number {
   return rows.filter((r) => r.unread).length
 }
+
+// Design Foundation V1, Desktop Workspace V1: the Messages tab's new
+// desktop left-panel search box. Same convention/shape as
+// lib/tenant-connect/directory.ts's filterTenantDirectory() — a pure,
+// case-insensitive substring match over fields already on the row
+// (tenant name, property label, and the latest-message preview text,
+// since a desktop inbox search is most useful when it can also find
+// "the conversation about the leaking faucet"), never a new query.
+export function filterMessageInbox(rows: MessageInboxRow[], query: string): MessageInboxRow[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return rows
+  return rows.filter(
+    (r) =>
+      r.tenantName.toLowerCase().includes(q) ||
+      r.propertyLabel.toLowerCase().includes(q) ||
+      (r.latestMessagePreview || '').toLowerCase().includes(q),
+  )
+}

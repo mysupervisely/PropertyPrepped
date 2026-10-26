@@ -74,12 +74,18 @@ describe('Landlord view — availability shown before contacting PropCrew, never
   })
 
   it('both landlord pages fetch availability windows and appointments and pass them into the shared component', () => {
-    for (const source of [pageSource, commandCenterPageSource]) {
-      expect(source).toContain("from('maintenance_availability_windows')")
-      expect(source).toContain("from('maintenance_appointments')")
-      expect(source).toContain('availabilityWindows={')
-      expect(source).toContain('appointment={')
-    }
+    expect(pageSource).toContain("from('maintenance_availability_windows')")
+    expect(pageSource).toContain("from('maintenance_appointments')")
+    expect(pageSource).toContain('availabilityWindows={')
+    expect(pageSource).toContain('appointment={')
+    // Design Foundation V1, Desktop Workspace V1: see the identical note
+    // in provider-outreach-wiring.test.ts — commandCenterPageSource now
+    // assembles these as an object literal (detailPropsFor()), spread
+    // into MaintenanceCaseDetail, rather than as inline JSX attributes.
+    expect(commandCenterPageSource).toContain("from('maintenance_availability_windows')")
+    expect(commandCenterPageSource).toContain("from('maintenance_appointments')")
+    expect(commandCenterPageSource).toContain('availabilityWindows: availabilityForOpenCase,')
+    expect(commandCenterPageSource).toContain('appointment: appointmentForOpenCase,')
   })
 })
 

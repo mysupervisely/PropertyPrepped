@@ -104,7 +104,7 @@ describe('Completed requests read calmly inside "All requests" — never hidden,
     // MaintenanceCaseCard has exactly one JSX return path — completed
     // cases render through the identical title/address/status markup
     // as active cases, just with an extra class name.
-    expect(commandCenterPageSource).toContain('function MaintenanceCaseCard({ caseRow, address, onOpen }: {')
+    expect(commandCenterPageSource).toContain('function MaintenanceCaseCard({ caseRow, address, selected, onOpen }: {')
     const bodyStart = commandCenterPageSource.indexOf('function MaintenanceCaseCard(')
     const body = commandCenterPageSource.slice(bodyStart, commandCenterPageSource.indexOf('\n}\n', bodyStart))
     expect(body).toContain('maintenanceCommandCenterCardTitle')

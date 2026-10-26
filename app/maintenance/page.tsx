@@ -45,7 +45,7 @@ import { NewMaintenanceRequestModal } from '../../components/maintenance/NewMain
 import type { NewMaintenanceRequestPayload } from '../../lib/maintenance/new-request'
 import {
   enrichMaintenanceCases, sortCasesForCommandCenter, summarizeCommandCenter, relevantContactsForProperty,
-  showsDedicatedUrgentBadge,
+  showsDedicatedUrgentBadge, filterMaintenanceCases,
   type MaintenanceCaseRow, type TenantRequestLink, type IntakeSessionOutcome,
   type PropCrewContactRef, type PropCrewLinkRef, type EnrichedMaintenanceCase, type MaintenanceCaseStatus,
 } from '../../lib/maintenance/command-center'
@@ -120,6 +120,11 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
   // instead ("make it easy to see the maintenance cases the landlord
   // needs to act on").
   const [filter, setFilter] = useState<'attention' | 'all' | 'urgent'>('attention')
+  // Design Foundation V1, Desktop Workspace V1: a pure client-side
+  // search over the already-loaded/enriched case list, same
+  // convention as Tenant Connect's new message search — no new query,
+  // applied on top of (not instead of) the existing filter chips.
+  const [caseSearch, setCaseSearch] = useState('')
   const [openCaseId, setOpenCaseId] = useState<string | null>(null)
   const [showNewRequest, setShowNewRequest] = useState(false)
   const [newRequestError, setNewRequestError] = useState('')
@@ -308,6 +313,35 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
     setBusy(false)
   }
 
+  // Design Foundation V1, Desktop Workspace V1: the exact same prop
+  // set MaintenanceCaseDetail has always received, now built once so
+  // both the mobile overlay instance and the new desktop panel
+  // instance (layout="panel") pass identical props — only `layout`
+  // ever differs between the two.
+  function detailPropsFor(c: EnrichedMaintenanceCase) {
+    return {
+      caseRow: c,
+      propertyLabel: propertyLabel(c.property_id),
+      contacts: contactsForOpenCase,
+      busy,
+      statusUpdateMessage,
+      onAssign: (contactId: string | null) => void assignContact(c.id, contactId),
+      onStatusChange: (status: MaintenanceCaseStatus) => void changeStatus(c.id, status),
+      onClose: () => { setOpenCaseId(null); setOutreachError(''); setAppointmentError('') },
+      outreach: outreachForOpenCase,
+      outreachBusy,
+      outreachError,
+      onSendOutreach: () => void sendOutreach(c.id),
+      availabilityWindows: availabilityForOpenCase,
+      entryPreference: entryPreferenceForOpenCase,
+      appointment: appointmentForOpenCase,
+      appointmentBusy,
+      appointmentError,
+      onConfirmAppointment: appointmentForOpenCase ? () => void respondToAppointment(appointmentForOpenCase.id, 'confirm') : undefined,
+      onDeclineAppointment: appointmentForOpenCase ? () => void respondToAppointment(appointmentForOpenCase.id, 'decline') : undefined,
+    }
+  }
+
   return (
     <main className="shell">
       <AuthHeader />
@@ -340,60 +374,87 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
       ) : active.length === 0 && history.length === 0 ? (
         <div className="emptyState"><strong>No maintenance requests yet.</strong><span>Requests your tenants submit through Tenant Connect, and any you log yourself, will show up here.</span></div>
       ) : (
-        <>
-          {/* Phase D.2: each chip now shows a real count, read from the
-              same already-loaded/derived arrays the filter itself uses
-              (summary.activeCount/urgentCount, sorted.length) — no new
-              query. */}
-          <div className="maintenanceFilterRow" role="tablist" aria-label="Filter maintenance requests">
-            <button type="button" role="tab" aria-selected={filter === 'attention'} className={`maintenanceFilterChip${filter === 'attention' ? ' active' : ''}`} onClick={() => setFilter('attention')}>Needs attention ({summary.activeCount})</button>
-            <button type="button" role="tab" aria-selected={filter === 'all'} className={`maintenanceFilterChip${filter === 'all' ? ' active' : ''}`} onClick={() => setFilter('all')}>All requests ({sorted.length})</button>
-            {summary.urgentCount > 0 && (
-              <button type="button" role="tab" aria-selected={filter === 'urgent'} className={`maintenanceFilterChip${filter === 'urgent' ? ' active' : ''}`} onClick={() => setFilter('urgent')}>Urgent ({summary.urgentCount})</button>
-            )}
-          </div>
-          {(() => {
-            const filtered = filter === 'attention' ? active : filter === 'urgent' ? active.filter((c) => c.urgent) : sorted
-            if (filtered.length === 0) {
+        <div className="maintenanceWorkspace">
+          <div className="maintenanceListPanel">
+            {/* Phase D.2: each chip now shows a real count, read from the
+                same already-loaded/derived arrays the filter itself uses
+                (summary.activeCount/urgentCount, sorted.length) — no new
+                query. */}
+            <div className="maintenanceFilterRow" role="tablist" aria-label="Filter maintenance requests">
+              <button type="button" role="tab" aria-selected={filter === 'attention'} className={`maintenanceFilterChip${filter === 'attention' ? ' active' : ''}`} onClick={() => setFilter('attention')}>Needs attention ({summary.activeCount})</button>
+              <button type="button" role="tab" aria-selected={filter === 'all'} className={`maintenanceFilterChip${filter === 'all' ? ' active' : ''}`} onClick={() => setFilter('all')}>All requests ({sorted.length})</button>
+              {summary.urgentCount > 0 && (
+                <button type="button" role="tab" aria-selected={filter === 'urgent'} className={`maintenanceFilterChip${filter === 'urgent' ? ' active' : ''}`} onClick={() => setFilter('urgent')}>Urgent ({summary.urgentCount})</button>
+              )}
+            </div>
+            {/* Design Foundation V1, Desktop Workspace V1: search layers
+                ON TOP of the existing filter chips (applied to whichever
+                chip is active), never replacing them. */}
+            <div className="searchInputWrap">
+              <input
+                className="searchInput"
+                type="search"
+                placeholder="Search requests…"
+                value={caseSearch}
+                onChange={(e) => setCaseSearch(e.target.value)}
+                aria-label="Search maintenance requests"
+              />
+            </div>
+            {(() => {
+              const byFilter = filter === 'attention' ? active : filter === 'urgent' ? active.filter((c) => c.urgent) : sorted
+              const filtered = filterMaintenanceCases(byFilter, caseSearch, propertyLabel)
+              if (filtered.length === 0) {
+                return (
+                  <div className="emptyState">
+                    <strong>
+                      {caseSearch.trim()
+                        ? `No requests match "${caseSearch.trim()}".`
+                        : filter === 'urgent' ? 'No urgent requests right now.' : 'Nothing needs attention right now.'}
+                    </strong>
+                  </div>
+                )
+              }
               return (
-                <div className="emptyState">
-                  <strong>{filter === 'urgent' ? 'No urgent requests right now.' : 'Nothing needs attention right now.'}</strong>
+                <div className="maintenanceCommandCenterList">
+                  {filtered.map((c) => (
+                    <MaintenanceCaseCard
+                      key={c.id}
+                      caseRow={c}
+                      address={propertyAddressLines(c.property_id)}
+                      selected={c.id === openCaseId}
+                      onOpen={() => setOpenCaseId(c.id)}
+                    />
+                  ))}
                 </div>
               )
-            }
-            return (
-              <div className="maintenanceCommandCenterList">
-                {filtered.map((c) => (
-                  <MaintenanceCaseCard key={c.id} caseRow={c} address={propertyAddressLines(c.property_id)} onOpen={() => setOpenCaseId(c.id)} />
-                ))}
-              </div>
-            )
-          })()}
-        </>
+            })()}
+          </div>
+
+          {/* Desktop-only (>=1024px) right panel — see app/globals.css's
+              Design Foundation V1 comment. Hidden entirely below that
+              width via CSS; the mobile/tablet experience is the
+              MaintenanceCaseDetail overlay further down, unchanged. */}
+          <div className="maintenanceDetailPanel">
+            {openCase ? (
+              <MaintenanceCaseDetail {...detailPropsFor(openCase)} layout="panel" />
+            ) : (
+              <div className="maintenanceDetailPanelEmpty">Select a request to view details.</div>
+            )}
+          </div>
+        </div>
       )}
 
+      {/* Mobile/tablet (<1024px) case detail — the exact pre-existing
+          MaintenanceCaseDetail overlay/modal (layout="overlay", its
+          default), unchanged, just additionally wrapped so it can be
+          hidden at desktop widths without touching the OTHER caller of
+          this same component (app/page.tsx's Details → Maintenance
+          tab, which never passes `layout` and keeps today's behavior
+          everywhere). */}
       {openCase && (
-        <MaintenanceCaseDetail
-          caseRow={openCase}
-          propertyLabel={propertyLabel(openCase.property_id)}
-          contacts={contactsForOpenCase}
-          busy={busy}
-          statusUpdateMessage={statusUpdateMessage}
-          onAssign={(contactId) => void assignContact(openCase.id, contactId)}
-          onStatusChange={(status) => void changeStatus(openCase.id, status)}
-          onClose={() => { setOpenCaseId(null); setOutreachError(''); setAppointmentError('') }}
-          outreach={outreachForOpenCase}
-          outreachBusy={outreachBusy}
-          outreachError={outreachError}
-          onSendOutreach={() => void sendOutreach(openCase.id)}
-          availabilityWindows={availabilityForOpenCase}
-          entryPreference={entryPreferenceForOpenCase}
-          appointment={appointmentForOpenCase}
-          appointmentBusy={appointmentBusy}
-          appointmentError={appointmentError}
-          onConfirmAppointment={appointmentForOpenCase ? () => void respondToAppointment(appointmentForOpenCase.id, 'confirm') : undefined}
-          onDeclineAppointment={appointmentForOpenCase ? () => void respondToAppointment(appointmentForOpenCase.id, 'decline') : undefined}
-        />
+        <div className="maintenanceDetailOverlay">
+          <MaintenanceCaseDetail {...detailPropsFor(openCase)} />
+        </div>
       )}
 
       {showNewRequest && (
@@ -424,18 +485,21 @@ function MaintenanceCommandCenter({ user }: { user: User }) {
 // obvious property identity, large tap target (the whole card is the
 // button), minimal horizontal scroll (no wide table anywhere in this
 // file).
-function MaintenanceCaseCard({ caseRow, address, onOpen }: {
+function MaintenanceCaseCard({ caseRow, address, selected, onOpen }: {
   caseRow: EnrichedMaintenanceCase
   address: { street: string; cityState: string | null }
+  /** Design Foundation V1, Desktop Workspace V1: highlights the card whose case is open in the desktop detail panel. Harmless at every width — on mobile/tablet the detail is a full overlay, so a selected card is simply never visible at the same time as its own highlight. */
+  selected?: boolean
   onOpen: () => void
 }) {
   const classNames = [
     'maintenanceCommandCenterCard',
     caseRow.urgent ? 'maintenanceCommandCenterCardUrgent' : '',
     !caseRow.active ? 'maintenanceCommandCenterCardCompleted' : '',
+    selected ? 'maintenanceCommandCenterCardSelected' : '',
   ].filter(Boolean).join(' ')
   return (
-    <button className={classNames} onClick={onOpen}>
+    <button className={classNames} aria-current={selected ? 'true' : undefined} onClick={onOpen}>
       <MaintenanceCategoryIcon category={caseRow.category} className="maintenanceCommandCenterCardIcon" />
       <span className="maintenanceCommandCenterCardBody">
         <span className="maintenanceCommandCenterCardTitle">{caseRow.title}</span>

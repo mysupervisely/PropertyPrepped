@@ -102,6 +102,7 @@ export function MaintenanceCaseDetail({
   caseRow, propertyLabel, contacts, busy, statusUpdateMessage, onAssign, onStatusChange, onClose,
   outreach, outreachBusy, outreachError, onSendOutreach,
   availabilityWindows, entryPreference, appointment, appointmentBusy, appointmentError, onConfirmAppointment, onDeclineAppointment,
+  layout = 'overlay',
 }: {
   caseRow: EnrichedMaintenanceCase
   propertyLabel: string
@@ -122,6 +123,18 @@ export function MaintenanceCaseDetail({
   appointmentError?: string
   onConfirmAppointment?: () => void
   onDeclineAppointment?: () => void
+  /**
+   * Design Foundation V1, Desktop Workspace V1: 'overlay' (the
+   * default, unchanged) renders exactly what this component always
+   * has — a centered .overlay/.modal popup, used by the property-level
+   * Details → Maintenance tab (app/page.tsx) and by this same page on
+   * mobile/tablet. 'panel' renders the identical content without the
+   * overlay/modal chrome, for app/maintenance/page.tsx's new desktop
+   * right-hand panel — no prop, no behavior, and no data-fetching
+   * logic in this file changes between the two; only the outer
+   * wrapper differs.
+   */
+  layout?: 'overlay' | 'panel'
 }) {
   const assignedContact = contacts.find((c) => c.id === caseRow.assigned_contact_id) || null
   const [showContactConfirm, setShowContactConfirm] = useState(false)
@@ -274,16 +287,20 @@ export function MaintenanceCaseDetail({
     }
   }
 
-  return (
-    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal maintenanceCaseDetailModal">
-        <div className="modalTop">
-          <div>
-            <p className="eyebrow">Maintenance</p>
-            <h2>{caseRow.title}</h2>
-          </div>
-          <button className="iconButton" onClick={onClose} aria-label="Close">×</button>
+  // Design Foundation V1, Desktop Workspace V1: everything below was
+  // always a single render tree inside the .overlay/.modal wrapper.
+  // It's now built once as `detailBody` so the 'panel' layout can
+  // reuse it verbatim inside a plain <div> instead — no content, prop,
+  // or handler is duplicated, only the outer wrapper differs.
+  const detailBody = (
+    <>
+      <div className="modalTop">
+        <div>
+          <p className="eyebrow">Maintenance</p>
+          <h2>{caseRow.title}</h2>
         </div>
+        <button className="iconButton" onClick={onClose} aria-label={layout === 'panel' ? 'Deselect' : 'Close'}>×</button>
+      </div>
 
         <div className="maintenanceCaseMeta">
           <p>{propertyLabel}</p>
@@ -402,25 +419,43 @@ export function MaintenanceCaseDetail({
             )}
           </div>
         </details>
-      </div>
+    </>
+  )
 
-      {showContactConfirm && assignedContact && (
-        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowContactConfirm(false)}>
-          <div className="modal">
-            <div className="modalTop"><h2>Contact {assignedContact.name}{assignedContact.business_name ? ` at ${assignedContact.business_name}` : ''}?</h2><button className="iconButton" onClick={() => setShowContactConfirm(false)}>×</button></div>
-            <p>PropRoster will send the maintenance request to {assignedContact.name} so they can review and respond.</p>
-            <div className="maintenanceContactConfirmMeta">
-              <span className="muted">{propertyLabel}</span>
-              <span className="muted">{caseRow.title}</span>
-              <span className="muted">{assignedContact.email}</span>
-            </div>
-            <div className="modalActions">
-              <button className="secondary" onClick={() => setShowContactConfirm(false)}>Cancel</button>
-              <button className="primary" disabled={outreachBusy} onClick={() => { setShowContactConfirm(false); onSendOutreach?.() }}>{outreachBusy ? 'Sending…' : 'Send Request'}</button>
-            </div>
-          </div>
+  // The "Contact PropCrew?" confirm step is always a true floating
+  // overlay — a confirmation prompt, not a layout concern — in both
+  // 'overlay' and 'panel' modes, unchanged from before this phase.
+  const contactConfirmModal = showContactConfirm && assignedContact && (
+    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowContactConfirm(false)}>
+      <div className="modal">
+        <div className="modalTop"><h2>Contact {assignedContact.name}{assignedContact.business_name ? ` at ${assignedContact.business_name}` : ''}?</h2><button className="iconButton" onClick={() => setShowContactConfirm(false)}>×</button></div>
+        <p>PropRoster will send the maintenance request to {assignedContact.name} so they can review and respond.</p>
+        <div className="maintenanceContactConfirmMeta">
+          <span className="muted">{propertyLabel}</span>
+          <span className="muted">{caseRow.title}</span>
+          <span className="muted">{assignedContact.email}</span>
         </div>
-      )}
+        <div className="modalActions">
+          <button className="secondary" onClick={() => setShowContactConfirm(false)}>Cancel</button>
+          <button className="primary" disabled={outreachBusy} onClick={() => { setShowContactConfirm(false); onSendOutreach?.() }}>{outreachBusy ? 'Sending…' : 'Send Request'}</button>
+        </div>
+      </div>
+    </div>
+  )
+
+  if (layout === 'panel') {
+    return (
+      <>
+        <div className="maintenanceCaseDetailPanel">{detailBody}</div>
+        {contactConfirmModal}
+      </>
+    )
+  }
+
+  return (
+    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal maintenanceCaseDetailModal">{detailBody}</div>
+      {contactConfirmModal}
     </div>
   )
 }

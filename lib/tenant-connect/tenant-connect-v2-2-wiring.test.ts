@@ -64,10 +64,23 @@ describe('app/tenant-connect/page.tsx: Messages tab reuses existing tables/RLS/n
   })
 
   it('links a maintenance-linked conversation out to the existing portfolio Maintenance page, never re-deriving case data', () => {
+    // Design Foundation V1, Desktop Workspace V1: the conversation
+    // header/thread/composer markup (including this link) was extracted
+    // into a threadBody() function so BOTH the mobile .overlay modal and
+    // the new desktop thread panel render the identical content instead
+    // of two hand-kept-in-sync copies — see that function's own source
+    // comment. The modal (tenantConnectThreadModal) now just calls
+    // {threadBody(openRow)}, so the real content to check is inside
+    // threadBody() itself, not textually adjacent to the modal div.
+    const bodyIndex = source.indexOf('function threadBody(')
+    expect(bodyIndex).toBeGreaterThan(-1)
+    const nearby = source.slice(bodyIndex, bodyIndex + 900)
+    expect(nearby).toContain('href="/maintenance"')
+    // And confirm the modal actually renders threadBody(), not a second,
+    // divergent copy of this markup.
     const modalIndex = source.indexOf('tenantConnectThreadModal')
     expect(modalIndex).toBeGreaterThan(-1)
-    const nearby = source.slice(modalIndex, modalIndex + 600)
-    expect(nearby).toContain('href="/maintenance"')
+    expect(source.slice(modalIndex, modalIndex + 100)).toContain('{threadBody(openRow)}')
   })
 
   it('the thread view reuses the exact same CSS classes as TenantRequestsPanel\'s thread modal — no new thread markup/classes invented', () => {

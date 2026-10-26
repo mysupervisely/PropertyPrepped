@@ -154,11 +154,19 @@ describe('Landlord visibility — one shared detail component, no second dashboa
   })
 
   it('both landlord pages fetch maintenance_provider_outreach and pass it into the shared component — one implementation, not a second dashboard', () => {
-    for (const source of [pageSource, commandCenterPageSource]) {
-      expect(source).toContain("from('maintenance_provider_outreach')")
-      expect(source).toContain('outreach={')
-      expect(source).toContain('onSendOutreach={')
-    }
+    expect(pageSource).toContain("from('maintenance_provider_outreach')")
+    expect(pageSource).toContain('outreach={')
+    expect(pageSource).toContain('onSendOutreach={')
+    // Design Foundation V1, Desktop Workspace V1: app/maintenance/page.tsx
+    // now builds MaintenanceCaseDetail's props once (detailPropsFor(), so
+    // the mobile overlay and the new desktop panel instance share an
+    // identical prop set) and spreads them with {...detailPropsFor(...)}
+    // instead of writing each prop as a JSX attribute inline — still
+    // exactly one implementation, just assembled as an object literal.
+    expect(commandCenterPageSource).toContain("from('maintenance_provider_outreach')")
+    expect(commandCenterPageSource).toContain('outreach: outreachForOpenCase,')
+    expect(commandCenterPageSource).toContain('onSendOutreach: () => void sendOutreach(c.id),')
+    expect(commandCenterPageSource).toContain('{...detailPropsFor(openCase)}')
   })
 
   it('the outreach row shown for the open case is scoped to that request AND its currently assigned contact — reassignment never inherits a stale outreach state', () => {

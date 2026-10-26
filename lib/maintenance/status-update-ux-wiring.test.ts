@@ -108,7 +108,14 @@ describe('Bug 1 — a brief, visible "Status updated." confirmation, auto-dismis
 
   it('both call sites actually pass their own statusUpdateMessage state into the shared modal', () => {
     expect(pageSource).toContain('statusUpdateMessage={statusUpdateMessage}')
-    expect(commandCenterPageSource).toContain('statusUpdateMessage={statusUpdateMessage}')
+    // Design Foundation V1, Desktop Workspace V1: app/maintenance/page.tsx
+    // now assembles MaintenanceCaseDetail's props once (detailPropsFor())
+    // as an object literal — `statusUpdateMessage` (shorthand) rather
+    // than the JSX attribute `statusUpdateMessage={statusUpdateMessage}`
+    // — and spreads that same object into both the mobile overlay and
+    // the new desktop panel instance.
+    expect(commandCenterPageSource).toContain('statusUpdateMessage,')
+    expect(commandCenterPageSource).toContain('{...detailPropsFor(openCase)}')
   })
 })
 

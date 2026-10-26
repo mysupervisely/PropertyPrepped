@@ -355,3 +355,27 @@ export function summarizeCommandCenter(cases: EnrichedMaintenanceCase[]): Comman
     completedCount: cases.filter((c) => !c.active).length,
   }
 }
+
+// Design Foundation V1, Desktop Workspace V1: the Command Center's new
+// desktop left-panel search box. Same pure, case-insensitive
+// substring-match convention as lib/tenant-connect/directory.ts's
+// filterTenantDirectory() — filters the already-loaded/enriched array,
+// never a new query. `propertyLabelFor` is supplied by the caller
+// (app/maintenance/page.tsx already computes propertyLabel() from its
+// own loaded properties) rather than duplicated here, so this module
+// never needs a properties table of its own.
+export function filterMaintenanceCases(
+  cases: EnrichedMaintenanceCase[],
+  query: string,
+  propertyLabelFor: (propertyId: string) => string,
+): EnrichedMaintenanceCase[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return cases
+  return cases.filter(
+    (c) =>
+      c.title.toLowerCase().includes(q) ||
+      c.tenant_name.toLowerCase().includes(q) ||
+      (c.category || '').toLowerCase().includes(q) ||
+      propertyLabelFor(c.property_id).toLowerCase().includes(q),
+  )
+}
