@@ -22,7 +22,8 @@ import {
 import {
   FIXTURE_LANDLORD, FIXTURE_PROPERTIES, FIXTURE_STATS, FIXTURE_MAINTENANCE,
   FIXTURE_PROPCREW, FIXTURE_TAX_SUMMARY, FIXTURE_BILLING, FIXTURE_DOCUMENTS,
-  FIXTURE_ATTENTION_ITEMS, type FixtureProperty, type FixtureAttentionNav,
+  FIXTURE_ATTENTION_ITEMS, FIXTURE_CONVERSATIONS, type FixtureProperty, type FixtureAttentionNav,
+  type FixtureConversation,
 } from './_lib/fixtures'
 
 // Mobile V2 — Quick Actions (preview parity): the SAME catalog/icon
@@ -678,14 +679,19 @@ function MaintenanceScreen({ selected, onSelect, onNewRequest }: { selected: Ret
   )
 }
 
-// Tenant Connect V2.1 (preview parity): the same .tenantDirectoryList/
-// .tenantDirectoryRow classes app/tenant-connect/page.tsx renders, over
-// fixture properties/tenants only — connection status here is a fixed
-// fictional label (no fixture "unread"/"pending" invention beyond what
-// FIXTURE_ATTENTION_ITEMS' own "Tenant Connect" item already implies
-// about Sam Whitfield), purely so the real design can be screenshotted.
+// Tenant Connect V2.1/V2.2 (preview parity): the same .tenantDirectoryList/
+// .tenantDirectoryRow/.tenantInboxRow classes app/tenant-connect/page.tsx
+// renders, over fixture properties/tenants/conversations only —
+// connection status and unread flags here are fixed fictional labels
+// (never invented beyond what FIXTURE_CONVERSATIONS/FIXTURE_PROPERTIES
+// already encode), purely so the real design can be screenshotted.
 function TenantConnectScreen({ onOpenProperty }: { onOpenProperty: (id: string, tab?: PropertyTab) => void }) {
+  const [tab, setTab] = useState<'messages' | 'tenants'>('messages')
   const [search, setSearch] = useState('')
+  const [openConvoId, setOpenConvoId] = useState<string | null>(null)
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string[]>>({})
+  const [replyText, setReplyText] = useState('')
+
   const rows = FIXTURE_PROPERTIES
     .filter((p) => p.tenant)
     .map((p) => ({ property: p, status: p.occupancy === 'occupied' ? 'Connected' : 'Not connected' }))
@@ -694,34 +700,103 @@ function TenantConnectScreen({ onOpenProperty }: { onOpenProperty: (id: string, 
     if (!q) return true
     return r.property.tenant!.name.toLowerCase().includes(q) || r.property.address.toLowerCase().includes(q)
   })
+  const unreadCount = FIXTURE_CONVERSATIONS.filter((c) => c.unread).length
+  const openConvo: FixtureConversation | null = FIXTURE_CONVERSATIONS.find((c) => c.id === openConvoId) || null
+  const openProperty = openConvo ? FIXTURE_PROPERTIES.find((p) => p.id === openConvo.propertyId) : null
+
+  function sendDecorativeReply() {
+    if (!openConvo || !replyText.trim()) return
+    setReplyDrafts((prev) => ({ ...prev, [openConvo.id]: [...(prev[openConvo.id] || []), replyText.trim()] }))
+    setReplyText('')
+  }
+
   return (
     <>
       <div className="sectionHead">
         <div>
           <h2>Tenant Connect</h2>
-          <p>{rows.length} connected · {FIXTURE_PROPERTIES.length - rows.length} not connected</p>
+          <p>{tab === 'messages' ? `${FIXTURE_CONVERSATIONS.length} conversations${unreadCount > 0 ? ` · ${unreadCount} unread` : ''}` : `${rows.length} connected · ${FIXTURE_PROPERTIES.length - rows.length} not connected`}</p>
         </div>
       </div>
-      <div className="searchInputWrap">
-        <input className="searchInput" type="search" placeholder="Search tenants or properties…" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search the tenant directory" />
+      <div className="maintenanceFilterRow" role="tablist" aria-label="Tenant Connect sections">
+        <button type="button" role="tab" aria-selected={tab === 'messages'} className={`maintenanceFilterChip${tab === 'messages' ? ' active' : ''}`} onClick={() => setTab('messages')}>Messages{unreadCount > 0 ? ` (${unreadCount})` : ''}</button>
+        <button type="button" role="tab" aria-selected={tab === 'tenants'} className={`maintenanceFilterChip${tab === 'tenants' ? ' active' : ''}`} onClick={() => setTab('tenants')}>Tenants</button>
       </div>
-      <div className="tenantDirectoryList">
-        {filtered.map(({ property: p, status }) => (
-          <div key={p.id} className="tenantDirectoryRow">
-            <div className="tenantConnectCardHead">
-              <div className="tenantConnectCardBody">
-                <strong>{p.tenant!.name}</strong>
-                <span className="muted">{p.address}, {p.city}</span>
-                <span className="muted">{p.tenant!.email}</span>
+
+      {tab === 'messages' ? (
+        <div className="tenantDirectoryList">
+          {FIXTURE_CONVERSATIONS.map((c) => (
+            <button type="button" key={c.id} className="tenantInboxRow" onClick={() => { setOpenConvoId(c.id); setReplyText('') }}>
+              <span className="tenantInboxRowHead">
+                <span className="tenantInboxRowBody">
+                  <strong>{c.tenantName}</strong>
+                  <span className="muted">{FIXTURE_PROPERTIES.find((p) => p.id === c.propertyId)?.address}</span>
+                </span>
+                {c.unread && <span className="tenantInboxUnreadDot" aria-label="Unread" />}
+                <span className="muted tenantInboxTimestamp">{c.timestampLabel}</span>
+              </span>
+              <span className="muted tenantInboxPreview">{(replyDrafts[c.id]?.length ? replyDrafts[c.id][replyDrafts[c.id].length - 1] : c.preview)}</span>
+              {c.maintenanceId && <span className="tenantInboxMaintenanceBadge">Maintenance request</span>}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <>
+          <div className="searchInputWrap">
+            <input className="searchInput" type="search" placeholder="Search tenants or properties…" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search the tenant directory" />
+          </div>
+          <div className="tenantDirectoryList">
+            {filtered.map(({ property: p, status }) => (
+              <div key={p.id} className="tenantDirectoryRow">
+                <div className="tenantConnectCardHead">
+                  <div className="tenantConnectCardBody">
+                    <strong>{p.tenant!.name}</strong>
+                    <span className="muted">{p.address}, {p.city}</span>
+                    <span className="muted">{p.tenant!.email}</span>
+                  </div>
+                  <span className={`statusPill ${status === 'Connected' ? 'pillGood' : 'pillMuted'}`}>{status}</span>
+                </div>
+                <div className="tenantDirectoryRowLinks">
+                  <button type="button" className="tenantConnectQuietAction" onClick={() => onOpenProperty(p.id, 'tenant')}>View in property &rarr;</button>
+                </div>
               </div>
-              <span className={`statusPill ${status === 'Connected' ? 'pillGood' : 'pillMuted'}`}>{status}</span>
+            ))}
+          </div>
+        </>
+      )}
+
+      {openConvo && (
+        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setOpenConvoId(null)}>
+          <div className="modal tenantConnectThreadModal">
+            <div className="modalTop">
+              <div><p className="eyebrow">{openProperty?.address}</p><h2>{openConvo.tenantName}</h2></div>
+              <button type="button" className="iconButton" aria-label="Close" onClick={() => setOpenConvoId(null)}>&times;</button>
             </div>
-            <div className="tenantDirectoryRowLinks">
-              <button type="button" className="tenantConnectQuietAction" onClick={() => onOpenProperty(p.id, 'tenant')}>View in property &rarr;</button>
+            {openConvo.maintenanceId && (
+              <button type="button" className="tenantRequestViewInMaintenance" onClick={() => setOpenConvoId(null)}>View in Maintenance &rarr;</button>
+            )}
+            <div className="tenantConnectThread">
+              <div className="tenantConnectBubble tenantConnectBubbleTenant">
+                <div className="tenantConnectBubbleMeta"><strong>Tenant</strong><span>{openConvo.timestampLabel}</span></div>
+                <p>{openConvo.preview}</p>
+              </div>
+              {(replyDrafts[openConvo.id] || []).map((text, i) => (
+                <div key={i} className="tenantConnectBubble tenantConnectBubbleOwner">
+                  <div className="tenantConnectBubbleMeta"><strong>Owner</strong><span>Just now</span></div>
+                  <p>{text}</p>
+                </div>
+              ))}
+            </div>
+            <div className="tenantConnectCompose">
+              <textarea value={replyText} onChange={(e) => setReplyText(e.target.value)} rows={3} placeholder="Write a reply…" />
+              <div className="tenantConnectComposeRow">
+                <label className="secondary tenantConnectAttachLabel">Attach photo<input type="file" accept="image/*" hidden /></label>
+                <button type="button" className="primary" disabled={!replyText.trim()} onClick={sendDecorativeReply}>Reply</button>
+              </div>
             </div>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </>
   )
 }
