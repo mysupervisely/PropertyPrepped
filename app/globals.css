@@ -4214,3 +4214,26 @@ h2, h3, p { margin-top: 0; }
     stroke-width: 1.7;
   }
 }
+
+
+/* Clean Design V1.6 - final small snapshot size adjustment.
+   Scoped to dashboard mobile; maintain readable figures and tap targets. */
+@media (max-width: 760px) {
+  .portfolioSnapshot {
+    padding: 9px 13px 10px;
+    margin-top: 8px;
+    margin-bottom: 13px;
+  }
+  .portfolioSnapshotGrid { margin-top: 3px; }
+  .portfolioSnapshotMetric {
+    min-height: 52px;
+    padding: 6px 9px;
+    gap: 2px;
+  }
+  .portfolioSnapshotMetric strong {
+    font-size: clamp(18px, 4.7vw, 21px);
+  }
+  .needsAttentionSnapshotHead .needsAttentionSnapshotCount {
+    font-size: clamp(18px, 4.7vw, 21px);
+  }
+}
