@@ -4145,3 +4145,72 @@ h2, h3, p { margin-top: 0; }
   .grid > .propertyCard .cardActions { margin-top: 3px; }
   .grid > .propertyCard .cardActions button { padding: 4px 0; }
 }
+
+
+/* Clean Design V1.5 - compact snapshot and unified monochrome iconography. */
+@media (max-width: 760px) {
+  .welcomeIntro { padding-top: 9px; }
+  .welcomeIntro h1 { font-size: clamp(22px, 5.5vw, 27px); }
+  .portfolioSnapshot {
+    margin: 10px 0 14px;
+    padding: 10px 14px 11px;
+    border: 1px solid #edf0ed;
+    border-radius: 15px;
+    box-shadow: none;
+  }
+  .portfolioSnapshotHead h2 {
+    font-size: 10px;
+    letter-spacing: .045em;
+  }
+  .portfolioSnapshotHead .snapshotToggle { font-size: 11px; }
+  .portfolioSnapshotGrid {
+    margin-top: 5px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .portfolioSnapshotMetric {
+    min-height: 57px;
+    padding: 7px 10px;
+    gap: 2px;
+  }
+  .portfolioSnapshotMetric strong {
+    font-size: clamp(18px, 4.9vw, 22px);
+    line-height: 1.1;
+  }
+  .portfolioSnapshotMetric span { font-size: 10.5px; }
+  .portfolioSnapshotMetric .portfolioSnapshotCoverageNote {
+    font-size: 9px;
+    line-height: 1.1;
+  }
+  .needsAttentionSnapshotHead {
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 2px;
+  }
+  .needsAttentionSnapshotHead > span:first-child { font-size: 10.5px; }
+  .needsAttentionSnapshotHead .needsAttentionSnapshotCount {
+    font-size: clamp(18px, 4.9vw, 22px);
+    line-height: 1.1;
+  }
+  .mobileQuickActions { margin-bottom: 12px; }
+  .mobileQuickActionsRow { gap: 8px; }
+  .mobileQuickActionIcon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: #f1f3f2;
+    color: #244b3d;
+  }
+  .mobileQuickActionIcon svg {
+    width: 19px;
+    height: 19px;
+    stroke-width: 1.65;
+  }
+  .mobileQuickActionLabel { font-size: 10.5px; font-weight: 500; }
+  .authHeader .headerSearchButton svg {
+    width: 19px;
+    height: 19px;
+    stroke-width: 1.7;
+  }
+}
