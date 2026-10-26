@@ -48,15 +48,17 @@ describe('Avatar menu simplification — AuthNavMenu', () => {
     expect(source).toContain('Log out')
   })
 
-  it('no additional menu destinations were added beyond the specified hierarchy plus Tenant Connect M3\'s own Maintenance Command Center', () => {
+  it('no additional menu destinations were added beyond the specified hierarchy plus Tenant Connect M3\'s own Maintenance Command Center and Tenant Connect V2.1\'s own tenant directory', () => {
     // M3 (Landlord Maintenance Command Center V1) added ONE new,
     // genuinely live destination — /maintenance — the portfolio-wide
     // view onto the SAME maintenance_requests table every property
     // workspace already reads/writes, not a dead link to an unfinished
-    // feature. Every other destination from this V2 milestone is
-    // unchanged.
+    // feature. Tenant Connect V2.1 added exactly one more — /tenant-connect —
+    // the same kind of portfolio-wide view onto tenant_property_access/
+    // leases every property workspace's Rent > Tenant tab already reads/
+    // writes. Every other destination from this V2 milestone is unchanged.
     const hrefs = [...source.matchAll(/href: '([^']+)'/g)].map((m) => m[1])
-    expect(new Set(hrefs)).toEqual(new Set(['/', '/documents', '/maintenance', '/tax-center', '/propcrew', '/investment-tools', '/profile', '/pricing']))
+    expect(new Set(hrefs)).toEqual(new Set(['/', '/documents', '/tenant-connect', '/maintenance', '/tax-center', '/propcrew', '/investment-tools', '/profile', '/pricing']))
   })
 })
 

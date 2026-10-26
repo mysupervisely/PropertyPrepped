@@ -3196,6 +3196,23 @@ h2, h3, p { margin-top: 0; }
   .tenantConnectCardActions button { flex: 1 1 auto; }
 }
 
+/* Tenant Connect V2.1 — portfolio-wide directory (app/tenant-connect/page.tsx).
+   Each row reuses .tenantConnectCard's own head/body/actions rules
+   wholesale (same card look as the property-level status card) — only
+   the list wrapper and the "View in property"/"open requests" link row
+   are new. */
+.tenantDirectoryList { display: grid; gap: 12px; margin-top: 14px; }
+.tenantDirectoryRow { background: white; border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; display: grid; gap: 10px; }
+.tenantDirectoryRowLinks { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; font-weight: 650; }
+.tenantDirectoryRowLinks a { color: var(--brand); text-decoration: none; }
+.tenantDirectoryRowLinks a:hover { text-decoration: underline; }
+
+@media (max-width: 480px) {
+  .tenantDirectoryRow .tenantConnectCardHead { flex-wrap: wrap; }
+  .tenantDirectoryRow .tenantConnectCardActions { width: 100%; }
+  .tenantDirectoryRow .tenantConnectCardActions button { flex: 1 1 auto; }
+}
+
 /* ==========================================================================
    Tenant Portal (app/tenant/page.tsx) — Section 14: "should feel almost
    mobile-app-like." Its own small shell, deliberately NOT reusing
