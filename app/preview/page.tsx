@@ -22,7 +22,7 @@ import {
 import {
   FIXTURE_LANDLORD, FIXTURE_PROPERTIES, FIXTURE_STATS, FIXTURE_MAINTENANCE,
   FIXTURE_PROPCREW, FIXTURE_TAX_SUMMARY, FIXTURE_BILLING, FIXTURE_DOCUMENTS,
-  FIXTURE_ATTENTION_ITEMS, FIXTURE_CONVERSATIONS, type FixtureProperty, type FixtureAttentionNav,
+  FIXTURE_ATTENTION_ITEMS, FIXTURE_CONVERSATIONS, FIXTURE_NOTIFICATIONS, type FixtureProperty, type FixtureAttentionNav,
   type FixtureConversation,
 } from './_lib/fixtures'
 
@@ -51,7 +51,7 @@ function previewInitials(fullName: string): string {
   return resolveInitials({ first_name: first || null, last_name: last || null, display_name: null }, FIXTURE_LANDLORD.email)
 }
 
-type Screen = 'dashboard' | 'property' | 'maintenance' | 'tenantconnect' | 'propcrew' | 'taxcenter' | 'billing' | 'admin'
+type Screen = 'dashboard' | 'property' | 'maintenance' | 'tenantconnect' | 'notifications' | 'propcrew' | 'taxcenter' | 'billing' | 'admin'
 type PropertyTab = 'overview' | 'documents' | 'tenant'
 
 function occupancyPill(p: FixtureProperty) {
@@ -99,6 +99,13 @@ export default function PreviewApp() {
   // reviewer still see that the shortcut does something distinct.
   const [smartUploadPreviewOpen, setSmartUploadPreviewOpen] = useState(false)
   const [addPropertyPreviewOpen, setAddPropertyPreviewOpen] = useState(false)
+  // Mobile V3 (Notifications & Activity Center, preview parity): lifted
+  // here (not local to NotificationsScreen) so the header bell's badge
+  // count and the Activity Center's own unread state never disagree —
+  // same single-source-of-truth reasoning as every other piece of
+  // lifted state in this file.
+  const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set())
+  const unreadNotificationCount = FIXTURE_NOTIFICATIONS.filter((n) => n.unread && !readNotificationIds.has(n.id)).length
 
   function goDashboard() {
     setScreen('dashboard')
@@ -188,6 +195,14 @@ export default function PreviewApp() {
           </button>
         </div>
         <div className="topbarActions">
+          {/* Mobile V3 (Notifications & Activity Center, preview parity):
+              same .headerSearchButton/.headerBellButton classes the real
+              AuthHeader renders, badge count from FIXTURE_NOTIFICATIONS'
+              own unread rows — never a separately invented number. */}
+          <button type="button" className="headerSearchButton headerBellButton" aria-label="Notifications" onClick={() => setScreen('notifications')}>
+            🔔
+            {unreadNotificationCount > 0 && <span className="headerBellBadge">{unreadNotificationCount}</span>}
+          </button>
           {/* Mobile Header Avatar V1 (preview parity): the real app's
               header replaced a visible account-name + separate
               "Account" button with one circular avatar, showing
@@ -373,6 +388,15 @@ export default function PreviewApp() {
       )}
 
       {screen === 'tenantconnect' && <TenantConnectScreen onOpenProperty={openProperty} />}
+      {screen === 'notifications' && (
+        <NotificationsScreen
+          readIds={readNotificationIds}
+          onMarkRead={(id) => setReadNotificationIds((prev) => new Set(prev).add(id))}
+          onMarkAllRead={() => setReadNotificationIds(new Set(FIXTURE_NOTIFICATIONS.map((n) => n.id)))}
+          onOpenTenantConnect={() => setScreen('tenantconnect')}
+          onOpenMaintenance={() => setScreen('maintenance')}
+        />
+      )}
       {screen === 'propcrew' && <PropCrewScreen />}
       {screen === 'taxcenter' && <TaxCenterScreen />}
       {screen === 'billing' && <BillingScreen />}
@@ -797,6 +821,53 @@ function TenantConnectScreen({ onOpenProperty }: { onOpenProperty: (id: string, 
           </div>
         </div>
       )}
+    </>
+  )
+}
+
+// Mobile V3 (Notifications & Activity Center, preview parity): same
+// .tenantDirectoryList/.notificationRow classes app/notifications/page.tsx
+// renders. Tapping a row marks it read locally (component state only,
+// no network) and routes to the existing screen it's about — never a
+// rendered thread/case detail of its own.
+function NotificationsScreen({ readIds, onMarkRead, onMarkAllRead, onOpenTenantConnect, onOpenMaintenance }: {
+  readIds: Set<string>
+  onMarkRead: (id: string) => void
+  onMarkAllRead: () => void
+  onOpenTenantConnect: () => void
+  onOpenMaintenance: () => void
+}) {
+  const rows = FIXTURE_NOTIFICATIONS.map((n) => ({ ...n, unread: n.unread && !readIds.has(n.id) }))
+  const unreadCount = rows.filter((n) => n.unread).length
+
+  function open(n: (typeof rows)[number]) {
+    onMarkRead(n.id)
+    if (n.screen === 'tenantconnect') onOpenTenantConnect()
+    else onOpenMaintenance()
+  }
+
+  return (
+    <>
+      <div className="sectionHead">
+        <div>
+          <h2>Notifications</h2>
+          <p>{rows.length} notifications{unreadCount > 0 ? ` · ${unreadCount} unread` : ''}</p>
+        </div>
+        {unreadCount > 0 && (
+          <button type="button" className="secondary" onClick={onMarkAllRead}>Mark all as read</button>
+        )}
+      </div>
+      <div className="tenantDirectoryList">
+        {rows.map((n) => (
+          <button type="button" key={n.id} className={`notificationRow${n.unread ? ' notificationRowUnread' : ''}`} style={{ cursor: 'pointer' }} onClick={() => open(n)}>
+            {n.unread && <span className="tenantInboxUnreadDot" aria-label="Unread" />}
+            <span className="notificationRowBody">
+              <span className="notificationRowTitle">{n.title}</span>
+              <span className="muted notificationRowMeta">{n.propertyLabel} · {n.timestampLabel}</span>
+            </span>
+          </button>
+        ))}
+      </div>
     </>
   )
 }

@@ -2310,6 +2310,10 @@ h2, h3, p { margin-top: 0; }
 .topbarActions { display: flex; align-items: center; gap: 10px; }
 .headerSearchButton { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 999px; border: 1px solid var(--line); background: white; font-size: 16px; text-decoration: none; flex-shrink: 0; }
 .headerSearchButton:hover { border-color: #c9d2cd; }
+/* Mobile V3 (Notifications & Activity Center): the bell reuses
+   .headerSearchButton wholesale — only the unread badge is new. */
+.headerBellButton { position: relative; }
+.headerBellBadge { position: absolute; top: -2px; right: -2px; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 999px; background: #c0392b; color: white; font-size: 10px; font-weight: 750; line-height: 16px; text-align: center; }
 .authNavMenu { position: relative; }
 /* Simplification + Maintenance Workspace V2, Phase D.2: the profile
    avatar is its own control (components/ProfileEntryButton.tsx) — see
@@ -3235,6 +3239,26 @@ h2, h3, p { margin-top: 0; }
 @media (max-width: 480px) {
   .tenantInboxRowHead { flex-wrap: wrap; }
 }
+
+/* Mobile V3 — Notifications & Activity Center (app/notifications/page.tsx).
+   Reuses .tenantDirectoryList as the outer list wrapper; each row is its
+   own compact card-link, same restrained border/hover language as
+   .tenantInboxRow, with an unread row getting a quiet brand-tinted
+   background instead of bold text (the leading dot already carries the
+   "unread" signal — doubling it with bold text everywhere would compete
+   with it, not reinforce it). */
+.notificationRow {
+  display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left;
+  background: white; color: var(--text); text-decoration: none;
+  border: 1px solid var(--line); border-radius: var(--radius-card); padding: 14px 16px;
+  transition: border-color .15s ease;
+}
+.notificationRow:hover { border-color: var(--brand); }
+.notificationRowUnread { background: var(--brand-soft); }
+.notificationRow .tenantInboxUnreadDot { margin-top: 6px; flex-shrink: 0; }
+.notificationRowBody { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.notificationRowTitle { font-size: 14.5px; font-weight: var(--weight-semibold); line-height: 1.35; }
+.notificationRowMeta { font-size: 12.5px; }
 
 /* ==========================================================================
    Tenant Portal (app/tenant/page.tsx) — Section 14: "should feel almost

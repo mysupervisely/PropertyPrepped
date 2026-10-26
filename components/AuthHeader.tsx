@@ -37,6 +37,8 @@ import { AuthNavMenu } from './AuthNavMenu'
 import { ProfileEntryButton } from './ProfileEntryButton'
 import { SmartUploadButton } from './SmartUploadButton'
 import { SmartUploadModal } from './SmartUpload/SmartUploadModal'
+import { useAuthUser } from '../lib/useAuthUser'
+import { useUnreadNotificationCount } from '../lib/notifications/useUnreadCount'
 
 export function AuthHeader({
   onBrandClick, onSmartUploadCompleted, registerSmartUploadTrigger,
@@ -46,6 +48,13 @@ export function AuthHeader({
   registerSmartUploadTrigger?: (fn: () => void) => void
 }) {
   const [smartUploadOpen, setSmartUploadOpen] = useState(false)
+  // Mobile V3 (Notifications & Activity Center): same independent
+  // useAuthUser() call AuthNavMenu already makes for its own
+  // hasTenantAccess check — no prop threading, every authenticated page
+  // gets the bell for free, same as the hamburger/Smart Upload already
+  // work.
+  const { user } = useAuthUser()
+  const unreadNotificationCount = useUnreadNotificationCount(user)
   // Phase D.1 lifted this out of AuthNavMenu itself so the mobile
   // bottom nav's old "More" button could open the exact same panel;
   // Phase E1 removed that bottom-nav item, making the header's own
@@ -108,6 +117,16 @@ export function AuthHeader({
               a search action/icon rather than a large primary navigation
               destination." Same /search route and page, unchanged. */}
           <Link href="/search" className="headerSearchButton" aria-label="Search">🔍</Link>
+          {/* Mobile V3: a discreet bell, same circular icon-button
+              language as the search button right next to it — not a
+              dropdown panel, just a link to the dedicated Activity
+              Center (app/notifications/page.tsx), matching how every
+              other header action in this app already works (Search is
+              a plain link too). */}
+          <Link href="/notifications" className="headerSearchButton headerBellButton" aria-label={unreadNotificationCount > 0 ? `Notifications, ${unreadNotificationCount} unread` : 'Notifications'}>
+            🔔
+            {unreadNotificationCount > 0 && <span className="headerBellBadge">{unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}</span>}
+          </Link>
           <SmartUploadButton onClick={() => setSmartUploadOpen(true)} />
         </div>
       </header>
