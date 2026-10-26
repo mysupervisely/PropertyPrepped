@@ -18,8 +18,14 @@
 -- and not at all for a no-op write (idempotency), cross-owner isolation
 -- on notification_events (select and the mark-read update), a client
 -- cannot INSERT into notification_events directly (no policy at all),
--- and an owner replying to their own conversation does not notify
--- themselves.
+-- an owner replying to their own conversation does not notify
+-- themselves, and (post-launch audit fix) the REAL guided-intake write
+-- sequence — conversation, then opening tenant message, then
+-- tenant_requests — produces exactly ONE notification per submission,
+-- while every other tenant message (a later reply, or a message in a
+-- conversation no tenant_requests row ever references, even one of
+-- conversation_type 'Maintenance') still gets its own, un-suppressed
+-- notification.
 --
 -- Role convention: `set local role authenticated` + set_config(...) for
 -- any write that must be attributed to a specific real user (so
@@ -46,25 +52,80 @@ insert into public.tenant_property_access (id, property_id, owner_id, tenant_use
 values ('35b00000-0000-0000-0000-000000000001', '35a00000-0000-0000-0000-000000000001', '35111111-1111-1111-1111-111111111111', '35333333-3333-3333-3333-333333333333', 'tenant@example.test', 'Active', now());
 
 -- conversation_type = 'Maintenance' because tenant_requests_insert_tenant's
--- own WITH CHECK requires the linked conversation to carry that type.
+-- own WITH CHECK requires the linked conversation to carry that type —
+-- NOT because the fix below reads this column at all (it deliberately
+-- doesn't; see the migration's own comment on why that heuristic was
+-- rejected).
 insert into public.property_conversations (id, property_id, owner_id, tenant_access_id, subject, conversation_type)
-values ('35c00000-0000-0000-0000-000000000001', '35a00000-0000-0000-0000-000000000001', '35111111-1111-1111-1111-111111111111', '35b00000-0000-0000-0000-000000000001', 'Test conversation', 'Maintenance');
+values ('35c00000-0000-0000-0000-000000000001', '35a00000-0000-0000-0000-000000000001', '35111111-1111-1111-1111-111111111111', '35b00000-0000-0000-0000-000000000001', 'Leaking sink', 'Maintenance');
 
--- ===== 1. A tenant message triggers exactly one notification_events row for the owner =====
+-- ===== 1. THE REAL GUIDED-INTAKE SEQUENCE: conversation already
+-- created above; now the opening tenant message, then the
+-- tenant_requests row referencing the SAME conversation — exactly
+-- matching lib/maintenance/intake/submit.ts's own write order. =====
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '35333333-3333-3333-3333-333333333333', true);
 insert into public.property_messages (conversation_id, sender_role, message)
-values ('35c00000-0000-0000-0000-000000000001', 'Tenant', 'Hi, the sink is leaking.');
+values ('35c00000-0000-0000-0000-000000000001', 'Tenant', 'Steady drip under the sink.');
 reset role;
 
 do $$
-declare v_count int;
+declare v_count int; v_type text;
 begin
-  select count(*) into v_count from public.notification_events where owner_id = '35111111-1111-1111-1111-111111111111' and event_type = 'tenant_message';
-  if v_count = 1 then
-    raise notice 'PASS: a tenant message creates exactly one tenant_message notification for the owner';
+  select count(*), max(event_type) into v_count, v_type from public.notification_events where owner_id = '35111111-1111-1111-1111-111111111111';
+  if v_count = 1 and v_type = 'tenant_message' then
+    raise notice 'PASS: immediately after the opening message alone, exactly one tenant_message notification exists (intermediate state, before the request lands)';
   else
-    raise exception 'REGRESSION: expected exactly 1 tenant_message notification, got %', v_count;
+    raise exception 'REGRESSION: expected exactly 1 tenant_message notification at this intermediate point, got % of type %', v_count, v_type;
+  end if;
+end $$;
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '35333333-3333-3333-3333-333333333333', true);
+insert into public.tenant_requests (id, property_id, owner_id, tenant_access_id, conversation_id, category, title, description)
+values ('35d00000-0000-0000-0000-000000000001', '35a00000-0000-0000-0000-000000000001', '35111111-1111-1111-1111-111111111111', '35b00000-0000-0000-0000-000000000001', '35c00000-0000-0000-0000-000000000001', 'plumbing', 'Leaking sink', 'Steady drip under the sink.');
+reset role;
+
+do $$
+declare
+  v_count int;
+  v_linked_case uuid;
+  v_event_type text;
+  v_event_case uuid;
+begin
+  select maintenance_request_id into v_linked_case from public.tenant_requests where id = '35d00000-0000-0000-0000-000000000001';
+  -- THE core fix under test: still exactly ONE notification for this
+  -- conversation — the earlier tenant_message row was UPGRADED in
+  -- place, never left behind as a second, duplicate row.
+  select count(*) into v_count from public.notification_events where conversation_id = '35c00000-0000-0000-0000-000000000001';
+  select event_type, maintenance_request_id into v_event_type, v_event_case from public.notification_events where conversation_id = '35c00000-0000-0000-0000-000000000001' limit 1;
+  if v_count = 1 and v_event_type = 'tenant_maintenance_request' and v_event_case = v_linked_case and v_linked_case is not null then
+    raise notice 'PASS: one real guided-intake submission (conversation + opening message + tenant_requests) produces exactly ONE notification, upgraded to tenant_maintenance_request and correctly linked to the real canonical case — not two';
+  else
+    raise exception 'REGRESSION: expected exactly 1 upgraded tenant_maintenance_request notification for this conversation, got count=%, type=%, event_case=%, real_case=%', v_count, v_event_type, v_event_case, v_linked_case;
+  end if;
+end $$;
+
+-- ===== 2. A SUBSEQUENT tenant reply in the SAME conversation (after
+-- the request already landed) still creates its own, separate
+-- tenant_message notification — the upgrade only ever touches the one
+-- opening-message row, never a later reply. =====
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '35333333-3333-3333-3333-333333333333', true);
+insert into public.property_messages (conversation_id, sender_role, message)
+values ('35c00000-0000-0000-0000-000000000001', 'Tenant', 'Also, it is dripping faster now.');
+reset role;
+
+do $$
+declare v_total int; v_message_count int; v_request_count int;
+begin
+  select count(*) into v_total from public.notification_events where conversation_id = '35c00000-0000-0000-0000-000000000001';
+  select count(*) into v_message_count from public.notification_events where conversation_id = '35c00000-0000-0000-0000-000000000001' and event_type = 'tenant_message';
+  select count(*) into v_request_count from public.notification_events where conversation_id = '35c00000-0000-0000-0000-000000000001' and event_type = 'tenant_maintenance_request';
+  if v_total = 2 and v_message_count = 1 and v_request_count = 1 then
+    raise notice 'PASS: a later reply in the same conversation gets its own tenant_message notification, alongside the untouched upgraded tenant_maintenance_request one (2 total, not 1 and not 3)';
+  else
+    raise exception 'REGRESSION: expected 2 total notifications for this conversation after a follow-up reply (1 tenant_message + 1 tenant_maintenance_request), got total=%, message=%, request=%', v_total, v_message_count, v_request_count;
   end if;
 end $$;
 
@@ -78,7 +139,7 @@ reset role;
 do $$
 declare v_count int;
 begin
-  select count(*) into v_count from public.notification_events where owner_id = '35111111-1111-1111-1111-111111111111' and event_type = 'tenant_message';
+  select count(*) into v_count from public.notification_events where conversation_id = '35c00000-0000-0000-0000-000000000001' and event_type = 'tenant_message';
   if v_count = 1 then
     raise notice 'PASS: the owner''s own reply does not create a second tenant_message notification';
   else
@@ -86,30 +147,35 @@ begin
   end if;
 end $$;
 
--- ===== 2. A tenant_requests insert triggers exactly one tenant_maintenance_request notification, carrying the real maintenance_request_id the OTHER trigger (tenant_requests_create_maintenance_case) set =====
+-- ===== 3. An ORDINARY tenant message — in a conversation no
+-- tenant_requests row ever references, even though it is ALSO
+-- conversation_type = 'Maintenance' — is never suppressed and never
+-- "upgraded": it stays exactly one plain tenant_message notification
+-- forever. This proves the fix is keyed on the real tenant_requests ->
+-- conversation_id link, never on the conversation_type string (the
+-- rejected heuristic). =====
+reset role;
+insert into public.property_conversations (id, property_id, owner_id, tenant_access_id, subject, conversation_type)
+values ('35c00000-0000-0000-0000-000000000002', '35a00000-0000-0000-0000-000000000001', '35111111-1111-1111-1111-111111111111', '35b00000-0000-0000-0000-000000000001', 'A question', 'Maintenance');
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '35333333-3333-3333-3333-333333333333', true);
-insert into public.tenant_requests (id, property_id, owner_id, tenant_access_id, conversation_id, category, title, description)
-values ('35d00000-0000-0000-0000-000000000001', '35a00000-0000-0000-0000-000000000001', '35111111-1111-1111-1111-111111111111', '35b00000-0000-0000-0000-000000000001', '35c00000-0000-0000-0000-000000000001', 'plumbing', 'Leaking sink', 'Steady drip under the sink.');
+insert into public.property_messages (conversation_id, sender_role, message)
+values ('35c00000-0000-0000-0000-000000000002', 'Tenant', 'Quick question about trash pickup day.');
 reset role;
 
 do $$
-declare
-  v_count int;
-  v_linked_case uuid;
-  v_event_case uuid;
+declare v_count int; v_type text;
 begin
-  select maintenance_request_id into v_linked_case from public.tenant_requests where id = '35d00000-0000-0000-0000-000000000001';
-  select count(*) into v_count from public.notification_events where owner_id = '35111111-1111-1111-1111-111111111111' and event_type = 'tenant_maintenance_request';
-  select maintenance_request_id into v_event_case from public.notification_events where owner_id = '35111111-1111-1111-1111-111111111111' and event_type = 'tenant_maintenance_request' limit 1;
-  if v_count = 1 and v_event_case = v_linked_case and v_linked_case is not null then
-    raise notice 'PASS: a new tenant_requests row creates exactly one tenant_maintenance_request notification, linked to the real canonical case';
+  select count(*), max(event_type) into v_count, v_type from public.notification_events where conversation_id = '35c00000-0000-0000-0000-000000000002';
+  if v_count = 1 and v_type = 'tenant_message' then
+    raise notice 'PASS: an ordinary tenant message with no tenant_requests ever referencing it stays a plain, un-suppressed, un-upgraded tenant_message notification — conversation_type alone never triggers the upgrade';
   else
-    raise exception 'REGRESSION: tenant_maintenance_request notification missing or mislinked (count=%, event_case=%, real_case=%)', v_count, v_event_case, v_linked_case;
+    raise exception 'REGRESSION: expected exactly 1 untouched tenant_message notification for the unrelated conversation, got count=%, type=%', v_count, v_type;
   end if;
 end $$;
 
--- ===== 3. A maintenance_requests status change triggers exactly one notification; re-saving the SAME status does not =====
+-- ===== 4. A maintenance_requests status change triggers exactly one notification; re-saving the SAME status does not =====
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '35111111-1111-1111-1111-111111111111', true);
 do $$
@@ -132,7 +198,7 @@ begin
   end if;
 end $$;
 
--- ===== 4. Outreach: sending (status='sent') does NOT notify; a provider response does, exactly once. Both writes go through the admin/service-role path in production (owner sends via an API route using createAdminClient; the provider responds via a public token route using createAdminClient) — simulated here as postgres, same as that bypasses RLS identically. =====
+-- ===== 5. Outreach: sending (status='sent') does NOT notify; a provider response does, exactly once. Both writes go through the admin/service-role path in production (owner sends via an API route using createAdminClient; the provider responds via a public token route using createAdminClient) — simulated here as postgres, same as that bypasses RLS identically. =====
 insert into public.property_contacts (id, owner_id, property_id, name, role) values
   ('35e00000-0000-0000-0000-000000000001', '35111111-1111-1111-1111-111111111111', '35a00000-0000-0000-0000-000000000001', 'Test Plumber', 'Plumbing');
 
@@ -168,7 +234,7 @@ begin
   end if;
 end $$;
 
--- ===== 5. Tenant invite acceptance: accepted_at null -> timestamp triggers exactly one notification; it cannot fire twice. In production this goes through accept_tenant_invite()'s own atomic conditional UPDATE, simulated here directly. =====
+-- ===== 6. Tenant invite acceptance: accepted_at null -> timestamp triggers exactly one notification; it cannot fire twice. In production this goes through accept_tenant_invite()'s own atomic conditional UPDATE, simulated here directly. =====
 insert into public.tenant_property_access (id, property_id, owner_id, tenant_email, status, invited_at)
 values ('35b00000-0000-0000-0000-000000000002', '35a00000-0000-0000-0000-000000000001', '35111111-1111-1111-1111-111111111111', 'other-tenant@example.test', 'Invited', now());
 
@@ -224,6 +290,18 @@ begin
   exception
     when insufficient_privilege or others then
       raise notice 'PASS: no client, not even the real owner, can INSERT into notification_events directly — only the SECURITY DEFINER triggers can';
+  end;
+end $$;
+
+-- A client cannot DELETE a notification directly either — no delete policy exists at all.
+do $$
+begin
+  begin
+    delete from public.notification_events where owner_id = '35111111-1111-1111-1111-111111111111';
+    raise exception 'REGRESSION: a client was able to DELETE notification_events rows directly';
+  exception
+    when insufficient_privilege or others then
+      raise notice 'PASS: no client can DELETE from notification_events — there is no delete policy at all';
   end;
 end $$;
 

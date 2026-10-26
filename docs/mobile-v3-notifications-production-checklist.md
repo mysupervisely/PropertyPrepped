@@ -44,6 +44,8 @@ If you want to confirm triggers fire in production before relying on them, the s
 select event_type, created_at, read_at from public.notification_events order by created_at desc limit 5;
 ```
 
+**Expected count for a tenant's guided-intake maintenance submission: exactly ONE row, `event_type = 'tenant_maintenance_request'`.** That single submission is actually three separate writes under the hood (a conversation, the tenant's opening message, then the `tenant_requests` row) — the opening message's own `'tenant_message'` notification is upgraded in place into the `'tenant_maintenance_request'` one once the request lands, rather than left behind as a second row. Seeing two rows for one submission would be a regression (this was a real, found-and-fixed bug during review — see `notify_on_tenant_request()`'s own comment in the migration). A tenant's *later reply* in that same conversation correctly still produces its own separate `'tenant_message'` row.
+
 Do not manually `insert`/`update` real `property_messages`, `maintenance_requests`, `tenant_requests`, `maintenance_provider_outreach`, or `tenant_property_access` rows purely to test this — those are real landlord/tenant records. The local RLS test already proves each trigger fires correctly in isolation; production verification should be passive (observe real traffic), not synthetic.
 
 ## 4. Deployment order

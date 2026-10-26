@@ -95,7 +95,13 @@ with check ((select auth.uid()) = owner_id);
 -- ===================================================================
 -- 1. New tenant message. Only the TENANT side of a conversation is
 --    notification-worthy here — an owner replying doesn't need to be
---    told about their own reply.
+--    told about their own reply. Unconditional for every tenant
+--    message, including the opening message of a guided-intake
+--    submission — see notify_on_tenant_request() below for how that
+--    specific row gets upgraded in place rather than duplicated, once
+--    (and only if) a tenant_requests row turns out to reference the
+--    same conversation a moment later. This function itself never
+--    needs to know or guess that in advance.
 -- ===================================================================
 create or replace function public.notify_on_tenant_message()
 returns trigger
@@ -137,6 +143,43 @@ create trigger notify_on_tenant_message
 --    tenant-initiated by construction (see
 --    tenant_requests_create_maintenance_case()'s own header above) —
 --    no WHEN clause needed to filter by actor.
+--
+--    De-duplication against notify_on_tenant_message (post-launch
+--    audit fix): the real guided-intake flow
+--    (lib/maintenance/intake/submit.ts) always inserts the tenant's
+--    opening property_messages row BEFORE this tenant_requests row, in
+--    the SAME conversation — which already fired
+--    notify_on_tenant_message() and created a 'tenant_message'
+--    notification moments earlier. Left alone, one tenant submission
+--    would produce two notifications for one action.
+--
+--    Rejected fix: suppress notify_on_tenant_message() for "the first
+--    message in a conversation_type = 'Maintenance' conversation."
+--    That's an inference from a string convention set by the CALLER,
+--    not from the real causal relationship, and the opening message
+--    doesn't yet know (can't know, as a cause-before-effect matter of
+--    sequence) whether a tenant_requests row is about to be created in
+--    the conversation it belongs to.
+--
+--    Actual fix: UPDATE the earlier 'tenant_message' notification for
+--    this exact conversation_id in place, turning it into the
+--    'tenant_maintenance_request' notification, keyed off the real FK
+--    (tenant_requests.conversation_id is even unique — see
+--    tenant_requests_conversation_unique below) rather than a type
+--    string. This is deterministic and timing-independent in the sense
+--    that matters: it never guesses about a write that hasn't happened
+--    yet, it only reacts to one that has already committed in this
+--    exact, always-sequential flow (message, then request — never the
+--    reverse, never concurrent, in the one real code path that creates
+--    tenant_requests rows). If no matching opening-message notification
+--    is found (any other flow that creates a tenant_requests row
+--    without a preceding message), it falls back to inserting a fresh
+--    one, so this is strictly additive safety, never a silent drop.
+--    Every OTHER tenant message — replies in the same conversation, or
+--    any message in a conversation no tenant_requests row ever
+--    references — is completely unaffected: this function only ever
+--    touches the one earliest 'tenant_message' row for the exact
+--    conversation_id the new tenant_requests row itself points at.
 -- ===================================================================
 create or replace function public.notify_on_tenant_request()
 returns trigger
@@ -144,9 +187,26 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_updated_count int;
 begin
-  insert into public.notification_events (owner_id, event_type, property_id, conversation_id, maintenance_request_id, metadata)
-  values (new.owner_id, 'tenant_maintenance_request', new.property_id, new.conversation_id, new.maintenance_request_id, jsonb_build_object('category', new.category));
+  update public.notification_events
+  set event_type = 'tenant_maintenance_request',
+      maintenance_request_id = new.maintenance_request_id,
+      metadata = jsonb_build_object('category', new.category)
+  where id = (
+    select id from public.notification_events
+    where conversation_id = new.conversation_id
+      and event_type = 'tenant_message'
+    order by created_at asc
+    limit 1
+  );
+  get diagnostics v_updated_count = row_count;
+
+  if v_updated_count = 0 then
+    insert into public.notification_events (owner_id, event_type, property_id, conversation_id, maintenance_request_id, metadata)
+    values (new.owner_id, 'tenant_maintenance_request', new.property_id, new.conversation_id, new.maintenance_request_id, jsonb_build_object('category', new.category));
+  end if;
 
   return new;
 end;
