@@ -218,6 +218,42 @@ export const FIXTURE_BILLING = {
   paymentMethod: 'Visa •••• 4242',
 }
 
+// Tenant Connect V2.2 (preview parity): a couple of fictional
+// conversations, each tied to an existing FIXTURE_MAINTENANCE case id
+// (never a new, disconnected fixture concept) so the Messages tab's
+// "related maintenance request" link has something real-within-the-
+// fixtures to point at.
+export type FixtureConversation = {
+  id: string
+  propertyId: string
+  tenantName: string
+  preview: string
+  timestampLabel: string
+  unread: boolean
+  maintenanceId: string | null
+}
+
+export const FIXTURE_CONVERSATIONS: FixtureConversation[] = [
+  {
+    id: 'convo-1',
+    propertyId: 'prop-harbor-lane',
+    tenantName: 'Jordan Reyes',
+    preview: 'Still dripping under the sink, a little worse than yesterday.',
+    timestampLabel: 'Sep 20',
+    unread: true,
+    maintenanceId: 'maint-1',
+  },
+  {
+    id: 'convo-2',
+    propertyId: 'prop-palm-avenue',
+    tenantName: 'Sam Whitfield',
+    preview: 'Thanks for sending someone — what time should I expect them?',
+    timestampLabel: 'Sep 25',
+    unread: false,
+    maintenanceId: 'maint-2',
+  },
+]
+
 export const FIXTURE_DOCUMENTS = [
   { id: 'doc-1', propertyId: 'prop-harbor-lane', name: 'Lease Agreement 2025-2027.pdf', category: 'Lease', uploadedAt: '2025-04-02' },
   { id: 'doc-2', propertyId: 'prop-harbor-lane', name: 'Homeowners Insurance Policy.pdf', category: 'Insurance', uploadedAt: '2025-05-14' },

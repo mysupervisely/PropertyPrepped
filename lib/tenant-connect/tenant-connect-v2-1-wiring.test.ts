@@ -35,7 +35,10 @@ describe('app/tenant-connect/page.tsx reuses existing tables/RLS, never a servic
     expect(source).toContain("supabase.from('properties').select('id,address,city')")
     expect(source).toContain("supabase.from('leases').select('id,property_id,tenant_name,tenant_email,start_date,end_date')")
     expect(source).toContain("supabase.from('tenant_property_access').select('*')")
-    expect(source).toContain("supabase.from('tenant_requests').select('tenant_access_id,status')")
+    // V2.2 widened this single select to also carry conversation_id/
+    // maintenance_request_id for the new Messages tab's inbox join —
+    // still one shared fetch, not a second query.
+    expect(source).toContain("supabase.from('tenant_requests').select('id,tenant_access_id,status,conversation_id,maintenance_request_id')")
   })
 
   it('never imports or calls createAdminClient — RLS is the only boundary, matching every other portfolio page', () => {
@@ -56,10 +59,19 @@ describe('app/tenant-connect/page.tsx reuses existing tables/RLS, never a servic
     expect(source).toContain('staleInvitedEmail(')
   })
 
-  it('does not re-implement message/conversation rendering — links out to the existing property Tenant tab instead', () => {
-    expect(source).not.toContain('property_messages')
-    expect(source).not.toContain('property_conversations')
+  it('"View in property" still deep-links to the existing property Tenant tab', () => {
     expect(source).toContain('openTab=Rent&openRentSubTab=Tenant')
+  })
+
+  // V2.2 added a Messages tab that DOES read/write property_messages/
+  // property_conversations directly (see
+  // lib/tenant-connect/tenant-connect-v2-2-wiring.test.ts) — reusing the
+  // same tables and the same 'landlord_update' notify kind
+  // TenantRequestsPanel already uses, never a second backend or a new
+  // API route.
+  it('V2.2\'s messaging reuses the existing notify kind and introduces no new API route', () => {
+    expect(source).toContain("notifyTenantConnect(supabase, 'landlord_update'")
+    expect(source).not.toMatch(/fetch\(['"]\/api\/tenant-connect\/(?!notify)/)
   })
 
   it('links out to the existing portfolio Maintenance page rather than re-deriving maintenance case data', () => {

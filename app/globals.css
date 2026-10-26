@@ -3213,6 +3213,29 @@ h2, h3, p { margin-top: 0; }
   .tenantDirectoryRow .tenantConnectCardActions button { flex: 1 1 auto; }
 }
 
+/* Tenant Connect V2.2 — portfolio-wide Messages inbox
+   (app/tenant-connect/page.tsx). Same card-button language as
+   .maintenanceCommandCenterCard (restrained border, no background
+   tint, a leading chevron), reshaped for a two-line inbox row: name +
+   property on one line, timestamp/unread trailing, then a preview
+   line, then an optional maintenance-link badge. */
+.tenantInboxRow {
+  display: block; width: 100%; min-width: 0; text-align: left; background: white; color: var(--text);
+  border: 1px solid var(--line); border-radius: var(--radius-card); padding: 14px 16px;
+  cursor: pointer; transition: border-color .15s ease;
+}
+.tenantInboxRow:hover { border-color: var(--brand); }
+.tenantInboxRowHead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-width: 0; }
+.tenantInboxRowBody { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-items: baseline; gap: 8px; min-width: 0; overflow: hidden; }
+.tenantInboxUnreadDot { width: 8px; height: 8px; border-radius: 999px; background: var(--brand); flex-shrink: 0; }
+.tenantInboxTimestamp { flex-shrink: 0; font-size: 12px; }
+.tenantInboxPreview { display: block; margin-top: 4px; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tenantInboxMaintenanceBadge { display: inline-flex; margin-top: 8px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); padding: 4px 9px; font-size: 11px; font-weight: 650; }
+
+@media (max-width: 480px) {
+  .tenantInboxRowHead { flex-wrap: wrap; }
+}
+
 /* ==========================================================================
    Tenant Portal (app/tenant/page.tsx) — Section 14: "should feel almost
    mobile-app-like." Its own small shell, deliberately NOT reusing
