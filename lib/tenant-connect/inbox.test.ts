@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildMessageInbox, latestMessageByConversation, summarizeUnreadInbox } from './inbox'
+import { buildMessageInbox, filterMessageInbox, latestMessageByConversation, summarizeUnreadInbox } from './inbox'
 
 const PROPERTIES = [{ id: 'prop-1', address: '123 Harbor Lane', city: 'Tampa' }]
 const ACCESS = [{ id: 'access-1', lease_id: 'lease-1', tenant_email: 'jordan@example.test' }]
@@ -85,5 +85,37 @@ describe('summarizeUnreadInbox', () => {
     const rows = buildMessageInbox(CONVERSATIONS, [{ conversation_id: 'convo-1', message: 'hi', created_at: '2026-01-01T00:00:00Z' }], ACCESS, LEASES, PROPERTIES, [], [])
     expect(summarizeUnreadInbox(rows)).toBe(1)
     expect(summarizeUnreadInbox([])).toBe(0)
+  })
+})
+
+describe('filterMessageInbox — Desktop Workspace V1 inbox search', () => {
+  const rows = buildMessageInbox(
+    [
+      { id: 'convo-1', property_id: 'prop-1', tenant_access_id: 'access-1', maintenance_request_id: null, status: 'Open' as const },
+    ],
+    [{ conversation_id: 'convo-1', message: 'Still dripping under the sink', created_at: '2026-01-01T00:00:00Z' }],
+    ACCESS, LEASES, PROPERTIES, [], [],
+  )
+
+  it('returns every row for an empty/whitespace query', () => {
+    expect(filterMessageInbox(rows, '')).toEqual(rows)
+    expect(filterMessageInbox(rows, '   ')).toEqual(rows)
+  })
+
+  it('matches on tenant name, case-insensitively', () => {
+    expect(filterMessageInbox(rows, 'jordan').map((r) => r.conversationId)).toEqual(['convo-1'])
+    expect(filterMessageInbox(rows, 'JORDAN').map((r) => r.conversationId)).toEqual(['convo-1'])
+  })
+
+  it('matches on property label', () => {
+    expect(filterMessageInbox(rows, 'harbor lane').map((r) => r.conversationId)).toEqual(['convo-1'])
+  })
+
+  it('matches on the latest message preview text', () => {
+    expect(filterMessageInbox(rows, 'dripping').map((r) => r.conversationId)).toEqual(['convo-1'])
+  })
+
+  it('excludes rows that match nothing', () => {
+    expect(filterMessageInbox(rows, 'nonexistent-term')).toEqual([])
   })
 })

@@ -2214,6 +2214,135 @@ h2, h3, p { margin-top: 0; }
   .tenantConnectComposeRow .primary { padding: 12px 14px; }
 }
 
+/* ==========================================================================
+   Design Foundation V1 — Desktop Workspace V1 (Tenant Connect)
+   ==========================================================================
+   A practical two-panel messaging workspace at genuine desktop widths
+   only. 1024px is the one new breakpoint this milestone introduces —
+   used identically here and in the Maintenance desktop workspace below,
+   rather than inventing a second ad hoc value per screen (the prior
+   Design Foundation V1 audit specifically flagged breakpoint sprawl —
+   18 distinct values with no shared scale — as a recurring problem;
+   this is the deliberate opposite of that). Below 1024px (mobile AND
+   the 768px tablet width this milestone was asked to review), nothing
+   below changes anything: the Messages tab still renders as the single
+   .tenantDirectoryList column, and an open conversation still renders
+   as the exact pre-existing .overlay/.modal.tenantConnectThreadModal —
+   same markup, same CSS, same real-device-tested behavior, just now
+   additionally tagged .tenantConnectThreadOverlay purely so the rule
+   below can target it specifically (NOT the generic .overlay class
+   every other modal in this app also uses) when hiding it at desktop
+   widths.
+
+   At >=1024px, .tenantConnectWorkspace becomes the two-column grid:
+   a left list panel (searchable, selected-row highlighted) and a
+   right thread panel that is ALWAYS present (never a popup) — showing
+   either the open conversation or a quiet "select a conversation"
+   placeholder. The thread panel reuses the identical inner JSX
+   (header/messages/composer) the mobile modal renders — see
+   app/tenant-connect/page.tsx's threadBody() — so there is exactly
+   one implementation of "what a conversation thread looks like," not
+   two kept in sync by hand. */
+.tenantConnectWorkspace { min-width: 0; }
+@media (min-width: 1024px) {
+  .tenantConnectWorkspace { display: grid; grid-template-columns: minmax(280px, 360px) 1fr; gap: 20px; align-items: start; }
+}
+
+.tenantConnectListPanel { min-width: 0; }
+
+/* Selected-conversation state in the left list — harmless and already
+   correct at every width (the list is still visible behind/above the
+   mobile modal), genuinely useful once the thread panel sits beside
+   it at desktop. */
+.tenantInboxRowSelected { border-color: var(--brand); background: var(--brand-soft); }
+
+@media (min-width: 1024px) {
+  .tenantConnectThreadOverlay { display: none; }
+}
+
+.tenantConnectThreadPanel {
+  display: none;
+  min-width: 0;
+}
+@media (min-width: 1024px) {
+  .tenantConnectThreadPanel {
+    display: flex; flex-direction: column;
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card);
+    padding: 22px; max-width: 760px;
+    position: sticky; top: 20px; max-height: calc(100vh - 40px);
+  }
+  /* The modal's own 45vh cap existed to leave room for the rest of a
+     centered popup on screen — irrelevant here, where the panel
+     already has a fixed, generous max-height of its own. */
+  .tenantConnectThreadPanel .tenantConnectThread { max-height: none; flex: 1 1 auto; }
+}
+.tenantConnectThreadPanelEmpty {
+  display: none;
+}
+@media (min-width: 1024px) {
+  .tenantConnectThreadPanelEmpty {
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    min-height: 320px; color: var(--muted); font-size: var(--text-body-sm);
+  }
+}
+
+/* The new Messages-tab search box reuses .searchInputWrap/.searchInput
+   verbatim (already generic — the Tenants tab's own search uses the
+   identical classes) — no new input styling. */
+
+/* ==========================================================================
+   Design Foundation V1 — Desktop Workspace V1 (Maintenance)
+   ==========================================================================
+   Same pattern and the same 1024px breakpoint as Tenant Connect above.
+   Below 1024px, nothing changes: the Command Center is still the
+   single .maintenanceCommandCenterList column, and an open case still
+   renders as the exact pre-existing MaintenanceCaseDetail
+   .overlay/.modal (layout="overlay", its default — see that
+   component's own header comment). At >=1024px,
+   .maintenanceWorkspace becomes a two-column grid: a left list panel
+   (searchable, selected-card highlighted) and a right detail panel
+   that is always present, hosting the SAME MaintenanceCaseDetail
+   component with layout="panel" instead of a popup — one component,
+   one set of props, two wrapper presentations. */
+.maintenanceWorkspace { min-width: 0; }
+@media (min-width: 1024px) {
+  .maintenanceWorkspace { display: grid; grid-template-columns: minmax(300px, 400px) 1fr; gap: 20px; align-items: start; }
+}
+
+.maintenanceListPanel { min-width: 0; }
+
+.maintenanceCommandCenterCardSelected { border-color: var(--brand); background: var(--brand-soft); }
+
+@media (min-width: 1024px) {
+  .maintenanceDetailOverlay { display: none; }
+}
+
+.maintenanceDetailPanel { display: none; min-width: 0; }
+@media (min-width: 1024px) {
+  .maintenanceDetailPanel {
+    display: block; position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto;
+  }
+}
+.maintenanceDetailPanelEmpty {
+  display: none;
+}
+@media (min-width: 1024px) {
+  .maintenanceDetailPanelEmpty {
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    min-height: 320px; color: var(--muted); font-size: var(--text-body-sm);
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card);
+  }
+}
+
+/* layout="panel" variant of .maintenanceCaseDetailModal — same inner
+   content, no centered-popup chrome, a slightly wider cap than the
+   modal's 520px (the panel has real room beside it, but an uncapped
+   680px+ detail column would read as unnecessarily stretched prose). */
+.maintenanceCaseDetailPanel {
+  display: grid; gap: 16px; max-width: 640px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 22px;
+}
+
 /* Investment Tools 2.0 — AddressAutocomplete (shared everywhere PropRoster
    collects a property address: Add/Edit Property, Rental Property
    Analyzer, Home Purchase Calculator, Property Value & Comps). */
@@ -3732,3 +3861,162 @@ h2, h3, p { margin-top: 0; }
 .providerProposeField { display: grid; gap: 10px; }
 .providerProposeField label { display: block; font-size: 13px; font-weight: 650; }
 .providerProposeField input[type="datetime-local"] { width: 100%; margin-top: 6px; border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; font-family: inherit; font-size: 15px; }
+
+
+/* ==========================================================================
+   PropRoster Minimalist UI V2: Tenant Connect + Maintenance
+   Design-only refinement of PR #91. Keep workflow and mobile overlays intact.
+   ========================================================================== */
+
+/* Flat, readable conversation rows instead of individual outlined cards. */
+.tenantConnectWorkspace .tenantDirectoryList {
+  gap: 0;
+}
+.tenantConnectWorkspace .tenantInboxRow {
+  position: relative;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  padding: 15px 16px;
+  transition: background-color .15s ease;
+}
+.tenantConnectWorkspace .tenantInboxRow:hover {
+  background: var(--surface-muted);
+}
+.tenantConnectWorkspace .tenantInboxRowSelected,
+.tenantConnectWorkspace .tenantInboxRowSelected:hover {
+  border-color: var(--line);
+  background: var(--brand-soft);
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+.tenantConnectWorkspace .tenantInboxRow:focus-visible,
+.maintenanceWorkspace .maintenanceCommandCenterCard:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+/* Request list: one quiet list, with meaningful status and title retained. */
+.maintenanceWorkspace .maintenanceCommandCenterList {
+  gap: 0;
+}
+.maintenanceWorkspace .maintenanceCommandCenterCard {
+  position: relative;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  padding: 15px 16px;
+  transition: background-color .15s ease;
+}
+.maintenanceWorkspace .maintenanceCommandCenterCard:hover {
+  background: var(--surface-muted);
+}
+.maintenanceWorkspace .maintenanceCommandCenterCardSelected,
+.maintenanceWorkspace .maintenanceCommandCenterCardSelected:hover {
+  border-color: var(--line);
+  background: var(--brand-soft);
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+
+/* Make the desktop workspace fill available width without nested card chrome. */
+@media (min-width: 1024px) {
+  .tenantConnectWorkspace,
+  .maintenanceWorkspace {
+    gap: 0;
+    align-items: stretch;
+  }
+  .tenantConnectWorkspace {
+    grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  }
+  .maintenanceWorkspace {
+    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  }
+  .tenantConnectListPanel,
+  .maintenanceListPanel {
+    border-right: 1px solid var(--line);
+    padding-right: 0;
+  }
+  .tenantConnectThreadPanel {
+    max-width: none;
+    border: 0;
+    border-radius: 0;
+    padding: 18px 24px;
+    box-shadow: none;
+  }
+  .tenantConnectThreadPanelEmpty,
+  .maintenanceDetailPanelEmpty {
+    min-height: 260px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .maintenanceDetailPanel {
+    padding-left: 24px;
+  }
+  .maintenanceCaseDetailPanel {
+    max-width: none;
+    border: 0;
+    border-radius: 0;
+    padding: 16px 0 24px;
+    box-shadow: none;
+  }
+  .maintenanceCaseDetailPanel .maintenanceNextStepCard {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 12px 0 18px;
+  }
+  .maintenanceCaseDetailPanel .maintenanceAvailabilitySection {
+    background: transparent;
+    border-radius: 0;
+    padding: 12px 0;
+  }
+}
+
+
+/* Minimalist UI V2 follow-up: lightweight tabs and contextual metadata.
+   Scoped to the portfolio workspaces so other product surfaces retain
+   their established styling. */
+.maintenanceWorkspace .maintenanceFilterRow {
+  border-bottom: 1px solid var(--line);
+  gap: 4px;
+}
+.maintenanceWorkspace .maintenanceFilterChip {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 10px 12px;
+  font-weight: var(--weight-medium);
+}
+.maintenanceWorkspace .maintenanceFilterChip:hover {
+  color: var(--text);
+  background: var(--surface-muted);
+}
+.maintenanceWorkspace .maintenanceFilterChip.active {
+  color: var(--brand);
+  background: transparent;
+  border-color: var(--brand);
+  font-weight: var(--weight-semibold);
+}
+.tenantConnectWorkspace .tenantInboxMaintenanceBadge {
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  padding: 0;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-medium);
+}
+@media (min-width: 1024px) {
+  .tenantConnectWorkspace .tenantConnectThreadMeta {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+  }
+  .maintenanceCaseDetailPanel .maintenanceNextStepQuiet {
+    background: transparent;
+  }
+}

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   isUrgentCase, nextActionFor, enrichMaintenanceCases, sortCasesForCommandCenter,
   casesForProperty, relevantContactsForProperty, summarizeCommandCenter, showsDedicatedUrgentBadge,
+  filterMaintenanceCases,
   type MaintenanceCaseRow, type TenantRequestLink, type IntakeSessionOutcome,
   type PropCrewContactRef, type PropCrewLinkRef,
 } from './command-center'
@@ -271,5 +272,46 @@ describe('summarizeCommandCenter', () => {
 
   it('an empty portfolio summarizes to all zeros, not an error', () => {
     expect(summarizeCommandCenter([])).toEqual({ activeCount: 0, urgentCount: 0, completedCount: 0 })
+  })
+})
+
+describe('filterMaintenanceCases — Desktop Workspace V1 list search', () => {
+  const cases = enrichMaintenanceCases(
+    [
+      makeCase({ id: 'a', property_id: 'prop-1', title: 'Kitchen faucet leaking', tenant_name: 'Jordan Reyes' }),
+      makeCase({ id: 'b', property_id: 'prop-2', title: 'AC not cooling', tenant_name: 'Sam Whitfield' }),
+    ],
+    [{ id: 'tr-1', maintenance_request_id: 'a', category: 'plumbing' }],
+    [],
+  )
+  const propertyLabelFor = (propertyId: string) => (propertyId === 'prop-1' ? '123 Harbor Lane' : '842 Palm Avenue')
+
+  it('returns every case for an empty/whitespace query', () => {
+    expect(filterMaintenanceCases(cases, '', propertyLabelFor)).toEqual(cases)
+    expect(filterMaintenanceCases(cases, '  ', propertyLabelFor)).toEqual(cases)
+  })
+
+  it('matches on title, case-insensitively', () => {
+    expect(filterMaintenanceCases(cases, 'FAUCET', propertyLabelFor).map((c) => c.id)).toEqual(['a'])
+  })
+
+  it('matches on tenant name', () => {
+    expect(filterMaintenanceCases(cases, 'whitfield', propertyLabelFor).map((c) => c.id)).toEqual(['b'])
+  })
+
+  it('matches on the enriched category', () => {
+    expect(filterMaintenanceCases(cases, 'plumbing', propertyLabelFor).map((c) => c.id)).toEqual(['a'])
+  })
+
+  it('matches on the caller-supplied property label', () => {
+    expect(filterMaintenanceCases(cases, 'palm avenue', propertyLabelFor).map((c) => c.id)).toEqual(['b'])
+  })
+
+  it('never throws on a null category (landlord-logged case)', () => {
+    expect(filterMaintenanceCases(cases, 'ac not', propertyLabelFor).map((c) => c.id)).toEqual(['b'])
+  })
+
+  it('excludes cases that match nothing', () => {
+    expect(filterMaintenanceCases(cases, 'nonexistent-term', propertyLabelFor)).toEqual([])
   })
 })

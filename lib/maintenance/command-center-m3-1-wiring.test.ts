@@ -117,7 +117,11 @@ describe('PropCrew assignment — fully preserved from M3, untouched by M3.1', (
 
   it('both the property hub and the portfolio Command Center still mount the same shared assignment UI', () => {
     expect(pageSource).toContain('onAssign={(contactId) => void assignMaintenanceContact(openMaintenanceCase.id, contactId)}')
-    expect(commandCenterPageSource).toContain('onAssign={(contactId) => void assignContact(openCase.id, contactId)}')
+    // Design Foundation V1, Desktop Workspace V1: see the identical note
+    // in provider-outreach-wiring.test.ts — commandCenterPageSource now
+    // builds this handler once inside detailPropsFor(c), called with the
+    // open case (`c`), and spreads the result into MaintenanceCaseDetail.
+    expect(commandCenterPageSource).toContain('onAssign: (contactId: string | null) => void assignContact(c.id, contactId),')
   })
 })
 

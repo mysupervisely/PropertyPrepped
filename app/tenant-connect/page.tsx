@@ -52,7 +52,7 @@ import {
   type DirectoryProperty, type DirectoryLease, type TenantDirectoryRow,
 } from '../../lib/tenant-connect/directory'
 import {
-  buildMessageInbox, summarizeUnreadInbox, type MessageInboxRow,
+  buildMessageInbox, filterMessageInbox, summarizeUnreadInbox, type MessageInboxRow,
 } from '../../lib/tenant-connect/inbox'
 import type { TenantPropertyAccess, TenantRequest, PropertyConversation, PropertyMessage } from '../../lib/tenant-connect/types'
 
@@ -116,6 +116,10 @@ function TenantConnectWorkspace({ user }: { user: User }) {
   const [revokeConfirmLeaseId, setRevokeConfirmLeaseId] = useState<string | null>(null)
 
   // Messages tab state (V2.2).
+  // Design Foundation V1, Desktop Workspace V1: a pure client-side
+  // filter over the already-loaded inbox, same convention as the
+  // Tenants tab's own `search` state above — no new query.
+  const [messageSearch, setMessageSearch] = useState('')
   const [openConversationId, setOpenConversationId] = useState<string | null>(null)
   const openConversationRef = useRef<string | null>(null)
   const [threadMessages, setThreadMessages] = useState<PropertyMessage[]>([])
@@ -216,6 +220,7 @@ function TenantConnectWorkspace({ user }: { user: User }) {
     [conversations, messagePreviews, access, leases, properties, reads, tenantRequests],
   )
   const unreadCount = useMemo(() => summarizeUnreadInbox(inbox), [inbox])
+  const filteredInbox = useMemo(() => filterMessageInbox(inbox, messageSearch), [inbox, messageSearch])
   const openRow = inbox.find((r) => r.conversationId === openConversationId) || null
 
   // Same race guard as TenantRequestsPanel.loadAttachments: a rapid
@@ -292,6 +297,55 @@ function TenantConnectWorkspace({ user }: { user: User }) {
     return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
   }
 
+  // Design Foundation V1, Desktop Workspace V1: the conversation
+  // header/thread/composer content, extracted so it can be rendered
+  // once from `openRow` and reused verbatim by BOTH the pre-existing
+  // mobile/tablet overlay modal (unchanged below 1024px) and the new
+  // desktop right-hand panel (>=1024px) — exactly one implementation
+  // of "what an open conversation looks like," not two hand-kept-in-
+  // sync copies. No state, prop, or handler is new here; this is a
+  // pure extraction of what already rendered inside the modal.
+  function threadBody(row: MessageInboxRow) {
+    return (
+      <>
+        <div className="modalTop">
+          <div><p className="eyebrow">{row.propertyLabel}</p><h2>{row.tenantName}</h2></div>
+          <button className="iconButton" onClick={closeThread} aria-label="Close">×</button>
+        </div>
+        {row.maintenanceRequestId && (
+          <Link href="/maintenance" className="tenantRequestViewInMaintenance">View in Maintenance &rarr;</Link>
+        )}
+        {threadError && <p className="errorMessage">{threadError}</p>}
+        <div className="tenantConnectThread">
+          {threadMessages.map((m) => (
+            <div key={m.id} className={`tenantConnectBubble tenantConnectBubble${m.sender_role}`}>
+              <div className="tenantConnectBubbleMeta"><strong>{m.sender_role}</strong><span>{new Date(m.created_at).toLocaleString()}</span></div>
+              <p>{m.message}</p>
+              {(attachmentsByMessage.get(m.id) || []).length > 0 && (
+                <div className="tenantConnectBubbleAttachments">
+                  {(attachmentsByMessage.get(m.id) || []).map((url) => (
+                    <a key={url} href={url} target="_blank" rel="noreferrer"><img src={url} alt="Attached photo" /></a>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          {!threadMessages.length && <p className="muted">No messages yet.</p>}
+        </div>
+        <div className="tenantConnectCompose">
+          <textarea value={replyText} onChange={(e) => setReplyText(e.target.value)} rows={3} placeholder="Write a reply…" />
+          <div className="tenantConnectComposeRow">
+            <label className="secondary tenantConnectAttachLabel">
+              {attachFile ? attachFile.name : 'Attach photo'}
+              <input type="file" accept="image/*" onChange={(e) => setAttachFile(e.target.files?.[0] || null)} hidden />
+            </label>
+            <button className="primary" disabled={threadBusy || !replyText.trim()} onClick={() => void sendReply()}>{threadBusy ? 'Sending…' : 'Reply'}</button>
+          </div>
+        </div>
+      </>
+    )
+  }
+
   return (
     <main className="shell">
       <AuthHeader />
@@ -329,21 +383,57 @@ function TenantConnectWorkspace({ user }: { user: User }) {
         inbox.length === 0 ? (
           <div className="emptyState"><strong>No conversations yet.</strong><span>Messages your tenants send will show up here.</span></div>
         ) : (
-          <div className="tenantDirectoryList">
-            {inbox.map((row) => (
-              <button type="button" key={row.conversationId} className="tenantInboxRow" onClick={() => void openConversation(row.conversationId)}>
-                <span className="tenantInboxRowHead">
-                  <span className="tenantInboxRowBody">
-                    <strong>{row.tenantName}</strong>
-                    <span className="muted">{row.propertyLabel}</span>
-                  </span>
-                  {row.unread && <span className="tenantInboxUnreadDot" aria-label="Unread" />}
-                  {row.latestMessageAt && <span className="muted tenantInboxTimestamp">{formatTimestamp(row.latestMessageAt)}</span>}
-                </span>
-                <span className="muted tenantInboxPreview">{row.latestMessagePreview || 'No messages yet.'}</span>
-                {row.maintenanceRequestId && <span className="tenantInboxMaintenanceBadge">Maintenance request</span>}
-              </button>
-            ))}
+          <div className="tenantConnectWorkspace">
+            <div className="tenantConnectListPanel">
+              <div className="searchInputWrap">
+                <input
+                  className="searchInput"
+                  type="search"
+                  placeholder="Search conversations…"
+                  value={messageSearch}
+                  onChange={(e) => setMessageSearch(e.target.value)}
+                  aria-label="Search conversations"
+                />
+              </div>
+              {filteredInbox.length === 0 ? (
+                <div className="emptyState"><strong>No conversations match &ldquo;{messageSearch}&rdquo;.</strong></div>
+              ) : (
+                <div className="tenantDirectoryList">
+                  {filteredInbox.map((row) => (
+                    <button
+                      type="button"
+                      key={row.conversationId}
+                      className={`tenantInboxRow${row.conversationId === openConversationId ? ' tenantInboxRowSelected' : ''}`}
+                      aria-current={row.conversationId === openConversationId ? 'true' : undefined}
+                      onClick={() => void openConversation(row.conversationId)}
+                    >
+                      <span className="tenantInboxRowHead">
+                        <span className="tenantInboxRowBody">
+                          <strong>{row.tenantName}</strong>
+                          <span className="muted">{row.propertyLabel}</span>
+                        </span>
+                        {row.unread && <span className="tenantInboxUnreadDot" aria-label="Unread" />}
+                        {row.latestMessageAt && <span className="muted tenantInboxTimestamp">{formatTimestamp(row.latestMessageAt)}</span>}
+                      </span>
+                      <span className="muted tenantInboxPreview">{row.latestMessagePreview || 'No messages yet.'}</span>
+                      {row.maintenanceRequestId && <span className="tenantInboxMaintenanceBadge">Maintenance request</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Desktop-only (>=1024px) right panel — see app/globals.css's
+                Design Foundation V1 comment. Hidden entirely below that
+                width via CSS; the mobile/tablet experience is the
+                .overlay modal further down, unchanged. */}
+            <div className="tenantConnectThreadPanel">
+              {openRow ? (
+                threadBody(openRow)
+              ) : (
+                <div className="tenantConnectThreadPanelEmpty">Select a conversation to view messages.</div>
+              )}
+            </div>
           </div>
         )
       ) : directory.length === 0 ? (
@@ -418,43 +508,15 @@ function TenantConnectWorkspace({ user }: { user: User }) {
         </>
       )}
 
+      {/* Mobile/tablet (<1024px) conversation view — the exact
+          pre-existing .overlay/.modal, unchanged, just additionally
+          tagged .tenantConnectThreadOverlay so it can be hidden at
+          desktop widths (see app/globals.css) without touching every
+          OTHER modal in the app that still uses plain .overlay. */}
       {openRow && (
-        <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && closeThread()}>
+        <div className="overlay tenantConnectThreadOverlay" onMouseDown={(e) => e.target === e.currentTarget && closeThread()}>
           <div className="modal tenantConnectThreadModal">
-            <div className="modalTop">
-              <div><p className="eyebrow">{openRow.propertyLabel}</p><h2>{openRow.tenantName}</h2></div>
-              <button className="iconButton" onClick={closeThread}>×</button>
-            </div>
-            {openRow.maintenanceRequestId && (
-              <Link href="/maintenance" className="tenantRequestViewInMaintenance">View in Maintenance &rarr;</Link>
-            )}
-            {threadError && <p className="errorMessage">{threadError}</p>}
-            <div className="tenantConnectThread">
-              {threadMessages.map((m) => (
-                <div key={m.id} className={`tenantConnectBubble tenantConnectBubble${m.sender_role}`}>
-                  <div className="tenantConnectBubbleMeta"><strong>{m.sender_role}</strong><span>{new Date(m.created_at).toLocaleString()}</span></div>
-                  <p>{m.message}</p>
-                  {(attachmentsByMessage.get(m.id) || []).length > 0 && (
-                    <div className="tenantConnectBubbleAttachments">
-                      {(attachmentsByMessage.get(m.id) || []).map((url) => (
-                        <a key={url} href={url} target="_blank" rel="noreferrer"><img src={url} alt="Attached photo" /></a>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-              {!threadMessages.length && <p className="muted">No messages yet.</p>}
-            </div>
-            <div className="tenantConnectCompose">
-              <textarea value={replyText} onChange={(e) => setReplyText(e.target.value)} rows={3} placeholder="Write a reply…" />
-              <div className="tenantConnectComposeRow">
-                <label className="secondary tenantConnectAttachLabel">
-                  {attachFile ? attachFile.name : 'Attach photo'}
-                  <input type="file" accept="image/*" onChange={(e) => setAttachFile(e.target.files?.[0] || null)} hidden />
-                </label>
-                <button className="primary" disabled={threadBusy || !replyText.trim()} onClick={() => void sendReply()}>{threadBusy ? 'Sending…' : 'Reply'}</button>
-              </div>
-            </div>
+            {threadBody(openRow)}
           </div>
         </div>
       )}
