@@ -155,11 +155,14 @@ export function ReceiptIcon({ className }: IconProps) {
 // Upload), ChatIcon (Tenant Messages). Invite Tenant and Add Property
 // reuse PersonIcon/HomeIcon above rather than adding near-duplicates;
 // Maintenance and PropCrew reuse WrenchIcon/PeopleIcon.
+// Add Expense uses a clean receipt-plus symbol instead of a dollar sign.
 export function DollarIcon({ className }: IconProps) {
   return (
     <svg {...base} className={className}>
-      <path d="M12 2.5v19" />
-      <path d="M16.5 6.5c0-1.7-2-3-4.5-3s-4.5 1.2-4.5 3c0 1.9 2 2.6 4.5 3.2s4.5 1.5 4.5 3.3c0 1.8-2 3-4.5 3s-4.5-1.1-4.5-3" />
+      <rect x="4" y="3.5" width="12.5" height="17" rx="2" />
+      <path d="M7.5 8h5M7.5 11.5h4" />
+      <circle cx="17.5" cy="16.5" r="4.5" fill="var(--bg, #fff)" />
+      <path d="M17.5 14.5v4M15.5 16.5h4" />
     </svg>
   )
 }
