@@ -89,6 +89,15 @@ function TenantConnectWorkspace({ user }: { user: User }) {
 
   const [tab, setTab] = useState<TenantConnectTab>('messages')
 
+  // Mobile V3 (Notifications & Activity Center): "accepted your
+  // invitation" notifications deep-link here with ?tab=tenants — same
+  // one-shot-flag-on-mount pattern app/page.tsx's own "?add=property"
+  // and "?openProperty=" params already use, plain browser APIs only.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (new URLSearchParams(window.location.search).get('tab') === 'tenants') setTab('tenants')
+  }, [])
+
   const [properties, setProperties] = useState<DirectoryProperty[]>([])
   const [leases, setLeases] = useState<DirectoryLease[]>([])
   const [access, setAccess] = useState<TenantPropertyAccess[]>([])

@@ -254,6 +254,27 @@ export const FIXTURE_CONVERSATIONS: FixtureConversation[] = [
   },
 ]
 
+// Mobile V3 (Notifications & Activity Center, preview parity): every
+// row ties back to an existing fixture entity above (a property, a
+// maintenance case, a PropCrew contact, a conversation) — never a new,
+// disconnected fictional notification concept.
+export type FixtureNotification = {
+  id: string
+  title: string
+  propertyLabel: string
+  timestampLabel: string
+  unread: boolean
+  screen: 'tenantconnect' | 'maintenance' | 'property'
+  propertyId?: string
+}
+
+export const FIXTURE_NOTIFICATIONS: FixtureNotification[] = [
+  { id: 'notif-1', title: 'New message from Sam Whitfield', propertyLabel: '842 Palm Avenue', timestampLabel: 'Sep 25, 2:14 PM', unread: true, screen: 'tenantconnect' },
+  { id: 'notif-2', title: "Jordan Reyes's case moved to In Progress", propertyLabel: '123 Harbor Lane', timestampLabel: 'Sep 20, 9:02 AM', unread: true, screen: 'maintenance' },
+  { id: 'notif-3', title: 'Marcus Bell accepted your request', propertyLabel: '123 Harbor Lane', timestampLabel: 'Sep 18, 4:40 PM', unread: false, screen: 'maintenance' },
+  { id: 'notif-4', title: 'Jordan Reyes accepted your invitation', propertyLabel: '123 Harbor Lane', timestampLabel: 'Aug 30, 11:15 AM', unread: false, screen: 'tenantconnect' },
+]
+
 export const FIXTURE_DOCUMENTS = [
   { id: 'doc-1', propertyId: 'prop-harbor-lane', name: 'Lease Agreement 2025-2027.pdf', category: 'Lease', uploadedAt: '2025-04-02' },
   { id: 'doc-2', propertyId: 'prop-harbor-lane', name: 'Homeowners Insurance Policy.pdf', category: 'Insurance', uploadedAt: '2025-05-14' },
