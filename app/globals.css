@@ -3975,3 +3975,48 @@ h2, h3, p { margin-top: 0; }
     padding: 12px 0;
   }
 }
+
+
+/* Minimalist UI V2 follow-up: lightweight tabs and contextual metadata.
+   Scoped to the portfolio workspaces so other product surfaces retain
+   their established styling. */
+.maintenanceWorkspace .maintenanceFilterRow {
+  border-bottom: 1px solid var(--line);
+  gap: 4px;
+}
+.maintenanceWorkspace .maintenanceFilterChip {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 10px 12px;
+  font-weight: var(--weight-medium);
+}
+.maintenanceWorkspace .maintenanceFilterChip:hover {
+  color: var(--text);
+  background: var(--surface-muted);
+}
+.maintenanceWorkspace .maintenanceFilterChip.active {
+  color: var(--brand);
+  background: transparent;
+  border-color: var(--brand);
+  font-weight: var(--weight-semibold);
+}
+.tenantConnectWorkspace .tenantInboxMaintenanceBadge {
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  padding: 0;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-medium);
+}
+@media (min-width: 1024px) {
+  .tenantConnectWorkspace .tenantConnectThreadMeta {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+  }
+  .maintenanceCaseDetailPanel .maintenanceNextStepQuiet {
+    background: transparent;
+  }
+}
