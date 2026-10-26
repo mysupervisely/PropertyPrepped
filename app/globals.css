@@ -3902,3 +3902,137 @@ h2, h3, p { margin-top: 0; }
   .authHeader .headerSearchButton,
   .authHeader .smartUploadButton { width: 35px; min-width: 35px; height: 38px; min-height: 38px; }
 }
+
+
+/* Clean Design V1.2 - approved compact photo-led dashboard layout.
+   Responsive presentation only; keep all real property actions. */
+@media (max-width: 760px) {
+  /* Mobile properties are compact rows, not large image-first cards. */
+  .grid:has(> .propertyCard) {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border-top: 1px solid var(--line);
+  }
+  .grid > .propertyCard {
+    display: grid;
+    grid-template-columns: 104px minmax(0, 1fr);
+    align-items: stretch;
+    gap: 12px;
+    padding: 13px 0;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+  }
+  .grid > .propertyCard > .cardOpen {
+    align-self: start;
+    min-width: 0;
+    width: 104px;
+  }
+  .grid > .propertyCard .photo {
+    height: 94px;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .grid > .propertyCard .photo .badge,
+  .grid > .propertyCard .photo .occupancyBadge {
+    display: none;
+  }
+  .grid > .propertyCard .photoPlaceholder {
+    height: 100%;
+    min-height: 0;
+    border-radius: 12px;
+  }
+  .grid > .propertyCard .photoPlaceholder small { display: none; }
+  .grid > .propertyCard .cardBody {
+    min-width: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .grid > .propertyCard .titleButton { text-align: left; }
+  .grid > .propertyCard .titleButton h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 650;
+    line-height: 1.3;
+    letter-spacing: -.02em;
+    overflow-wrap: anywhere;
+  }
+  .grid > .propertyCard .titleButton p {
+    margin: 3px 0 0;
+    font-size: 12px;
+  }
+  .grid > .propertyCard .miniStats {
+    margin: 3px 0 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    border: 0;
+    background: transparent;
+  }
+  .grid > .propertyCard .miniStats > div {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 0;
+  }
+  .grid > .propertyCard .miniStats span,
+  .grid > .propertyCard .miniStats strong {
+    font-size: 11px;
+    line-height: 1.3;
+  }
+  .grid > .propertyCard .miniStats strong { font-weight: 650; }
+  .grid > .propertyCard .cardActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 3px;
+    padding: 0;
+  }
+  .grid > .propertyCard .cardActions button {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 3px 0;
+    font-size: 11px;
+    color: var(--brand);
+    font-weight: 600;
+  }
+  .grid > .propertyCard .cardAlertBadge {
+    align-self: start;
+    font-size: 11px;
+    padding: 2px 0;
+    border: 0;
+    background: transparent;
+  }
+  .sectionHead:has(+ .grid > .propertyCard) {
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .sectionHead:has(+ .grid > .propertyCard) h2 {
+    font-size: 21px;
+    letter-spacing: -.035em;
+  }
+  .sectionHead:has(+ .grid > .propertyCard) p {
+    font-size: 12px;
+    margin-top: 3px;
+  }
+  .sectionHead:has(+ .grid > .propertyCard) > .primary {
+    font-size: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    white-space: nowrap;
+  }
+}
+@media (max-width: 370px) {
+  .grid > .propertyCard { grid-template-columns: 88px minmax(0, 1fr); gap: 10px; }
+  .grid > .propertyCard > .cardOpen { width: 88px; }
+  .grid > .propertyCard .photo { height: 84px; }
+}
