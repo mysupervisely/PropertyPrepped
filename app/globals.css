@@ -4036,3 +4036,33 @@ h2, h3, p { margin-top: 0; }
   .grid > .propertyCard > .cardOpen { width: 88px; }
   .grid > .propertyCard .photo { height: 84px; }
 }
+
+
+/* Clean Design V1.3 - single-line wordmark and compact actions. */
+@media (max-width: 760px) {
+  .authHeader.topbar { flex-wrap: nowrap !important; }
+  .authHeader .topbarBrandGroup { flex: 1 1 auto; min-width: 0; }
+  .authHeader .topbarActions { flex: 0 0 auto; gap: 4px; }
+  .authHeader .profileEntryButton { width: 35px; height: 35px; flex: 0 0 35px; margin-left: 4px; }
+  .authHeader .headerSearchButton {
+    background: transparent;
+    border: 0;
+    border-radius: 11px;
+    font-size: 17px;
+    width: 34px;
+    min-width: 34px;
+  }
+  .authHeader .smartUploadButton {
+    background: transparent;
+    border: 0;
+    color: var(--brand);
+    width: 34px;
+    min-width: 34px;
+    font-size: 24px;
+  }
+}
+@media (max-width: 370px) {
+  .authHeader .brand { font-size: 18px; }
+  .authHeader .profileEntryButton { width: 31px; height: 31px; flex-basis: 31px; }
+  .authHeader .headerSearchButton, .authHeader .smartUploadButton { width: 30px; min-width: 30px; }
+}
