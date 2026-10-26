@@ -3732,3 +3732,88 @@ h2, h3, p { margin-top: 0; }
 .providerProposeField { display: grid; gap: 10px; }
 .providerProposeField label { display: block; font-size: 13px; font-weight: 650; }
 .providerProposeField input[type="datetime-local"] { width: 100%; margin-top: 6px; border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; font-family: inherit; font-size: 15px; }
+
+
+/* ==========================================================================
+   PropRoster Clean Design V1 - dashboard visual foundation
+   Scoped to dashboard snapshot and property list. No business logic changes.
+   ========================================================================== */
+.portfolioSnapshot {
+  background: var(--surface);
+  border: 1px solid rgba(32, 75, 59, .07);
+  border-radius: 18px;
+  padding: 16px 20px 20px;
+  box-shadow: 0 8px 28px rgba(21, 32, 27, .025);
+}
+.portfolioSnapshotHead h2 {
+  letter-spacing: .035em;
+  font-weight: var(--weight-semibold);
+}
+.portfolioSnapshotGrid {
+  gap: 0;
+  align-items: stretch;
+}
+.portfolioSnapshotMetric {
+  background: transparent;
+  border-radius: 0;
+  min-height: 82px;
+  padding: 12px 16px;
+  justify-content: flex-start;
+  gap: 7px;
+}
+.portfolioSnapshotMetric + .portfolioSnapshotMetric {
+  border-left: 1px solid var(--line);
+}
+.portfolioSnapshotMetric strong {
+  font-size: clamp(19px, 2.1vw, 26px);
+  letter-spacing: -.045em;
+  font-weight: 650;
+}
+.portfolioSnapshotMetric span {
+  font-size: 12px;
+  font-weight: var(--weight-medium);
+}
+.portfolioSnapshotMetric .portfolioSnapshotCoverageNote {
+  font-size: 11px;
+}
+.propertyCard {
+  border-color: rgba(32, 75, 59, .09);
+  border-radius: 17px;
+  box-shadow: none;
+}
+.propertyCard:hover {
+  transform: none;
+  border-color: var(--line);
+}
+@media (max-width: 760px) {
+  .portfolioSnapshot {
+    margin-top: 14px;
+    margin-bottom: 25px;
+    padding: 14px 14px 16px;
+  }
+  .portfolioSnapshotGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 0;
+  }
+  .portfolioSnapshotMetric {
+    min-height: 82px;
+    padding: 13px 12px;
+    gap: 5px;
+  }
+  .portfolioSnapshotMetric + .portfolioSnapshotMetric {
+    border-left: 0;
+  }
+  .portfolioSnapshotMetric:nth-child(2n) {
+    border-left: 1px solid var(--line);
+  }
+  .portfolioSnapshotMetric:nth-child(n+3) {
+    border-top: 1px solid var(--line);
+  }
+  .portfolioSnapshotMetric strong {
+    font-size: clamp(20px, 5vw, 25px);
+  }
+  .needsAttentionSnapshotTile {
+    border-radius: 0;
+    background: transparent;
+  }
+}
