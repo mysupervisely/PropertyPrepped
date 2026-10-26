@@ -91,10 +91,13 @@ describe('Pricing is reachable from the public homepage without an account', () 
 
   // Simplification + Maintenance Workspace V2, Phase D.1 gave the
   // signed-in branch a hideMobileNav prop (Pricing is a public/
-  // marketing surface, excluded from the new mobile bottom nav) —
-  // reachability while signed out is otherwise unchanged.
+  // marketing surface, excluded from the mobile bottom nav that
+  // existed at the time) — Mobile V2 later removed the bottom nav
+  // entirely, making hideMobileNav a no-op prop, so it was removed
+  // from AuthHeader and every call site, this one included.
+  // Reachability while signed out is otherwise unchanged.
   it('/pricing itself remains reachable while signed out (unchanged — this milestone does not touch that page)', () => {
-    expect(pricingPageSource).toContain('ready && user ? <AuthHeader hideMobileNav /> : (')
+    expect(pricingPageSource).toContain('ready && user ? <AuthHeader /> : (')
   })
 })
 

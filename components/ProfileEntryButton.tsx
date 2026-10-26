@@ -9,10 +9,14 @@
 // header/shell now carries:
 //   - Profile avatar (this component)  = the landlord's own identity AND
 //     the single trigger for the account/tools menu (AuthNavMenu).
-//   - AuthNavMenu                      = PROPROSTER TOOLS — Documents/
-//     Maintenance/Tax Center/PropCrew/Investment Tools, plus the account
-//     links (Profile/Pricing) and Log out.
-//   - MobileBottomNav                  = PRIMARY EVERYDAY DESTINATIONS.
+//   - AuthNavMenu                      = THE primary navigation
+//     mechanism at every breakpoint — Dashboard/Documents/Maintenance/
+//     Tax Center/PropCrew/Investment Tools, plus the account links
+//     (Profile/Pricing) and Log out. Mobile V2 removed the fixed
+//     mobile bottom navigation bar that used to duplicate four of
+//     these same destinations (components/MobileBottomNav.tsx, now
+//     deleted) — it had become redundant with this menu and the
+//     Dashboard's own customizable Quick Actions.
 //
 // Phase E1.1 made the mobile avatar open AuthNavMenu instead of linking
 // straight to /profile, because the mobile header's own hamburger had

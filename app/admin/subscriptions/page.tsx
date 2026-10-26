@@ -117,7 +117,7 @@ export default function AdminSubscriptionsPage() {
 
   return (
     <main className="shell">
-      <AuthHeader hideMobileNav />
+      <AuthHeader />
 
       <section className="intro">
         <p className="eyebrow">ADMIN · BILLING</p>

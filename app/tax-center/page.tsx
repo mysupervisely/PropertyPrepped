@@ -245,6 +245,23 @@ function TaxCenterWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Mobile Dashboard Quick Actions V1: reuses the exact same one-shot
+  // query-flag pattern app/page.tsx's own "?add=property" already
+  // established (see that file's own comment) — the dashboard's "Add
+  // Expense" quick action links to "/tax-center?add=expense", this
+  // reads it once properties have loaded (openAddExpense() needs them
+  // for emptyExpenseDraft), opens the exact same modal the page's own
+  // "+ Add Expense" button uses, then strips the flag so a refresh or
+  // back-navigation doesn't re-open it.
+  useEffect(() => {
+    if (!loaded) return
+    if (typeof window === 'undefined') return
+    if (new URLSearchParams(window.location.search).get('add') !== 'expense') return
+    window.history.replaceState(null, '', window.location.pathname)
+    openAddExpense()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded])
+
   const availableYears = useMemo(() => getAvailableTaxYears(transactions), [transactions])
 
   // Default intelligently to the current year, but if the current year
@@ -640,7 +657,15 @@ function TaxCenterWorkspace() {
                 <p className="muted">For an expense PropRoster doesn&apos;t already know about — a lease/maintenance-related cost is usually better logged from that property&apos;s own Ledger or Maintenance tab instead, so it stays linked there too.</p>
                 <div className="formGrid">
                   <label>Amount
-                    <input inputMode="decimal" value={expenseDraft.amount} onChange={(e) => setExpenseDraft((d) => ({ ...d, amount: e.target.value }))} placeholder="184.27" />
+                    {/* Mobile V2, Section 5: shared .currencyField pattern
+                        (app/globals.css) — see its own comment for why the
+                        "$" is a fixed sibling span rather than typed into
+                        the input itself. Same implementation Smart
+                        Upload's expense review (ReceiptReview.tsx) uses. */}
+                    <div className="currencyField">
+                      <span className="currencyFieldPrefix" aria-hidden="true">$</span>
+                      <input inputMode="decimal" value={expenseDraft.amount} onChange={(e) => setExpenseDraft((d) => ({ ...d, amount: e.target.value }))} placeholder="184.27" />
+                    </div>
                   </label>
                   <label>Property
                     <select value={expenseDraft.propertyId} onChange={(e) => setExpenseDraft((d) => ({ ...d, propertyId: e.target.value }))}>

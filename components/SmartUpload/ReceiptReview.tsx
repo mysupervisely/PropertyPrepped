@@ -133,7 +133,11 @@ export function ReceiptReview({
       <div className="formGrid">
         <label>Vendor<input value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder="The Home Depot" /></label>
         <label>Date<input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
-        <label>Amount<input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="184.72" /></label>
+        {/* Mobile V2, Section 5: shared .currencyField pattern
+            (app/globals.css) — the exact same implementation Tax
+            Center's Add Expense amount field uses (see that field's own
+            comment for why the "$" is a fixed sibling span). */}
+        <label>Amount<div className="currencyField"><span className="currencyFieldPrefix" aria-hidden="true">$</span><input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="184.72" /></div></label>
         <label>Expense category<select value={financialCategory} onChange={(e) => setFinancialCategory(e.target.value)}>{FINANCIAL_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></label>
         <label className="fullField">Description<input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="HVAC air filter / supplies" /></label>
       </div>

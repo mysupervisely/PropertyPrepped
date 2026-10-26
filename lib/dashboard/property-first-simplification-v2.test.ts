@@ -95,9 +95,11 @@ describe('Pricing page reuses the shared authenticated header', () => {
 
   it('imports and conditionally renders the shared AuthHeader for signed-in visitors', () => {
     expect(source).toContain("import { AuthHeader } from '../../components/AuthHeader'")
-    // Phase D.1: hideMobileNav — Pricing is a public/marketing surface,
-    // excluded from the new mobile bottom nav.
-    expect(source).toContain('{ready && user ? <AuthHeader hideMobileNav /> : (')
+    // Phase D.1 originally passed hideMobileNav here (Pricing is a
+    // public/marketing surface, excluded from the mobile bottom nav
+    // that existed at the time). Mobile V2 removed that bar entirely,
+    // making the prop a no-op, so it was removed here too.
+    expect(source).toContain('{ready && user ? <AuthHeader /> : (')
   })
 
   it('keeps a lightweight marketing header for signed-out visitors only (Pricing is reachable while logged out)', () => {

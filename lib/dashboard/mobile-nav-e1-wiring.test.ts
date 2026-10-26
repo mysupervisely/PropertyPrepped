@@ -15,63 +15,39 @@ function readFile(relativePath: string): string {
   return readFileSync(join(ROOT, relativePath), 'utf8')
 }
 
-const navSource = readFile('components/MobileBottomNav.tsx')
 const headerSource = readFile('components/AuthHeader.tsx')
 const authNavMenuSource = readFile('components/AuthNavMenu.tsx')
 const profileButtonSource = readFile('components/ProfileEntryButton.tsx')
 const pageSource = readFile('app/page.tsx')
 const globalsCss = readFile('app/globals.css')
 
-describe('Mobile bottom nav is exactly four destinations', () => {
-  it('Dashboard, Maintenance, PropCrew, Tax Center — in that order, nothing else', () => {
-    const labels = [...navSource.matchAll(/<span>([^<]+)<\/span>/g)].map((m) => m[1])
-    expect(labels).toEqual(['Dashboard', 'Maintenance', 'PropCrew', 'Tax Center'])
+// Mobile V2 (navigation simplification) removed the fixed mobile
+// bottom nav this describe block originally tested in detail
+// (components/MobileBottomNav.tsx — Dashboard/Maintenance/PropCrew/
+// Tax Center, exactly four destinations) — the component is deleted,
+// so there is nothing left to assert about ITS internal logic
+// (active-state matching, icon imports, the onDashboardNavigate
+// single-page-app mechanism, etc). What actually matters —
+// reachability of those four destinations — is covered by the
+// "Removed destinations are mobile-primary-nav-only" describe block
+// below (unchanged by this revision) and by
+// lib/dashboard/mobile-header-dashboard-polish-e1-1-wiring.test.ts's
+// own guard against AuthNavMenu's NAV_LINKS.
+describe('The fixed mobile bottom nav is gone (Mobile V2), not merely restyled', () => {
+  it('components/MobileBottomNav.tsx no longer exists', () => {
+    expect(() => readFile('components/MobileBottomNav.tsx')).toThrow()
   })
 
-  it('Properties is gone as a distinct destination — Dashboard now covers "/" unconditionally, no hasSelectedProperty split', () => {
-    expect(navSource).not.toMatch(/>Properties</)
-    expect(navSource).not.toContain('isProperties')
-    expect(navSource).not.toContain('hasSelectedProperty')
-    expect(navSource).toContain("const isDashboard = pathname === '/'")
+  it('AuthHeader no longer imports or renders it (a historical mention in a comment explaining the removal is fine)', () => {
+    expect(headerSource).not.toMatch(/import \{ MobileBottomNav \}/)
+    expect(headerSource).not.toMatch(/<MobileBottomNav/)
   })
 
-  it('Documents is gone as a bottom-nav destination (the route itself is untouched elsewhere — see the routes-not-deleted describe block below)', () => {
-    expect(navSource).not.toMatch(/>Documents</)
-    expect(navSource).not.toContain("href=\"/documents\"")
-  })
-
-  it('More is gone — no onMoreClick/moreOpen props, no sheet-trigger button in this component at all', () => {
-    expect(navSource).not.toMatch(/>More</)
-    expect(navSource).not.toContain('onMoreClick')
-    expect(navSource).not.toContain('moreOpen')
-  })
-
-  it('routes to the real, existing, unchanged pages — /, /maintenance, /propcrew, /tax-center', () => {
-    expect(navSource).toContain('href="/"')
-    expect(navSource).toContain('href="/maintenance"')
-    expect(navSource).toContain('href="/propcrew"')
-    expect(navSource).toContain('href="/tax-center"')
-  })
-
-  it('active-state logic: each of the four items lights up on its own exact pathname, no cross-contamination', () => {
-    expect(navSource).toContain("const isMaintenance = pathname === '/maintenance'")
-    expect(navSource).toContain("const isPropCrew = pathname === '/propcrew'")
-    expect(navSource).toContain("const isTaxCenter = pathname === '/tax-center'")
-  })
-
-  it('Dashboard still reuses the onDashboardNavigate/onBrandClick single-page-app mechanism (clicking it while already on "/" clears selectedId, not a same-route no-op)', () => {
-    expect(navSource).toContain('if (onDashboardNavigate && pathname === \'/\') { e.preventDefault(); onDashboardNavigate() }')
-  })
-
-  it('uses hand-authored line icons, not emoji, for every destination', () => {
-    expect(navSource).toContain("import { GridIcon, WrenchIcon, PeopleIcon, ReceiptIcon } from './icons/NavIcons'")
-    expect(navSource).not.toMatch(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u)
-  })
-})
-
-describe('AuthHeader no longer threads bottom-nav-specific props into MobileBottomNav (Phase E1, unchanged by E1.1)', () => {
-  it('MobileBottomNav is called with just onDashboardNavigate', () => {
-    expect(headerSource).toContain('<MobileBottomNav onDashboardNavigate={onBrandClick} />')
+  it('the hideMobileNav prop (a no-op once the bar it hid no longer exists) is gone from AuthHeader and every call site', () => {
+    expect(headerSource).not.toContain('hideMobileNav')
+    for (const page of ['app/pricing/page.tsx', 'app/privacy/page.tsx', 'app/terms/page.tsx', 'app/admin/realtor-leads/page.tsx', 'app/admin/subscriptions/page.tsx']) {
+      expect(readFile(page)).not.toContain('hideMobileNav')
+    }
   })
 })
 
@@ -184,16 +160,48 @@ describe('Dashboard: Needs Your Attention replaces the old standalone PropWatch 
     expect(pageSource).toContain('<p className="muted needsAttentionEmpty">You&apos;re all caught up.</p>')
   })
 
-  // Scoped to the dashboard's own JSX (from attentionRows through the
-  // end of the file) rather than the whole large file — the property
-  // WORKSPACE view (a completely different branch of this same
-  // component, for a single selected property) has its own long-
-  // standing, unrelated "QUICK ACTIONS" eyebrow (Documents/Photos/
-  // Maintenance/Add transaction shortcuts inside one property), which
-  // this guard must not flag.
-  it('no Quick Actions section was added to the dashboard (Section 7 — explicitly out of scope)', () => {
-    const dashboardSource = pageSource.slice(pageSource.indexOf('const attentionRows = ['))
-    expect(dashboardSource).not.toMatch(/Quick Actions/i)
+  // Section 7 originally kept a dashboard Quick Actions row explicitly
+  // out of scope. Mobile V2 Area A reverses that scoping decision on
+  // purpose — a mobile-only Quick Actions row (Add Expense/Add
+  // Property/View Maintenance/Invite Tenant) was added to the
+  // dashboard, each one routing to an existing workflow rather than
+  // inventing a new one. This guard now checks the opposite of what it
+  // used to: that the row exists, is CSS-scoped to mobile (hidden by
+  // default, shown only under the mobile breakpoint), and that none of
+  // its four actions duplicate backend logic that already exists
+  // elsewhere in this file.
+  //
+  // Mobile V2 (Quick Actions redesign): the four rendered shortcuts are
+  // no longer hardcoded JSX — they're data-driven from quickActions
+  // (persisted, customizable, defaulting to DEFAULT_QUICK_ACTIONS) via
+  // renderQuickAction()/quickActionNav() above. This guard now checks
+  // that layer: the row exists, is CSS-scoped to mobile, is backed by
+  // the shared lib/dashboard/quick-actions.ts catalog (not a second,
+  // page-local one), and that every one of quickActionNav()'s own
+  // branches points at a real, pre-existing route or handler rather
+  // than inventing new navigation.
+  it('a mobile-only, customizable dashboard Quick Actions row exists (Mobile V2) and every catalog action reuses an existing workflow rather than duplicating one', () => {
+    expect(pageSource).toContain('<section className="mobileQuickActions">')
+    expect(globalsCss).toContain('.mobileQuickActions { display: none; }')
+    expect(pageSource).toContain("from '../lib/dashboard/quick-actions'")
+    expect(pageSource).toContain('{quickActions.map((id) => renderQuickAction(id))}')
+    expect(pageSource).toContain('function quickActionNav(id: QuickActionId)')
+    expect(pageSource).toContain("case 'add_expense': return { kind: 'link', href: '/tax-center?add=expense' }")
+    expect(pageSource).toContain("case 'tax_center': return { kind: 'link', href: '/tax-center' }")
+    expect(pageSource).toContain("case 'maintenance': return { kind: 'link', href: '/maintenance' }")
+    expect(pageSource).toContain("case 'propcrew': return { kind: 'link', href: '/propcrew' }")
+    expect(pageSource).toContain("case 'add_property': return { kind: 'link', href: '/?add=property' }")
+    expect(pageSource).toContain("case 'smart_upload': return { kind: 'button', onClick: openSmartUpload }")
+    expect(pageSource).toContain("case 'invite_tenant': return { kind: 'button', onClick: startTenantConnectQuickAction }")
+    expect(pageSource).toContain("case 'tenant_messages': return { kind: 'button', onClick: startTenantConnectQuickAction }")
+  })
+
+  it('a "Customize" control opens a sheet requiring exactly 4 selections, with a Restore Defaults option, and never renders the default set until a save actually succeeds', () => {
+    expect(pageSource).toContain('<button type="button" className="mobileQuickActionsCustomize" onClick={openQuickActionsCustomize}>Customize</button>')
+    expect(pageSource).toContain('disabled={quickActionsSaving || quickActionsDraft.length !== QUICK_ACTION_SELECTION_SIZE}')
+    expect(pageSource).toContain('onClick={restoreDefaultQuickActions}')
+    expect(pageSource).toContain('setQuickActions(next)')
+    expect(pageSource).toContain('setQuickActionsCustomizeOpen(false)')
   })
 })
 
@@ -241,18 +249,25 @@ describe('No horizontal overflow / tenant-provider-public isolation (unchanged i
     expect(globalsCss).toContain('.shell { max-width: 1220px; margin: 0 auto; padding: 0 28px 70px; overflow-x: hidden; }')
   })
 
-  it('MobileBottomNav is only ever mounted from AuthHeader — tenant/provider/public pages never import it directly', () => {
+  // Superseded by Mobile V2 — MobileBottomNav is deleted, so there is
+  // no longer anything for tenant/provider/public pages to NOT import;
+  // this now just confirms the removal is total (no stray reference
+  // left anywhere outside this file's own historical comments).
+  it('no page imports or references the deleted MobileBottomNav component', () => {
     const tenantSource = readFile('app/tenant/page.tsx')
     const providerSource = readFile('app/provider/[token]/page.tsx')
     expect(tenantSource).not.toContain('MobileBottomNav')
     expect(providerSource).not.toContain('MobileBottomNav')
+    expect(pageSource).not.toContain('MobileBottomNav')
   })
 })
 
 describe('No em dash in E1\'s new/modified user-facing copy', () => {
-  it('the new Needs Your Attention / Recent Activity / bottom-nav copy uses no em dash', () => {
+  // navSource (components/MobileBottomNav.tsx) is gone — its four
+  // labels now live in AuthNavMenu's NAV_LINKS instead, checked there.
+  it('the new Needs Your Attention / Recent Activity / hamburger-nav copy uses no em dash', () => {
     for (const label of ['Needs Your Attention', 'Recent Activity', 'View all', 'Show less', 'Dashboard', 'Maintenance', 'PropCrew', 'Tax Center']) {
-      expect(pageSource + navSource).not.toContain(`${label}—`)
+      expect(pageSource + authNavMenuSource).not.toContain(`${label}—`)
     }
   })
 })

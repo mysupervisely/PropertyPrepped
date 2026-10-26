@@ -147,3 +147,37 @@ export function ReceiptIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+// Mobile V2 — Dashboard Quick Actions. Three new shapes, same stroke-
+// based/currentColor/aria-hidden house style as every icon above:
+// DollarIcon (Add Expense — distinct from ReceiptIcon, which already
+// means "Tax Center" elsewhere in this same row), UploadIcon (Smart
+// Upload), ChatIcon (Tenant Messages). Invite Tenant and Add Property
+// reuse PersonIcon/HomeIcon above rather than adding near-duplicates;
+// Maintenance and PropCrew reuse WrenchIcon/PeopleIcon.
+export function DollarIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <path d="M12 2.5v19" />
+      <path d="M16.5 6.5c0-1.7-2-3-4.5-3s-4.5 1.2-4.5 3c0 1.9 2 2.6 4.5 3.2s4.5 1.5 4.5 3.3c0 1.8-2 3-4.5 3s-4.5-1.1-4.5-3" />
+    </svg>
+  )
+}
+
+export function UploadIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <path d="M12 15.5V4.5" />
+      <path d="M7 9l5-4.5L17 9" />
+      <path d="M4.5 15.5V19a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-3.5" />
+    </svg>
+  )
+}
+
+export function ChatIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9A1.5 1.5 0 0 1 18.5 16H10l-4.5 4v-4H5.5A1.5 1.5 0 0 1 4 14.5v-9Z" />
+    </svg>
+  )
+}

@@ -62,15 +62,24 @@ describe('Dashboard Navigation Bug fix — AuthHeader threads the same reset it 
 describe('Dashboard Navigation Bug fix — the property workspace still wires its own reset, and All Properties is untouched', () => {
   const source = readFile('app/page.tsx')
 
-  it('the property detail view passes an onBrandClick that resets selectedId to AuthHeader (the same reset Dashboard now reuses) — Onboarding & First-Run Experience V2 additionally clears the one-time first-property notice in the same handler, still a single setSelectedId(null) reset underneath', () => {
-    expect(source).toContain('<AuthHeader onBrandClick={() => { setSelectedId(null); setShowFirstPropertyNotice(false) }}')
+  // Mobile V2 — Area E: both onBrandClick and "All Properties" now go
+  // through the shared closeProperty() helper instead of an inline
+  // setSelectedId(null), so a back gesture pushed by openProperty() is
+  // popped (not left dangling) when the landlord exits a property this
+  // way. closeProperty() still resets selectedId to null — directly when
+  // there's no pushed history entry to pop, via history.back() (which
+  // triggers the popstate listener's own setSelectedId(null)) when there
+  // is — and still clears the one-time first-property notice either way.
+  it('the property detail view passes an onBrandClick that resets selectedId via closeProperty() (the same reset Dashboard now reuses)', () => {
+    expect(source).toContain('<AuthHeader onBrandClick={closeProperty}')
+    expect(source).toContain('function closeProperty() {')
   })
 
-  it('"All Properties" still calls setSelectedId(null) directly — a separate, unchanged action from Dashboard', () => {
+  it('"All Properties" also calls closeProperty() — the same shared reset as the brand/wordmark click', () => {
     const breadcrumbIndex = source.indexOf('breadcrumbBack')
     expect(breadcrumbIndex).toBeGreaterThan(-1)
     const nearby = source.slice(breadcrumbIndex, breadcrumbIndex + 120)
-    expect(nearby).toContain('setSelectedId(null)')
+    expect(nearby).toContain('closeProperty')
     expect(nearby).toContain('All Properties')
   })
 })

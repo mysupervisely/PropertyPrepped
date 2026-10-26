@@ -131,10 +131,15 @@ describe('Quick Actions is unchanged — already fit the quieter desktop hierarc
 })
 
 describe('Authenticated header/avatar navigation is untouched', () => {
+  // Mobile V2 removed the dead authHeaderWithBottomNav CSS class
+  // (it had no matching rule in app/globals.css even before this —
+  // confirmed by grep at the time) along with the fixed bottom nav
+  // it used to pair with. The actual guard this test protects — the
+  // avatar staying the single navigation trigger, never a second
+  // hamburger button — still holds and is still asserted below.
   it('the avatar is still the single navigation trigger — no hamburger reintroduced', () => {
     const headerSource = readFile('components/AuthHeader.tsx')
     expect(headerSource.toLowerCase()).not.toMatch(/<button[^>]*classname="hamburger/)
-    expect(headerSource).toContain('authHeaderWithBottomNav')
   })
 })
 
@@ -147,9 +152,12 @@ describe('Mobile property navigation is NOT redesigned in this milestone', () =>
     expect(tabsSlice).toContain('role="tab"')
   })
 
-  it('the mobile bottom navigation bar is untouched', () => {
-    expect(cssSource).toContain('.mobileBottomNav { display: none; }')
-    expect(cssSource).toContain('.mobileBottomNavItem.active { color: var(--brand); }')
+  // Superseded by Mobile V2 — the fixed mobile bottom navigation bar
+  // was intentionally removed entirely (see its own milestone), not
+  // merely left untouched. The property tab row this describe block
+  // actually protects (asserted above) is unrelated and unaffected.
+  it('the mobile bottom navigation bar stays removed', () => {
+    expect(cssSource).not.toMatch(/\.mobileBottomNav\s*\{/)
   })
 })
 

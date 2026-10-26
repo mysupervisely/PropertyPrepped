@@ -98,8 +98,10 @@ describe('Nothing else about the Property page hero/selector/Snapshot was touche
     expect(cssSource).toMatch(/\.tabs \{ display: none; \}/)
   })
 
-  it('mobile bottom navigation is untouched', () => {
-    expect(cssSource).toContain('.mobileBottomNav { display: none; }')
+  // Superseded by Mobile V2, which intentionally removed the fixed
+  // mobile bottom navigation bar entirely — not merely left untouched.
+  it('mobile bottom navigation stays removed', () => {
+    expect(cssSource).not.toMatch(/\.mobileBottomNav\s*\{/)
   })
 
   it('the global body font-family stack is byte-for-byte unchanged', () => {

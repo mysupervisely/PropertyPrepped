@@ -82,7 +82,7 @@ export default function PricingPage() {
           a public/marketing surface even for a signed-in visitor —
           excluded from the mobile bottom nav ("logged-out/public
           marketing pages" per that phase's own brief). */}
-      {ready && user ? <AuthHeader hideMobileNav /> : (
+      {ready && user ? <AuthHeader /> : (
         <header className="topbar">
           <Link href="/" className="brandButton"><span className="brand"><Wordmark /></span><span className="tagline">Your real estate portfolio, all in one place.</span></Link>
           <div className="accountActions">

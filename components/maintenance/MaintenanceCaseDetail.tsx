@@ -81,6 +81,7 @@
 // rest of the app, not performed here).
 
 import { useState } from 'react'
+import Link from 'next/link'
 import type { EnrichedMaintenanceCase, MaintenanceCaseStatus, PropCrewContactRef } from '../../lib/maintenance/command-center'
 import { maintenanceCategoryLabel } from '../../lib/maintenance/categories'
 import { PROVIDER_OUTREACH_STATUS_LABEL, type ProviderOutreachRow } from '../../lib/maintenance/provider-outreach'
@@ -150,7 +151,15 @@ export function MaintenanceCaseDetail({
       </select>
     </label>
   )
-  const noContactsNote = !contacts.length && <p className="muted maintenanceAssignedNote">No PropCrew contacts for this property yet. Add one from PropCrew.</p>
+  // Mobile V2, Section 4 audit: this used to say "Add one from
+  // PropCrew" as plain text with no way to actually get there short of
+  // leaving to find the hamburger menu — a real "unnecessarily
+  // difficult" gap, not a hypothetical one, since a landlord with zero
+  // contacts is otherwise stuck at this exact message. A real link to
+  // the existing /propcrew directory, nothing more — no new vendor
+  // management workflow, no change to PropCrew's own backend,
+  // authorization, or entitlements.
+  const noContactsNote = !contacts.length && <p className="muted maintenanceAssignedNote">No PropCrew contacts for this property yet. Add one from <Link href="/propcrew">PropCrew</Link>.</p>
 
   // The one "Contact PropCrew" trigger + its guard (no email on file /
   // duplicate-send protection) — reused for both a first contact and a
@@ -164,7 +173,7 @@ export function MaintenanceCaseDetail({
         </button>
       )
     ) : (
-      <p className="muted maintenanceOutreachStatus">Add an email address for {assignedContact.name} in PropCrew to contact them through PropRoster.</p>
+      <p className="muted maintenanceOutreachStatus">Add an email address for {assignedContact.name} in <Link href="/propcrew">PropCrew</Link> to contact them through PropRoster.</p>
     )
   )
 

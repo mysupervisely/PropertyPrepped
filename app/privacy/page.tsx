@@ -26,7 +26,7 @@ export default function PrivacyPolicyPage() {
 
   return (
     <main className="shell investmentShell legalPage">
-      {ready && user ? <AuthHeader hideMobileNav /> : (
+      {ready && user ? <AuthHeader /> : (
         <header className="topbar">
           <Link href="/" className="brandButton"><span className="brand"><Wordmark /></span><span className="tagline">Your real estate portfolio, all in one place.</span></Link>
           <div className="accountActions">

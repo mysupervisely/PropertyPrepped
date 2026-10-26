@@ -141,9 +141,13 @@ describe('Part A — no full-screen sheet, no grid of boxes, no scroll trapping,
     expect(mobileBlock).not.toMatch(/\.mobilePropertyNav[^{]*\{[^}]*display: grid/)
   })
 
-  it('the mobile bottom navigation bar is untouched', () => {
-    expect(cssSource).toContain('.mobileBottomNav { display: none; }')
-    expect(cssSource).toContain('.mobileBottomNavItem.active { color: var(--brand); }')
+  // Superseded by Mobile V2 — the fixed mobile bottom navigation bar
+  // was intentionally removed entirely (its own milestone), not
+  // merely left untouched by this one. The mobile property section
+  // selector this describe block actually protects (asserted above)
+  // is unrelated and unaffected.
+  it('the mobile bottom navigation bar stays removed', () => {
+    expect(cssSource).not.toMatch(/\.mobileBottomNav\s*\{/)
   })
 })
 
