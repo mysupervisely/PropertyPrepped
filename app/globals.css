@@ -3861,3 +3861,117 @@ h2, h3, p { margin-top: 0; }
 .providerProposeField { display: grid; gap: 10px; }
 .providerProposeField label { display: block; font-size: 13px; font-weight: 650; }
 .providerProposeField input[type="datetime-local"] { width: 100%; margin-top: 6px; border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; font-family: inherit; font-size: 15px; }
+
+
+/* ==========================================================================
+   PropRoster Minimalist UI V2: Tenant Connect + Maintenance
+   Design-only refinement of PR #91. Keep workflow and mobile overlays intact.
+   ========================================================================== */
+
+/* Flat, readable conversation rows instead of individual outlined cards. */
+.tenantConnectWorkspace .tenantDirectoryList {
+  gap: 0;
+}
+.tenantConnectWorkspace .tenantInboxRow {
+  position: relative;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  padding: 15px 16px;
+  transition: background-color .15s ease;
+}
+.tenantConnectWorkspace .tenantInboxRow:hover {
+  background: var(--surface-muted);
+}
+.tenantConnectWorkspace .tenantInboxRowSelected,
+.tenantConnectWorkspace .tenantInboxRowSelected:hover {
+  border-color: var(--line);
+  background: var(--brand-soft);
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+.tenantConnectWorkspace .tenantInboxRow:focus-visible,
+.maintenanceWorkspace .maintenanceCommandCenterCard:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+/* Request list: one quiet list, with meaningful status and title retained. */
+.maintenanceWorkspace .maintenanceCommandCenterList {
+  gap: 0;
+}
+.maintenanceWorkspace .maintenanceCommandCenterCard {
+  position: relative;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  padding: 15px 16px;
+  transition: background-color .15s ease;
+}
+.maintenanceWorkspace .maintenanceCommandCenterCard:hover {
+  background: var(--surface-muted);
+}
+.maintenanceWorkspace .maintenanceCommandCenterCardSelected,
+.maintenanceWorkspace .maintenanceCommandCenterCardSelected:hover {
+  border-color: var(--line);
+  background: var(--brand-soft);
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+
+/* Make the desktop workspace fill available width without nested card chrome. */
+@media (min-width: 1024px) {
+  .tenantConnectWorkspace,
+  .maintenanceWorkspace {
+    gap: 0;
+    align-items: stretch;
+  }
+  .tenantConnectWorkspace {
+    grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  }
+  .maintenanceWorkspace {
+    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  }
+  .tenantConnectListPanel,
+  .maintenanceListPanel {
+    border-right: 1px solid var(--line);
+    padding-right: 0;
+  }
+  .tenantConnectThreadPanel {
+    max-width: none;
+    border: 0;
+    border-radius: 0;
+    padding: 18px 24px;
+    box-shadow: none;
+  }
+  .tenantConnectThreadPanelEmpty,
+  .maintenanceDetailPanelEmpty {
+    min-height: 260px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .maintenanceDetailPanel {
+    padding-left: 24px;
+  }
+  .maintenanceCaseDetailPanel {
+    max-width: none;
+    border: 0;
+    border-radius: 0;
+    padding: 16px 0 24px;
+    box-shadow: none;
+  }
+  .maintenanceCaseDetailPanel .maintenanceNextStepCard {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 12px 0 18px;
+  }
+  .maintenanceCaseDetailPanel .maintenanceAvailabilitySection {
+    background: transparent;
+    border-radius: 0;
+    padding: 12px 0;
+  }
+}
