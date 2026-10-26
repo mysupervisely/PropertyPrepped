@@ -99,12 +99,6 @@ export function AuthHeader({
               trigger for the tools/account menu right next to it, at
               every breakpoint — see ProfileEntryButton's own header
               comment for the full reasoning. */}
-          <ProfileEntryButton menuOpen={navMenuOpen} onOpenMenu={() => setNavMenuOpen((o) => !o)} />
-          {/* Dashboard Navigation Bug fix: reuse the exact same
-              onBrandClick this header already threads to the wordmark
-              below for the identical single-page-app reason — see
-              AuthNavMenu's own comment on onDashboardNavigate. */}
-          <AuthNavMenu onDashboardNavigate={onBrandClick} open={navMenuOpen} onOpenChange={setNavMenuOpen} />
           {onBrandClick ? (
             <button className="brandButton" onClick={onBrandClick}>{brandContent}</button>
           ) : (
@@ -128,6 +122,12 @@ export function AuthHeader({
             {unreadNotificationCount > 0 && <span className="headerBellBadge">{unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}</span>}
           </Link>
           <SmartUploadButton onClick={() => setSmartUploadOpen(true)} />
+          <ProfileEntryButton menuOpen={navMenuOpen} onOpenMenu={() => setNavMenuOpen((o) => !o)} />
+          {/* Dashboard Navigation Bug fix: reuse the exact same
+              onBrandClick this header already threads to the wordmark
+              below for the identical single-page-app reason — see
+              AuthNavMenu's own comment on onDashboardNavigate. */}
+          <AuthNavMenu onDashboardNavigate={onBrandClick} open={navMenuOpen} onOpenChange={setNavMenuOpen} />
         </div>
       </header>
       {/* Mobile V2 (Quick Actions + navigation simplification): the
