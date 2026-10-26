@@ -4341,3 +4341,61 @@ h2, h3, p { margin-top: 0; }
     box-shadow: none;
   }
 }
+
+
+/* Clean Property Workspace V1.1 - quieter sections and navigation.
+   Scoped to property-specific controls, no routing or behavior changes. */
+.breadcrumbBack {
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+.propertyHero .heroInfo .eyebrow {
+  color: var(--muted);
+  letter-spacing: .07em;
+  font-size: 10px;
+}
+.propertyHero .heroStatusPills .statusPill {
+  border-radius: 8px;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+.propertyHero .heroInvestmentLink {
+  font-size: 12px;
+  font-weight: 600;
+}
+.propertySnapshotCard .propertySnapshotSubhead {
+  margin-top: 16px;
+  font-size: 11px;
+  letter-spacing: .045em;
+}
+.propertySnapshotCard .propertySnapshotYear { font-size: 11px; }
+.propertySnapshotCard .detailRows > div {
+  padding: 11px 0;
+  gap: 14px;
+}
+@media (max-width: 760px) {
+  .breadcrumbBack { margin-top: 9px; }
+  .mobilePropertyNav {
+    margin-top: 3px;
+    margin-bottom: 2px;
+  }
+  .mobilePropertyNavTrigger {
+    padding: 11px 13px;
+    border-color: #e8ede9;
+    background: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    min-height: 44px;
+  }
+  .mobilePropertyNavMenu {
+    border-color: #e8ede9;
+    box-shadow: 0 12px 28px rgba(21, 32, 27, .09);
+  }
+  .propertyHero .heroStatusPills { margin-top: 6px; }
+  .propertySnapshotCard .propertySnapshotSubhead { margin-top: 13px; }
+  .propertySnapshotCard .detailRows > div { padding: 9px 0; }
+  .propertySnapshotCard .detailRows span,
+  .propertySnapshotCard .detailRows strong { font-size: 12px; }
+}
