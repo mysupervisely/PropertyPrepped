@@ -110,7 +110,7 @@ export function AuthHeader({
               list and becomes a real header action/icon — "represented as
               a search action/icon rather than a large primary navigation
               destination." Same /search route and page, unchanged. */}
-          <Link href="/search" className="headerSearchButton" aria-label="Search">🔍</Link>
+          <Link href="/search" className="headerSearchButton" aria-label="Search"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg></Link>
           {/* Mobile V3: a discreet bell, same circular icon-button
               language as the search button right next to it — not a
               dropdown panel, just a link to the dedicated Activity
@@ -118,7 +118,7 @@ export function AuthHeader({
               other header action in this app already works (Search is
               a plain link too). */}
           <Link href="/notifications" className="headerSearchButton headerBellButton" aria-label={unreadNotificationCount > 0 ? `Notifications, ${unreadNotificationCount} unread` : 'Notifications'}>
-            🔔
+            <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z"/><path d="M10 21h4"/></svg>
             {unreadNotificationCount > 0 && <span className="headerBellBadge">{unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}</span>}
           </Link>
           <SmartUploadButton onClick={() => setSmartUploadOpen(true)} />
