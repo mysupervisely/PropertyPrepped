@@ -4399,3 +4399,73 @@ h2, h3, p { margin-top: 0; }
   .propertySnapshotCard .detailRows span,
   .propertySnapshotCard .detailRows strong { font-size: 12px; }
 }
+
+
+/* Clean Property Workspace V1.2 - cohesive desktop tabs and performance.
+   Keep existing tab state and all financial calculations untouched. */
+@media (min-width: 761px) {
+  .propertyHero + .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 22px;
+    border-top: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 0;
+  }
+  .propertyHero + .tabs button {
+    padding: 12px 2px 13px;
+    border-radius: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 550;
+  }
+  .propertyHero + .tabs button:hover { color: var(--brand); }
+  .propertyHero + .tabs button.active {
+    color: var(--brand);
+    border-bottom-color: var(--brand);
+    background: transparent;
+    font-weight: 650;
+  }
+}
+.propertySnapshotCard .propertySnapshotSecondaryGrid {
+  gap: 0;
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+}
+.propertySnapshotCard .propertySnapshotSecondaryGrid .propertySnapshotMetric {
+  background: transparent;
+  border-radius: 0;
+  min-height: 63px;
+  padding: 12px;
+}
+.propertySnapshotCard .propertySnapshotSecondaryGrid .propertySnapshotMetric + .propertySnapshotMetric {
+  border-left: 1px solid var(--line);
+}
+.propertySnapshotCard .propertySnapshotSecondaryGrid .propertySnapshotMetric strong {
+  font-size: 18px;
+  font-weight: 650;
+}
+.propertySnapshotCard .propertySnapshotSecondaryGrid .propertySnapshotMetric span {
+  font-size: 11px;
+}
+@media (max-width: 760px) {
+  .propertySnapshotCard .propertySnapshotSecondaryGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+  }
+  .propertySnapshotCard .propertySnapshotSecondaryGrid .propertySnapshotMetric {
+    min-width: 0;
+    min-height: 59px;
+    padding: 10px 7px;
+  }
+  .propertySnapshotCard .propertySnapshotSecondaryGrid .propertySnapshotMetric strong {
+    font-size: clamp(14px, 3.8vw, 18px);
+    overflow-wrap: anywhere;
+  }
+  .propertySnapshotCard .propertySnapshotSecondaryGrid .propertySnapshotMetric span {
+    font-size: 10px;
+  }
+}
