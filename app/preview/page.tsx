@@ -188,20 +188,39 @@ export default function PreviewApp() {
 
   return (
     <main className="shell">
-      <header className="topbar">
+      <header className="topbar authHeader">
         <div className="topbarBrandGroup">
           <button type="button" className="brand" style={{ border: 0, background: 'transparent', cursor: 'pointer' }} onClick={goDashboard}>
             <Wordmark />
           </button>
         </div>
         <div className="topbarActions">
+          {/* Design Foundation V1 (preview parity): mirrors the real
+              AuthHeader's full action row — search, notifications,
+              upload, profile — in the same order and with the same
+              classes/icon markup, so header-width/overflow checks run
+              against this harness actually mean something. Previously
+              this row only had the bell and avatar, which silently
+              missed any real header-width regression. */}
+          <button type="button" className="headerSearchButton" aria-label="Search">
+            <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 5 5" /></svg>
+          </button>
           {/* Mobile V3 (Notifications & Activity Center, preview parity):
               same .headerSearchButton/.headerBellButton classes the real
               AuthHeader renders, badge count from FIXTURE_NOTIFICATIONS'
               own unread rows — never a separately invented number. */}
           <button type="button" className="headerSearchButton headerBellButton" aria-label="Notifications" onClick={() => setScreen('notifications')}>
-            🔔
+            <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z" /><path d="M10 21h4" /></svg>
             {unreadNotificationCount > 0 && <span className="headerBellBadge">{unreadNotificationCount}</span>}
+          </button>
+          {/* Same markup as components/SmartUploadButton.tsx — decorative
+              only here (no real upload modal in this fixture-only
+              harness), but the exact same classes/text nodes so mobile
+              header-width checks reflect reality. */}
+          <button type="button" className="primary smartUploadButton" aria-label="Smart Upload">
+            <span aria-hidden="true">+</span>
+            <span className="smartUploadLabelFull">Smart Upload</span>
+            <span className="smartUploadLabelShort">Upload</span>
           </button>
           {/* Mobile Header Avatar V1 (preview parity): the real app's
               header replaced a visible account-name + separate
