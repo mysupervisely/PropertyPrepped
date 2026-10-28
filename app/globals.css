@@ -3732,3 +3732,551 @@ h2, h3, p { margin-top: 0; }
 .providerProposeField { display: grid; gap: 10px; }
 .providerProposeField label { display: block; font-size: 13px; font-weight: 650; }
 .providerProposeField input[type="datetime-local"] { width: 100%; margin-top: 6px; border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; font-family: inherit; font-size: 15px; }
+
+
+/* ==========================================================================
+   PropRoster Clean Design V1 - dashboard visual foundation
+   Scoped to dashboard snapshot and property list. No business logic changes.
+   ========================================================================== */
+.portfolioSnapshot {
+  background: var(--surface);
+  border: 1px solid rgba(32, 75, 59, .07);
+  border-radius: 18px;
+  padding: 16px 20px 20px;
+  box-shadow: 0 8px 28px rgba(21, 32, 27, .025);
+}
+.portfolioSnapshotHead h2 {
+  letter-spacing: .035em;
+  font-weight: var(--weight-semibold);
+}
+.portfolioSnapshotGrid {
+  gap: 0;
+  align-items: stretch;
+}
+.portfolioSnapshotMetric {
+  background: transparent;
+  border-radius: 0;
+  min-height: 82px;
+  padding: 12px 16px;
+  justify-content: flex-start;
+  gap: 7px;
+}
+.portfolioSnapshotMetric + .portfolioSnapshotMetric {
+  border-left: 1px solid var(--line);
+}
+.portfolioSnapshotMetric strong {
+  font-size: clamp(19px, 2.1vw, 26px);
+  letter-spacing: -.045em;
+  font-weight: 650;
+}
+.portfolioSnapshotMetric span {
+  font-size: 12px;
+  font-weight: var(--weight-medium);
+}
+.portfolioSnapshotMetric .portfolioSnapshotCoverageNote {
+  font-size: 11px;
+}
+.propertyCard {
+  border-color: rgba(32, 75, 59, .09);
+  border-radius: 17px;
+  box-shadow: none;
+}
+.propertyCard:hover {
+  transform: none;
+  border-color: var(--line);
+}
+@media (max-width: 760px) {
+  .portfolioSnapshot {
+    margin-top: 14px;
+    margin-bottom: 25px;
+    padding: 14px 14px 16px;
+  }
+  .portfolioSnapshotGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 0;
+  }
+  .portfolioSnapshotMetric {
+    min-height: 82px;
+    padding: 13px 12px;
+    gap: 5px;
+  }
+  .portfolioSnapshotMetric + .portfolioSnapshotMetric {
+    border-left: 0;
+  }
+  .portfolioSnapshotMetric:nth-child(2n) {
+    border-left: 1px solid var(--line);
+  }
+  .portfolioSnapshotMetric:nth-child(n+3) {
+    border-top: 1px solid var(--line);
+  }
+  .portfolioSnapshotMetric strong {
+    font-size: clamp(20px, 5vw, 25px);
+  }
+  .needsAttentionSnapshotTile {
+    border-radius: 0;
+    background: transparent;
+  }
+}
+
+
+/* Clean Design V1.1 - iPhone preview refinement, 2026-10-26.
+   Keep existing search, notifications, upload and menu fully operable. */
+@media (max-width: 760px) {
+  .authHeader.topbar {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    min-height: 66px;
+    padding-top: 8px;
+    padding-bottom: 10px;
+  }
+  .authHeader .topbarBrandGroup {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 8px;
+  }
+  .authHeader .topbarActions {
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 5px;
+  }
+  .authHeader .brand { font-size: clamp(18px, 5.2vw, 22px); }
+  .authHeader .headerSearchButton,
+  .authHeader .smartUploadButton {
+    width: 38px;
+    height: 40px;
+    min-width: 38px;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border-radius: 12px;
+    font-size: 19px;
+    line-height: 1;
+  }
+  .authHeader .smartUploadButton {
+    background: var(--brand-soft);
+    color: var(--brand);
+    border: 0;
+    font-size: 24px;
+    font-weight: 500;
+  }
+  .authHeader .smartUploadLabelShort,
+  .authHeader .smartUploadLabelFull { display: none; }
+  .welcomeIntro { padding-top: 15px; padding-bottom: 3px; }
+  .welcomeIntro h1 { font-size: clamp(23px, 5.7vw, 29px); }
+  .welcomeIntro > p:last-child { font-size: 13px; margin-top: 3px; }
+  .portfolioSnapshot { margin-top: 10px; margin-bottom: 18px; }
+  .portfolioSnapshotHead h2 { font-size: 11px; }
+  .portfolioSnapshotGrid { margin-top: 8px; }
+  .portfolioSnapshotMetric {
+    justify-content: center;
+    min-height: 78px;
+    padding: 10px 12px;
+  }
+  /* Grid DOM order differs from visual order; target visual positions,
+     not nth-child (the desktop-only NOI tile is hidden on mobile). */
+  .portfolioSnapshotMetric:nth-child(n) { border: 0; }
+  .portfolioSnapshotMetricValue { border-right: 1px solid var(--line) !important; border-bottom: 1px solid var(--line) !important; }
+  .portfolioSnapshotMetricRent { border-bottom: 1px solid var(--line) !important; }
+  .portfolioSnapshotMetricProperties { border-right: 1px solid var(--line) !important; }
+  .mobileQuickActions { margin-bottom: 13px; }
+  .mobileQuickActionsHead { margin-bottom: 3px; }
+  .mobileQuickActionIcon {
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
+    background: #f0f4f1;
+  }
+  .mobileQuickAction { gap: 5px; padding: 5px 2px; }
+  .mobileQuickActionLabel { font-size: 11px; }
+  .propertyCard { border-radius: 13px; }
+}
+@media (max-width: 390px) {
+  .authHeader.topbar { gap: 5px; }
+  .authHeader .topbarBrandGroup { gap: 5px; }
+  .authHeader .headerSearchButton,
+  .authHeader .smartUploadButton { width: 35px; min-width: 35px; height: 38px; min-height: 38px; }
+}
+
+
+/* Clean Design V1.2 - approved compact photo-led dashboard layout.
+   Responsive presentation only; keep all real property actions. */
+@media (max-width: 760px) {
+  /* Mobile properties are compact rows, not large image-first cards. */
+  .grid:has(> .propertyCard) {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border-top: 1px solid var(--line);
+  }
+  .grid > .propertyCard {
+    display: grid;
+    grid-template-columns: 104px minmax(0, 1fr);
+    align-items: stretch;
+    gap: 12px;
+    padding: 13px 0;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+  }
+  .grid > .propertyCard > .cardOpen {
+    align-self: start;
+    min-width: 0;
+    width: 104px;
+  }
+  .grid > .propertyCard .photo {
+    height: 94px;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  /* Production-release refinement: property type and occupancy were
+     previously hidden entirely on mobile — a real loss of at-a-glance
+     info, not just a style change (flagged in pre-release review).
+     Restored as small, stacked chips in the thumbnail's top-left
+     corner rather than left/right corners (the desktop layout) —
+     side-by-side corners don't fit on a 104px-wide thumbnail without
+     colliding; stacking lets each chip use the full available width
+     instead of sharing it. ellipsis/max-width guard against a long
+     property type (e.g. "Multi-Family") still overflowing the chip. */
+  .grid > .propertyCard .photo .badge,
+  .grid > .propertyCard .photo .occupancyBadge {
+    left: 5px;
+    right: auto;
+    padding: 2px 7px;
+    font-size: 8.5px;
+    font-weight: 700;
+    line-height: 1.5;
+    max-width: calc(100% - 10px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .grid > .propertyCard .photo .badge { top: 5px; }
+  .grid > .propertyCard .photo .occupancyBadge { top: 23px; }
+  .grid > .propertyCard .photoPlaceholder {
+    height: 100%;
+    min-height: 0;
+    border-radius: 12px;
+  }
+  .grid > .propertyCard .photoPlaceholder small { display: none; }
+  .grid > .propertyCard .cardBody {
+    min-width: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .grid > .propertyCard .titleButton { text-align: left; }
+  .grid > .propertyCard .titleButton h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 650;
+    line-height: 1.3;
+    letter-spacing: -.02em;
+    overflow-wrap: anywhere;
+  }
+  .grid > .propertyCard .titleButton p {
+    margin: 3px 0 0;
+    font-size: 12px;
+  }
+  .grid > .propertyCard .miniStats {
+    margin: 3px 0 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    border: 0;
+    background: transparent;
+  }
+  .grid > .propertyCard .miniStats > div {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 0;
+  }
+  .grid > .propertyCard .miniStats span,
+  .grid > .propertyCard .miniStats strong {
+    font-size: 11px;
+    line-height: 1.3;
+  }
+  .grid > .propertyCard .miniStats strong { font-weight: 650; }
+  .grid > .propertyCard .cardActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 3px;
+    padding: 0;
+  }
+  .grid > .propertyCard .cardActions button {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 3px 0;
+    font-size: 11px;
+    color: var(--brand);
+    font-weight: 600;
+  }
+  .grid > .propertyCard .cardAlertBadge {
+    align-self: start;
+    font-size: 11px;
+    padding: 2px 0;
+    border: 0;
+    background: transparent;
+  }
+  .sectionHead:has(+ .grid > .propertyCard) {
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .sectionHead:has(+ .grid > .propertyCard) h2 {
+    font-size: 21px;
+    letter-spacing: -.035em;
+  }
+  .sectionHead:has(+ .grid > .propertyCard) p {
+    font-size: 12px;
+    margin-top: 3px;
+  }
+  .sectionHead:has(+ .grid > .propertyCard) > .primary {
+    font-size: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    white-space: nowrap;
+  }
+}
+@media (max-width: 370px) {
+  .grid > .propertyCard { grid-template-columns: 88px minmax(0, 1fr); gap: 10px; }
+  .grid > .propertyCard > .cardOpen { width: 88px; }
+  .grid > .propertyCard .photo { height: 84px; }
+  .grid > .propertyCard .photo .badge,
+  .grid > .propertyCard .photo .occupancyBadge {
+    font-size: 8px;
+    padding: 2px 6px;
+  }
+  .grid > .propertyCard .photo .occupancyBadge { top: 21px; }
+}
+
+
+/* Clean Design V1.3 - single-line wordmark and compact actions. */
+@media (max-width: 760px) {
+  /* Production-release review of this rule (pre-release regression
+     pass): the `!important` here was redundant, not load-bearing —
+     .authHeader.topbar already beats the older, generic .topbar {
+     flex-wrap: wrap } safety net (@media max-width: 480px, written for
+     a since-removed header configuration with a separate hamburger +
+     full-text "+ Smart Upload" button) purely on selector specificity
+     (two classes vs. one), independent of !important. Removed to stop
+     fighting that older rule for no behavioral reason — if a future
+     real-device report ever finds this row too tight again, the
+     480px-and-below wrap fallback is still there, undefeated, as a
+     silent safety net exactly where history says it's needed.
+     Verified empirically (not just read), with ALL FIVE header
+     controls actually present (logo, search, notifications, upload,
+     profile — a prior preview-harness gap had silently been testing
+     only two of five): real Chromium renders at 320/360/375/390/393/
+     430px all stay single-row, no document-level horizontal overflow,
+     every control visible and tappable, wordmark never wraps. */
+  .authHeader.topbar { flex-wrap: nowrap; }
+  .authHeader .topbarBrandGroup { flex: 1 1 auto; min-width: 0; }
+  .authHeader .topbarActions { flex: 0 0 auto; gap: 4px; }
+  .authHeader .profileEntryButton { width: 35px; height: 35px; flex: 0 0 35px; margin-left: 4px; }
+  .authHeader .headerSearchButton {
+    background: transparent;
+    border: 0;
+    border-radius: 11px;
+    font-size: 17px;
+    width: 34px;
+    min-width: 34px;
+  }
+  .authHeader .smartUploadButton {
+    background: transparent;
+    border: 0;
+    color: var(--brand);
+    width: 34px;
+    min-width: 34px;
+    font-size: 24px;
+  }
+}
+@media (max-width: 370px) {
+  .authHeader .brand { font-size: 18px; }
+  .authHeader .profileEntryButton { width: 31px; height: 31px; flex-basis: 31px; }
+  .authHeader .headerSearchButton, .authHeader .smartUploadButton { width: 30px; min-width: 30px; }
+}
+
+
+/* Clean Design V1.4 - screenshot-led refinement: less height, cleaner
+   typography, quieter financial metadata and compact rows. */
+@media (max-width: 760px) {
+  .authHeader .headerSearchButton {
+    color: var(--text);
+    font-size: 0;
+    width: 37px;
+    min-width: 37px;
+  }
+  .authHeader .headerSearchButton svg { width: 20px; height: 20px; }
+  .authHeader .smartUploadButton { font-size: 23px; }
+  .welcomeIntro { padding-top: 12px; padding-bottom: 0; }
+  .welcomeIntro > p:last-child { color: var(--muted); }
+  .portfolioSnapshot {
+    border-color: #edf0ed;
+    border-radius: 17px;
+    padding: 12px 16px 13px;
+    box-shadow: none;
+    margin: 12px 0 18px;
+  }
+  .portfolioSnapshotHead h2 { font-size: 10.5px; letter-spacing: .055em; }
+  .portfolioSnapshotHead .snapshotToggle { font-size: 12px; }
+  .portfolioSnapshotGrid { margin-top: 8px; }
+  .portfolioSnapshotMetric {
+    min-height: 70px;
+    padding: 10px 11px;
+    gap: 3px;
+  }
+  .portfolioSnapshotMetric strong {
+    font-size: clamp(20px, 5.1vw, 24px);
+    letter-spacing: -.045em;
+  }
+  .portfolioSnapshotMetric span { font-size: 11px; }
+  .portfolioSnapshotMetric .portfolioSnapshotCoverageNote {
+    font-size: 10px;
+    line-height: 1.25;
+  }
+  .needsAttentionSnapshotHead {
+    flex-direction: column-reverse;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 4px;
+  }
+  .needsAttentionSnapshotHead .needsAttentionSnapshotCount {
+    font-size: clamp(20px, 5.1vw, 24px);
+    line-height: 1.15;
+  }
+  .needsAttentionSnapshotHead > span:first-child { font-size: 11px; }
+  .mobileQuickActions { margin-bottom: 15px; }
+  .mobileQuickActionsHeading { font-size: 11px; letter-spacing: .055em; }
+  .mobileQuickActionsCustomize { font-size: 12px; }
+  .mobileQuickActionIcon { width: 36px; height: 36px; }
+  .mobileQuickActionIcon svg { width: 18px; height: 18px; }
+  .grid > .propertyCard .miniStats {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    align-items: flex-start;
+    margin-top: 5px;
+  }
+  .grid > .propertyCard .miniStats > div {
+    display: flex;
+    gap: 5px;
+    align-items: baseline;
+  }
+  .grid > .propertyCard .miniStats > div > span:first-child {
+    color: var(--muted);
+  }
+  .grid > .propertyCard .cardAlertBadge {
+    margin: 2px 0 0;
+    padding: 0;
+    width: auto;
+    line-height: 1.35;
+  }
+  .grid > .propertyCard .cardActions { margin-top: 3px; }
+  .grid > .propertyCard .cardActions button { padding: 4px 0; }
+}
+
+
+/* Clean Design V1.5 - compact snapshot and unified monochrome iconography. */
+@media (max-width: 760px) {
+  .welcomeIntro { padding-top: 9px; }
+  .welcomeIntro h1 { font-size: clamp(22px, 5.5vw, 27px); }
+  .portfolioSnapshot {
+    margin: 10px 0 14px;
+    padding: 10px 14px 11px;
+    border: 1px solid #edf0ed;
+    border-radius: 15px;
+    box-shadow: none;
+  }
+  .portfolioSnapshotHead h2 {
+    font-size: 10px;
+    letter-spacing: .045em;
+  }
+  .portfolioSnapshotHead .snapshotToggle { font-size: 11px; }
+  .portfolioSnapshotGrid {
+    margin-top: 5px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .portfolioSnapshotMetric {
+    min-height: 57px;
+    padding: 7px 10px;
+    gap: 2px;
+  }
+  .portfolioSnapshotMetric strong {
+    font-size: clamp(18px, 4.9vw, 22px);
+    line-height: 1.1;
+  }
+  .portfolioSnapshotMetric span { font-size: 10.5px; }
+  .portfolioSnapshotMetric .portfolioSnapshotCoverageNote {
+    font-size: 9px;
+    line-height: 1.1;
+  }
+  .needsAttentionSnapshotHead {
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 2px;
+  }
+  .needsAttentionSnapshotHead > span:first-child { font-size: 10.5px; }
+  .needsAttentionSnapshotHead .needsAttentionSnapshotCount {
+    font-size: clamp(18px, 4.9vw, 22px);
+    line-height: 1.1;
+  }
+  .mobileQuickActions { margin-bottom: 12px; }
+  .mobileQuickActionsRow { gap: 8px; }
+  .mobileQuickActionIcon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: #f1f3f2;
+    color: #244b3d;
+  }
+  .mobileQuickActionIcon svg {
+    width: 19px;
+    height: 19px;
+    stroke-width: 1.65;
+  }
+  .mobileQuickActionLabel { font-size: 10.5px; font-weight: 500; }
+  .authHeader .headerSearchButton svg {
+    width: 19px;
+    height: 19px;
+    stroke-width: 1.7;
+  }
+}
+
+
+/* Clean Design V1.6 - final small snapshot size adjustment.
+   Scoped to dashboard mobile; maintain readable figures and tap targets. */
+@media (max-width: 760px) {
+  .portfolioSnapshot {
+    padding: 9px 13px 10px;
+    margin-top: 8px;
+    margin-bottom: 13px;
+  }
+  .portfolioSnapshotGrid { margin-top: 3px; }
+  .portfolioSnapshotMetric {
+    min-height: 52px;
+    padding: 6px 9px;
+    gap: 2px;
+  }
+  .portfolioSnapshotMetric strong {
+    font-size: clamp(18px, 4.7vw, 21px);
+  }
+  .needsAttentionSnapshotHead .needsAttentionSnapshotCount {
+    font-size: clamp(18px, 4.7vw, 21px);
+  }
+}
