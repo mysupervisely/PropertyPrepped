@@ -4280,3 +4280,235 @@ h2, h3, p { margin-top: 0; }
     font-size: clamp(18px, 4.7vw, 21px);
   }
 }
+
+
+/* PropRoster Clean Design - Property Workspace V1.
+   Property-only selectors; preserve existing tabs, data and actions. */
+.propertyHero {
+  gap: 24px;
+  padding: 23px 0 20px;
+  grid-template-columns: minmax(240px, .78fr) minmax(0, 1.22fr);
+}
+.propertyHero .heroPhoto {
+  border: 0;
+  border-radius: 15px;
+  height: 230px;
+  background: #f0f3f1;
+}
+.propertyHero .heroInfo h1 {
+  font-size: clamp(23px, 2.6vw, 34px);
+  letter-spacing: -.04em;
+  line-height: 1.15;
+}
+.propertyHero .heroInfoActions .secondary {
+  border-color: var(--line);
+  box-shadow: none;
+}
+.propertySnapshotCard {
+  border: 1px solid #e9eeea;
+  background: #fff;
+  border-radius: 17px;
+  box-shadow: none;
+}
+.propertySnapshotCard .propertySnapshotPrimaryGrid { gap: 0; }
+.propertySnapshotCard .propertySnapshotMetric {
+  border-radius: 0;
+  background: transparent;
+  padding: 13px 16px;
+  min-height: 75px;
+}
+.propertySnapshotCard .propertySnapshotMetric:nth-child(2n) {
+  border-left: 1px solid var(--line);
+}
+.propertySnapshotCard .propertySnapshotMetric:nth-child(n+3) {
+  border-top: 1px solid var(--line);
+}
+.propertySnapshotCard .propertySnapshotMetric strong {
+  letter-spacing: -.035em;
+  font-weight: 650;
+}
+@media (max-width: 760px) {
+  .propertyHero {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 13px;
+    padding: 14px 0 14px;
+  }
+  .propertyHero .heroPhoto {
+    height: clamp(145px, 43vw, 190px);
+    border-radius: 14px;
+  }
+  .propertyHero .heroInfoHead {
+    gap: 10px;
+  }
+  .propertyHero .heroInfo h1 {
+    font-size: clamp(22px, 5.7vw, 27px);
+    line-height: 1.18;
+    letter-spacing: -.035em;
+  }
+  .propertyHero .heroCity { font-size: 13px; }
+  .propertyHero .heroStatusPills { gap: 6px; margin-top: 8px; }
+  .propertyHero .heroInfoActions {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+  }
+  .propertyHero .heroInfoActions .secondary {
+    padding: 8px 12px;
+    font-size: 12px;
+    border-radius: 9px;
+  }
+  .workspaceContent.workspaceContentTight { padding-top: 16px; }
+  .workspaceHeading.workspaceHeadingTight { margin-bottom: 13px; }
+  .workspaceHeading.workspaceHeadingTight h2 {
+    font-size: 21px;
+    letter-spacing: -.03em;
+  }
+  .propertySnapshotCard {
+    border-radius: 15px;
+    padding: 14px;
+    margin-bottom: 15px;
+  }
+  .propertySnapshotCard h3 { margin-bottom: 10px; font-size: 13px; }
+  .propertySnapshotCard .propertySnapshotMetric {
+    padding: 10px;
+    min-height: 67px;
+    gap: 3px;
+  }
+  .propertySnapshotCard .propertySnapshotMetric strong {
+    font-size: clamp(18px, 4.7vw, 22px);
+  }
+  .mobilePropertyNavTrigger {
+    border-radius: 11px;
+    box-shadow: none;
+  }
+}
+
+
+/* Clean Property Workspace V1.1 - quieter sections and navigation.
+   Scoped to property-specific controls, no routing or behavior changes. */
+.breadcrumbBack {
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+.propertyHero .heroInfo .eyebrow {
+  color: var(--muted);
+  letter-spacing: .07em;
+  font-size: 10px;
+}
+.propertyHero .heroStatusPills .statusPill {
+  border-radius: 8px;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+.propertyHero .heroInvestmentLink {
+  font-size: 12px;
+  font-weight: 600;
+}
+.propertySnapshotCard .propertySnapshotSubhead {
+  margin-top: 16px;
+  font-size: 11px;
+  letter-spacing: .045em;
+}
+.propertySnapshotCard .propertySnapshotYear { font-size: 11px; }
+.propertySnapshotCard .detailRows > div {
+  padding: 11px 0;
+  gap: 14px;
+}
+@media (max-width: 760px) {
+  .breadcrumbBack { margin-top: 9px; }
+  .mobilePropertyNav {
+    margin-top: 3px;
+    margin-bottom: 2px;
+  }
+  .mobilePropertyNavTrigger {
+    padding: 11px 13px;
+    border-color: #e8ede9;
+    background: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    min-height: 44px;
+  }
+  .mobilePropertyNavMenu {
+    border-color: #e8ede9;
+    box-shadow: 0 12px 28px rgba(21, 32, 27, .09);
+  }
+  .propertyHero .heroStatusPills { margin-top: 6px; }
+  .propertySnapshotCard .propertySnapshotSubhead { margin-top: 13px; }
+  .propertySnapshotCard .detailRows > div { padding: 9px 0; }
+  .propertySnapshotCard .detailRows span,
+  .propertySnapshotCard .detailRows strong { font-size: 12px; }
+}
+
+
+/* Clean Property Workspace V1.2 - cohesive desktop tabs and performance.
+   Keep existing tab state and all financial calculations untouched. */
+@media (min-width: 761px) {
+  .propertyHero + .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 22px;
+    border-top: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 0;
+  }
+  .propertyHero + .tabs button {
+    padding: 12px 2px 13px;
+    border-radius: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 550;
+  }
+  .propertyHero + .tabs button:hover { color: var(--brand); }
+  .propertyHero + .tabs button.active {
+    color: var(--brand);
+    border-bottom-color: var(--brand);
+    background: transparent;
+    font-weight: 650;
+  }
+}
+.propertySnapshotCard .propertySnapshotSecondaryGrid {
+  gap: 0;
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+}
+.propertySnapshotCard .propertySnapshotSecondaryGrid .propertySnapshotMetric {
+  background: transparent;
+  border-radius: 0;
+  min-height: 63px;
+  padding: 12px;
+}
+.propertySnapshotCard .propertySnapshotSecondaryGrid .propertySnapshotMetric + .propertySnapshotMetric {
+  border-left: 1px solid var(--line);
+}
+.propertySnapshotCard .propertySnapshotSecondaryGrid .propertySnapshotMetric strong {
+  font-size: 18px;
+  font-weight: 650;
+}
+.propertySnapshotCard .propertySnapshotSecondaryGrid .propertySnapshotMetric span {
+  font-size: 11px;
+}
+@media (max-width: 760px) {
+  .propertySnapshotCard .propertySnapshotSecondaryGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+  }
+  .propertySnapshotCard .propertySnapshotSecondaryGrid .propertySnapshotMetric {
+    min-width: 0;
+    min-height: 59px;
+    padding: 10px 7px;
+  }
+  .propertySnapshotCard .propertySnapshotSecondaryGrid .propertySnapshotMetric strong {
+    font-size: clamp(14px, 3.8vw, 18px);
+    overflow-wrap: anywhere;
+  }
+  .propertySnapshotCard .propertySnapshotSecondaryGrid .propertySnapshotMetric span {
+    font-size: 10px;
+  }
+}
