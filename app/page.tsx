@@ -4451,6 +4451,10 @@ export default function Home() {
             </button>
             <div className="cardBody">
               <button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button>
+              <div className="propertyMobileLabels" aria-label="Property type and occupancy">
+                <span className="propertyMobileType">{property.property_type}</span>
+                {propertyOccupancy && <span className={`propertyMobileOccupancy ${occupancyPillClass(propertyOccupancy)}`}>{propertyOccupancy === 'Occupancy unknown' ? 'Unknown' : propertyOccupancy === 'Upcoming tenancy' ? 'Upcoming' : propertyOccupancy}</span>}
+              </div>
               <div className="miniStats">
                 <div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div>
                 {propertyRentRow ? <div><span>Rent status</span><strong><span className={`statusPill ${rentStatusPillClass(propertyRentRow.status)}`}>{rentStatusLabel(propertyRentRow.status)}</span></strong></div> : <div><span>Value</span><strong>{money(property.estimated_value)}</strong></div>}
