@@ -4512,3 +4512,25 @@ h2, h3, p { margin-top: 0; }
     font-size: 10px;
   }
 }
+
+/* Property workspace visual hierarchy: one heading and a useful, data-driven chart. */
+.propertyEquityVisual { margin: 14px 0 4px; padding: 14px 0 3px; }
+.propertyEquityVisualHead { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; font-size: 12px; color: var(--muted); }
+.propertyEquityVisualHead strong { font-size: 12px; color: var(--brand); }
+.propertyEquityTrack { display: flex; width: 100%; height: 13px; border-radius: 999px; background: #e4e9e6; overflow: hidden; margin: 10px 0; }
+.propertyEquityFill { display: block; height: 100%; background: var(--brand); border-radius: 999px; }
+.propertyEquityLegend { display: flex; gap: 17px; align-items: center; font-size: 11px; color: var(--muted); }
+.propertyEquityLegend span { display: inline-flex; align-items: center; gap: 6px; }
+.propertyEquityLegend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+.propertyEquityDot { background: var(--brand); }
+.propertyMortgageDot { background: #e4e9e6; border: 1px solid #cad4ce; }
+@media (max-width: 760px) {
+  .propertyHero .heroInfoActions { margin-top: 8px; }
+  .propertyHero .heroInfoActions .secondary { padding: 7px 12px; min-height: 36px; }
+  .workspaceContentTight > .workspaceHeading { margin: 0 0 12px; gap: 8px; }
+  .workspaceContentTight > .workspaceHeading .eyebrow { display: none; }
+  .workspaceContentTight > .workspaceHeading h2 { font-size: 19px; }
+  .workspaceContentTight > .workspaceHeading .secondary { font-size: 12px; padding: 8px 11px; }
+  .propertySnapshotCard { padding-top: 15px; }
+  .propertySnapshotCard > h3:first-child { font-size: 15px; margin-bottom: 12px; }
+}
