@@ -974,10 +974,10 @@ export default function Home() {
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState('')
   const [draft, setDraft] = useState({
-    address: '', city: '', type: 'Rental Property', value: '', mortgage: '', rent: '', marketRent: '', purchasePrice: '', monthlyExpenses: '', financingStatus: 'Unknown',
+    address: '', city: '', type: 'Rental Property', value: '', mortgage: '', rent: '', purchasePrice: '', monthlyExpenses: '', financingStatus: 'Unknown',
   })
   const [editDraft, setEditDraft] = useState({
-    address: '', city: '', type: 'Rental Property', value: '', mortgage: '', rent: '', purchasePrice: '', monthlyExpenses: '', financingStatus: 'Unknown',
+    address: '', city: '', type: 'Rental Property', value: '', mortgage: '', rent: '', marketRent: '', purchasePrice: '', monthlyExpenses: '', financingStatus: 'Unknown',
     beds: '', baths: '', squareFeet: '', yearBuilt: '', lotSizeSqft: '', purchaseDate: '', propertyTaxAnnual: '', hoaMonthly: '',
   })
 
