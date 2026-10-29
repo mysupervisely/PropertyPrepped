@@ -3486,6 +3486,11 @@ export default function Home() {
               hairline, .overviewInfoSection/.overviewSectionHeading/
               .overviewInfoGrid, in app/globals.css) — Property Snapshot
               above (.overviewPanel .propertySnapshotCard) is untouched. */}
+          <section className="overviewInfoSection quickActions">
+            <p className="eyebrow">QUICK ACTIONS</p>
+            <div className="quickActionButtons"><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Documents') }}>Documents <span className="quickActionCount">{selectedDocs.length}</span></button><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Photos') }}>Photos <span className="quickActionCount">{selectedPhotos.length}</span></button><button onClick={() => setActiveTab('Maintenance')}>Maintenance <span className="quickActionCount">{selectedMaintenance.length}</span></button><button onClick={() => { setActiveTab('Rent'); setRentSubTab('Ledger') }}>Add transaction</button></div>
+          </section>
+
           <section className="overviewInfoSection">
             <h2 className="overviewSectionHeading">Property information</h2>
             <div className="overviewInfoGrid">
@@ -3538,7 +3543,7 @@ export default function Home() {
           )}
 
           <section className="overviewInfoSection">
-            <h2 className="overviewSectionHeading">Notes &amp; history</h2>
+            <h2 className="overviewSectionHeading">Activity &amp; notes</h2>
             <div className="overviewInfoGrid">
               <div className="overviewInfoGroup">
                 <h3 className="overviewInfoGroupLabel">Notes</h3>
@@ -3551,10 +3556,7 @@ export default function Home() {
             </div>
           </section>
 
-          <section className="overviewInfoSection quickActions">
-            <p className="eyebrow">QUICK ACTIONS</p>
-            <div className="quickActionButtons"><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Documents') }}>Documents <span className="quickActionCount">{selectedDocs.length}</span></button><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Photos') }}>Photos <span className="quickActionCount">{selectedPhotos.length}</span></button><button onClick={() => setActiveTab('Maintenance')}>Maintenance <span className="quickActionCount">{selectedMaintenance.length}</span></button><button onClick={() => { setActiveTab('Rent'); setRentSubTab('Ledger') }}>Add transaction</button></div>
-          </section>
+
         </section>}
 
         {activeTab === 'Documents' && <section className="workspaceContent">
