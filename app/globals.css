@@ -4568,3 +4568,38 @@ h2, h3, p { margin-top: 0; }
   .workspaceContentTight > .overviewInfoSection.quickActions .quickActionButtons { gap: 7px; }
   .workspaceContentTight > .overviewInfoSection.quickActions .quickActionButtons button { font-size: 12px; padding: 8px 10px; }
 }
+
+/* Mobile dashboard: photos are the hero, not a surface for badges. */
+.propertyMobileLabels { display: none; }
+@media (max-width: 760px) {
+  .grid > .propertyCard .photo .badge, .grid > .propertyCard .photo .occupancyBadge { display: none !important; }
+  .grid > .propertyCard .propertyMobileLabels { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 2px 0 3px; min-width: 0; }
+  .grid > .propertyCard .propertyMobileType, .grid > .propertyCard .propertyMobileOccupancy { position: static; display: inline-block; padding: 2px 6px; border-radius: 6px; font-size: 10px; font-weight: 600; line-height: 1.3; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .grid > .propertyCard .propertyMobileType { background: #eef1ef; color: #46554c; }
+  .grid > .propertyCard .propertyMobileOccupancy { background: #e7f2eb; color: #246747; }
+  .grid > .propertyCard .propertyMobileOccupancy.vacant { background: #f0f2f0; color: #53635a; }
+}
+/* Compact financial overview, focused on what landlords can act on. */
+.propertyIncomeVisual { margin: 12px 0 2px; }
+.propertyIncomeVisualHeader { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: #69756e; margin-bottom: 9px; }
+.propertyIncomeBars { display: grid; gap: 7px; }
+.propertyIncomeBars > div { display: grid; grid-template-columns: 54px minmax(0,1fr) 62px; align-items: center; gap: 8px; font-size: 11px; color: #596860; }
+.propertyIncomeBars strong { font-size: 11px; text-align: right; color: #263e31; }
+.propertyIncomeTrack { height: 8px; background: #edf1ee; border-radius: 99px; overflow: hidden; }
+.propertyIncomeTrack i { display: block; height: 100%; border-radius: 99px; }
+.propertyIncomeFill { background: #20533d; }
+.propertyExpenseFill { background: #b5c8bd; }
+@media (max-width: 760px) {
+  .propertySnapshotCard { padding: 13px 14px !important; }
+  .propertySnapshotCard > h3:first-child { margin: 0 0 10px !important; font-size: 15px !important; }
+  .propertySnapshotCard .propertySnapshotPrimaryGrid { row-gap: 0; }
+  .propertySnapshotCard .propertySnapshotMetric { padding: 8px 7px; }
+  .propertySnapshotCard .propertySnapshotMetric strong { font-size: 20px; line-height: 1.15; }
+  .propertySnapshotCard .propertySnapshotMetric span { font-size: 11px; }
+  .propertySnapshotCard .propertySnapshotDivider { margin: 11px 0; }
+  .propertySnapshotCard .propertySnapshotSubhead { font-size: 11px; margin: 0 0 8px; }
+  .propertySnapshotCard .propertySnapshotSecondaryGrid .propertySnapshotMetric strong { font-size: 17px; }
+  .propertySnapshotCard .propertySnapshotContextLine { font-size: 11px; }
+  .propertySnapshotCard .propertySnapshotPerformanceGrid { display: none; }
+  .propertySnapshotCard .propertySnapshotPerformanceGrid + .propertyPerformanceNote { display: none; }
+}

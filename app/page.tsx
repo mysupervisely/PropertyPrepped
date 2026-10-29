@@ -3361,13 +3361,13 @@ export default function Home() {
               <div className="propertySnapshotMetric"><strong>{metricMoney(performance.contractMonthlyRent, '/mo')}</strong><span>Monthly Rent</span></div>
               <div className="propertySnapshotMetric"><strong>{performance.mortgageBalance.source === 'financing_status_confirmed' ? selected.financing_status : metricMoney(performance.mortgageBalance)}</strong><span>Mortgage</span></div>
             </div>
-            {performance.estimatedValue.status === 'available' && performance.equity.status === 'available' && performance.mortgageBalance.status === 'available' && Number(performance.estimatedValue.value) > 0 && Number(performance.equity.value) >= 0 && Number(performance.mortgageBalance.value) >= 0 && (
-              <div className="propertyEquityVisual" aria-label="Estimated property value split between equity and remaining mortgage">
-                <div className="propertyEquityVisualHead"><span>Ownership breakdown</span><strong>{Math.round(Math.min(100, Number(performance.equity.value) / Number(performance.estimatedValue.value) * 100))}% equity</strong></div>
-                <div className="propertyEquityTrack" role="img" aria-label={`Equity ${Math.round(Math.min(100, Number(performance.equity.value) / Number(performance.estimatedValue.value) * 100))} percent of estimated property value`}>
-                  <span className="propertyEquityFill" style={{ width: `${Math.min(100, Math.max(0, Number(performance.equity.value) / Number(performance.estimatedValue.value) * 100))}%` }} />
+            {performance.actualIncomeYtd.status === 'available' && performance.operatingExpensesYtd.status === 'available' && Number(performance.actualIncomeYtd.value) > 0 && Number(performance.operatingExpensesYtd.value) >= 0 && (
+              <div className="propertyIncomeVisual" aria-label="Year-to-date income and operating expenses">
+                <div className="propertyIncomeVisualHeader"><span>Income vs. expenses</span><span>{performance.period.taxYear} YTD</span></div>
+                <div className="propertyIncomeBars">
+                  <div><span>Income</span><div className="propertyIncomeTrack"><i className="propertyIncomeFill" style={{ width: '100%' }} /></div><strong>{metricCompactMoney(performance.actualIncomeYtd)}</strong></div>
+                  <div><span>Expenses</span><div className="propertyIncomeTrack"><i className="propertyExpenseFill" style={{ width: `${Math.min(100, Number(performance.operatingExpensesYtd.value) / Number(performance.actualIncomeYtd.value) * 100)}%` }} /></div><strong>{metricCompactMoney(performance.operatingExpensesYtd)}</strong></div>
                 </div>
-                <div className="propertyEquityLegend"><span><i className="propertyEquityDot" />Equity</span><span><i className="propertyMortgageDot" />Mortgage</span></div>
               </div>
             )}
             {performance.mortgageBalance.potentiallyStale && <p className="propertyPerformanceNote">Based on the mortgage balance saved in PropRoster.</p>}
@@ -4462,6 +4462,7 @@ export default function Home() {
             </button>
             <div className="cardBody">
               <button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button>
+              <div className="propertyMobileLabels" aria-label="Property type and occupancy"><span className="propertyMobileType">{property.property_type}</span>{propertyOccupancy && <span className={`propertyMobileOccupancy ${occupancyPillClass(propertyOccupancy)}`}>{propertyOccupancy === 'Occupancy unknown' ? 'Unknown' : propertyOccupancy === 'Upcoming tenancy' ? 'Upcoming' : propertyOccupancy}</span>}</div>
               <div className="miniStats">
                 <div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div>
                 {propertyRentRow ? <div><span>Rent status</span><strong><span className={`statusPill ${rentStatusPillClass(propertyRentRow.status)}`}>{rentStatusLabel(propertyRentRow.status)}</span></strong></div> : <div><span>Value</span><strong>{money(property.estimated_value)}</strong></div>}
