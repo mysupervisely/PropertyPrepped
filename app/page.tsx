@@ -3361,6 +3361,15 @@ export default function Home() {
               <div className="propertySnapshotMetric"><strong>{metricMoney(performance.contractMonthlyRent, '/mo')}</strong><span>Monthly Rent</span></div>
               <div className="propertySnapshotMetric"><strong>{performance.mortgageBalance.source === 'financing_status_confirmed' ? selected.financing_status : metricMoney(performance.mortgageBalance)}</strong><span>Mortgage</span></div>
             </div>
+            {performance.estimatedValue.status === 'available' && performance.equity.status === 'available' && performance.mortgageBalance.status === 'available' && Number(performance.estimatedValue.value) > 0 && Number(performance.equity.value) >= 0 && Number(performance.mortgageBalance.value) >= 0 && (
+              <div className="propertyEquityVisual" aria-label="Estimated property value split between equity and remaining mortgage">
+                <div className="propertyEquityVisualHead"><span>Ownership breakdown</span><strong>{Math.round(Math.min(100, Number(performance.equity.value) / Number(performance.estimatedValue.value) * 100))}% equity</strong></div>
+                <div className="propertyEquityTrack" role="img" aria-label={`Equity ${Math.round(Math.min(100, Number(performance.equity.value) / Number(performance.estimatedValue.value) * 100))} percent of estimated property value`}>
+                  <span className="propertyEquityFill" style={{ width: `${Math.min(100, Math.max(0, Number(performance.equity.value) / Number(performance.estimatedValue.value) * 100))}%` }} />
+                </div>
+                <div className="propertyEquityLegend"><span><i className="propertyEquityDot" />Equity</span><span><i className="propertyMortgageDot" />Mortgage</span></div>
+              </div>
+            )}
             {performance.mortgageBalance.potentiallyStale && <p className="propertyPerformanceNote">Based on the mortgage balance saved in PropRoster.</p>}
             {/* Phase C.3 follow-up (2nd real-device round): the engine's
                 own explanatory note for a financing_status-confirmed $0
@@ -3477,6 +3486,11 @@ export default function Home() {
               hairline, .overviewInfoSection/.overviewSectionHeading/
               .overviewInfoGrid, in app/globals.css) — Property Snapshot
               above (.overviewPanel .propertySnapshotCard) is untouched. */}
+          <section className="overviewInfoSection quickActions">
+            <p className="eyebrow">QUICK ACTIONS</p>
+            <div className="quickActionButtons"><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Documents') }}>Documents <span className="quickActionCount">{selectedDocs.length}</span></button><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Photos') }}>Photos <span className="quickActionCount">{selectedPhotos.length}</span></button><button onClick={() => setActiveTab('Maintenance')}>Maintenance <span className="quickActionCount">{selectedMaintenance.length}</span></button><button onClick={() => { setActiveTab('Rent'); setRentSubTab('Ledger') }}>Add transaction</button></div>
+          </section>
+
           <section className="overviewInfoSection">
             <h2 className="overviewSectionHeading">Property information</h2>
             <div className="overviewInfoGrid">
@@ -3529,7 +3543,7 @@ export default function Home() {
           )}
 
           <section className="overviewInfoSection">
-            <h2 className="overviewSectionHeading">Notes &amp; history</h2>
+            <h2 className="overviewSectionHeading">Activity &amp; notes</h2>
             <div className="overviewInfoGrid">
               <div className="overviewInfoGroup">
                 <h3 className="overviewInfoGroupLabel">Notes</h3>
@@ -3542,10 +3556,7 @@ export default function Home() {
             </div>
           </section>
 
-          <section className="overviewInfoSection quickActions">
-            <p className="eyebrow">QUICK ACTIONS</p>
-            <div className="quickActionButtons"><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Documents') }}>Documents <span className="quickActionCount">{selectedDocs.length}</span></button><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Photos') }}>Photos <span className="quickActionCount">{selectedPhotos.length}</span></button><button onClick={() => setActiveTab('Maintenance')}>Maintenance <span className="quickActionCount">{selectedMaintenance.length}</span></button><button onClick={() => { setActiveTab('Rent'); setRentSubTab('Ledger') }}>Add transaction</button></div>
-          </section>
+
         </section>}
 
         {activeTab === 'Documents' && <section className="workspaceContent">
