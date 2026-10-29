@@ -4603,3 +4603,21 @@ h2, h3, p { margin-top: 0; }
   .propertySnapshotCard .propertySnapshotPerformanceGrid { display: none; }
   .propertySnapshotCard .propertySnapshotPerformanceGrid + .propertyPerformanceNote { display: none; }
 }
+
+/* Property snapshot: concise, factual market-rent comparison. */
+.propertyMarketRentCard { border-top: 1px solid #e7ece8; margin-top: 13px; padding-top: 14px; }
+.propertyMarketRentHeading { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-bottom: 10px; }
+.propertyMarketRentHeading strong { font-size: 13px; color: #213b2d; }
+.propertyMarketRentHeading > span { font-size: 10px; color: #748078; }
+.propertyMarketRentValues { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.propertyMarketRentValues > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.propertyMarketRentValues span { font-size: 11px; color: #66746b; }
+.propertyMarketRentValues strong { font-size: 18px; letter-spacing: -.02em; color: #213b2d; }
+.propertyMarketRentDifference { margin: 10px 0 0; color: #20533d; font-size: 12px; font-weight: 650; }
+.propertyMarketRentEmpty { font-size: 12px; color: #66746b; margin: 0; line-height: 1.5; }
+.propertyMarketRentDisclaimer { font-size: 10px; color: #77837b; margin: 9px 0 0; line-height: 1.4; }
+@media (max-width: 760px) {
+  .propertySnapshotCard .propertySnapshotPrimaryGrid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .propertyMarketRentValues strong { font-size: 16px; }
+  .propertySnapshotCard .propertySnapshotPerformanceGrid, .propertySnapshotCard .propertySnapshotPerformanceGrid + .propertyPerformanceNote { display: none; }
+}
