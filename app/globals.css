@@ -4534,3 +4534,37 @@ h2, h3, p { margin-top: 0; }
   .propertySnapshotCard { padding-top: 15px; }
   .propertySnapshotCard > h3:first-child { font-size: 15px; margin-bottom: 12px; }
 }
+
+/* Property Overview V2: distinct, compact sections instead of one continuous form. */
+@media (max-width: 760px) {
+  .workspaceContentTight > .overviewInfoSection {
+    margin: 14px 0 0;
+    padding: 17px 16px 18px;
+    background: #fff;
+    border: 1px solid #e5ebe7;
+    border-radius: 16px;
+  }
+  .workspaceContentTight > .overviewInfoSection .overviewSectionHeading {
+    font-size: 18px;
+    line-height: 1.25;
+    margin: 0 0 13px;
+    letter-spacing: -.025em;
+  }
+  .workspaceContentTight > .overviewInfoSection .overviewInfoGrid { gap: 16px; }
+  .workspaceContentTight > .overviewInfoSection .overviewInfoGroup + .overviewInfoGroup {
+    border-top: 1px solid #edf0ee;
+    padding-top: 15px;
+  }
+  .workspaceContentTight > .overviewInfoSection .overviewInfoGroupLabel {
+    font-size: 10px;
+    letter-spacing: .075em;
+    margin-bottom: 7px;
+  }
+  .workspaceContentTight > .overviewInfoSection .detailRows > div { padding: 10px 0; gap: 12px; }
+  .workspaceContentTight > .overviewInfoSection .detailRows > div > span:first-child { font-size: 12px; }
+  .workspaceContentTight > .overviewInfoSection .detailRows > div > strong { font-size: 12px; text-align: right; }
+  .workspaceContentTight > .overviewInfoSection.quickActions { padding: 12px 14px; }
+  .workspaceContentTight > .overviewInfoSection.quickActions .eyebrow { margin-bottom: 9px; font-size: 10px; }
+  .workspaceContentTight > .overviewInfoSection.quickActions .quickActionButtons { gap: 7px; }
+  .workspaceContentTight > .overviewInfoSection.quickActions .quickActionButtons button { font-size: 12px; padding: 8px 10px; }
+}
