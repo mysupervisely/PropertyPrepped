@@ -3392,7 +3392,7 @@ export default function Home() {
               <div className="propertySnapshotMetric"><strong>{performance.mortgageBalance.source === 'financing_status_confirmed' ? selected.financing_status : metricMoney(performance.mortgageBalance)}</strong><span>Mortgage</span></div>
             </div>
             <div className="propertyMarketRentCard">
-              <div className="propertyMarketRentHeading"><strong>Rent comparison</strong><span>RentCast estimate</span></div>
+              <div className="propertyMarketRentHeading"><strong>Market rent</strong><span>Powered by RentCast</span></div>
               {rentEstimateByProperty[selected.id] ? (
                 <>
                   <div className="propertyMarketRentValues">
@@ -3402,15 +3402,16 @@ export default function Home() {
                   {performance.contractMonthlyRent.status === 'available' && Number(performance.contractMonthlyRent.value) > 0 && (
                     <p className="propertyMarketRentDifference">{Math.abs(rentEstimateByProperty[selected.id]!.rent - Number(performance.contractMonthlyRent.value)) < 1 ? 'Approximately at estimated market rent' : `${money(Math.abs(rentEstimateByProperty[selected.id]!.rent - Number(performance.contractMonthlyRent.value)))}/mo ${Number(performance.contractMonthlyRent.value) < rentEstimateByProperty[selected.id]!.rent ? 'below' : 'above'} estimated market rent`}</p>
                   )}
-                  {rentEstimateByProperty[selected.id]!.low != null && rentEstimateByProperty[selected.id]!.high != null && <p className="propertyMarketRentDisclaimer">Estimated range: {money(rentEstimateByProperty[selected.id]!.low!)} - {money(rentEstimateByProperty[selected.id]!.high!)} /mo</p>}
-                  <p className="propertyMarketRentDisclaimer">Source: RentCast. Retrieved {new Date(rentEstimateByProperty[selected.id]!.retrievedAt).toLocaleDateString()}. Estimates are not guaranteed.</p>
+                  {rentEstimateByProperty[selected.id]!.low != null && rentEstimateByProperty[selected.id]!.high != null && <p className="propertyMarketRentDisclaimer">Typical range: {money(rentEstimateByProperty[selected.id]!.low!)} - {money(rentEstimateByProperty[selected.id]!.high!)} /mo</p>}
+                  <p className="propertyMarketRentDisclaimer">Updated {new Date(rentEstimateByProperty[selected.id]!.retrievedAt).toLocaleDateString()} · Estimate only</p>
                 </>
               ) : selected.market_rent_estimate != null && Number(selected.market_rent_estimate) > 0 ? (
                 <p className="propertyMarketRentEmpty">Your estimate: {money(Number(selected.market_rent_estimate))}/mo. Not independently verified.</p>
               ) : <p className="propertyMarketRentEmpty">Check estimated market rent using nearby rental data.</p>}
-              <button type="button" className="btnSecondary" disabled={rentEstimateLoading} onClick={() => requestMarketRent(selected.id)}>{rentEstimateLoading ? 'Checking rental market…' : 'Check market rent'}</button>
-              {rentEstimateError && <p className="propertyMarketRentDisclaimer" role="status">{rentEstimateError}</p>}
-              <p className="propertyMarketRentDisclaimer">Estimates are requested only when you tap the button to help conserve API usage.</p>
+              <div className="propertyMarketRentActions">
+                <button type="button" className="propertyMarketRentButton" disabled={rentEstimateLoading} onClick={() => requestMarketRent(selected.id)}>{rentEstimateLoading ? 'Checking…' : rentEstimateByProperty[selected.id] ? 'Refresh estimate' : 'Get market estimate'}<span aria-hidden="true">↗</span></button>
+              </div>
+              {rentEstimateError && <p className="propertyMarketRentError" role="status">{rentEstimateError}</p>}
             </div>
             {performance.mortgageBalance.potentiallyStale && <p className="propertyPerformanceNote">Based on the mortgage balance saved in PropRoster.</p>}
             {/* Phase C.3 follow-up (2nd real-device round): the engine's
