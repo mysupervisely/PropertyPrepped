@@ -53,3 +53,18 @@ and accessibility trees. These results must come from a cloud run: local YAML,
 project parsing and Python checks do not compile or execute Swift UI tests.
 Signed-in tests need a dedicated test account and a separately authorized
 fictional-data workflow. Never commit credentials or use a real tenant account.
+
+## First UI run findings
+
+The first cloud UI run compiled the test runner and executed all three tests.
+Reset-password navigation passed. Login field entry reached the password
+toggle, and Start Free opened the signup form, but those tests targeted
+`aria-pressed` web controls as native buttons. The captured accessibility
+trees expose them as `Switch` elements. Tests now use switch queries,
+without removing assertions or changing product accessibility semantics.
+A rerun is required to verify password visibility and full signup dismissal.
+
+The focused login screenshot also shows the modal title under the iOS status
+bar while editing. This is a separate keyboard/safe-area layout finding,
+not resolved by the selector correction. Track it before release and check
+on a device. No hosted CSS or production deployment was changed.

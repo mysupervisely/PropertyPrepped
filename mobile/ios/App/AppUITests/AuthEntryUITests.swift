@@ -33,16 +33,20 @@ final class AuthEntryUITests: XCTestCase {
         email.typeText("mobile-ui-test@example.invalid")
         password.tap()
         password.typeText("Fictional123!")
-        app.buttons["Show password"].tap()
+        let showPassword = app.switches["Show password"]
+        XCTAssertTrue(showPassword.waitForExistence(timeout: 5))
+        showPassword.tap()
         XCTAssertTrue(app.textFields.matching(NSPredicate(format: "value == %@", "Fictional123!")).firstMatch.waitForExistence(timeout: 5))
-        app.buttons["Hide password"].tap()
+        let hidePassword = app.switches["Hide password"]
+        XCTAssertTrue(hidePassword.waitForExistence(timeout: 5))
+        hidePassword.tap()
         XCTAssertTrue(app.secureTextFields.firstMatch.waitForExistence(timeout: 5))
         // Never submit credentials or create an account against the hosted site.
     }
 
     func testStartFreeAndClose() throws {
         app.buttons["Start Free"].firstMatch.tap()
-        XCTAssertTrue(app.buttons["I manage properties"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.switches["I manage properties"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["Create account"].exists)
         XCTAssertTrue(app.textFields.firstMatch.exists)
         let attachment = XCTAttachment(screenshot: app.screenshot())
