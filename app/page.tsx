@@ -926,6 +926,32 @@ export default function Home() {
   const [showEdit, setShowEdit] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [rentEstimateByProperty, setRentEstimateByProperty] = useState<Record<string, { rent: number; low: number | null; high: number | null; retrievedAt: string } | null>>({})
+  const [rentEstimateLoading, setRentEstimateLoading] = useState(false)
+  const [rentEstimateError, setRentEstimateError] = useState('')
+  async function requestMarketRent(propertyId: string) {
+    if (rentEstimateLoading) return
+    setRentEstimateLoading(true)
+    setRentEstimateError('')
+    try {
+      const { data } = await supabase.auth.getSession()
+      if (!data.session?.access_token) throw new Error('Please sign in again.')
+      const response = await fetch('/api/valuation/rent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + data.session.access_token },
+        body: JSON.stringify({ propertyId }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Could not retrieve rental estimate.')
+      setRentEstimateByProperty(prev => ({ ...prev, [propertyId]: result.estimate }))
+      if (!result.estimate) setRentEstimateError('No reliable rental estimate was returned for this address.')
+    } catch (error) {
+      setRentEstimateError(error instanceof Error ? error.message : 'Rental estimate unavailable.')
+    } finally {
+      setRentEstimateLoading(false)
+    }
+  }
+
   const [activeTab, setActiveTab] = useState<Tab>('Overview')
   // Mobile Property Section Selector V1: the mobile-only compact
   // "current section ▾" control that replaces the horizontally
@@ -3365,16 +3391,25 @@ export default function Home() {
               <div className="propertySnapshotMetric"><strong>{performance.mortgageBalance.source === 'financing_status_confirmed' ? selected.financing_status : metricMoney(performance.mortgageBalance)}</strong><span>Mortgage</span></div>
             </div>
             <div className="propertyMarketRentCard">
-              <div className="propertyMarketRentHeading"><strong>Rent comparison</strong><span>Owner-entered estimate</span></div>
-              {selected.market_rent_estimate != null && Number(selected.market_rent_estimate) > 0 && Number.isFinite(Number(selected.market_rent_estimate)) ? (
+              <div className="propertyMarketRentHeading"><strong>Rent comparison</strong><span>RentCast estimate</span></div>
+              {rentEstimateByProperty[selected.id] ? (
                 <>
-                  <div className="propertyMarketRentValues"><div><span>Current monthly rent</span><strong>{metricMoney(performance.contractMonthlyRent, '/mo')}</strong></div><div><span>Estimated market rent</span><strong>{money(Number(selected.market_rent_estimate))}/mo</strong></div></div>
+                  <div className="propertyMarketRentValues">
+                    <div><span>Current monthly rent</span><strong>{metricMoney(performance.contractMonthlyRent, '/mo')}</strong></div>
+                    <div><span>Estimated market rent</span><strong>{money(rentEstimateByProperty[selected.id]!.rent)}/mo</strong></div>
+                  </div>
                   {performance.contractMonthlyRent.status === 'available' && Number(performance.contractMonthlyRent.value) > 0 && (
-                    <p className="propertyMarketRentDifference">{Math.abs(Number(selected.market_rent_estimate) - Number(performance.contractMonthlyRent.value)) < 1 ? 'On par with your estimate' : `${money(Math.abs(Number(selected.market_rent_estimate) - Number(performance.contractMonthlyRent.value)))}/mo ${Number(performance.contractMonthlyRent.value) < Number(selected.market_rent_estimate) ? 'below' : 'above'} your estimate`}</p>
+                    <p className="propertyMarketRentDifference">{Math.abs(rentEstimateByProperty[selected.id]!.rent - Number(performance.contractMonthlyRent.value)) < 1 ? 'Approximately at estimated market rent' : `${money(Math.abs(rentEstimateByProperty[selected.id]!.rent - Number(performance.contractMonthlyRent.value)))}/mo ${Number(performance.contractMonthlyRent.value) < rentEstimateByProperty[selected.id]!.rent ? 'below' : 'above'} estimated market rent`}</p>
                   )}
+                  {rentEstimateByProperty[selected.id]!.low != null && rentEstimateByProperty[selected.id]!.high != null && <p className="propertyMarketRentDisclaimer">Estimated range: {money(rentEstimateByProperty[selected.id]!.low!)} - {money(rentEstimateByProperty[selected.id]!.high!)} /mo</p>}
+                  <p className="propertyMarketRentDisclaimer">Source: RentCast. Retrieved {new Date(rentEstimateByProperty[selected.id]!.retrievedAt).toLocaleDateString()}. Estimates are not guaranteed.</p>
                 </>
-              ) : <p className="propertyMarketRentEmpty">Add your market rent estimate in Edit property to compare it with current rent.</p>}
-              <p className="propertyMarketRentDisclaimer">Your own estimate, not an independently verified market average.</p>
+              ) : selected.market_rent_estimate != null && Number(selected.market_rent_estimate) > 0 ? (
+                <p className="propertyMarketRentEmpty">Your estimate: {money(Number(selected.market_rent_estimate))}/mo. Not independently verified.</p>
+              ) : <p className="propertyMarketRentEmpty">Check estimated market rent using nearby rental data.</p>}
+              <button type="button" className="btnSecondary" disabled={rentEstimateLoading} onClick={() => requestMarketRent(selected.id)}>{rentEstimateLoading ? 'Checking rental market…' : 'Check market rent'}</button>
+              {rentEstimateError && <p className="propertyMarketRentDisclaimer" role="status">{rentEstimateError}</p>}
+              <p className="propertyMarketRentDisclaimer">Estimates are requested only when you tap the button to help conserve API usage.</p>
             </div>
             {performance.mortgageBalance.potentiallyStale && <p className="propertyPerformanceNote">Based on the mortgage balance saved in PropRoster.</p>}
             {/* Phase C.3 follow-up (2nd real-device round): the engine's
