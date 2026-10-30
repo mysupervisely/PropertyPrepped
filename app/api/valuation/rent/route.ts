@@ -13,7 +13,10 @@ export async function POST(req: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !anon) return NextResponse.json({ error: 'Service unavailable.' }, { status: 503 })
-  const client = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false } })
+  const client = createClient(url, anon, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${bearer}` } },
+  })
   const { data: auth, error: authError } = await client.auth.getUser(bearer)
   if (authError || !auth.user) return NextResponse.json({ error: 'Session expired.' }, { status: 401 })
   const body = await req.json().catch(() => null) as { propertyId?: unknown } | null
@@ -21,7 +24,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid property.' }, { status: 400 })
   }
   const { data: property, error } = await client.from('properties').select('id,address,city').eq('id', body.propertyId).eq('owner_id', auth.user.id).single()
-  if (error || !property) return NextResponse.json({ error: 'Property not found.' }, { status: 404 })
+  if (error) {
+    console.error('Rent estimate property lookup failed', { code: error.code, message: error.message })
+    return NextResponse.json({ error: 'Unable to verify property access.' }, { status: 502 })
+  }
+  if (!property) return NextResponse.json({ error: 'Property not found.' }, { status: 404 })
   const address = [property.address, property.city].filter(Boolean).join(', ').trim()
   if (address.length < 8) return NextResponse.json({ error: 'Add a complete property address first.' }, { status: 400 })
   const key = process.env.RENTCAST_API_KEY
