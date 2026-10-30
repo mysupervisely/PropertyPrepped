@@ -53,34 +53,17 @@ and knows nothing about this directory.
 
 ## Branding / icons / splash
 
-Source art lives in `mobile/assets/` (`icon.png`, 1024×1024;
-`splash.png`, 2732×2732), generated from the **existing, unmodified**
-PropRoster brand mark at `public/icons/icon-512.png` (the same art the
-web app's PWA manifest already uses) — a resolution-only upscale for
-the icon, and the same unmodified logo centered on a plain canvas using
-the web manifest's own `background_color` (`#f5f7f9`) for the splash.
-**The logo itself was never redrawn, cropped, or altered.**
+The current iOS icon and launch screens use the user-supplied green roof/list
+logo (`IMG_6725.png`, supplied October 30, 2026). `assets/icon.png` preserves
+the original 1024 by 1024 image. The bundled iOS icon is opaque at 1024 by
+1024. `assets/splash.png` and `assets/splash-dark.png` center the supplied full PropRoster wordmark
+on a white 2732 by 2732 canvas, with no redesign. All six referenced iOS
+launch images use this artwork, including dark appearances.
 
-Native icons/splash screens for both platforms were generated from
-these via `@capacitor/assets` (`npm run assets`, from `mobile/`) and
-are already wired into both native projects (verified: iOS
-`LaunchScreen.storyboard` references the generated `Splash` image set;
-Android's launch theme references `@drawable/splash`).
-
-**Known quality caveat, disclosed rather than hidden:** the source art
-is only 512×512 natively; 1024×1024/2732×2732 versions used here are a
-clean upscale, not new detail. Apple's App Store listing icon
-requirement (1024×1024, no alpha) will accept this, but a true
-higher-resolution source from a designer would look sharper — worth
-doing before M13 submission, not required to keep testing/iterating
-now. Separately, Android's *adaptive* icon foreground layer was
-generated from the same full-bleed flat image (it has no transparent
-margin, since the source has no alpha channel) — on some Android
-launchers' circular/squircle masks this may crop a bit tighter than
-ideal. This is a real, known limitation of reusing the existing flat
-PWA icon as-is rather than a redesign; fixing it means asking for a
-transparent-background version of the mark, which we're explicitly not
-doing in M2 ("do not redesign the PropRoster logo").
+Android generated assets and hosted website branding have not been changed
+in this iOS branding update. The new shared source artwork is available for
+the next Android asset generation. Native rendering requires a new cloud
+build; it has not yet been verified with the new logo.
 
 ## Billing safety — no code change needed, verified from source
 
