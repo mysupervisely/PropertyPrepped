@@ -1,0 +1,19 @@
+{
+  "packageId": "com.proproster.app",
+  "host": "proproster.com",
+  "name": "PropRoster",
+  "launcherName": "PropRoster",
+  "display": "standalone",
+  "themeColor": "#204b3b",
+  "themeColorDark": "#204b3b",
+  "navigationColor": "#204b3b",
+  "navigationColorDark": "#204b3b",
+  "backgroundColor": "#f5f7f9",
+  "enableNotifications": false,
+  "startUrl": "/",
+  "iconUrl": "https://proproster.com/icons/icon-512.png",
+  "maskableIconUrl": "https://proproster.com/icons/icon-512.png",
+  "webManifestUrl": "https://proproster.com/manifest.webmanifest",
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1
+}
