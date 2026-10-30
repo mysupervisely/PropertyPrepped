@@ -34,21 +34,36 @@ jobs:
           mkdir -p "$HOME/.bubblewrap"
           node -e 'require("fs").writeFileSync(process.env.HOME+"/.bubblewrap/config.json",JSON.stringify({jdkPath:process.env.JAVA_HOME,androidSdkPath:process.env.ANDROID_HOME}))'
           echo "Bubblewrap toolchain configuration prepared."
-      - name: Inspect Bubblewrap CLI options
-        run: |
-          bubblewrap --version || true
-          bubblewrap init --help || true
-          bubblewrap build --help || true
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "JAVA_HOME=$JAVA_HOME"
-      - name: Generate Android project from production manifest
+       - name: Generate Android project from production manifest
         working-directory: android-twa
         env:
           CI: 'true'
         run: |
           set -euo pipefail
-          # Use explicit toolchain config to avoid Bubblewrap's first-run wizard.
-          timeout 120 bubblewrap init --manifest https://proproster.com/manifest.webmanifest < /dev/null
+          # Bubblewrap init is interactive. Run with a pseudo-terminal and capture
+          # the prompts for a deterministic, reviewed initialization step.
+          python3 -m pip install --user pexpect
+          python3 - <<'PY'
+          import pexpect
+          import sys
+          child = pexpect.spawn('bubblewrap init --manifest https://proproster.com/manifest.webmanifest', encoding='utf-8', timeout=40)
+          child.logfile_read = sys.stdout
+          answers = [
+              ('Domain:', 'proproster.com'),
+              ('URL path:', '/'),
+              ('Application name:', 'PropRoster'),
+              ('Short name:', 'PropRoster'),
+              ('Application ID:', 'com.proproster.app'),
+          ]
+          for prompt, answer in answers:
+              index = child.expect([prompt, pexpect.EOF, pexpect.TIMEOUT])
+              if index != 0:
+                  raise RuntimeError('Bubblewrap initialization stopped before prompt: '+prompt)
+              child.sendline(answer)
+          # Stop here until remaining Bubblewrap prompts have been audited.
+          child.close(force=True)
+          raise RuntimeError('Initial Bubblewrap prompts captured. Complete remaining prompts before producing an AAB.')
+          PY
       - name: Validate generated Android project
         working-directory: android-twa
         run: |
