@@ -87,3 +87,26 @@ desktop spacing override. No dashboard layout was changed.
 Validation: all 181 test files / 3,057 tests passed, TypeScript passed, and
 all 53 calculation tests passed independently in UTC, America/New_York,
 and Asia/Seoul. No merge or production deployment occurred.
+
+## Password-recovery resilience
+
+Reset-link checking now distinguishes confirmed missing/expired sessions from
+transport errors and stalled requests. A ten-second deadline exposes a retry
+screen instead of leaving the visitor on Checking your reset link indefinitely.
+The existing grace period for a PASSWORD_RECOVERY event is preserved. Cleanup
+removes the auth listener and timers, and ignores stale responses after leaving
+the page or retrying. Supabase remains the source of session validity; no local
+authentication bypass was added.
+
+Password submission now uses the existing synchronous request lock and finally
+cleanup. A rejected update no longer leaves Updating stuck. Password-update
+success is retained even if the following sign-out fails, and that failure is
+disclosed on the completion screen rather than being mistaken for a failed
+password update.
+
+Validation: 182 files / 3,064 tests passed; TypeScript and the Next.js production
+build passed. Seven new recovery tests cover valid/missing sessions, recovery
+events, returned/thrown transport errors, timeout/cleanup and late-response races.
+React review checked effect cleanup, stable retry dependencies, labelled inputs,
+alerts and real auth calls. No live reset email, password change or sign-out was
+performed. These hosted changes remain undeployed on the review branch.

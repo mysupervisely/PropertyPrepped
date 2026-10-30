@@ -82,7 +82,7 @@ describe('New password screen (app/reset-password/page.tsx)', () => {
 
   it('waits for a PASSWORD_RECOVERY session before showing the new-password form', () => {
     expect(resetPasswordSource).toContain("event === 'PASSWORD_RECOVERY'")
-    expect(resetPasswordSource).toContain("setRecoveryState('ready')")
+    expect(resetPasswordSource).toContain("watchRecoverySession(")
   })
 
   it('has a distinct invalid/expired-link failure state with a clear next action, not a dead end', () => {
