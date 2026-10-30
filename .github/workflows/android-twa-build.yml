@@ -40,29 +40,41 @@ jobs:
           CI: 'true'
         run: |
           set -euo pipefail
-          # Bubblewrap init is interactive. Run with a pseudo-terminal and capture
-          # the prompts for a deterministic, reviewed initialization step.
+          # Bubblewrap asks for app metadata even with JDK/SDK preconfigured.
+          # Answer known identity fields explicitly and accept other manifest defaults.
           python3 -m pip install --user pexpect
           python3 - <<'PY'
-          import pexpect
-          import sys
-          child = pexpect.spawn('bubblewrap init --manifest https://proproster.com/manifest.webmanifest', encoding='utf-8', timeout=40)
+          import pexpect, re, sys
+          child = pexpect.spawn('bubblewrap init --manifest https://proproster.com/manifest.webmanifest', encoding='utf-8', timeout=50)
           child.logfile_read = sys.stdout
-          answers = [
-              ('Domain:', 'proproster.com'),
-              ('URL path:', '/'),
-              ('Application name:', 'PropRoster'),
-              ('Short name:', 'PropRoster'),
-              ('Application ID:', 'com.proproster.app'),
-          ]
-          for prompt, answer in answers:
-              index = child.expect([prompt, pexpect.EOF, pexpect.TIMEOUT])
-              if index != 0:
-                  raise RuntimeError('Bubblewrap initialization stopped before prompt: '+prompt)
+          for _ in range(45):
+              index = child.expect([r'\\?[^\\r\\n]*?:[^\\r\\n]*', r'\\?[^\\r\\n]*?\\(Y/n\\)', r'\\?[^\\r\\n]*?\\(y/N\\)', pexpect.EOF, pexpect.TIMEOUT])
+              if index == 3:
+                  child.close()
+                  if child.exitstatus != 0:
+                      raise RuntimeError(f'Bubblewrap exited with {child.exitstatus}')
+                  break
+              if index == 4:
+                  raise RuntimeError('Bubblewrap timed out waiting for an answer')
+              question = child.match.group(0).lower()
+              if 'domain' in question:
+                  answer = 'proproster.com'
+              elif 'url path' in question:
+                  answer = '/'
+              elif 'application id' in question or 'package id' in question:
+                  answer = 'com.proproster.app'
+              elif 'application name' in question or 'short name' in question or 'launcher name' in question:
+                  answer = 'PropRoster'
+              elif 'install the jdk' in question or 'install the android sdk' in question:
+                  answer = 'n'
+              elif 'key' in question or 'password' in question or 'keystore' in question:
+                  raise RuntimeError('Refusing to create or supply signing credentials in CI')
+              else:
+                  answer = ''
               child.sendline(answer)
-          # Stop here until remaining Bubblewrap prompts have been audited.
-          child.close(force=True)
-          raise RuntimeError('Initial Bubblewrap prompts captured. Complete remaining prompts before producing an AAB.')
+          else:
+              child.close(force=True)
+              raise RuntimeError('Too many Bubblewrap prompts')
           PY
       - name: Validate generated Android project
         working-directory: android-twa
