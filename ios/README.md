@@ -68,3 +68,19 @@ The focused login screenshot also shows the modal title under the iOS status
 bar while editing. This is a separate keyboard/safe-area layout finding,
 not resolved by the selector correction. Track it before release and check
 on a device. No hosted CSS or production deployment was changed.
+
+## Keyboard safe-area adjustment under verification
+
+The canonical mobile config now uses `ios.contentInset: automatic` instead
+of Capacitor's default `never`. This lets UIKit apply its native safe-area
+scroll adjustments. No remote website CSS or Android behavior was changed.
+This is a candidate fix for the observed status-bar overlap, not a verified
+resolution. The native UI test now requires a visible software keyboard and
+attaches a screenshot immediately after password entry, before toggling
+visibility can dismiss the keyboard. Inspect that screenshot in the next
+cloud result and compare homepage spacing for regressions.
+
+The simulator smoke script also captures the screen after installation and
+before launch as `installed-icon.png`. Inspect it for the new app icon;
+its presence/location depends on SpringBoard's current home screen. The
+launch artwork itself is brief and is not verified by 15/30-second captures.

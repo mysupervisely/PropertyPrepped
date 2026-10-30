@@ -33,6 +33,12 @@ final class AuthEntryUITests: XCTestCase {
         email.typeText("mobile-ui-test@example.invalid")
         password.tap()
         password.typeText("Fictional123!")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5),
+                      "Keyboard must be visible for the layout evidence.")
+        let keyboardShot = XCTAttachment(screenshot: app.screenshot())
+        keyboardShot.name = "Login with password keyboard visible"
+        keyboardShot.lifetime = .keepAlways
+        add(keyboardShot)
         let showPassword = app.switches["Show password"]
         XCTAssertTrue(showPassword.waitForExistence(timeout: 5))
         showPassword.tap()

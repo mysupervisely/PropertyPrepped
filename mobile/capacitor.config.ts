@@ -34,6 +34,10 @@ const config: CapacitorConfig = {
   appId: 'com.proproster.app',
   appName: 'PropRoster',
   webDir: 'www',
+  ios: {
+    // Let UIKit account for device safe areas while WebKit scrolls focused fields.
+    contentInset: 'automatic',
+  },
   server: {
     url: 'https://proproster.com',
     androidScheme: 'https',
