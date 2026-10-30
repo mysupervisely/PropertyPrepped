@@ -30,6 +30,8 @@ workflows:
     scripts:
       - name: Install mobile dependencies
         script: cd mobile && npm ci
+      - name: Install TypeScript for Capacitor config parsing
+        script: cd mobile && npm install --no-save --package-lock=false typescript@^5.9.0
       - name: Sync existing native iOS project
         script: cd mobile && npx cap sync ios
       - name: Compile unsigned iOS Simulator app
