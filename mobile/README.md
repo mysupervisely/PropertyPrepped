@@ -17,7 +17,7 @@ mobile/
 ├── capacitor.config.ts       PRODUCTION config (https://proproster.com) — the default
 ├── capacitor.config.dev.json DEV-ONLY config — never used unless explicitly passed
 ├── assets/                   Source icon/splash art (see "Branding" below)
-├── www/                      Placeholder only — never actually shown (server.url wins)
+├── www/                      Placeholder index and bundled connection recovery screen
 ├── ios/                      Generated Xcode project (com.proproster.app)
 └── android/                  Generated Android Studio project (com.proproster.app)
 ```
@@ -191,3 +191,18 @@ named `appstore_credentials` (`APP_STORE_CONNECT_ISSUER_ID`,
 `APP_STORE_CONNECT_KEY_IDENTIFIER`, `APP_STORE_CONNECT_PRIVATE_KEY`) —
 none of that is stored in this repository. See the M4 milestone report
 for the exact one-at-a-time setup steps.
+
+## Connection recovery
+
+The production config sets `server.errorPath` to the bundled
+`www/connection-error.html`. Capacitor can show it when top-level web
+navigation fails, including when the initial hosted page cannot load.
+It has no external assets, scripts, plugins, credentials, or patient/tenant
+data. Try again navigates to the fixed production URL; it does not clear
+storage or retry writes. This does not detect HTTP error pages that load
+successfully, failed API requests, or provide offline access to records.
+
+Browser checks can validate layout and retry destination, but native
+fallback triggering and session retention still require simulator/device
+testing: cold-launch offline, reconnect and retry, resume after network
+loss, and verify whether an interrupted save completed before resubmitting.

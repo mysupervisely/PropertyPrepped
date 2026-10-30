@@ -14,6 +14,8 @@ assert.ok(pkg.dependencies['@capacitor/app'], 'Capacitor App plugin missing');
 assert.match(config, /appId:\s*['"]com\.proproster\.app['"]/);
 assert.match(config, /appName:\s*['"]PropRoster['"]/);
 assert.match(config, /url:\s*['"]https:\/\/proproster\.com['"]/);
+assert.match(config, /errorPath:\s*['"]connection-error\.html['"]/);
+assert.ok(existsSync(new URL('mobile/www/connection-error.html', root)), 'Bundled connection recovery page missing');
 assert.match(project, /PRODUCT_BUNDLE_IDENTIFIER = com\.proproster\.app;/);
 assert.ok(existsSync(new URL('mobile/ios/App/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme', root)), 'Shared App scheme missing');
 assert.match(workflow, /ios-simulator-unsigned:/);

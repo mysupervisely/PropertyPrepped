@@ -14,7 +14,7 @@ Both workflows use Node 22 and the mobile lockfile now supplies TypeScript for C
 
 Apple organization verification and membership activation remain pending. After activation, register the bundle ID and App Store Connect app, then configure distribution certificates and provisioning profiles in Codemagic. The current TestFlight workflow still needs signing identity/keychain/profile setup; publishing API credentials alone do not sign an app.
 
-Before distribution, test login/session persistence, navigation, external links, uploads, keyboard/safe areas, Tenant Connect, PropCrew, and Tax Center with fictional data. Test cold launch without internet and hosted-site failure: no local error page is configured. A working native build does not guarantee that the hosted website is available.
+Before distribution, test login/session persistence, navigation, external links, uploads, keyboard/safe areas, Tenant Connect, PropCrew, and Tax Center with fictional data. Test cold launch without internet and hosted-site failure: a bundled recovery page is configured, but native triggering remains untested. A working native build does not guarantee that the hosted website is available.
 
 ## Release gates
 
