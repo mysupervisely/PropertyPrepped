@@ -6,9 +6,15 @@
 
 The native project, icon/splash assets, mobile npm dependencies, and a Codemagic TestFlight workflow already exist. Do not run `npx cap add ios` at repository root or create a second iOS project. The root-level `capacitor.config.ts` on this experimental branch is superseded by `mobile/capacitor.config.ts` and must not be used for builds.
 
-## Next milestone: unsigned simulator build, no Apple enrollment needed
+## Current status and next steps
 
-Codemagic currently contains an `ios-testflight` workflow requiring signing secrets and Apple Developer enrollment. Add a separate manual unsigned simulator build to validate compilation **without** Apple credentials. It should run `npm ci` in `mobile/`, `npx cap sync ios`, and `xcodebuild` for generic iOS Simulator with `CODE_SIGNING_ALLOWED=NO`. Capture build logs and an unsigned simulator `.app` artifact. No TestFlight submission.
+Unsigned simulator compilation succeeded in Codemagic at commit `861ac81`. Runtime behavior is not yet verified. Run `npm run ios:verify` at repository root to check the canonical mobile project references.
+
+Both workflows use Node 22 and the mobile lockfile now supplies TypeScript for Capacitor config parsing. Root web dependencies are unnecessary for compiling this hosted shell.
+
+Apple organization verification and membership activation remain pending. After activation, register the bundle ID and App Store Connect app, then configure distribution certificates and provisioning profiles in Codemagic. The current TestFlight workflow still needs signing identity/keychain/profile setup; publishing API credentials alone do not sign an app.
+
+Before distribution, test login/session persistence, navigation, external links, uploads, keyboard/safe areas, Tenant Connect, PropCrew, and Tax Center with fictional data. Test cold launch without internet and hosted-site failure: no local error page is configured. A working native build does not guarantee that the hosted website is available.
 
 ## Release gates
 

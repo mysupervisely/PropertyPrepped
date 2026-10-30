@@ -108,10 +108,9 @@ source (not assumed from documentation):
 add `stripe.com`/`checkout.stripe.com`/`billing.stripe.com` to it. The
 practical effect: a signed-in user tapping "Manage Subscription" or any
 Checkout link inside the app is handed off to Safari/Chrome, never
-shown a purchase flow inside PropRoster's own app chrome — the standard
-low-risk posture for avoiding an App Store Guideline 3.1.1 rejection
-without implementing Apple IAP or Google Play Billing (neither was
-implemented; none of this is a new billing system).
+shown a purchase flow inside PropRoster's own app chrome — a navigation behavior only. Browser handoff does not establish payment
+policy compliance. Review current storefront-specific requirements before
+distribution. Neither Apple IAP nor Google Play Billing is implemented.
 
 This mechanism was confirmed by reading the native source, **not** by
 running the app on a simulator/device/emulator — none were available in
@@ -170,7 +169,7 @@ Requires a Mac. None of this can be done from this Linux environment.
 3. `npx cap open ios` — opens `mobile/ios/App/App.xcodeproj` in Xcode (confirmed via the installed `@capacitor/cli` source: it opens the `.xcworkspace` only when CocoaPods is in use; this project's package manager is SPM, so it opens the `.xcodeproj` directly).
 4. In Xcode: select the `App` target → *Signing & Capabilities* → choose your own (free) Apple ID team so it can sign a debug build. (A paid Apple Developer account is only needed for TestFlight/App Store — not for running on your own device.)
 5. Plug in your iPhone, select it as the run destination, hit Run (▶). First launch will ask you to trust the developer certificate on the phone (Settings → General → VPN & Device Management).
-6. The app boots straight to `https://proproster.com` and behaves like the live site — sign in with your real PropRoster account.
+6. The app boots straight to `https://proproster.com` and behaves like the live site — use a dedicated test account with fictional data.
 
 Android equivalent: install Android Studio, `npx cap open android`, connect a device with USB debugging enabled (or use an emulator), Run.
 
