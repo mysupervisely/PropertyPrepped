@@ -1,0 +1,58 @@
+name: Android TWA preflight
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'android-twa/**'
+      - '.github/workflows/android-twa-preflight.yml'
+      - 'app/manifest.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Check Android package and configuration
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = 'android-twa/twa-manifest.json';
+          const config = JSON.parse(fs.readFileSync(path, 'utf8'));
+          const assert = require('node:assert/strict');
+          assert.equal(config.packageId, 'com.proproster.app');
+          assert.equal(config.host, 'proproster.com');
+          assert.equal(config.name, 'PropRoster');
+          assert.equal(config.webManifestUrl, 'https://proproster.com/manifest.webmanifest');
+          assert.ok(config.appVersionCode > 0);
+          console.log('Android package and configuration validated.');
+          NODE
+
+      - name: Check production web manifest and icons
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --max-time 25 \
+            https://proproster.com/manifest.webmanifest -o /tmp/proproster-manifest.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const manifest = JSON.parse(fs.readFileSync('/tmp/proproster-manifest.json','utf8'));
+          if (manifest.name !== 'PropRoster') throw new Error('Unexpected PWA name');
+          if (manifest.display !== 'standalone') throw new Error('PWA is not standalone');
+          if (!manifest.icons?.some(i => i.sizes?.includes('512x512'))) throw new Error('512px icon missing');
+          console.log('Live PWA manifest validated.');
+          NODE
+          curl --fail --location --retry 3 --max-time 25 \
+            https://proproster.com/icons/icon-512.png -o /tmp/proproster-icon.png
+          test "$(wc -c </tmp/proproster-icon.png)" -gt 1000
+
+      - name: Explain release blockers
+        run: |
+          echo 'Preflight only: this workflow does not generate or sign an AAB.'
+          echo 'Release requires Android toolchain, Bubblewrap project, signing credentials, Play app signing fingerprint and physical-device QA.'

@@ -1,0 +1,118 @@
+name: Android TWA unsigned build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'android-twa/**'
+      - '.github/workflows/android-twa-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Verify preinstalled Android SDK
+        run: |
+          test -d "$ANDROID_HOME"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version || true
+      - name: Install Bubblewrap
+        run: npm install --global @bubblewrap/cli
+      - name: Configure Bubblewrap from runner toolchain
+        run: |
+          mkdir -p "$HOME/.bubblewrap"
+          node -e 'require("fs").writeFileSync(process.env.HOME+"/.bubblewrap/config.json",JSON.stringify({jdkPath:process.env.JAVA_HOME,androidSdkPath:process.env.ANDROID_HOME}))'
+          echo "Bubblewrap toolchain configuration prepared."
+      - name: Generate Android project from production manifest
+        working-directory: android-twa
+        env:
+          CI: 'true'
+        run: |
+          set -euo pipefail
+          # Bubblewrap asks for app metadata even with JDK/SDK preconfigured.
+          # Answer known identity fields explicitly and accept other manifest defaults.
+          python3 -m pip install --user pexpect
+          python3 - <<'PY'
+          import pexpect, sys
+          child = pexpect.spawn('bubblewrap init --manifest https://proproster.com/manifest.webmanifest', encoding='utf-8', timeout=50)
+          child.logfile_read = sys.stdout
+          for _ in range(45):
+              index = child.expect([r'\?[^\r\n]*?:[^\r\n]*', r'\?[^\r\n]*?\(Y/n\)', r'\?[^\r\n]*?\(y/N\)', pexpect.EOF, pexpect.TIMEOUT])
+              if index == 3:
+                  child.close()
+                  if child.exitstatus != 0:
+                      raise RuntimeError(f'Bubblewrap exited with {child.exitstatus}')
+                  break
+              if index == 4:
+                  raise RuntimeError('Bubblewrap timed out waiting for an answer')
+              question = child.match.group(0).lower()
+              if 'domain' in question:
+                  answer = 'proproster.com'
+              elif 'url path' in question:
+                  answer = '/'
+              elif 'application id' in question or 'package id' in question:
+                  answer = 'com.proproster.app'
+              elif 'application name' in question or 'short name' in question or 'launcher name' in question:
+                  answer = 'PropRoster'
+              elif 'install the jdk' in question or 'install the android sdk' in question:
+                  answer = 'n'
+              elif 'key' in question or 'password' in question or 'keystore' in question:
+                  raise RuntimeError('Refusing to create or supply signing credentials in CI')
+              else:
+                  answer = ''
+              child.sendline(answer)
+          else:
+              child.close(force=True)
+              raise RuntimeError('Too many Bubblewrap prompts')
+          PY
+      - name: Validate generated Android project
+        working-directory: android-twa
+        run: |
+          if [ ! -f gradlew ]; then
+            echo "::error::Bubblewrap did not generate gradlew. The CI command must be made noninteractive before compilation can proceed."
+            ls -la
+            exit 1
+          fi
+          node <<'NODE'
+          const fs = require('node:fs');
+          const expected = JSON.parse(fs.readFileSync('twa-manifest.json', 'utf8'));
+          if (expected.packageId !== 'com.proproster.app' || expected.host !== 'proproster.com') {
+            throw new Error('PropRoster Android identity configuration mismatch');
+          }
+          const gradle = ['app/build.gradle', 'app/build.gradle.kts']
+            .filter(p => fs.existsSync(p)).map(p => fs.readFileSync(p, 'utf8')).join('\\n');
+          if (!gradle.includes('com.proproster.app')) {
+            throw new Error('Generated Android application ID does not match Google Play');
+          }
+          if (!fs.existsSync('app/src/main/AndroidManifest.xml')) {
+            throw new Error('Android manifest missing from generated project');
+          }
+          const androidManifest = fs.readFileSync('app/src/main/AndroidManifest.xml', 'utf8');
+          if (!androidManifest.includes('android.intent.action.MAIN')) {
+            throw new Error('Android launcher activity missing');
+          }
+          console.log('Generated Android project identity verified.');
+          NODE
+      - name: Build unsigned Android App Bundle
+        working-directory: android-twa
+        run: |
+          chmod +x gradlew
+          ./gradlew bundleRelease --no-daemon
+      - name: Upload unsigned bundle for engineering review
+        uses: actions/upload-artifact@v4
+        with:
+          name: proproster-unsigned-aab-NOT-FOR-PLAY
+          path: android-twa/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+          retention-days: 7
