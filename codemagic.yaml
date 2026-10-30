@@ -63,6 +63,8 @@ workflows:
         script: python3 ios/scripts/simulator-smoke.py
       - name: Test login and signup entry forms
         script: python3 ios/scripts/run-ui-tests.py
+      - name: Capture isolated connection recovery screen
+        script: python3 ios/scripts/offline-smoke.py
     artifacts:
       - ios-simulator-evidence/**
       - ios-simulator-derived/Build/Products/Debug-iphonesimulator/*.app
@@ -73,6 +75,9 @@ workflows:
     instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.proproster.app
       groups:
         - appstore_credentials
       vars:
@@ -93,17 +98,20 @@ workflows:
           cd mobile
           npx cap sync ios
 
+      - name: Check TestFlight publishing configuration
+        script: python3 ios/scripts/testflight-preflight.py
+
+      - name: Apply distribution signing profiles
+        script: |
+          xcode-project use-profiles --project "$XCODE_PROJECT" \
+            --custom-export-options='{"testFlightInternalTestingOnly": true}'
+
       - name: Build and archive signed .ipa
-        # DEVELOPMENT_TEAM ($APPLE_TEAM_ID, from the same
-        # "appstore_credentials" group) is required for automatic
-        # signing to resolve a team — the project's own
-        # CODE_SIGN_STYLE=Automatic has no team baked in, deliberately,
-        # since no signing identity is stored in this repository.
         script: |
           xcode-project build-ipa \
             --project "$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME" \
-            --archive-flags="CURRENT_PROJECT_VERSION=$BUILD_NUMBER DEVELOPMENT_TEAM=$APPLE_TEAM_ID"
+            --archive-flags="CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
 
     artifacts:
       - build/ios/ipa/*.ipa

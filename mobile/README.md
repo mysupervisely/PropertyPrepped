@@ -60,9 +60,10 @@ the original 1024 by 1024 image. The bundled iOS icon is opaque at 1024 by
 on a white 2732 by 2732 canvas, with no redesign. All six referenced iOS
 launch images use this artwork, including dark appearances.
 
-Android generated assets and hosted website branding have not been changed
-in this iOS branding update. The new shared source artwork is available for
-the next Android asset generation. Native rendering requires a new cloud
+Android Capacitor icon and splash assets have also been regenerated from
+these sources. Hosted website branding and the separate Bubblewrap/TWA
+Google Play workflow have not been changed. Android build/release verification
+remains pending. Native rendering requires a new cloud
 build; it has not yet been verified with the new logo.
 
 ## Billing safety — no code change needed, verified from source

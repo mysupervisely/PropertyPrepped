@@ -12,7 +12,7 @@ Unsigned simulator compilation succeeded in Codemagic at commit `861ac81`. Runti
 
 Both workflows use Node 22 and the mobile lockfile now supplies TypeScript for Capacitor config parsing. Root web dependencies are unnecessary for compiling this hosted shell.
 
-Apple organization verification and membership activation remain pending. After activation, register the bundle ID and App Store Connect app, then configure distribution certificates and provisioning profiles in Codemagic. The current TestFlight workflow still needs signing identity/keychain/profile setup; publishing API credentials alone do not sign an app.
+Apple organization verification and membership activation remain pending. After activation, register the bundle ID and App Store Connect app, then configure distribution certificates and provisioning profiles in Codemagic. The TestFlight workflow now selects uploaded App Store signing identities and applies their profiles. Those identities still need to be configured in Codemagic; publishing API credentials alone do not sign an app.
 
 Before distribution, test login/session persistence, navigation, external links, uploads, keyboard/safe areas, Tenant Connect, PropCrew, and Tax Center with fictional data. Test cold launch without internet and hosted-site failure: a bundled recovery page is configured, but native triggering remains untested. A working native build does not guarantee that the hosted website is available.
 
@@ -84,3 +84,45 @@ The simulator smoke script also captures the screen after installation and
 before launch as `installed-icon.png`. Inspect it for the new app icon;
 its presence/location depends on SpringBoard's current home screen. The
 launch artwork itself is brief and is not verified by 15/30-second captures.
+
+## Next batched cloud run
+
+Run `PropRoster iOS UI Tests (unsigned)` on `ios-readiness-v1` when ready.
+This batch includes the new branding, candidate keyboard adjustment, visible
+keyboard screenshot, existing three UI tests, and an isolated connection
+failure capture. No signed-in test, real data, or store upload occurs.
+
+`offline-smoke.py` copies the unsigned built app into a temporary directory,
+changes only that copy to a closed loopback HTTPS port, installs it, captures
+`offline-recovery.png`, and reinstalls the original app in a finally block.
+It does not alter the source config, normal app artifact, or production URL.
+Screenshot capture is evidence for manual inspection, not a semantic UI pass.
+
+## TestFlight setup after Apple activation
+
+1. Resolve Apple's enrollment/document verification and activate membership.
+2. Register `com.proproster.app` and create its App Store Connect app record.
+3. In Codemagic Code signing identities, upload or generate a matching Apple
+   Distribution certificate and App Store provisioning profile. The YAML now
+   selects them by `distribution_type: app_store` and bundle identifier.
+4. Store the publishing API private key, key identifier, and issuer ID in the
+   encrypted `appstore_credentials` group. Do not put them in chat or Git.
+5. Review the remaining layout, login/upload, privacy and billing gates.
+6. Only then manually run the signed TestFlight workflow. It applies profiles
+   using `xcode-project use-profiles`, builds an internal-only export, and is
+   configured to upload to TestFlight. Nothing runs automatically on push.
+
+The preflight checks presence of required configuration without printing
+values. It does not prove certificate validity, API permissions or membership
+status. BUILD_NUMBER must be a positive integer and must exceed any previous
+App Store Connect build number for the version; confirm before first upload.
+
+Camera capture already exists in Smart Upload. The iOS plist now explains
+that camera use is for property/maintenance photos, receipts and documents.
+No microphone/location access was added. Camera permission, denial and file
+picker behavior remain physical-device acceptance checks.
+
+References checked October 30, 2026:
+- https://docs.codemagic.io/yaml-code-signing/signing-ios/
+- https://github.com/codemagic-ci-cd/cli-tools/blob/master/docs/xcode-project/use-profiles.md
+- https://developer.apple.com/documentation/bundleresources/information-property-list/nscamerausagedescription

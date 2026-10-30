@@ -34,3 +34,14 @@ Use fictional data and a dedicated test account:
 7. Verify external links and return from browser flows.
 
 Apple membership and signing remain external blockers for TestFlight. Website availability remains a dependency of the remote shell. No production deployment or store submission was made.
+
+## Subsequent batch
+
+Cloud evidence supplied by the user confirms three authentication-entry UI
+tests passed with zero failures after native switch selector corrections.
+Successful login and uploads remain untested. New logo assets, candidate
+keyboard safe-area adjustment, camera-purpose description, TestFlight signing
+configuration, and isolated offline capture were prepared afterward. These
+new changes have local source/package checks only until another cloud run.
+Android Capacitor branding assets were regenerated, but the existing separate
+Bubblewrap/TWA distribution path was not replaced or validated.
