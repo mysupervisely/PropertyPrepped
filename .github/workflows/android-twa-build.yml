@@ -1,0 +1,54 @@
+name: Android TWA unsigned build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'android-twa/**'
+      - '.github/workflows/android-twa-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Bubblewrap
+        run: npm install --global @bubblewrap/cli
+      - name: Generate Android project from production manifest
+        working-directory: android-twa
+        env:
+          CI: 'true'
+        run: |
+          set -euo pipefail
+          bubblewrap init --manifest https://proproster.com/manifest.webmanifest
+      - name: Validate generated Android project
+        working-directory: android-twa
+        run: |
+          test -f gradlew
+          grep -R -q 'com.proproster.app' app/build.gradle* || {
+            echo 'Generated application ID does not match Play Console'; exit 1;
+          }
+      - name: Build unsigned Android App Bundle
+        working-directory: android-twa
+        run: |
+          chmod +x gradlew
+          ./gradlew bundleRelease --no-daemon
+      - name: Upload unsigned bundle for engineering review
+        uses: actions/upload-artifact@v4
+        with:
+          name: proproster-unsigned-aab-NOT-FOR-PLAY
+          path: android-twa/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+          retention-days: 7
