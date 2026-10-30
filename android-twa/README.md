@@ -32,3 +32,13 @@ The GitHub Actions workflow `.github/workflows/android-twa-preflight.yml` can be
 ## Next build milestone
 
 After preflight passes, add a reproducible Bubblewrap project generation step and unsigned build validation. Configure release signing using GitHub Actions secrets or a secure signing service, with explicit confirmation of Play App Signing and Digital Asset Links. Do not upload or distribute a build until signing and physical-device QA are complete.
+
+## GitHub Actions jobs stuck in Queued
+
+If both **Android TWA preflight** and **Android TWA unsigned build** remain queued with no runner assigned, treat this as a GitHub Actions execution issue, not evidence that Bubblewrap or Gradle failed. Do not repeatedly edit the workflow solely to trigger new jobs.
+
+1. Open the queued run in GitHub Actions and check for approval, concurrency, runner availability, or account billing/usage notices.
+2. In repository **Settings > Actions > General**, confirm Actions are enabled and GitHub-hosted runners are permitted. Confirm the organization/account Actions spending limit and billing status where applicable.
+3. Check whether unrelated workflows on the same repository can start. If all are queued, investigate repository/account Actions settings before changing Android build scripts.
+4. Once a runner starts, inspect the first failed step and its logs, then fix that specific failure on the Android branch. Avoid rerunning outdated attempts after newer commits.
+5. A completed unsigned build is only an engineering artifact. It cannot replace secure release signing and real-device validation.
