@@ -34,7 +34,7 @@ jobs:
           mkdir -p "$HOME/.bubblewrap"
           node -e 'require("fs").writeFileSync(process.env.HOME+"/.bubblewrap/config.json",JSON.stringify({jdkPath:process.env.JAVA_HOME,androidSdkPath:process.env.ANDROID_HOME}))'
           echo "Bubblewrap toolchain configuration prepared."
-       - name: Generate Android project from production manifest
+      - name: Generate Android project from production manifest
         working-directory: android-twa
         env:
           CI: 'true'
