@@ -44,7 +44,7 @@ jobs:
           # Answer known identity fields explicitly and accept other manifest defaults.
           python3 -m pip install --user pexpect
           python3 - <<'PY'
-          import pexpect, re, sys
+          import pexpect, sys
           child = pexpect.spawn('bubblewrap init --manifest https://proproster.com/manifest.webmanifest', encoding='utf-8', timeout=50)
           child.logfile_read = sys.stdout
           for _ in range(45):
@@ -95,8 +95,13 @@ jobs:
           if (!gradle.includes('com.proproster.app')) {
             throw new Error('Generated Android application ID does not match Google Play');
           }
-          const generated = JSON.parse(fs.readFileSync('twa-manifest.json', 'utf8'));
-          if (generated.packageId !== expected.packageId) throw new Error('Unexpected package ID');
+          if (!fs.existsSync('app/src/main/AndroidManifest.xml')) {
+            throw new Error('Android manifest missing from generated project');
+          }
+          const androidManifest = fs.readFileSync('app/src/main/AndroidManifest.xml', 'utf8');
+          if (!androidManifest.includes('android.intent.action.MAIN')) {
+            throw new Error('Android launcher activity missing');
+          }
           console.log('Generated Android project identity verified.');
           NODE
       - name: Build unsigned Android App Bundle
