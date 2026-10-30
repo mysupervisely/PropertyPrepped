@@ -29,6 +29,13 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version || true
       - name: Install Bubblewrap
         run: npm install --global @bubblewrap/cli
+      - name: Inspect Bubblewrap CLI options
+        run: |
+          bubblewrap --version || true
+          bubblewrap init --help || true
+          bubblewrap build --help || true
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "JAVA_HOME=$JAVA_HOME"
       - name: Generate Android project from production manifest
         working-directory: android-twa
         env:
@@ -39,7 +46,11 @@ jobs:
       - name: Validate generated Android project
         working-directory: android-twa
         run: |
-          test -f gradlew
+          if [ ! -f gradlew ]; then
+            echo "::error::Bubblewrap did not generate gradlew. The CI command must be made noninteractive before compilation can proceed."
+            ls -la
+            exit 1
+          fi
           grep -R -q 'com.proproster.app' app/build.gradle* || {
             echo 'Generated application ID does not match Play Console'; exit 1;
           }
