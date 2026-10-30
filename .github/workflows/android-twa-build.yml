@@ -84,9 +84,21 @@ jobs:
             ls -la
             exit 1
           fi
-          grep -R -q 'com.proproster.app' app/build.gradle* || {
-            echo 'Generated application ID does not match Play Console'; exit 1;
+          node <<'NODE'
+          const fs = require('node:fs');
+          const expected = JSON.parse(fs.readFileSync('twa-manifest.json', 'utf8'));
+          if (expected.packageId !== 'com.proproster.app' || expected.host !== 'proproster.com') {
+            throw new Error('PropRoster Android identity configuration mismatch');
           }
+          const gradle = ['app/build.gradle', 'app/build.gradle.kts']
+            .filter(p => fs.existsSync(p)).map(p => fs.readFileSync(p, 'utf8')).join('\\n');
+          if (!gradle.includes('com.proproster.app')) {
+            throw new Error('Generated Android application ID does not match Google Play');
+          }
+          const generated = JSON.parse(fs.readFileSync('twa-manifest.json', 'utf8'));
+          if (generated.packageId !== expected.packageId) throw new Error('Unexpected package ID');
+          console.log('Generated Android project identity verified.');
+          NODE
       - name: Build unsigned Android App Bundle
         working-directory: android-twa
         run: |
