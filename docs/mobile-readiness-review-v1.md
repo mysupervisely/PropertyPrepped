@@ -70,3 +70,20 @@ shell loads proproster.com, a native rebuild alone will not expose this new
 form behavior. A separate reviewed web deployment is required. No deployment
 or merge occurred, and the cloud UI suite still exercises the currently
 deployed form. Successful real authentication and upload tests remain open.
+
+## Baseline test cleanup and UTC period consistency
+
+The three prior baseline failures are resolved. Property Intelligence now
+uses UTC for the year-completion gate, matching its existing UTC `asOf`
+date. Previously a New Year boundary could label a snapshot annual while
+its displayed date was still in the reviewed year. Added offset-boundary
+and invalid-date cases. This defines snapshot consistency; it does not
+claim jurisdiction-specific tax treatment or change recorded transactions.
+
+The two desktop tests now reflect the existing Activity & notes heading
+and distinguish the single base Quick Actions CSS rule from its scoped
+desktop spacing override. No dashboard layout was changed.
+
+Validation: all 181 test files / 3,057 tests passed, TypeScript passed, and
+all 53 calculation tests passed independently in UTC, America/New_York,
+and Asia/Seoul. No merge or production deployment occurred.

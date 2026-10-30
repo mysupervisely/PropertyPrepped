@@ -320,7 +320,9 @@ export function resolveEquity(estimatedValue: Metric, mortgageBalance: Metric): 
 }
 
 /**
- * Whether `year` has fully elapsed relative to `now` — the ONLY condition
+ * Whether `year` has fully elapsed relative to the UTC date in `period.asOf`.
+ * Using the same date basis avoids machine-timezone-dependent snapshots.
+ * This is the ONLY condition
  * under which this engine treats actual income/expense totals as a
  * genuine annual basis. The year `now` itself falls in is ALWAYS
  * "incomplete," even on December 31st, to avoid a fragile exact-date
@@ -328,7 +330,7 @@ export function resolveEquity(estimatedValue: Metric, mortgageBalance: Metric): 
  */
 export function isYearComplete(year: string, now: Date): boolean {
   const y = Number(year)
-  return Number.isFinite(y) && y < now.getFullYear()
+  return Number.isFinite(y) && y < now.getUTCFullYear()
 }
 
 // ---------------------------------------------------------------------------
