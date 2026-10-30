@@ -23,7 +23,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - name: Verify preinstalled Android SDK
+        run: |
+          test -d "$ANDROID_HOME"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version || true
       - name: Install Bubblewrap
         run: npm install --global @bubblewrap/cli
       - name: Generate Android project from production manifest
