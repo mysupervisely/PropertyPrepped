@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { authFormError } from './auth/form-submission'
 
 // Launch Essentials V1 — same no-jsdom, source-read wiring-test
 // convention as every other milestone-scale wiring test in this repo
@@ -102,7 +103,9 @@ describe('New password screen (app/reset-password/page.tsx)', () => {
   })
 
   it('does not invent unusually restrictive password rules — same 6-character minimum as signup elsewhere', () => {
-    expect(landingSource).toContain('password.length < 6')
+    expect(landingSource).toContain('authFormError(email, password)')
+    expect(authFormError('test@example.com', '12345')).not.toBeNull()
+    expect(authFormError('test@example.com', '123456')).toBeNull()
     expect(resetPasswordSource).toContain('password.length < 6')
   })
 

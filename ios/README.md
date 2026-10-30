@@ -4,7 +4,7 @@
 **Canonical Capacitor configuration:** `mobile/capacitor.config.ts`.
 **Cloud build configuration:** repository-root `codemagic.yaml`.
 
-The native project, icon/splash assets, mobile npm dependencies, and a Codemagic TestFlight workflow already exist. Do not run `npx cap add ios` at repository root or create a second iOS project. The root-level `capacitor.config.ts` on this experimental branch is superseded by `mobile/capacitor.config.ts` and must not be used for builds.
+The native project, icon/splash assets, mobile npm dependencies, and a Codemagic TestFlight workflow already exist. Do not run `npx cap add ios` at repository root or create a second iOS project. The obsolete root-level `capacitor.config.ts` was removed. Only `mobile/capacitor.config.ts` is used for native builds.
 
 ## Current status and next steps
 

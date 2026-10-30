@@ -48,7 +48,8 @@
 // flow from Launch Essentials V1. Only the marketing content above the
 // pricing section changed.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { authFormError, runAuthSubmission } from '../lib/auth/form-submission'
 import Link from 'next/link'
 import { supabase } from '../lib/supabase'
 import { Wordmark } from './Wordmark'
@@ -328,6 +329,7 @@ export default function LandingPage({ sessionExpired = false }: { sessionExpired
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [busy, setBusy] = useState(false)
+  const authSubmission = useRef(false)
   const [error, setError] = useState('')
   const [authMessage, setAuthMessage] = useState('')
 
@@ -378,46 +380,52 @@ export default function LandingPage({ sessionExpired = false }: { sessionExpired
   const finalCtaReveal = useScrollReveal<HTMLElement>()
 
   async function submitAuth() {
-    if (!supabase || authMode === 'reset' || !email.trim() || password.length < 6) return
-    setBusy(true)
+    if (authSubmission.current || authMode === 'reset') return
     setAuthMessage('')
+    const validationError = authFormError(email, password)
+    if (validationError) { setError(validationError); return }
+    if (!supabase) { setError('Sign in is temporarily unavailable. Please try again later.'); return }
     setError('')
-    if (authMode === 'signin') {
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
-      if (signInError) {
-        setError(toSafeErrorMessage(signInError, signInError.message))
-      } else {
-        trackEvent('login_completed')
-      }
-    } else {
-      const { data, error: signUpError } = await supabase.auth.signUp({ email: email.trim(), password })
-      if (signUpError) {
-        setError(toSafeErrorMessage(signUpError, signUpError.message))
-      } else {
-        // Fired here, once, the moment Supabase confirms the account
-        // itself was genuinely created — regardless of which branch
-        // runs next (auto-confirmed vs. email-confirmation-pending
-        // below). Both are a real signup; only a signUpError means it
-        // didn't happen.
-        trackEvent('sign_up_completed')
-        if (data.session) {
-          // Auto-confirmed (no email-verification step required for this
-          // project) — the account already exists AND is signed in right
-          // now, so the redirect can happen immediately; no need to leave
-          // anything in localStorage for a later visit to act on.
-          if (intendedRole === 'tenant') window.location.href = postSignupRedirectPath('tenant')
+    await runAuthSubmission(authSubmission, setBusy, async () => {
+      if (!supabase) throw new Error('Authentication client unavailable')
+      if (authMode === 'signin') {
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+        if (signInError) {
+          setError(toSafeErrorMessage(signInError, signInError.message))
         } else {
-          // Email confirmation required — there is no session yet to act
-          // on, so the choice is remembered for the ONE time app/page.tsx
-          // sees this account's first real sign-in (after they click the
-          // confirmation link and sign in) and is cleared immediately
-          // after — see app/page.tsx's own auth-state-change handler.
-          try { if (intendedRole === 'tenant') window.localStorage.setItem(INTENDED_ROLE_STORAGE_KEY, intendedRole) } catch { /* best-effort only */ }
-          setAuthMessage('Account created. Check your email to confirm your address, then sign in.')
+          trackEvent('login_completed')
+        }
+      } else {
+        const { data, error: signUpError } = await supabase.auth.signUp({ email: email.trim(), password })
+        if (signUpError) {
+          setError(toSafeErrorMessage(signUpError, signUpError.message))
+        } else {
+          // Fired here, once, the moment Supabase confirms the account
+          // itself was genuinely created — regardless of which branch
+          // runs next (auto-confirmed vs. email-confirmation-pending
+          // below). Both are a real signup; only a signUpError means it
+          // didn't happen.
+          trackEvent('sign_up_completed')
+          if (data.session) {
+            // Auto-confirmed (no email-verification step required for this
+            // project) — the account already exists AND is signed in right
+            // now, so the redirect can happen immediately; no need to leave
+            // anything in localStorage for a later visit to act on.
+            if (intendedRole === 'tenant') window.location.href = postSignupRedirectPath('tenant')
+          } else {
+            // Email confirmation required — there is no session yet to act
+            // on, so the choice is remembered for the ONE time app/page.tsx
+            // sees this account's first real sign-in (after they click the
+            // confirmation link and sign in) and is cleared immediately
+            // after — see app/page.tsx's own auth-state-change handler.
+            try { if (intendedRole === 'tenant') window.localStorage.setItem(INTENDED_ROLE_STORAGE_KEY, intendedRole) } catch { /* best-effort only */ }
+            setAuthMessage('Account created. Check your email to confirm your address, then sign in.')
+          }
         }
       }
-    }
-    setBusy(false)
+    }, (requestError) => {
+      setError(toSafeErrorMessage(requestError, 'Unable to complete your request. Please try again.'))
+    })
   }
 
   // Launch Essentials V1 — the standard Supabase password-reset request.
@@ -430,19 +438,25 @@ export default function LandingPage({ sessionExpired = false }: { sessionExpired
   // environment — see app/reset-password/page.tsx for the landing side
   // of this link.
   async function submitReset() {
-    if (!supabase || !email.trim()) return
-    setBusy(true)
-    setError('')
+    if (authSubmission.current) return
     setAuthMessage('')
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/reset-password`,
+    const validationError = authFormError(email)
+    if (validationError) { setError(validationError); return }
+    if (!supabase) { setError('Password reset is temporarily unavailable. Please try again later.'); return }
+    setError('')
+    await runAuthSubmission(authSubmission, setBusy, async () => {
+      if (!supabase) throw new Error('Authentication client unavailable')
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+      if (resetError) {
+        setError(toSafeErrorMessage(resetError, resetError.message))
+      } else {
+        setAuthMessage("If an account exists for that email, you'll receive password reset instructions shortly.")
+      }
+    }, (requestError) => {
+      setError(toSafeErrorMessage(requestError, 'Unable to request a password reset. Please try again.'))
     })
-    if (resetError) {
-      setError(toSafeErrorMessage(resetError, resetError.message))
-    } else {
-      setAuthMessage("If an account exists for that email, you'll receive password reset instructions shortly.")
-    }
-    setBusy(false)
   }
 
   function submitActiveForm() {
@@ -451,6 +465,7 @@ export default function LandingPage({ sessionExpired = false }: { sessionExpired
   }
 
   function switchMode(mode: 'signin' | 'signup' | 'reset') {
+    if (authSubmission.current) return
     setAuthMode(mode)
     setError('')
     setAuthMessage('')
@@ -699,7 +714,7 @@ export default function LandingPage({ sessionExpired = false }: { sessionExpired
 
       {authOpen && (
         <div className="overlay landingAuthOverlay" onMouseDown={(e) => e.target === e.currentTarget && closeAuth()}>
-          <div className="modal landingAuthModal" role="dialog" aria-modal="true" aria-labelledby="landing-auth-title">
+          <div className="modal landingAuthModal" role="dialog" aria-modal="true" aria-busy={busy} aria-labelledby="landing-auth-title">
             <div className="landingSignInCard">
               <div className="landingSignInCardTop">
                 <div>

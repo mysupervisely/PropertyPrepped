@@ -45,3 +45,28 @@ configuration, and isolated offline capture were prepared afterward. These
 new changes have local source/package checks only until another cloud run.
 Android Capacitor branding assets were regenerated, but the existing separate
 Bubblewrap/TWA distribution path was not replaced or validated.
+
+## Authentication form reliability follow-up
+
+The shared hosted landing form now reports missing/malformed email and short
+password entries instead of silently returning. Sign-in, signup and reset
+share a synchronous submission lock. Unexpected request rejections route to
+a safe error message, and a finally block always releases the lock and busy
+state. No automatic retries, alternate auth providers, or authentication
+bypasses were introduced. Password-reset confirmation remains neutral.
+
+The obsolete repository-root Capacitor config was removed because the
+canonical project is under `mobile/`, and the obsolete file imported a CLI
+package absent from the web app's dependencies, breaking root typechecking.
+
+Validation: 141 focused tests passed; TypeScript passed; Next.js production
+build passed. Broad suite: 3,052 passed and 3 failed. All three failures were
+reproduced on a detached baseline checkout before these edits: two desktop
+layout source assertions and one calendar-year calculation test. They are
+not attributed to the authentication change and remain visible.
+
+These hosted-form changes are committed for review only. Because the native
+shell loads proproster.com, a native rebuild alone will not expose this new
+form behavior. A separate reviewed web deployment is required. No deployment
+or merge occurred, and the cloud UI suite still exercises the currently
+deployed form. Successful real authentication and upload tests remain open.
