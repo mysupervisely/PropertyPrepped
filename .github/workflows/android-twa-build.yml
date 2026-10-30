@@ -35,7 +35,7 @@ jobs:
           CI: 'true'
         run: |
           set -euo pipefail
-          bubblewrap init --manifest https://proproster.com/manifest.webmanifest
+          # Bubblewrap prompts for JDK/SDK even in CI; answer No to use the runner's installed tools.\n          printf 'n\\nn\\n' | bubblewrap init --manifest https://proproster.com/manifest.webmanifest
       - name: Validate generated Android project
         working-directory: android-twa
         run: |
