@@ -11,7 +11,8 @@
     "open:ios": "cap open ios",
     "open:android": "cap open android",
     "doctor": "cap doctor",
-    "assets": "capacitor-assets generate"
+    "assets": "capacitor-assets generate",
+    "test:readiness": "node --test tests/readiness.test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "8.5.2",
