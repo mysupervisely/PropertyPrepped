@@ -1,0 +1,26 @@
+name: Android Digital Asset Links artifact
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  assetlinks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require Play app signing certificate
+        env:
+          PLAY_APP_SIGNING_SHA256: ${{ secrets.PLAY_APP_SIGNING_SHA256 }}
+        run: |
+          mkdir -p dist
+          node android-twa/generate-assetlinks.mjs dist/assetlinks.json
+      - name: Upload reviewable assetlinks JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-assetlinks
+          path: dist/assetlinks.json
+          retention-days: 7
