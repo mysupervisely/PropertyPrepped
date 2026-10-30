@@ -21,3 +21,17 @@ Before distribution, test login/session persistence, navigation, external links,
 Before App Store distribution, validate login/session handling, native navigation, camera/document uploads, Tenant Connect, PropCrew, Tax Center, privacy declarations, and App Store review requirements. In particular, a remote website shell may face Apple's minimum functionality review. Stripe-hosted checkout and digital-service payments require an App Store policy assessment, not merely browser handoff.
 
 Do not put signing keys, API keys, or user data in source control.
+
+## Cloud launch evidence
+
+The unsigned workflow now runs `ios/scripts/simulator-smoke.py` after
+compilation. It selects an available iPhone, boots with a bounded wait,
+installs and launches the app, then captures screenshots at 15 and 30
+seconds. Download `ios-simulator-evidence` artifacts and inspect both PNGs.
+A successful job proves these commands completed, not that the website
+loaded or any signed-in flow works. The runner uses no login credentials.
+
+Run manually in Codemagic: branch `ios-readiness-v1`, workflow
+`PropRoster iOS Simulator (unsigned)`. This needs simulator availability
+and Codemagic build minutes, but no Apple signing membership or App Preview
+team feature. If booting fails, review `summary.json` and device inventory.

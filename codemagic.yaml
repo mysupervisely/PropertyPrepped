@@ -36,7 +36,10 @@ workflows:
         script: |
           cd mobile
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$CM_BUILD_DIR/ios-simulator-derived" CODE_SIGNING_ALLOWED=NO build
+      - name: Launch iPhone simulator and capture screenshots
+        script: python3 ios/scripts/simulator-smoke.py
     artifacts:
+      - ios-simulator-evidence/**
       - ios-simulator-derived/Build/Products/Debug-iphonesimulator/*.app
       - /tmp/xcodebuild_logs/*.log
 
