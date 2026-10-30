@@ -48,7 +48,7 @@ jobs:
           child = pexpect.spawn('bubblewrap init --manifest https://proproster.com/manifest.webmanifest', encoding='utf-8', timeout=50)
           child.logfile_read = sys.stdout
           for _ in range(45):
-              index = child.expect([r'\\?[^\\r\\n]*?:[^\\r\\n]*', r'\\?[^\\r\\n]*?\\(Y/n\\)', r'\\?[^\\r\\n]*?\\(y/N\\)', pexpect.EOF, pexpect.TIMEOUT])
+              index = child.expect([r'\?[^\r\n]*?:[^\r\n]*', r'\?[^\r\n]*?\(Y/n\)', r'\?[^\r\n]*?\(y/N\)', pexpect.EOF, pexpect.TIMEOUT])
               if index == 3:
                   child.close()
                   if child.exitstatus != 0:
