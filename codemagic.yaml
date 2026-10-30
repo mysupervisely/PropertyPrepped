@@ -20,6 +20,26 @@
 ## deliberately, while this is still a first-build/bring-up milestone.
 
 workflows:
+  ios-simulator-unsigned:
+    name: PropRoster iOS Simulator (unsigned)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      node: 22
+      xcode: latest
+    scripts:
+      - name: Install mobile dependencies
+        script: cd mobile && npm ci
+      - name: Sync existing native iOS project
+        script: cd mobile && npx cap sync ios
+      - name: Compile unsigned iOS Simulator app
+        script: |
+          cd mobile
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$CM_BUILD_DIR/ios-simulator-derived" CODE_SIGNING_ALLOWED=NO build
+    artifacts:
+      - ios-simulator-derived/Build/Products/Debug-iphonesimulator/*.app
+      - /tmp/xcodebuild_logs/*.log
+
   ios-testflight:
     name: PropRoster iOS — TestFlight (internal)
     instance_type: mac_mini_m2
