@@ -32,7 +32,7 @@ jobs:
       - name: Configure Bubblewrap from runner toolchain
         run: |
           mkdir -p "$HOME/.bubblewrap"
-          printf '{"jdkPath":"%s","androidSdkPath":"%s"}\\n' "$JAVA_HOME" "$ANDROID_HOME" > "$HOME/.bubblewrap/config.json"
+          node -e 'require("fs").writeFileSync(process.env.HOME+"/.bubblewrap/config.json",JSON.stringify({jdkPath:process.env.JAVA_HOME,androidSdkPath:process.env.ANDROID_HOME}))'
           echo "Bubblewrap toolchain configuration prepared."
       - name: Inspect Bubblewrap CLI options
         run: |
