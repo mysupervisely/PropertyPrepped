@@ -934,6 +934,7 @@ export default function Home() {
     setRentEstimateLoading(true)
     setRentEstimateError('')
     try {
+      if (!supabase) throw new Error('Sign-in service unavailable.')
       const { data } = await supabase.auth.getSession()
       if (!data.session?.access_token) throw new Error('Please sign in again.')
       const response = await fetch('/api/valuation/rent', {
