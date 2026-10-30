@@ -24,3 +24,11 @@ This is the **pre-build configuration**, not a signed Android app bundle. Do not
 - Do not add a placeholder certificate fingerprint or use an upload-key fingerprint in place of the Play app-signing fingerprint.
 - Google Play policies may require adjustments for authentication, billing, and account deletion; review before public launch.
 - Keep Android signing material outside the repository and protect it with secure backups.
+
+## Automated cloud checks
+
+The GitHub Actions workflow `.github/workflows/android-twa-preflight.yml` can be run manually from the Actions tab. It checks the package configuration and the live PWA manifest/icon, and requires no local Mac or Android SDK. A successful preflight is **not** a signed Android build.
+
+## Next build milestone
+
+After preflight passes, add a reproducible Bubblewrap project generation step and unsigned build validation. Configure release signing using GitHub Actions secrets or a secure signing service, with explicit confirmation of Play App Signing and Digital Asset Links. Do not upload or distribute a build until signing and physical-device QA are complete.
