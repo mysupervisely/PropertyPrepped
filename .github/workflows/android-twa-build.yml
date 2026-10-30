@@ -29,6 +29,11 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version || true
       - name: Install Bubblewrap
         run: npm install --global @bubblewrap/cli
+      - name: Configure Bubblewrap from runner toolchain
+        run: |
+          mkdir -p "$HOME/.bubblewrap"
+          printf '{"jdkPath":"%s","androidSdkPath":"%s"}\\n' "$JAVA_HOME" "$ANDROID_HOME" > "$HOME/.bubblewrap/config.json"
+          echo "Bubblewrap toolchain configuration prepared."
       - name: Inspect Bubblewrap CLI options
         run: |
           bubblewrap --version || true
@@ -42,7 +47,8 @@ jobs:
           CI: 'true'
         run: |
           set -euo pipefail
-          # Bubblewrap prompts for JDK/SDK even in CI; answer No to use the runner's installed tools.\n          printf 'n\\nn\\n' | bubblewrap init --manifest https://proproster.com/manifest.webmanifest
+          # Use explicit toolchain config to avoid Bubblewrap's first-run wizard.
+          timeout 120 bubblewrap init --manifest https://proproster.com/manifest.webmanifest < /dev/null
       - name: Validate generated Android project
         working-directory: android-twa
         run: |
