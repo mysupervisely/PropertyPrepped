@@ -35,3 +35,21 @@ Run manually in Codemagic: branch `ios-readiness-v1`, workflow
 `PropRoster iOS Simulator (unsigned)`. This needs simulator availability
 and Codemagic build minutes, but no Apple signing membership or App Preview
 team feature. If booting fails, review `summary.json` and device inventory.
+
+## Native authentication-entry UI tests
+
+A separate manual workflow, **PropRoster iOS UI Tests (unsigned)**
+(`ios-ui-tests`), builds the same app and runs `AppUITests` through
+Xcode's UI automation. Use branch `ios-readiness-v1`.
+
+The three tests exercise login field entry/password visibility, Start Free
+and closing the form, and reset-password navigation. Fictional credentials
+are typed but never submitted. No account is created, no reset email is sent,
+and no successful login or upload is claimed. Tests observe the hosted page,
+so deployed UI changes and hosting availability can affect results.
+
+The artifacts include `ui-tests.log`, exported `ui-attachments` (when supported), and `AuthEntry.xcresult` with screenshots
+and accessibility trees. These results must come from a cloud run: local YAML,
+project parsing and Python checks do not compile or execute Swift UI tests.
+Signed-in tests need a dedicated test account and a separately authorized
+fictional-data workflow. Never commit credentials or use a real tenant account.
