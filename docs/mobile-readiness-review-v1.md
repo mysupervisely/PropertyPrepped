@@ -532,3 +532,21 @@ Isolated browser fixtures passed page/strip overflow checks at 320, 375, 393,
 without creating a second strip row. The 393px screenshot was inspected.
 Actual authenticated iPhone confirmation remains pending. No production merge
 or store publication.
+
+
+## Fourth summary cell: lease timing or vacancy
+
+The connected strip now has four cells: alert/rent status, Rent, Value, and
+lease timing/occupancy. Reuses canonical deriveOccupancy/selectCurrentLease
+with only this property's leases. Vacant shows Occupancy: Vacant; occupied
+shows Lease ends with an explicit UTC month/year; future tenancy shows Lease
+starts; incomplete dates show Lease: Not entered. Non-rental property types
+show Lease: Not applicable. Historical expired leases cannot provide a fake
+current end date. No occupancy or lease business rules changed.
+
+Validation: 188 files / 3,092 tests passed, including five new lease-summary
+cases. Production build/type checking passed. Isolated full-CSS fixtures
+passed page/strip overflow checks at 320, 375, 393, 430, 760 and 1024 pixels;
+long labels wrap within their own cells. The 393px screenshot was inspected.
+These fixtures are not authenticated device verification. Preview review
+only, with no production merge or store submission.

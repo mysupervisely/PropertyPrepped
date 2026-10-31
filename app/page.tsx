@@ -15,6 +15,7 @@ import { toSafeErrorMessage } from '../lib/user-facing-errors'
 import { AuthHeader } from '../components/AuthHeader'
 import DocumentIntelligencePanel, { type ApplyAction } from '../components/DocumentIntelligencePanel'
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
+import { propertyLeaseSummary } from '../lib/dashboard/property-lease-summary'
 import { propertySummaryLabel } from '../lib/dashboard/property-rent-label'
 import { PropertySectionNav } from '../components/property-profile/PropertySectionNav'
 import { PropCrewPanel } from '../components/PropCrewPanel'
@@ -4491,7 +4492,9 @@ export default function Home() {
             out as the natural property-level home for money and files:
             Rent and Documents. */}
         <div className="grid">{properties.map((property) => {
-          const propertyOccupancy = property.property_type === 'Rental Property' ? deriveOccupancy(leases.filter((l) => l.property_id === property.id)) : null
+          const propertyLeases = leases.filter((l) => l.property_id === property.id)
+          const propertyOccupancy = property.property_type === 'Rental Property' ? deriveOccupancy(propertyLeases) : null
+          const leaseSummary = propertyLeaseSummary(propertyLeases, property.property_type === 'Rental Property')
           const propertyRentRow = rentStatusByProperty.get(property.id)
           const propertyAlertCount = attentionCountByProperty.get(property.id) || 0
           return <article className="propertyCard" key={property.id}>
@@ -4509,6 +4512,7 @@ export default function Home() {
               <div><dt className="propertySummaryStatusLabel">Status</dt><dd className={propertyOccupancy === 'Vacant' ? 'pillNeutral' : propertyRentRow ? rentStatusPillClass(propertyRentRow.status) : 'pillNeutral'}>{propertySummaryLabel(propertyRentRow?.status, propertyOccupancy === 'Vacant', propertyAlertCount)}</dd></div>
               <div><dt>Rent</dt><dd>{money(property.monthly_rent)}</dd></div>
               <div><dt>Value</dt><dd>{compactMoney(Number(property.estimated_value))}</dd></div>
+              <div><dt>{leaseSummary.label}</dt><dd>{leaseSummary.value}</dd></div>
             </dl>
           </article>
         })}

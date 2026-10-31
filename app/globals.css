@@ -4746,3 +4746,7 @@ h2, h3, p { margin-top: 0; }
 .propertySummaryStrip .pillGood { color: #246747; }
 .propertySummaryStatusLabel { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 760px) { .grid > .propertyCard .propertySummaryStrip { grid-column: 1 / -1; margin: 0; } }
+
+/* Four equal-purpose cells stay in one row; labels wrap within their own cell. */
+.propertySummaryStrip { grid-template-columns: minmax(0,1.25fr) repeat(3,minmax(0,1fr)); }
+.propertySummaryStrip > div { font-size: 10px; gap: 2px 4px; }
