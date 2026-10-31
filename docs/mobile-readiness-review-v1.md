@@ -209,3 +209,30 @@ expected because production web branding remains undeployed. The three-day
 GitHub artifact contains screenshots, launch/activity/emulator/crash logs,
 packaging evidence, lint reports, and the debug APK. No Codemagic plan upgrade
 was purchased, and no production merge or app-store publication occurred.
+
+## Android auth-entry instrumentation added; acceptance still blocked
+
+Added native AuthEntryTest instrumentation for opening login, reset, returning
+to login, opening signup role choice, and closing to landing. It never enters
+credentials, creates an account, requests a reset email, or uploads data. If
+the real connection-recovery screen appears, it exercises Try again once and
+requires landing to return. Screenshot evidence is stored in the debug app's
+internal storage and collected with run-as. Original test assertions are kept
+when diagnostic capture also fails. Both app and instrumentation APKs compile.
+
+The expanded cloud checks have NOT passed. Run 41195769790 showed the bundled
+Android recovery screen and failed to find Log In. Later runs encountered
+emulator/ADB failures, an unavailable CLI hierarchy dump, and a test evidence
+path issue. The CLI approach was replaced with native instrumentation; the
+evidence path and target activity startup were corrected. Subsequent API 36
+instrumentation lost device connectivity. API 35 with a compact display also
+failed screenshot capture before auth assertions (run 41198301099). These
+failures do not establish successful form behavior or successful retry.
+
+The earlier API 36 install/visible landing launch remains independently
+verified by run 41164503887. Current workflow uses API 35 for investigation,
+with software graphics and Vulkan disabled; this is a test-runner setting, not
+a production-app change. Form navigation, keyboard, account activation,
+authenticated login, and uploads remain pending. No production deployment,
+store submission, or paid runner upgrade occurred. Do not keep rerunning the
+same cloud job without addressing the device/screenshot failure evidence.
