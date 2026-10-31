@@ -228,3 +228,10 @@ Launcher resource presence does not verify the artwork visually. This script
 does not parse the compiled manifest or verify the APK signature, launch,
 authentication, uploads, back navigation, keyboard behavior, or store readiness.
 Its first execution is pending; source review is not a passing Android build.
+
+Packaging verifier regression coverage: six local tests pass using synthetic
+ZIP fixtures. They cover the valid fixture, HTTP/localhost rejection, diagnostic
+and navigation overrides, wrong identity, stale recovery HTML, missing DEX,
+and missing launcher resources. The Android workflow runs these checks before
+installing dependencies. Codemagic YAML parsing and existing five simulator
+runner tests also pass. These are not a compiled APK or emulator run.

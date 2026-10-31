@@ -130,6 +130,8 @@ workflows:
       node: 22
       java: 21
     scripts:
+      - name: Validate APK packaging checks
+        script: python3 mobile/scripts/test-debug-apk.py
       - name: Install mobile dependencies
         script: cd mobile && npm ci
       - name: Sync existing native Android project
