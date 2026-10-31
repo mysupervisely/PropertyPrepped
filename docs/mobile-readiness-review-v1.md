@@ -375,3 +375,20 @@ installation returned invalid ZIP downloads; no screenshot/overflow or device
 pass is claimed. Mobile preview at narrow widths and enlarged text remains
 required before deployment. This CSS-only change is committed for review and
 is not yet visible on production.
+
+
+## Mobile row touch targets and isolated browser verification
+
+Rent/Documents controls now have mobile minimum dimensions of 44 by 44 CSS
+pixels with compact 12px labels. This retains existing click handlers and
+right alignment. Desktop controls are unchanged.
+
+A separate local Chromium setup allowed isolated layout verification using
+the complete application CSS and representative property-row HTML with
+fictional data and placeholder photos. Widths 320, 375, 393, 430, 760 and
+1024 had no horizontal page overflow. Mobile action controls measured at
+least 44 by 44 pixels. Cases included a long address/city and Partially paid
+status. The 393px screenshot was visually inspected. This supersedes the
+previous browser-install blocker for local isolated checks, but is not an
+authenticated React app, real iPhone/Safari, enlarged-text, or device pass.
+No deployment or store publication occurred.
