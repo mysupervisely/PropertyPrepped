@@ -5,15 +5,16 @@ type SectionButton = { key: string; props: { onClick: () => void; 'aria-pressed'
 
 function render(activeTab: 'Rent' | 'Maintenance' = 'Rent', rentSubTab: 'Lease' | 'Tenant' | 'Ledger' = 'Lease') {
   const onSelect = vi.fn()
-  const tree = PropertySectionNav({ propertyAddress: 'Fictional property', activeTab, rentSubTab, maintenanceCount: 2, onSelect })
-  return { tree, buttons: tree.props.children as SectionButton[], onSelect }
+  const onEdit = vi.fn()
+  const tree = PropertySectionNav({ propertyAddress: 'Fictional property', activeTab, rentSubTab, maintenanceCount: 2, onSelect, onEdit })
+  return { tree, buttons: tree.props.children.flat() as SectionButton[], onSelect, onEdit }
 }
 
 describe('property-scoped section navigation', () => {
-  it('exposes all eight sections and names the selected property', () => {
+  it('exposes eight sections plus Edit and names the selected property', () => {
     const { tree, buttons } = render()
     expect(tree.props['aria-label']).toBe('Sections for Fictional property')
-    expect(buttons.map(button => button.key)).toEqual(['Overview', 'Rent', 'Tenant Connect', 'Maintenance', 'PropCrew', 'Documents', 'Tax', 'Details'])
+    expect(buttons.map(button => button.key)).toEqual(['Overview', 'Rent', 'Tenant Connect', 'Maintenance', 'PropCrew', 'Documents', 'Tax', 'Details', 'Edit'])
   })
   it('routes Tenant Connect into the existing Rent/Tenant view', () => {
     const { buttons, onSelect } = render()
@@ -36,4 +37,11 @@ describe('property-scoped section navigation', () => {
     }
     expect(buttons.find(button => button.key === 'Maintenance')!.props.children[1]).toMatchObject({ props: { children: 2 } })
   })
+  it('opens editing without changing the selected section', () => {
+    const { buttons, onEdit, onSelect } = render()
+    buttons.find(button => button.key === 'Edit')!.props.onClick()
+    expect(onEdit).toHaveBeenCalledOnce()
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
 })

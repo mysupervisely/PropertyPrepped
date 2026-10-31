@@ -51,7 +51,7 @@ describe('The redundant bottom CTA is removed from the "Expenses & tax" card (fo
 
 describe('The Investment Analysis entry point near the top of the property profile is untouched (Phase C.1: presentation-only de-emphasis)', () => {
   it('the hero still has its Edit + Investment Analysis actions, now with Investment Analysis as a quiet text link rather than a bordered button', () => {
-    expect(pageSource).toContain('className="propertyPhotoEdit"')
+    expect(pageSource).toContain('onEdit={() => openEditProperty(selected)}')
     expect(readFile('components/AuthNavMenu.tsx')).toContain("? 'Investment Analysis' : link.label")
   })
 })

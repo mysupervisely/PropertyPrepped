@@ -12,7 +12,8 @@ const sections: { label: string; tab: PropertyTab; rent?: 'Lease' | 'Tenant' }[]
   { label: 'Details', tab: 'Details' },
 ]
 
-export function PropertySectionNav({ propertyAddress, activeTab, rentSubTab, maintenanceCount, onSelect }: {
+export function PropertySectionNav({ propertyAddress, activeTab, rentSubTab, maintenanceCount, onSelect, onEdit }: {
+  onEdit: () => void
   propertyAddress: string
   activeTab: PropertyTab
   rentSubTab: 'Lease' | 'Ledger' | 'Tenant'
@@ -27,5 +28,6 @@ export function PropertySectionNav({ propertyAddress, activeTab, rentSubTab, mai
         {section.label}{section.tab === 'Maintenance' && maintenanceCount > 0 && <span className="propertySectionCount">{maintenanceCount}</span>}
       </button>
     })}
+    <button key="Edit" type="button" onClick={onEdit} aria-label={`Edit ${propertyAddress}`}>Edit</button>
   </nav>
 }

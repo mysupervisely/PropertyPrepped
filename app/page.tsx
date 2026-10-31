@@ -3269,7 +3269,7 @@ export default function Home() {
         <button className="breadcrumbBack" onClick={closeProperty}>← All Properties</button>
 
         <section className="propertyHero">
-          <div className="heroPhoto">{selected.coverUrl ? <img src={selected.coverUrl} alt={selected.address} /> : <div className="heroPlaceholder"><span>Property photo</span><small>Add photos in the Photos tab</small></div>}<button type="button" className="propertyPhotoEdit" aria-label={`Edit ${selected.address}`} onClick={() => openEditProperty(selected)}>Edit</button></div>
+          <div className="heroPhoto">{selected.coverUrl ? <img src={selected.coverUrl} alt={selected.address} /> : <div className="heroPlaceholder"><span>Property photo</span><small>Add photos in the Photos tab</small></div>}</div>
           <div className="heroInfo">
             {/* Property Intelligence V1, Phase C.1 (Unified Property
                 Snapshot): the hero is identity only now — photo, address,
@@ -3301,7 +3301,7 @@ export default function Home() {
             replaced the horizontally-scrolling mobile version of this
             same strip with .mobilePropertyNav below — see its own
             comment). */}
-        <PropertySectionNav propertyAddress={selected.address} activeTab={activeTab} rentSubTab={rentSubTab} maintenanceCount={selectedOpenMaintenanceCount} onSelect={(tab, rentSection) => {
+        <PropertySectionNav onEdit={() => openEditProperty(selected)} propertyAddress={selected.address} activeTab={activeTab} rentSubTab={rentSubTab} maintenanceCount={selectedOpenMaintenanceCount} onSelect={(tab, rentSection) => {
           setActiveTab(tab)
           if (rentSection) setRentSubTab(rentSection)
         }} />

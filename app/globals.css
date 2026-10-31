@@ -4673,7 +4673,7 @@ h2, h3, p { margin-top: 0; }
 
 /* Selected property: compact identity and visible, property-scoped sections. */
 .wordmarkIcon { mix-blend-mode: multiply; }
-.propertyWorkspaceSections { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; padding: 12px 0 18px; border-bottom: 1px solid var(--line); }
+.propertyWorkspaceSections { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; padding: 12px 0 18px; border-bottom: 1px solid var(--line); }
 .propertyWorkspaceSections button { min-width: 0; min-height: 44px; padding: 10px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
 .propertyWorkspaceSections button.active { background: var(--brand); color: white; border-color: var(--brand); }
 .propertySectionCount { display: inline-block; margin-left: 6px; font-size: 11px; }
@@ -4715,10 +4715,9 @@ h2, h3, p { margin-top: 0; }
 
 /* Compact section menu and a wider, photo-led identity block. */
 .propertyHero .heroPhoto { position: relative; }
-.propertyPhotoEdit { position: absolute; right: 6px; bottom: 6px; min-height: 36px; min-width: 44px; padding: 6px 10px; border: 1px solid #d7e1da; border-radius: 8px; background: #fff; color: #214d36; font: inherit; font-size: 11px; font-weight: 650; box-shadow: 0 1px 4px #0001; }
 @media (max-width: 760px) {
-  .propertyHero { grid-template-columns: clamp(112px,34vw,152px) minmax(0,1fr); gap: 12px; }
-  .propertyHero .heroPhoto { height: 120px; }
+  .propertyHero { grid-template-columns: clamp(128px,40vw,180px) minmax(0,1fr); gap: 12px; }
+  .propertyHero .heroPhoto { height: 132px; }
   .propertyHero .heroInfo h1 { font-size: 19px; }
   .propertyWorkspaceSections { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 5px; padding: 6px 0 12px; }
   .propertyWorkspaceSections button { padding: 5px; font-size: 11px; border-radius: 8px; min-height: 44px; }

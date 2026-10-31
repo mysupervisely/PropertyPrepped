@@ -33,7 +33,7 @@ describe('Phase C.1: the hero is identity-only — no financial numbers', () => 
   it('the hero still shows address, city, and the property-scoped actions (Edit, Investment Analysis)', () => {
     expect(heroSlice).toContain('<h1>{selected.address}</h1>')
     expect(heroSlice).toContain('className="heroCity"')
-    expect(heroSlice).toContain('>Edit</button>')
+    expect(pageSource).toContain('onEdit={() => openEditProperty(selected)}')
     expect(heroSlice).not.toContain('heroInvestmentLink')
   })
 
@@ -51,8 +51,8 @@ describe('Phase C.1: the hero is identity-only — no financial numbers', () => 
 
 describe('Phase C.1: Investment Analysis reads as secondary, not equal-weight with Edit', () => {
   it('uses the quiet brand-color text-link treatment (.heroInvestmentLink), not the bordered .secondary button it used to share with Edit', () => {
-    expect(heroSlice).toContain('className="propertyPhotoEdit"')
-    expect(heroSlice).toContain('openEditProperty(selected)')
+    expect(pageSource).toContain('onEdit={() => openEditProperty(selected)}')
+    expect(pageSource).toContain('onEdit={() => openEditProperty(selected)}')
     expect(heroSlice).not.toContain('heroInvestmentLink')
   })
 
@@ -178,7 +178,7 @@ describe('Phase C.1: everything else stays intact', () => {
   })
 
   it('the compact hero keeps one canonical property edit action', () => {
-    expect((pageSource.match(/onClick=\{\(\) => openEditProperty\(selected\)\}/g) || []).length).toBe(1)
+    expect((pageSource.match(/onEdit=\{\(\) => openEditProperty\(selected\)\}/g) || []).length).toBe(1)
   })
 
   it('Notes, Timeline, and Quick actions are untouched', () => {

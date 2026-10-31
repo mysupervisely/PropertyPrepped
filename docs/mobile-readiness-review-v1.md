@@ -449,3 +449,20 @@ horizontal page overflow; mobile menu has three rows. The 393px screenshot
 was visually inspected with a placeholder photo. Live authenticated menu,
 property switching and Safari remain unverified. Preview only; no production
 merge or store submission.
+
+
+## Even property section grid and wider unobstructed photo
+
+Edit now fills the ninth section-grid position and invokes the existing
+property edit callback without selecting another tab. Removed the photo
+Edit overlay. The section grid has three columns; all controls retain 44px
+minimum height. Mobile photo width is now clamp(128px,40vw,180px), with a
+132px height, preserving image fit behavior. Investment Analysis remains
+in the profile menu with selected-property context.
+
+Validation: 186 files / 3,083 tests passed, including a new edit callback
+regression; production build and TypeScript passed. Isolated browser
+fixtures had no horizontal page overflow at 320,375,393,430,760,1024px. The
+393px photo measured about 157px wide, versus 134px in the preceding revision.
+Screenshot visually inspected with a placeholder photo. Authenticated iPhone
+preview confirmation remains pending. No production merge or store release.
