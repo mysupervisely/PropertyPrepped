@@ -137,3 +137,18 @@ it now runs before the UI suite so it can provide independent evidence.
 Local follow-up: all 183 files / 3,068 tests and TypeScript pass. No successful
 signup activation, fixed keyboard layout, verified new icon, or offline screen
 pass is claimed from this failed cloud run. Nothing has been deployed.
+
+## Reinspection of failed signup activation
+
+Inspected the exported test recording and synthesized tap event. Around the
+failed tap, the hero content was not yet visibly rendered, then appeared in
+the next sampled video frame. The tap event targeted point (210, 437) on a
+420 by 912 simulator. This supports a startup/rendering timing explanation;
+it does not establish the exact browser/React event cause.
+
+The UI suite now establishes hosted-app interactivity by opening and closing
+Log In in setup before testing each flow. This uses real UI responses, not
+a fixed startup sleep, a retry of Start Free, or a weaker signup assertion.
+A single Start Free tap must still open signup after readiness. First-tap
+behavior during initial rendering remains a separate product acceptance item.
+The keyboard layout change still needs deployment before its cloud verification.

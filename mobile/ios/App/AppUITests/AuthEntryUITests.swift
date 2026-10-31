@@ -9,6 +9,13 @@ final class AuthEntryUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["Log In"].waitForExistence(timeout: 45),
                       "Hosted homepage did not expose Log In. Inspect screenshot and site availability.")
+        // SSR accessibility elements can exist before the hosted app is interactive.
+        // Establish readiness through a real, local UI interaction rather than a delay.
+        app.buttons["Log In"].tap()
+        XCTAssertTrue(app.secureTextFields.firstMatch.waitForExistence(timeout: 15),
+                      "The homepage rendered, but opening Log In did not become interactive.")
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.buttons["Log In"].isHittable)
     }
 
     override func tearDownWithError() throws {
