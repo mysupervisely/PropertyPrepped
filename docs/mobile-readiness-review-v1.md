@@ -487,3 +487,28 @@ This approximates reduced space but does not emulate a real iPhone keyboard.
 No new product patch was needed. Real authentication, reset email delivery,
 Safari/device keyboard, sessions and uploads remain pending. Apple enrollment
 remains pending; no production deployment or store submission.
+
+
+## Consistent dashboard property footer
+
+Every property card now has one footer spanning the full card width, grouping
+rent status and a compact alert link left, with Rent/Documents right. The
+facts above consistently show Rent and Value, rather than swapping Value for
+status depending on record availability. Existing destinations and attention
+counts are preserved. Desktop also uses the shared footer structure.
+
+The new presentation helper labels confirmed Paid rent as Rent up to date,
+not the property's overall health. Vacant properties say No active lease;
+missing ledger records say No rent record; unknown due dates retain Due date
+unavailable. Due, Partial, Overdue and Upcoming stay distinct. No rent-status
+calculation, transaction, entitlement or occupancy rule changed.
+
+Validation: 187 files / 3,086 tests and production build/type checking passed.
+Three new helper tests guard truthful paid/vacant/unknown/unpaid labels. The
+older source-wiring assertion now verifies three workspace label call sites
+plus the new dashboard helper. Isolated full-CSS browser fixtures passed page
+and footer overflow checks at320,375,393,430,760,1024px with overdue, paid,
+vacant, unknown-date and multiple-alert examples. At320px the longest status
+plus12 alerts wraps within the footer, without clipping; larger widths remain
+one row. The393px screenshot was inspected. Actual authenticated Safari
+confirmation remains pending. No production merge or store publication.

@@ -15,6 +15,7 @@ import { toSafeErrorMessage } from '../lib/user-facing-errors'
 import { AuthHeader } from '../components/AuthHeader'
 import DocumentIntelligencePanel, { type ApplyAction } from '../components/DocumentIntelligencePanel'
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
+import { propertyRentLabel } from '../lib/dashboard/property-rent-label'
 import { PropertySectionNav } from '../components/property-profile/PropertySectionNav'
 import { PropCrewPanel } from '../components/PropCrewPanel'
 import { PropertySystemsPanel, type PropertySystem } from '../components/property-profile/PropertySystemsPanel'
@@ -4505,9 +4506,14 @@ export default function Home() {
               <div className="propertyMobileLabels" aria-label="Property type and occupancy"><span className="propertyMobileType">{property.property_type}</span>{propertyOccupancy && <span className={`propertyMobileOccupancy ${occupancyPillClass(propertyOccupancy)}`}>{propertyOccupancy === 'Occupancy unknown' ? 'Unknown' : propertyOccupancy === 'Upcoming tenancy' ? 'Upcoming' : propertyOccupancy}</span>}</div>
               <div className="miniStats">
                 <div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div>
-                {propertyRentRow ? <div><span>Rent status</span><strong><span className={`statusPill ${rentStatusPillClass(propertyRentRow.status)}`}>{rentStatusLabel(propertyRentRow.status)}</span></strong></div> : <div><span>Value</span><strong>{money(property.estimated_value)}</strong></div>}
+                <div><span>Value</span><strong>{money(property.estimated_value)}</strong></div>
               </div>
-              {propertyAlertCount > 0 && <button className="cardAlertBadge" onClick={() => openProperty(property.id, 'Overview')}>{propertyAlertCount} alert{propertyAlertCount === 1 ? '' : 's'} need{propertyAlertCount === 1 ? 's' : ''} attention</button>}
+            </div>
+            <div className="propertyCardFooter">
+              <div className="propertyCardFooterMeta">
+                <span className={`statusPill ${propertyOccupancy === 'Vacant' ? 'pillNeutral' : propertyRentRow ? rentStatusPillClass(propertyRentRow.status) : 'pillNeutral'}`}>{propertyRentLabel(propertyRentRow?.status, propertyOccupancy === 'Vacant')}</span>
+                {propertyAlertCount > 0 && <button type="button" className="cardAlertBadge" aria-label={`View ${propertyAlertCount} alert${propertyAlertCount === 1 ? '' : 's'} for ${property.address}`} onClick={() => openProperty(property.id, 'Overview')}>{propertyAlertCount} alert{propertyAlertCount === 1 ? '' : 's'}</button>}
+              </div>
               <div className="cardActions">
                 <button onClick={() => openProperty(property.id, 'Rent', undefined, undefined, 'Lease')}>Rent</button>
                 <button onClick={() => openProperty(property.id, 'Documents', 'Documents')}>Documents</button>

@@ -4722,3 +4722,15 @@ h2, h3, p { margin-top: 0; }
   .propertyWorkspaceSections { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 5px; padding: 6px 0 12px; }
   .propertyWorkspaceSections button { padding: 5px; font-size: 11px; border-radius: 8px; min-height: 44px; }
 }
+
+
+/* Every property has the same footer: status and alerts, then destinations. */
+.propertyCardFooter { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 19px 12px; }
+.propertyCardFooterMeta { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; flex-wrap: wrap; }
+.propertyCardFooter .statusPill { font-size: 10px; line-height: 1.35; padding: 4px 6px; max-width: 100%; overflow-wrap: anywhere; }
+.grid > .propertyCard .propertyCardFooter .cardAlertBadge { width: auto; min-height: 44px; margin: 0; padding: 4px 0; border: 0; background: transparent; font-size: 10px; line-height: 1.3; flex-shrink: 0; }
+.grid > .propertyCard .propertyCardFooter .cardActions { margin: 0; padding: 0; flex-wrap: nowrap; gap: 8px; flex-shrink: 0; }
+.grid > .propertyCard .propertyCardFooter .cardActions button { min-width: 44px; min-height: 44px; padding: 4px; font-size: 11px; }
+@media (max-width: 760px) {
+  .grid > .propertyCard .propertyCardFooter { grid-column: 1 / -1; padding: 0; gap: 8px; }
+}
