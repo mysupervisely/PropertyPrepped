@@ -166,3 +166,13 @@ recovery page directly using server.appStartPath, then captures navigation
 failure at 10 and 30 seconds with app console logs. Original app restoration
 remains in finally. This corrects diagnostics, not a proven production fix.
 Simulator execution and visual inspection are still required on macOS.
+
+## Independent simulator checks
+
+The UI workflow now runs recovery and auth checks through one bounded runner.
+A recovery diagnostic failure no longer skips auth testing. Either failure
+still fails the build; no errors are suppressed. Five local regression checks
+cover success, recovery failure, auth failure, timeout, and launch failure.
+Recovery capture also rejects an app console process that has already exited,
+including exit zero, instead of accepting a screenshot of a stopped app.
+These checks validate orchestration only, not iOS rendering or authenticated use.

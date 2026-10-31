@@ -51,7 +51,7 @@ with tempfile.TemporaryDirectory(prefix='proproster-offline-') as directory:
                 for delay in delays:
                     time.sleep(delay - elapsed)
                     elapsed = delay
-                    if process.poll() not in (None, 0):
+                    if process.poll() is not None:
                         raise RuntimeError(f'{name} launch failed; inspect console log.')
                     run('xcrun', 'simctl', 'io', udid, 'screenshot',
                         str(evidence / f'{name}-{delay}s.png'))
