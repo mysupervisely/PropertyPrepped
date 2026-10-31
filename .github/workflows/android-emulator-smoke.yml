@@ -63,8 +63,8 @@ jobs:
           mkdir -p "$ANDROID_AVD_HOME"
           test -c /dev/kvm
           sudo chown "$(id -un)" /dev/kvm
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "emulator" "system-images;android-36;google_apis;x86_64"
-          printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name emulator-36 --package "system-images;android-36;google_apis;x86_64" --device pixel_6a
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "emulator" "system-images;android-35;google_apis;x86_64"
+          printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name emulator-35 --package "system-images;android-35;google_apis;x86_64" --device pixel_4
           "$ANDROID_HOME/emulator/emulator" -list-avds
       - name: Launch app and capture screenshots
         run: python3 mobile/scripts/android-emulator-smoke.py

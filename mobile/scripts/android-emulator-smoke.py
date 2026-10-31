@@ -67,6 +67,8 @@ def main():
                 if time.monotonic() >= deadline:
                     raise TimeoutError('Emulator boot exceeded 240 seconds.')
                 time.sleep(2)
+            device('shell', 'wm', 'size', '720x1280')
+            device('shell', 'wm', 'density', '320')
             device('shell', 'input', 'keyevent', '82')
             installed = device('install', '-r', str(apk))
             (evidence / 'install.txt').write_bytes(installed.stdout + installed.stderr)
