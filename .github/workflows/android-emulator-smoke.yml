@@ -22,7 +22,6 @@ jobs:
     timeout-minutes: 25
     env:
       CM_BUILD_DIR: ${{ github.workspace }}
-      ANDROID_AVD_HOME: ${{ runner.temp }}/proproster-avd
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -44,6 +43,7 @@ jobs:
       - name: Configure Android SDK
         run: |
           test -d "$ANDROID_HOME"
+          printf 'ANDROID_AVD_HOME=%s/proproster-avd\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
           printf 'ANDROID_SDK_ROOT=%s\n' "$ANDROID_HOME" >> "$GITHUB_ENV"
           printf 'sdk.dir=%s\n' "$ANDROID_HOME" > mobile/android/local.properties
       - name: Build and verify debug APK
