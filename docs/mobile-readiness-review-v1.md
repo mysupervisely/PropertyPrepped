@@ -360,3 +360,18 @@ remains unresolved. Apple enrollment is still pending per the user. Hosted
 changes remain undeployed on the review branch; no merge or store submission
 was performed. Next useful acceptance work is preview/browser validation with
 fictional data and a dedicated test account, then native device verification.
+
+
+## Mobile property-row space use
+
+Mobile property rows now place existing rent and status/value in two columns,
+with the second detail aligned right. Rent/Documents actions align with the
+right edge below the existing attention message. Photo, title, city, occupancy
+labels, values and action handlers are unchanged; desktop styles are unchanged.
+Both stat columns can shrink and wrap long values. No new data is fabricated.
+
+Production build passed. Visual browser checking was attempted, but Chromium
+installation returned invalid ZIP downloads; no screenshot/overflow or device
+pass is claimed. Mobile preview at narrow widths and enlarged text remains
+required before deployment. This CSS-only change is committed for review and
+is not yet visible on production.

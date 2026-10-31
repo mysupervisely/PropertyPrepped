@@ -4639,3 +4639,26 @@ h2, h3, p { margin-top: 0; }
   .propertyMarketRentValues strong { font-size: 16px; }
   .propertySnapshotCard .propertySnapshotPerformanceGrid, .propertySnapshotCard .propertySnapshotPerformanceGrid + .propertyPerformanceNote { display: none; }
 }
+
+/* Mobile property rows: use the available right edge for existing details. */
+@media (max-width: 760px) {
+  .grid > .propertyCard .miniStats {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+  }
+  .grid > .propertyCard .miniStats > div {
+    flex-direction: column;
+    gap: 2px;
+    overflow-wrap: anywhere;
+  }
+  .grid > .propertyCard .miniStats > div:last-child {
+    align-items: flex-end;
+    text-align: right;
+  }
+  .grid > .propertyCard .cardActions {
+    justify-content: flex-end;
+    gap: 12px;
+  }
+}
