@@ -15,7 +15,7 @@ import { toSafeErrorMessage } from '../lib/user-facing-errors'
 import { AuthHeader } from '../components/AuthHeader'
 import DocumentIntelligencePanel, { type ApplyAction } from '../components/DocumentIntelligencePanel'
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
-import { propertyRentLabel } from '../lib/dashboard/property-rent-label'
+import { propertySummaryLabel } from '../lib/dashboard/property-rent-label'
 import { PropertySectionNav } from '../components/property-profile/PropertySectionNav'
 import { PropCrewPanel } from '../components/PropCrewPanel'
 import { PropertySystemsPanel, type PropertySystem } from '../components/property-profile/PropertySystemsPanel'
@@ -4504,21 +4504,12 @@ export default function Home() {
             <div className="cardBody">
               <button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button>
               <div className="propertyMobileLabels" aria-label="Property type and occupancy"><span className="propertyMobileType">{property.property_type}</span>{propertyOccupancy && <span className={`propertyMobileOccupancy ${occupancyPillClass(propertyOccupancy)}`}>{propertyOccupancy === 'Occupancy unknown' ? 'Unknown' : propertyOccupancy === 'Upcoming tenancy' ? 'Upcoming' : propertyOccupancy}</span>}</div>
-              <div className="miniStats">
-                <div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div>
-                <div><span>Value</span><strong>{money(property.estimated_value)}</strong></div>
-              </div>
             </div>
-            <div className="propertyCardFooter">
-              <div className="propertyCardFooterMeta">
-                <span className={`statusPill ${propertyOccupancy === 'Vacant' ? 'pillNeutral' : propertyRentRow ? rentStatusPillClass(propertyRentRow.status) : 'pillNeutral'}`}>{propertyRentLabel(propertyRentRow?.status, propertyOccupancy === 'Vacant')}</span>
-                {propertyAlertCount > 0 && <button type="button" className="cardAlertBadge" aria-label={`View ${propertyAlertCount} alert${propertyAlertCount === 1 ? '' : 's'} for ${property.address}`} onClick={() => openProperty(property.id, 'Overview')}>{propertyAlertCount} alert{propertyAlertCount === 1 ? '' : 's'}</button>}
-              </div>
-              <div className="cardActions">
-                <button onClick={() => openProperty(property.id, 'Rent', undefined, undefined, 'Lease')}>Rent</button>
-                <button onClick={() => openProperty(property.id, 'Documents', 'Documents')}>Documents</button>
-              </div>
-            </div>
+            <dl className="propertySummaryStrip" aria-label={`Summary for ${property.address}`}>
+              <div><dt className="propertySummaryStatusLabel">Status</dt><dd className={propertyOccupancy === 'Vacant' ? 'pillNeutral' : propertyRentRow ? rentStatusPillClass(propertyRentRow.status) : 'pillNeutral'}>{propertySummaryLabel(propertyRentRow?.status, propertyOccupancy === 'Vacant', propertyAlertCount)}</dd></div>
+              <div><dt>Rent</dt><dd>{money(property.monthly_rent)}</dd></div>
+              <div><dt>Value</dt><dd>{compactMoney(Number(property.estimated_value))}</dd></div>
+            </dl>
           </article>
         })}
           {!busy && properties.length === 0 && <button className="emptyPropertyCard" onClick={() => openAddProperty()}><strong>+ Add your first property</strong><span>Start building your organized property file.</span></button>}

@@ -13,3 +13,9 @@ export function propertyRentLabel(status: RentStatus | undefined, vacant: boolea
     case 'Unknown': return 'Due date unavailable'
   }
 }
+
+
+export function propertySummaryLabel(status: RentStatus | undefined, vacant: boolean, alerts: number): string {
+  const label = propertyRentLabel(status, vacant).replace(/^Rent /, '')
+  return alerts > 0 ? `${alerts} alert${alerts === 1 ? '' : 's'} - ${label.toLowerCase()}` : label.charAt(0).toUpperCase() + label.slice(1)
+}

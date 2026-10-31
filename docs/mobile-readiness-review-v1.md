@@ -512,3 +512,23 @@ vacant, unknown-date and multiple-alert examples. At320px the longest status
 plus12 alerts wraps within the footer, without clipping; larger widths remain
 one row. The393px screenshot was inspected. Actual authenticated Safari
 confirmation remains pending. No production merge or store publication.
+
+
+## Read-only connected property summary strip
+
+Replaced footer badges/links with a single three-cell description list in the
+requested order: alert count and rent status, Rent, Value. Cells have thin
+vertical dividers and no button/link behavior. Photo and address still open
+the property; Documents and Rent remain in the selected property's menu.
+Removed the duplicated Rent/Value row from above the strip. Value uses the
+existing compactMoney presentation helper. Paid, vacant, unknown due date and
+unpaid meanings are retained; alerts use the existing count.
+
+Validation: 187 files / 3,087 tests passed and production build/type checking
+passed. Added summary-label regression cases, and updated the old Documents
+shortcut assertion to guard the retained property Documents workspace instead.
+Isolated browser fixtures passed page/strip overflow checks at 320, 375, 393,
+430, 760 and 1024 pixels. Long unknown-date text wraps inside the first cell,
+without creating a second strip row. The 393px screenshot was inspected.
+Actual authenticated iPhone confirmation remains pending. No production merge
+or store publication.

@@ -4734,3 +4734,15 @@ h2, h3, p { margin-top: 0; }
 @media (max-width: 760px) {
   .grid > .propertyCard .propertyCardFooter { grid-column: 1 / -1; padding: 0; gap: 8px; }
 }
+
+
+/* Read-only property summary: one connected row, not navigation controls. */
+.propertySummaryStrip { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1fr) minmax(0,1fr); margin: 0 14px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden; }
+.propertySummaryStrip > div { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 3px; padding: 9px 5px; min-width: 0; text-align: center; font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.propertySummaryStrip > div + div { border-left: 1px solid var(--line); }
+.propertySummaryStrip dt { color: var(--muted); }
+.propertySummaryStrip dd { margin: 0; font-weight: 650; background: transparent; border: 0; }
+.propertySummaryStrip .pillBad { color: #963e38; }
+.propertySummaryStrip .pillGood { color: #246747; }
+.propertySummaryStatusLabel { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 760px) { .grid > .propertyCard .propertySummaryStrip { grid-column: 1 / -1; margin: 0; } }

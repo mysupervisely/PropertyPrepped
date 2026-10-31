@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { propertyRentLabel } from './property-rent-label'
+import { propertyRentLabel, propertySummaryLabel } from './property-rent-label'
 
 describe('property rent label', () => {
   it('uses up to date only for confirmed Paid rent', () => {
@@ -20,4 +20,11 @@ describe('property rent label', () => {
     expect(propertyRentLabel('Due', false)).toBe('Rent due')
     expect(propertyRentLabel('Overdue', false)).toBe('Rent overdue')
   })
+})
+
+it('formats one consistent summary without inventing alerts or payment status', () => {
+  expect(propertySummaryLabel('Overdue', false, 1)).toBe('1 alert - overdue')
+  expect(propertySummaryLabel('Paid', false, 0)).toBe('Up to date')
+  expect(propertySummaryLabel(undefined, true, 0)).toBe('No active lease')
+  expect(propertySummaryLabel('Unknown', false, 2)).toBe('2 alerts - due date unavailable')
 })

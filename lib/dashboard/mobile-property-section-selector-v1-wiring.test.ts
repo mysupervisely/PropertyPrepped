@@ -180,7 +180,7 @@ describe('Part B — Rent status label clarity', () => {
   it('workspace rent pills use rentStatusLabel and dashboard footer uses its explicit presentation helper', () => {
     expect(pageSource).not.toMatch(/statusPill \$\{rentStatusPillClass\([^)]+\)\}`\}>\{(?!rentStatusLabel)[a-zA-Z.]+\.status\}/)
     expect((pageSource.match(/rentStatusLabel\((currentRentRow|row|propertyRentRow)\.status\)/g) || []).length).toBe(3)
-    expect(pageSource).toContain("propertyRentLabel(propertyRentRow?.status, propertyOccupancy === 'Vacant')")
+    expect(pageSource).toContain("propertySummaryLabel(propertyRentRow?.status, propertyOccupancy === 'Vacant', propertyAlertCount)")
   })
 
   it('the legacy Rent Ledger compatibility route (app/rent-ledger/page.tsx) gets the same truthful label, not left showing the old word', () => {
