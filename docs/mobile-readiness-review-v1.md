@@ -564,3 +564,31 @@ and retained action mapping checked. A stale local build-cache failure was
 resolved by moving the generated cache aside; the fresh production build
 and TypeScript passed. Actual iPhone preview confirmation remains pending.
 No production merge or store submission.
+
+
+## Single occupancy label and current-month rent collection ring
+
+Occupancy remains beside the property name. Vacant properties no longer
+repeat No active lease in the first summary cell and Vacant in the last:
+the first shows the actual visible alert count or No alerts, and the last
+shows Lease ends with an unavailable marker. Other rent statuses retain
+their meanings. Existing lease-summary regression expectations were updated.
+
+Added a small right-hand Rent collected ring from the same current-month
+rent ledger rows already derived under canUseRentLedger. Aggregates applicable
+leases by property rather than taking only the last lease row. Shows recorded
+payments divided by expected rent, with a month label and accessible exact
+amounts. Missing/zero/invalid obligations produce No data, not 0% or a fake
+performance score. Percent display caps at100 for overpayment; unpaid balances
+cannot round to100. This is collection performance only, not ROI, occupancy,
+cash flow, or a whole-property health score. No API calls, data writes or
+entitlement changes were introduced.
+
+Validation:189 files /3,095 tests and production build/type checking passed.
+Three new tests cover collection amounts, missing data, rounding, overpayment
+and multi-lease/property isolation. Two old memo source anchors were updated
+to include the additional derived collection map. Full-CSS fictional browser
+fixtures passed overflow checks at320,375,393,430,760,1024px; the393px chart
+screenshot was inspected. Fixture percentages are explicitly fictional.
+Actual authenticated iPhone verification remains pending. No production merge
+or store submission.

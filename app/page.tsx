@@ -15,6 +15,8 @@ import { toSafeErrorMessage } from '../lib/user-facing-errors'
 import { AuthHeader } from '../components/AuthHeader'
 import DocumentIntelligencePanel, { type ApplyAction } from '../components/DocumentIntelligencePanel'
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
+import { RentCollectionRing } from '../components/property-profile/RentCollectionRing'
+import { aggregateRentCollection } from '../lib/dashboard/rent-collection'
 import { propertyLeaseSummary } from '../lib/dashboard/property-lease-summary'
 import { propertySummaryLabel } from '../lib/dashboard/property-rent-label'
 import { PropertySectionNav } from '../components/property-profile/PropertySectionNav'
@@ -1231,7 +1233,7 @@ export default function Home() {
 
   const propertyLabelById = useMemo(() => new Map(properties.map((p) => [p.id, p.address])), [properties])
 
-  const { attentionItems, upcomingItems, openMaintenanceItems, recentActivity, vacancyItems, attentionCountByProperty, rentStatusByProperty } = useMemo(() => {
+  const { attentionItems, upcomingItems, openMaintenanceItems, recentActivity, vacancyItems, attentionCountByProperty, rentStatusByProperty, rentCollectionByProperty } = useMemo(() => {
     // Milestone 18: PropWatch's rent + warranty signals fold into the
     // SAME dateItems list Milestone 16 already builds — same
     // classifyDate() thresholds, same Needs Attention/Upcoming split,
@@ -1339,6 +1341,7 @@ export default function Home() {
       vacancyItems: visibleVacancy,
       attentionCountByProperty: attentionCounts,
       rentStatusByProperty: rentByProperty,
+      rentCollectionByProperty: aggregateRentCollection(rentRows),
     }
   }, [leases, insurancePolicies, mortgages, maintenanceRecords, maintenanceRequests, intakeSessions, documents, transactions, propertyNotes, properties, contacts, propertyLabelById, rentPayments, propertySystems, entitlements, tenantRequests, dismissedAttentionKeys])
 
@@ -4508,6 +4511,7 @@ export default function Home() {
             <div className="cardBody">
               <button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button>
               <div className="propertyMobileLabels" aria-label="Property type and occupancy"><span className="propertyMobileType">{property.property_type}</span>{propertyOccupancy && <span className={`propertyMobileOccupancy ${occupancyPillClass(propertyOccupancy)}`}>{propertyOccupancy === 'Occupancy unknown' ? 'Unknown' : propertyOccupancy === 'Upcoming tenancy' ? 'Upcoming' : propertyOccupancy}</span>}</div>
+              {property.property_type === 'Rental Property' && <RentCollectionRing totals={rentCollectionByProperty.get(property.id)} period={formatPeriodLabel(periodFromDate(new Date()))} />}
             </div>
             <dl className="propertySummaryStrip" aria-label={`Summary for ${property.address}`}>
               <div><dt className="propertySummaryStatusLabel">Status</dt><dd className={propertyOccupancy === 'Vacant' ? 'pillNeutral' : propertyRentRow ? rentStatusPillClass(propertyRentRow.status) : 'pillNeutral'}>{propertySummaryLabel(propertyRentRow?.status, propertyOccupancy === 'Vacant', propertyAlertCount)}</dd></div>

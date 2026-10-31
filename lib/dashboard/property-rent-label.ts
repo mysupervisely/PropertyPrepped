@@ -16,6 +16,7 @@ export function propertyRentLabel(status: RentStatus | undefined, vacant: boolea
 
 
 export function propertySummaryLabel(status: RentStatus | undefined, vacant: boolean, alerts: number): string {
+  if (vacant) return alerts > 0 ? `${alerts} alert${alerts === 1 ? '' : 's'}` : 'No alerts'
   const label = propertyRentLabel(status, vacant).replace(/^Rent /, '')
   return alerts > 0 ? `${alerts} alert${alerts === 1 ? '' : 's'} - ${label.toLowerCase()}` : label.charAt(0).toUpperCase() + label.slice(1)
 }

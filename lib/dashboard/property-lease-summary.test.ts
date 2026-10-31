@@ -8,7 +8,7 @@ describe('property lease summary', () => {
     expect(propertyLeaseSummary([expired, active], true, now)).toEqual({ label: 'Lease ends', value: 'Aug 2027' })
   })
   it('shows Vacant for no lease or only expired leases', () => {
-    for (const leases of [[], [expired]]) expect(propertyLeaseSummary(leases, true, now)).toEqual({ label: 'Occupancy', value: 'Vacant' })
+    for (const leases of [[], [expired]]) expect(propertyLeaseSummary(leases, true, now)).toEqual({ label: 'Lease ends', value: '—' })
   })
   it('does not label incomplete lease dates Vacant', () => {
     expect(propertyLeaseSummary([{ id: 'incomplete', start_date: null, end_date: null }], true, now)).toEqual({ label: 'Lease', value: 'Not entered' })

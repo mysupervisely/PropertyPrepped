@@ -25,6 +25,6 @@ describe('property rent label', () => {
 it('formats one consistent summary without inventing alerts or payment status', () => {
   expect(propertySummaryLabel('Overdue', false, 1)).toBe('1 alert - overdue')
   expect(propertySummaryLabel('Paid', false, 0)).toBe('Up to date')
-  expect(propertySummaryLabel(undefined, true, 0)).toBe('No active lease')
+  expect(propertySummaryLabel(undefined, true, 0)).toBe('No alerts')
   expect(propertySummaryLabel('Unknown', false, 2)).toBe('2 alerts - due date unavailable')
 })

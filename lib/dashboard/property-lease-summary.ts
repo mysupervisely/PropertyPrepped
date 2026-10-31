@@ -4,7 +4,7 @@ import { deriveOccupancy, selectCurrentLease, type LeaseWithId } from '../leases
 export function propertyLeaseSummary(leases: LeaseWithId[], rental: boolean, now: Date = new Date()): { label: string; value: string } {
   if (!rental) return { label: 'Lease', value: 'Not applicable' }
   const occupancy = deriveOccupancy(leases, now)
-  if (occupancy === 'Vacant') return { label: 'Occupancy', value: 'Vacant' }
+  if (occupancy === 'Vacant') return { label: 'Lease ends', value: '—' }
   if (occupancy === 'Occupancy unknown') return { label: 'Lease', value: 'Not entered' }
   const current = selectCurrentLease(leases, now)
   const upcoming = occupancy === 'Upcoming tenancy'
