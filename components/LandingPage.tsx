@@ -53,6 +53,7 @@ import { authFormError, runAuthSubmission } from '../lib/auth/form-submission'
 import { bindAuthViewport } from '../lib/auth/visual-viewport'
 import Link from 'next/link'
 import { supabase } from '../lib/supabase'
+import Image from 'next/image'
 import { Wordmark } from './Wordmark'
 import { PLANS, PUBLIC_PLAN_ORDER, PLAN_FEATURE_HIGHLIGHTS, EARLY_ACCESS_PRICING } from '../lib/billing/plans'
 import { postSignupRedirectPath, INTENDED_ROLE_STORAGE_KEY, type IntendedRole } from '../lib/tenant-connect/onboarding'
@@ -63,11 +64,7 @@ import { LegalFooter } from './LegalFooter'
 
 function HouseIcon() {
   return (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
-      <path d="M4 11.5L12 4l8 7.5" stroke="#204b3b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M6 10v9a1 1 0 001 1h10a1 1 0 001-1v-9" stroke="#204b3b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M10 20v-5h4v5" stroke="#204b3b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <Image src="/proproster-logo.png" width={40} height={40} alt="" aria-hidden="true" />
   )
 }
 
