@@ -187,3 +187,25 @@ when tabbing so sign-in/signup/reset modes and disabled fields stay current.
 Five behavioral regression tests pass; the full suite now passes 184 files
 and 3,073 tests, with TypeScript passing. Device and assistive-technology
 verification remains pending, and hosted deployment is still required.
+
+## Android emulator launch verified on GitHub
+
+Codemagic Linux was blocked by the account plan. The standard GitHub-hosted
+Ubuntu fallback succeeded after making ANDROID_AVD_HOME explicit during
+creation and launch. Successful run:
+https://github.com/mysupervisely/PropertyPrepped/actions/runs/41164503887
+Source head: 5a50aa186145b3d0e500ab5921aae57f9dab5ff8.
+
+APK compilation, lint, packaging verification, API 36 emulator installation,
+and foreground launch passed. The activity launch reported Status: ok and
+cold launch TotalTime 4009 ms. Both 10/30-second PNGs were captured; the
+30-second image was visually inspected and shows the live PropRoster landing
+page with Log In and Start Free. The captured crash log is empty.
+
+This verifies installation and visible signed-out launch only, not successful
+login, signup activation, uploads, keyboard behavior, back navigation, offline
+recovery, signature cryptography, or store acceptance. The old header icon is
+expected because production web branding remains undeployed. The three-day
+GitHub artifact contains screenshots, launch/activity/emulator/crash logs,
+packaging evidence, lint reports, and the debug APK. No Codemagic plan upgrade
+was purchased, and no production merge or app-store publication occurred.
