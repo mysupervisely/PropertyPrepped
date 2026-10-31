@@ -74,6 +74,8 @@ jobs:
           ram-size: 2048M
           heap-size: 256M
           disable-animations: true
+          # Android's documented graphics troubleshooting flags; app settings stay unchanged.
+          emulator-options: -no-window -gpu swiftshader -feature -Vulkan -no-snapshot -noaudio -no-boot-anim
           emulator-boot-timeout: 300
           script: bash mobile/scripts/run-android-auth-tests.sh
       - name: Capture host resource diagnostics

@@ -257,3 +257,18 @@ it cannot accept missing reports or screenshots as success. The underlying
 emulator termination cause is unresolved. No unchanged retry was launched.
 
 Review run: https://github.com/mysupervisely/PropertyPrepped/actions/runs/41199027544
+
+
+## Android graphics isolation after resource diagnostics
+
+Run 41224533416 at 7132308e passed compilation, lint, packaging and six runner
+fixtures, but lost the emulator during AuthEntryTest. Its JUnit failure has no
+usable assertion detail; required form screenshots are absent. Host diagnostics
+show no recorded out-of-memory kill, 79 GB free disk and 14.9 GB available RAM
+after termination. This does not establish peak memory use or the exit cause.
+
+The maintained runner now explicitly uses SwiftShader with Vulkan disabled,
+following https://developer.android.com/studio/run/emulator-troubleshooting .
+This isolates a graphics compatibility possibility, not a proven root cause.
+The API level, test assertions, evidence requirements and app remain unchanged.
+A new cloud result is required before claiming any Android auth-entry pass.
