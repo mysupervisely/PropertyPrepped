@@ -15,7 +15,9 @@ import { toSafeErrorMessage } from '../lib/user-facing-errors'
 import { AuthHeader } from '../components/AuthHeader'
 import DocumentIntelligencePanel, { type ApplyAction } from '../components/DocumentIntelligencePanel'
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
-import { RentCollectionRing } from '../components/property-profile/RentCollectionRing'
+import { PropertyNetGraph } from '../components/property-profile/PropertyNetGraph'
+import { propertyRecordedNet } from '../lib/dashboard/property-net'
+import { computePropertyTaxSummary } from '../lib/tax-center/aggregate'
 import { aggregateRentCollection } from '../lib/dashboard/rent-collection'
 import { propertyLeaseSummary } from '../lib/dashboard/property-lease-summary'
 import { propertySummaryLabel } from '../lib/dashboard/property-rent-label'
@@ -1230,6 +1232,19 @@ export default function Home() {
   const UPCOMING_LIMIT = 8
   const OPEN_MAINTENANCE_LIMIT = 6
   const RECENT_ACTIVITY_LIMIT = 8
+
+  // Recorded-year totals use the same overrides as Tax Center. No annual-to-monthly guesses.
+  const propertyNetById = useMemo(() => {
+    const year = String(new Date().getFullYear())
+    return new Map(properties.map(property => {
+      const summary = computePropertyTaxSummary(property,
+        transactions.filter(row => row.transaction_date.startsWith(year)),
+        maintenanceRecords.filter(row => row.service_date.startsWith(year)),
+        taxRecords.find(row => row.property_id === property.id && String(row.tax_year) === year) ?? null,
+        taxCustomItems.filter(row => String(row.tax_year) === year).map(row => ({ id: row.id, propertyId: row.property_id, taxYear: row.tax_year, description: row.description, amount: Number(row.amount), group: row.category_group, notes: row.notes, documentId: row.document_id })))
+      return [property.id, propertyRecordedNet(summary, property.financing_status)]
+    }))
+  }, [properties, transactions, maintenanceRecords, taxRecords, taxCustomItems])
 
   const propertyLabelById = useMemo(() => new Map(properties.map((p) => [p.id, p.address])), [properties])
 
@@ -4511,7 +4526,7 @@ export default function Home() {
             <div className="cardBody">
               <button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button>
               <div className="propertyMobileLabels" aria-label="Property type and occupancy"><span className="propertyMobileType">{property.property_type}</span>{propertyOccupancy && <span className={`propertyMobileOccupancy ${occupancyPillClass(propertyOccupancy)}`}>{propertyOccupancy === 'Occupancy unknown' ? 'Unknown' : propertyOccupancy === 'Upcoming tenancy' ? 'Upcoming' : propertyOccupancy}</span>}</div>
-              {property.property_type === 'Rental Property' && <RentCollectionRing totals={rentCollectionByProperty.get(property.id)} period={formatPeriodLabel(periodFromDate(new Date()))} />}
+              {property.property_type === 'Rental Property' && <PropertyNetGraph totals={propertyNetById.get(property.id)} year={String(new Date().getFullYear())} />}
             </div>
             <dl className="propertySummaryStrip" aria-label={`Summary for ${property.address}`}>
               <div><dt className="propertySummaryStatusLabel">Status</dt><dd className={propertyOccupancy === 'Vacant' ? 'pillNeutral' : propertyRentRow ? rentStatusPillClass(propertyRentRow.status) : 'pillNeutral'}>{propertySummaryLabel(propertyRentRow?.status, propertyOccupancy === 'Vacant', propertyAlertCount)}</dd></div>
