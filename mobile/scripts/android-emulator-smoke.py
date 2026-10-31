@@ -14,7 +14,7 @@ def select_avd(names):
     for name in ('emulator-36', 'emulator-35'):
         if name in names:
             return name
-    raise RuntimeError('Expected Codemagic Android API 35 or 36 AVD is unavailable.')
+    raise RuntimeError('Expected Android API 35 or 36 AVD is unavailable; inspect available-avds.txt.')
 
 
 def main():
@@ -36,7 +36,9 @@ def main():
     def device(*args, check=True):
         return run(adb, '-s', serial, *args, check=check)
 
-    avd = select_avd(run(emulator, '-list-avds').stdout.decode().splitlines())
+    available = run(emulator, '-list-avds').stdout.decode()
+    (evidence / 'available-avds.txt').write_text(available)
+    avd = select_avd([name.strip() for name in available.splitlines()])
     summary = {'avd': avd, 'package': package, 'status': 'failed',
                'scope': 'Install, foreground launch, and screenshot capture only. No authenticated flow or visual assertion.'}
     with (evidence / 'emulator.log').open('wb') as log:

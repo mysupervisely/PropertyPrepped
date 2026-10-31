@@ -22,6 +22,7 @@ jobs:
     timeout-minutes: 25
     env:
       CM_BUILD_DIR: ${{ github.workspace }}
+      ANDROID_AVD_HOME: ${{ runner.temp }}/proproster-avd
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -53,10 +54,12 @@ jobs:
           python3 mobile/scripts/verify-debug-apk.py
       - name: Prepare ephemeral emulator
         run: |
+          mkdir -p "$ANDROID_AVD_HOME"
           test -c /dev/kvm
           sudo chown "$(id -un)" /dev/kvm
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "emulator" "system-images;android-36;google_apis;x86_64"
           printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name emulator-36 --package "system-images;android-36;google_apis;x86_64" --device pixel_6a
+          "$ANDROID_HOME/emulator/emulator" -list-avds
       - name: Launch app and capture screenshots
         run: python3 mobile/scripts/android-emulator-smoke.py
       - name: Save APK and diagnostics
