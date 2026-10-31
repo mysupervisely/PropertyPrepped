@@ -230,9 +230,30 @@ failed screenshot capture before auth assertions (run 41198301099). These
 failures do not establish successful form behavior or successful retry.
 
 The earlier API 36 install/visible landing launch remains independently
-verified by run 41164503887. Current workflow uses API 35 for investigation,
-with software graphics and Vulkan disabled; this is a test-runner setting, not
-a production-app change. Form navigation, keyboard, account activation,
+verified by run 41164503887. Current workflow uses API 35 and the pinned maintained emulator runner
+with its default software graphics settings. These are test-runner settings,
+not production-app changes. Form navigation, keyboard, account activation,
 authenticated login, and uploads remain pending. No production deployment,
 store submission, or paid runner upgrade occurred. Do not keep rerunning the
 same cloud job without addressing the device/screenshot failure evidence.
+
+
+## Maintained Android runner follow-up
+
+Run 41199027544 at a5ced304 built the debug app and instrumentation APKs and
+passed packaging and lint tasks. The workflow now uses the pinned
+reactivecircus/android-emulator-runner action and Gradle connected tests rather
+than the custom emulator lifecycle for GitHub. Four local runner fixtures
+passed: successful report/screenshots, preserved test failure, missing JUnit
+report, and missing screenshots. These fixtures are not device acceptance.
+
+The cloud emulator booted, started AuthEntryTest, then disappeared. The JUnit
+report has one failure with no assertion detail and reports device
+'emulator-5554' not found and an incomplete run. All four required auth
+screenshots are missing. This is a failed, inconclusive device run, not proof
+that the forms pass or that an application assertion caused the disconnection.
+The runner preserves failure and uploads Gradle reports and available logs;
+it cannot accept missing reports or screenshots as success. The underlying
+emulator termination cause is unresolved. No unchanged retry was launched.
+
+Review run: https://github.com/mysupervisely/PropertyPrepped/actions/runs/41199027544
