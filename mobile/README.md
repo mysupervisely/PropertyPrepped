@@ -259,3 +259,18 @@ First cloud execution remains pending. Syntax, AVD selection and workflow
 isolation checks pass locally; screenshots must be inspected to establish
 what actually rendered. The native shell still loads the production website,
 so unmerged hosted branding and viewport changes will not appear in it.
+
+### Codemagic Linux plan restriction and GitHub fallback
+
+The emulator workflow could not start because this Codemagic account's plan
+does not include the selected Linux instance. This is not an APK compilation
+or app runtime failure. The successful Mac M2 APK/lint workflow remains valid.
+
+`.github/workflows/android-emulator-smoke.yml` provides a standard GitHub-hosted
+Ubuntu 24.04 alternative for this public repository. It runs on PR changes to
+that workflow or the emulator smoke script (restricted to ios-readiness-v1),
+or manually after the workflow is available on the default branch. It uses
+Java 21, the same mobile build/packaging checks, and an API 36 Google APIs AVD.
+The job uses a read-only repository token, no secrets or publishing credentials,
+a 25-minute timeout, and three-day artifact retention. KVM access is limited to
+the ephemeral job user. Screenshot evidence remains pending until it runs.

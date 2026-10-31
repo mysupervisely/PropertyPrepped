@@ -1,0 +1,73 @@
+name: Android Emulator Screenshots
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/android-emulator-smoke.yml'
+      - 'mobile/scripts/android-emulator-smoke.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-emulator-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'ios-readiness-v1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CM_BUILD_DIR: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Validate packaging checks
+        run: python3 mobile/scripts/test-debug-apk.py
+      - name: Install and sync mobile dependencies
+        working-directory: mobile
+        run: |
+          npm ci
+          npx cap sync android
+      - name: Configure Android SDK
+        run: |
+          test -d "$ANDROID_HOME"
+          printf 'ANDROID_SDK_ROOT=%s\n' "$ANDROID_HOME" >> "$GITHUB_ENV"
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" > mobile/android/local.properties
+      - name: Build and verify debug APK
+        run: |
+          cd mobile/android
+          bash ./gradlew --no-daemon :app:assembleDebug :app:lintDebug
+          cd ../..
+          python3 mobile/scripts/verify-debug-apk.py
+      - name: Prepare ephemeral emulator
+        run: |
+          test -c /dev/kvm
+          sudo chown "$(id -un)" /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "emulator" "system-images;android-36;google_apis;x86_64"
+          printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name emulator-36 --package "system-images;android-36;google_apis;x86_64" --device pixel_6a
+      - name: Launch app and capture screenshots
+        run: python3 mobile/scripts/android-emulator-smoke.py
+      - name: Save APK and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: proproster-android-emulator
+          retention-days: 3
+          if-no-files-found: warn
+          path: |
+            android-emulator-evidence/
+            android-build-evidence/
+            mobile/android/app/build/outputs/apk/debug/*.apk
+            mobile/android/app/build/reports/lint-results-debug.*
