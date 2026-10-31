@@ -340,3 +340,23 @@ passed. The new test executes the actual extracted save handler with fake
 adapters for failed read, uncertain save, and successful save. This is handler
 isolation, not mounted React, browser, live Supabase, full build or device QA.
 Apple is still pending. Changes remain in review and undeployed.
+
+
+## Combined validation after receipt and custom-item fixes
+
+Validated review head afd0a3ff60426f4b8c67340cce81527bf3937ecd in a fresh
+checkout using npm ci and the committed lockfile on October 31, 2026.
+
+- Full Vitest suite: 185 files, 3,078 tests passed.
+- npx tsc --noEmit: passed.
+- npm run build: passed with Next.js 16.4.3, including 51 prerendered pages.
+- npm run ios:verify: passed canonical source identity/project/workflow checks.
+- Working tree stayed clean after validation.
+
+These checks cover the combined source, not actual authentication, real
+receipt uploads, camera/picker behavior, device rendering, session persistence,
+release signatures, or store acceptance. Android auth-entry emulator testing
+remains unresolved. Apple enrollment is still pending per the user. Hosted
+changes remain undeployed on the review branch; no merge or store submission
+was performed. Next useful acceptance work is preview/browser validation with
+fictional data and a dedicated test account, then native device verification.
