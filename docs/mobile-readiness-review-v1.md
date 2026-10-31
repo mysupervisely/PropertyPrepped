@@ -110,3 +110,30 @@ events, returned/thrown transport errors, timeout/cleanup and late-response race
 React review checked effect cleanup, stable retry dependencies, labelled inputs,
 alerts and real auth calls. No live reset email, password change or sign-out was
 performed. These hosted changes remain undeployed on the review branch.
+
+## Latest combined cloud evidence and follow-up
+
+The user supplied `PropertyPrepped_3_artifacts 2.zip`. Login/password visibility
+and reset navigation passed, but Start Free did not open signup after its tap:
+the final screenshot remains on the homepage, with no role controls in the
+accessibility tree. This is an activation failure, not another button/switch
+selector mismatch. Its underlying cause remains unconfirmed. The test now
+waits for a hittable CTA and captures evidence immediately before the single
+tap; no retries or weakened assertions were added.
+
+The keyboard-visible screenshot confirms the native `contentInset: automatic`
+candidate did not resolve status-bar overlap. That setting was reverted. The
+hosted auth overlay now binds its top/height to VisualViewport offset/height
+and scrolls its content within the available area. The binding removes event
+listeners and temporary dimensions on close. Four new tests cover resize,
+scroll, cleanup, invalid heights, overscroll and missing-API fallback.
+Actual visual correction still requires web deployment and device verification.
+
+Installed-icon evidence showed placeholders for all SpringBoard icons, so it
+does not verify the logo's appearance. A short rendering wait was added before
+that capture. The connection-recovery capture was skipped after the UI failure;
+it now runs before the UI suite so it can provide independent evidence.
+
+Local follow-up: all 183 files / 3,068 tests and TypeScript pass. No successful
+signup activation, fixed keyboard layout, verified new icon, or offline screen
+pass is claimed from this failed cloud run. Nothing has been deployed.

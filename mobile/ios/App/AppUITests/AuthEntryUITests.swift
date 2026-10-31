@@ -51,7 +51,15 @@ final class AuthEntryUITests: XCTestCase {
     }
 
     func testStartFreeAndClose() throws {
-        app.buttons["Start Free"].firstMatch.tap()
+        let startFree = app.buttons["Start Free"].firstMatch
+        let hittable = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: startFree)
+        XCTAssertEqual(XCTWaiter.wait(for: [hittable], timeout: 10), .completed)
+        let beforeTap = XCTAttachment(screenshot: app.screenshot())
+        beforeTap.name = "Before Start Free tap"
+        beforeTap.lifetime = .keepAlways
+        add(beforeTap)
+        startFree.tap()
+        // A missed activation still fails: no retry or weaker signup assertion.
         XCTAssertTrue(app.switches["I manage properties"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["Create account"].exists)
         XCTAssertTrue(app.textFields.firstMatch.exists)

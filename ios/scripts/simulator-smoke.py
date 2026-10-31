@@ -45,6 +45,7 @@ def main():
             run('xcrun', 'simctl', 'boot', udid)
         run('xcrun', 'simctl', 'bootstatus', udid, '-b', timeout=180)
         run('xcrun', 'simctl', 'install', udid, str(app))
+        time.sleep(5)  # Let SpringBoard render newly installed icons before capture.
         run('xcrun', 'simctl', 'io', udid, 'screenshot', str(artifacts / 'installed-icon.png'))
         report['launch'] = run('xcrun', 'simctl', 'launch', udid, 'com.proproster.app')
         (artifacts / 'launch.txt').write_text(report['launch'] + '\n')

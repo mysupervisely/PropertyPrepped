@@ -1944,8 +1944,18 @@ h2, h3, p { margin-top: 0; }
    overlay, opened by "Log In" / "Start Free" — reuses the existing
    .overlay/.modal pattern (app/globals.css, shared with every other
    modal in the app) rather than a new one. */
-.landingAuthOverlay { z-index: 20; }
-.landingAuthModal { width: min(440px, 100%); padding: 0; background: transparent; }
+.landingAuthOverlay {
+  z-index: 20;
+  top: var(--auth-viewport-top, 0px);
+  bottom: auto;
+  height: 100vh;
+  height: var(--auth-viewport-height, 100dvh);
+  box-sizing: border-box;
+  padding-top: max(22px, env(safe-area-inset-top));
+  padding-bottom: max(22px, env(safe-area-inset-bottom));
+  grid-template-rows: minmax(0, 1fr);
+}
+.landingAuthModal { width: min(440px, 100%); max-height: 100%; min-height: 0; padding: 0; background: transparent; overscroll-behavior: contain; }
 .landingSignInCard { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 32px 28px; box-shadow: 0 28px 64px -28px rgba(20, 35, 28, .5); }
 .landingSignInCardTop { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .landingSignInCard h2 { font-size: 22px; margin: 4px 0 0; letter-spacing: -.4px; }

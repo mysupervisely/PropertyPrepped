@@ -50,6 +50,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { authFormError, runAuthSubmission } from '../lib/auth/form-submission'
+import { bindAuthViewport } from '../lib/auth/visual-viewport'
 import Link from 'next/link'
 import { supabase } from '../lib/supabase'
 import { Wordmark } from './Wordmark'
@@ -330,6 +331,12 @@ export default function LandingPage({ sessionExpired = false }: { sessionExpired
   const [showPassword, setShowPassword] = useState(false)
   const [busy, setBusy] = useState(false)
   const authSubmission = useRef(false)
+  const authOverlayRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!authOpen || !authOverlayRef.current) return
+    return bindAuthViewport(window.visualViewport, authOverlayRef.current.style)
+  }, [authOpen])
   const [error, setError] = useState('')
   const [authMessage, setAuthMessage] = useState('')
 
@@ -713,7 +720,7 @@ export default function LandingPage({ sessionExpired = false }: { sessionExpired
       <LegalFooter />
 
       {authOpen && (
-        <div className="overlay landingAuthOverlay" onMouseDown={(e) => e.target === e.currentTarget && closeAuth()}>
+        <div ref={authOverlayRef} className="overlay landingAuthOverlay" onMouseDown={(e) => e.target === e.currentTarget && closeAuth()}>
           <div className="modal landingAuthModal" role="dialog" aria-modal="true" aria-busy={busy} aria-labelledby="landing-auth-title">
             <div className="landingSignInCard">
               <div className="landingSignInCardTop">

@@ -61,10 +61,10 @@ workflows:
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$CM_BUILD_DIR/ios-simulator-derived" CODE_SIGNING_ALLOWED=NO build
       - name: Launch iPhone simulator and capture screenshots
         script: python3 ios/scripts/simulator-smoke.py
-      - name: Test login and signup entry forms
-        script: python3 ios/scripts/run-ui-tests.py
       - name: Capture isolated connection recovery screen
         script: python3 ios/scripts/offline-smoke.py
+      - name: Test login and signup entry forms
+        script: python3 ios/scripts/run-ui-tests.py
     artifacts:
       - ios-simulator-evidence/**
       - ios-simulator-derived/Build/Products/Debug-iphonesimulator/*.app
