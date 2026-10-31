@@ -10,7 +10,8 @@
     * { box-sizing: border-box; }
     body { margin: 0; min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left)); }
     main { width: 100%; max-width: 420px; }
-    .brand { font-weight: 750; font-size: 20px; margin-bottom: 40px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 750; font-size: 20px; margin-bottom: 40px; }
+    .brand-mark { flex: none; width: 56px; height: 56px; padding: 6px; border-radius: 12px; background: #fff; }
     h1 { font-size: clamp(26px, 7vw, 34px); line-height: 1.15; letter-spacing: -.025em; }
     p { line-height: 1.6; }
     .hint { font-size: 14px; color: #4c6170; }
@@ -21,7 +22,16 @@
 </head>
 <body>
   <main>
-    <div class="brand">PropRoster</div>
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+        <g fill="none" stroke="#075740" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 47 L50 20 L84 47 M79 42 V27"/>
+          <path d="M42 51 H67 M42 62 H67 M42 73 H67"/>
+        </g>
+        <g fill="#075740"><circle cx="31" cy="51" r="3.3"/><circle cx="31" cy="62" r="3.3"/><circle cx="31" cy="73" r="3.3"/></g>
+      </svg>
+      <span>PropRoster</span>
+    </div>
     <h1>We couldn’t connect.</h1>
     <p>Check your internet connection and try again. PropRoster may also be temporarily unavailable.</p>
     <p class="hint">You need an internet connection to access your account. If you were saving something, check whether it was saved after reconnecting.</p>

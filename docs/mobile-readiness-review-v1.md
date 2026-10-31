@@ -272,3 +272,20 @@ following https://developer.android.com/studio/run/emulator-troubleshooting .
 This isolates a graphics compatibility possibility, not a proven root cause.
 The API level, test assertions, evidence requirements and app remain unchanged.
 A new cloud result is required before claiming any Android auth-entry pass.
+
+
+## Bundled recovery branding
+
+Added a self-contained inline vector version of the supplied green roof/list
+mark beside PropRoster on the connection-recovery screen. A white tile keeps
+the green mark visible in light and dark appearance. The mark is decorative
+and hidden from accessibility, with the adjacent brand text retained. No
+external assets, scripts, network probes or automatic retries were introduced.
+The fixed HTTPS retry destination and existing recovery guidance are unchanged.
+HTML/SVG structure and the self-contained recovery constraints were checked
+locally. Visual verification on an installed native build remains pending.
+
+The graphics isolation run 41226223537 also lost its emulator and produced no
+usable auth-entry screenshots. Disabling Vulkan did not resolve the observed
+disconnect; its cause and Android auth-entry acceptance remain unresolved.
+No production deployment or store publication occurred.
