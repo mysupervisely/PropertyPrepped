@@ -33,10 +33,16 @@ def main():
         raise RuntimeError('Expected verified debug APK is missing.')
 
     def run(*args, check=True, timeout=60):
-        return subprocess.run(args, check=check, capture_output=True, timeout=timeout)
+        try:
+            return subprocess.run(args, check=check, capture_output=True, timeout=timeout)
+        except subprocess.CalledProcessError as error:
+            (evidence / 'command-failure.txt').write_text(
+                ' '.join(args) + '\n' + (error.stdout or b'').decode(errors='replace')
+                + (error.stderr or b'').decode(errors='replace'))
+            raise
 
-    def device(*args, check=True):
-        return run(adb, '-s', serial, *args, check=check)
+    def device(*args, check=True, timeout=60):
+        return run(adb, '-s', serial, *args, check=check, timeout=timeout)
 
     available = run(emulator, '-list-avds').stdout.decode()
     (evidence / 'available-avds.txt').write_text(available)
@@ -46,7 +52,8 @@ def main():
     with (evidence / 'emulator.log').open('wb') as log:
         process = subprocess.Popen([emulator, '-avd', avd, '-port', '5554',
                                     '-no-window', '-no-audio', '-no-snapshot',
-                                    '-wipe-data', '-no-boot-anim', '-gpu', 'swiftshader_indirect'],
+                                    '-wipe-data', '-no-boot-anim', '-gpu', 'swiftshader',
+                                    '-feature', '-Vulkan', '-cores', '2'],
                                    stdout=log, stderr=subprocess.STDOUT)
         try:
             run(adb, 'start-server')
@@ -87,16 +94,17 @@ def main():
             summary['status'] = 'captured'
         except Exception as error:
             summary['error'] = str(error)
+            summary['emulator_returncode_at_failure'] = process.poll()
             raise
         finally:
             # Diagnostics must not prevent shutdown or replace the original error.
             try:
-                crash = device('logcat', '-b', 'crash', '-d', check=False)
+                crash = device('logcat', '-b', 'crash', '-d', check=False, timeout=10)
                 (evidence / 'crash.log').write_bytes(crash.stdout + crash.stderr)
             except (OSError, subprocess.SubprocessError):
                 pass
             try:
-                web = device('logcat', '-d', '-s', 'chromium', 'Capacitor', check=False)
+                web = device('logcat', '-d', '-s', 'chromium', 'Capacitor', check=False, timeout=10)
                 (evidence / 'webview.log').write_bytes(web.stdout + web.stderr)
             except (OSError, subprocess.SubprocessError):
                 pass

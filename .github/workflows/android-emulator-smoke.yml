@@ -35,6 +35,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+          cache: gradle
+          cache-dependency-path: |
+            mobile/android/**/*.gradle
+            mobile/android/gradle/wrapper/gradle-wrapper.properties
       - name: Validate packaging checks
         run: |
           python3 mobile/scripts/test-debug-apk.py
