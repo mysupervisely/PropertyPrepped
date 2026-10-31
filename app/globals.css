@@ -160,12 +160,12 @@ button { cursor: pointer; }
 .previewBanner { position: sticky; top: 0; z-index: 30; background: #7a3b12; color: white; text-align: center; font-size: 12px; font-weight: 700; letter-spacing: .02em; padding: 8px 12px; padding-top: max(8px, env(safe-area-inset-top)); }
 .topbar { min-height: 86px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); }
 .brand { font-size: 25px; font-weight: 750; letter-spacing: -0.7px; display: block; }
-/* Wordmark two-tone treatment (components/Wordmark.tsx) — "Prop" stays the
-   standard text color, "Roster" uses the same green as .primary/--brand.
-   Explicit colors rather than inherited, so this can't silently change if
-   .brand's container ever sets a different color for some other reason. */
-.wordmarkProp { color: var(--text); }
-.wordmarkRoster { color: var(--brand); }
+/* Shared identity uses the supplied symbol and its deep green wordmark.
+   em sizing follows each existing compact header's font-size. */
+.wordmarkLockup { display: inline-flex; align-items: center; gap: 0.12em; vertical-align: middle; white-space: nowrap; }
+.wordmarkIcon { display: block; width: 1.6em; height: 1.6em; flex: 0 0 auto; object-fit: contain; }
+.wordmarkText { display: inline-flex; }
+.wordmarkProp, .wordmarkRoster { color: #075740; }
 .tagline { color: var(--muted); font-size: 13px; margin-top: 2px; display: block; }
 .brandButton { border: 0; padding: 0; background: transparent; color: inherit; text-align: left; text-decoration: none; }
 /* Phase B button foundation: .primary/.secondary are already the

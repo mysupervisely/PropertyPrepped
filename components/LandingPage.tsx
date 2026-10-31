@@ -53,7 +53,6 @@ import { authFormError, runAuthSubmission } from '../lib/auth/form-submission'
 import { bindAuthViewport } from '../lib/auth/visual-viewport'
 import Link from 'next/link'
 import { supabase } from '../lib/supabase'
-import Image from 'next/image'
 import { Wordmark } from './Wordmark'
 import { PLANS, PUBLIC_PLAN_ORDER, PLAN_FEATURE_HIGHLIGHTS, EARLY_ACCESS_PRICING } from '../lib/billing/plans'
 import { postSignupRedirectPath, INTENDED_ROLE_STORAGE_KEY, type IntendedRole } from '../lib/tenant-connect/onboarding'
@@ -61,12 +60,6 @@ import { useScrollReveal } from '../lib/homepage/use-scroll-reveal'
 import { trackEvent } from '../lib/analytics'
 import { toSafeErrorMessage } from '../lib/user-facing-errors'
 import { LegalFooter } from './LegalFooter'
-
-function HouseIcon() {
-  return (
-    <Image src="/proproster-logo.png" width={40} height={40} alt="" aria-hidden="true" />
-  )
-}
 
 function IconBadge({ children }: { children: React.ReactNode }) {
   return <span className="landingIconBadge">{children}</span>
@@ -502,7 +495,6 @@ export default function LandingPage({ sessionExpired = false }: { sessionExpired
     <main className="landingPage">
       <header className="landingHeader">
         <div className="landingBrand">
-          <HouseIcon />
           <span className="landingBrandText">
             <span className="brand"><Wordmark /></span>
             <span className="tagline">Your properties. Organized.</span>
