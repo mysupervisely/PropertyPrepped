@@ -6,6 +6,22 @@ evidence="$root/android-emulator-evidence"
 adb_tool="$ANDROID_HOME/platform-tools/adb"
 serial="${ANDROID_SERIAL:-emulator-5554}"
 mkdir -p "$evidence"
+# Only current-run output may satisfy acceptance checks.
+python3 - "$evidence" "$root/mobile/android/app/build/outputs/androidTest-results" <<'PY'
+from pathlib import Path
+import shutil, sys
+evidence, reports = map(Path, sys.argv[1:])
+for name in ('auth-entry', 'auth-entry.tar', 'summary.json'):
+    item = evidence / name
+    if item.is_dir():
+        shutil.rmtree(item)
+    elif item.exists():
+        item.unlink()
+for report in reports.rglob('TEST-*.xml'):
+    report.unlink()
+PY
+# A clean emulator may not have the debug app installed yet.
+timeout 15 "$adb_tool" -s "$serial" shell run-as com.proproster.app rm -rf files/auth-test-evidence >/dev/null 2>&1 || true
 collect_evidence() {
   result=$?
   trap - EXIT

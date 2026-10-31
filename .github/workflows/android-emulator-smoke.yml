@@ -76,6 +76,14 @@ jobs:
           disable-animations: true
           emulator-boot-timeout: 300
           script: bash mobile/scripts/run-android-auth-tests.sh
+      - name: Capture host resource diagnostics
+        if: always()
+        run: |
+          mkdir -p android-emulator-evidence
+          free -m > android-emulator-evidence/host-memory.txt
+          df -h > android-emulator-evidence/host-disk.txt
+          ps -eo pid,ppid,comm,rss --sort=-rss | head -40 > android-emulator-evidence/host-processes.txt || true
+          sudo dmesg --ctime | tail -200 > android-emulator-evidence/host-kernel.txt || true
       - name: Save APK and diagnostics
         if: always()
         uses: actions/upload-artifact@v4

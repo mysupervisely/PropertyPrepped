@@ -9,21 +9,27 @@ RUNNER = Path(__file__).with_name('run-android-auth-tests.sh').resolve()
 
 
 class AuthRunnerExitTests(unittest.TestCase):
-    def scenario(self, gradle_exit=0, report=True, screenshots=True):
+    def scenario(self, gradle_exit=0, report=True, screenshots=True, stale=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             android = root / 'mobile/android'
             android.mkdir(parents=True)
-            (android / 'gradlew').write_text(f'#!/bin/bash\nexit {gradle_exit}\n')
+            (android / 'gradlew').write_text(f'#!/bin/bash\nif [ -f pending-report.xml ]; then cp pending-report.xml app/build/outputs/androidTest-results/connected/debug/TEST-fixture.xml; fi\nexit {gradle_exit}\n')
             reports = android / 'app/build/outputs/androidTest-results/connected/debug'
             reports.mkdir(parents=True)
             if report:
-                (reports / 'TEST-fixture.xml').write_text('<testsuite tests="1" failures="0" errors="0" skipped="0"/>')
+                (android / 'pending-report.xml').write_text('<testsuite tests="1" failures="0" errors="0" skipped="0"/>')
+            if stale:
+                (reports / 'TEST-stale.xml').write_text('<testsuite tests="1" failures="0" errors="0" skipped="0"/>')
+                old = root / 'android-emulator-evidence/auth-entry/auth-test-evidence'
+                old.mkdir(parents=True)
+                for name in ['login-entry', 'password-reset-entry', 'signup-entry', 'auth-returned-to-landing']:
+                    (old / (name + '.png')).write_bytes(b'old image')
             adb = root / 'sdk/platform-tools/adb'
             adb.parent.mkdir(parents=True)
             adb.write_text('''#!/usr/bin/env python3
 import io, os, sys, tarfile
-if 'run-as' in sys.argv:
+if 'exec-out' in sys.argv:
     with tarfile.open(fileobj=sys.stdout.buffer, mode='w|') as archive:
         if os.environ['FAKE_SCREENSHOTS'] == '1':
             for name in ['login-entry', 'password-reset-entry', 'signup-entry', 'auth-returned-to-landing']:
@@ -50,6 +56,12 @@ if 'run-as' in sys.argv:
 
     def test_missing_screenshots_cannot_pass(self):
         self.assertNotEqual(self.scenario(screenshots=False), 0)
+
+    def test_stale_report_cannot_pass(self):
+        self.assertNotEqual(self.scenario(report=False, stale=True), 0)
+
+    def test_stale_screenshots_cannot_pass(self):
+        self.assertNotEqual(self.scenario(screenshots=False, stale=True), 0)
 
 
 if __name__ == '__main__':
