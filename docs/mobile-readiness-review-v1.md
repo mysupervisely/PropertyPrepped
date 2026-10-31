@@ -176,3 +176,14 @@ cover success, recovery failure, auth failure, timeout, and launch failure.
 Recovery capture also rejects an app console process that has already exited,
 including exit zero, instead of accepting a screenshot of a stopped app.
 These checks validate orchestration only, not iOS rendering or authenticated use.
+
+## Auth dialog keyboard focus
+
+The hosted auth dialog now focuses its heading on open, contains forward and
+backward Tab navigation, redirects outside programmatic focus, and restores
+the prior connected focus target on dismissal. Focusing the heading avoids
+automatically opening a phone keyboard. Available controls are recalculated
+when tabbing so sign-in/signup/reset modes and disabled fields stay current.
+Five behavioral regression tests pass; the full suite now passes 184 files
+and 3,073 tests, with TypeScript passing. Device and assistive-technology
+verification remains pending, and hosted deployment is still required.

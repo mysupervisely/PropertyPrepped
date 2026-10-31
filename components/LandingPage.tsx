@@ -51,6 +51,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { authFormError, runAuthSubmission } from '../lib/auth/form-submission'
 import { bindAuthViewport } from '../lib/auth/visual-viewport'
+import { bindDialogFocus } from '../lib/auth/dialog-focus'
 import Link from 'next/link'
 import { supabase } from '../lib/supabase'
 import { Wordmark } from './Wordmark'
@@ -322,6 +323,8 @@ export default function LandingPage({ sessionExpired = false }: { sessionExpired
   const [busy, setBusy] = useState(false)
   const authSubmission = useRef(false)
   const authOverlayRef = useRef<HTMLDivElement>(null)
+  const authDialogRef = useRef<HTMLDivElement>(null)
+  const authTitleRef = useRef<HTMLHeadingElement>(null)
 
   useEffect(() => {
     if (!authOpen || !authOverlayRef.current) return
@@ -480,6 +483,11 @@ export default function LandingPage({ sessionExpired = false }: { sessionExpired
   function closeAuth() {
     setAuthOpen(false)
   }
+
+  useEffect(() => {
+    if (!authOpen || !authDialogRef.current || !authTitleRef.current) return
+    return bindDialogFocus(authDialogRef.current, authTitleRef.current)
+  }, [authOpen])
 
   // Accessibility: Escape closes the auth panel, same as any other modal.
   useEffect(() => {
@@ -710,12 +718,12 @@ export default function LandingPage({ sessionExpired = false }: { sessionExpired
 
       {authOpen && (
         <div ref={authOverlayRef} className="overlay landingAuthOverlay" onMouseDown={(e) => e.target === e.currentTarget && closeAuth()}>
-          <div className="modal landingAuthModal" role="dialog" aria-modal="true" aria-busy={busy} aria-labelledby="landing-auth-title">
+          <div ref={authDialogRef} className="modal landingAuthModal" role="dialog" aria-modal="true" aria-busy={busy} aria-labelledby="landing-auth-title">
             <div className="landingSignInCard">
               <div className="landingSignInCardTop">
                 <div>
                   <p className="eyebrow">{authMode === 'signin' ? 'WELCOME BACK' : authMode === 'signup' ? 'CREATE YOUR ACCOUNT' : 'RESET PASSWORD'}</p>
-                  <h2 id="landing-auth-title">{authMode === 'signin' ? 'Sign in to PropRoster' : authMode === 'signup' ? 'Create your PropRoster account' : 'Reset your password'}</h2>
+                  <h2 ref={authTitleRef} tabIndex={-1} id="landing-auth-title">{authMode === 'signin' ? 'Sign in to PropRoster' : authMode === 'signup' ? 'Create your PropRoster account' : 'Reset your password'}</h2>
                 </div>
                 <button type="button" className="iconButton" aria-label="Close" onClick={closeAuth}>&times;</button>
               </div>
