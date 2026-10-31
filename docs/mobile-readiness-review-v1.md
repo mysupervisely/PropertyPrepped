@@ -152,3 +152,17 @@ a fixed startup sleep, a retry of Start Free, or a weaker signup assertion.
 A single Start Free tap must still open signup after readiness. First-tap
 behavior during initial rendering remains a separate product acceptance item.
 The keyboard layout change still needs deployment before its cloud verification.
+
+## Recovery diagnostic correction
+
+The fourth supplied build passed all three auth-entry UI tests. Its recovery
+screenshot was blank, and SpringBoard icons remained placeholders. These do
+not verify recovery or branding. Live keyboard overlap still needs the pending
+hosted viewport change deployed.
+
+The isolated recovery harness previously used WebKit-restricted port 1. It now
+reserves a non-listening ephemeral loopback port, first captures the bundled
+recovery page directly using server.appStartPath, then captures navigation
+failure at 10 and 30 seconds with app console logs. Original app restoration
+remains in finally. This corrects diagnostics, not a proven production fix.
+Simulator execution and visual inspection are still required on macOS.
