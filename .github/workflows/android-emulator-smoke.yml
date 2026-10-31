@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/android-emulator-smoke.yml'
       - 'mobile/scripts/android-emulator-smoke.py'
+      - 'mobile/scripts/run-android-auth-tests.sh'
+      - 'mobile/scripts/test-android-auth-runner.py'
       - 'mobile/android/app/src/androidTest/**'
   workflow_dispatch:
 
@@ -41,6 +43,7 @@ jobs:
       - name: Validate packaging checks
         run: |
           python3 mobile/scripts/test-debug-apk.py
+          python3 mobile/scripts/test-android-auth-runner.py
       - name: Install and sync mobile dependencies
         working-directory: mobile
         run: |
@@ -49,7 +52,6 @@ jobs:
       - name: Configure Android SDK
         run: |
           test -d "$ANDROID_HOME"
-          printf 'ANDROID_AVD_HOME=%s/proproster-avd\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
           printf 'ANDROID_SDK_ROOT=%s\n' "$ANDROID_HOME" >> "$GITHUB_ENV"
           printf 'sdk.dir=%s\n' "$ANDROID_HOME" > mobile/android/local.properties
       - name: Build and verify debug APK
@@ -58,16 +60,22 @@ jobs:
           bash ./gradlew --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug
           cd ../..
           python3 mobile/scripts/verify-debug-apk.py
-      - name: Prepare ephemeral emulator
+      - name: Enable hardware acceleration for the ephemeral runner
         run: |
-          mkdir -p "$ANDROID_AVD_HOME"
           test -c /dev/kvm
           sudo chown "$(id -un)" /dev/kvm
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "emulator" "system-images;android-35;google_apis;x86_64"
-          printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name emulator-35 --package "system-images;android-35;google_apis;x86_64" --device pixel_4
-          "$ANDROID_HOME/emulator/emulator" -list-avds
-      - name: Launch app and capture screenshots
-        run: python3 mobile/scripts/android-emulator-smoke.py
+      - name: Run native Android auth-entry tests
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_4
+          ram-size: 2048M
+          heap-size: 256M
+          disable-animations: true
+          emulator-boot-timeout: 300
+          script: bash mobile/scripts/run-android-auth-tests.sh
       - name: Save APK and diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -80,3 +88,5 @@ jobs:
             android-build-evidence/
             mobile/android/app/build/outputs/apk/debug/*.apk
             mobile/android/app/build/reports/lint-results-debug.*
+            mobile/android/app/build/reports/androidTests/
+            mobile/android/app/build/outputs/androidTest-results/
