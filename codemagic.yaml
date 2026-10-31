@@ -121,3 +121,27 @@ workflows:
         key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
+
+  android-debug:
+    name: PropRoster Android Debug APK (Capacitor, test only)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      node: 22
+      java: 21
+    scripts:
+      - name: Install mobile dependencies
+        script: cd mobile && npm ci
+      - name: Sync existing native Android project
+        script: cd mobile && npx cap sync android
+      - name: Set Android SDK location
+        script: |
+          test -n "$ANDROID_SDK_ROOT"
+          printf 'sdk.dir=%s\n' "$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/mobile/android/local.properties"
+      - name: Compile debug APK and run Android lint
+        script: |
+          cd mobile/android
+          bash ./gradlew --no-daemon :app:assembleDebug :app:lintDebug
+    artifacts:
+      - mobile/android/app/build/outputs/apk/debug/*.apk
+      - mobile/android/app/build/reports/lint-results-debug.*

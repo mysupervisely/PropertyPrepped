@@ -190,3 +190,27 @@ Browser checks can validate layout and retry destination, but native
 fallback triggering and session retention still require simulator/device
 testing: cold-launch offline, reconnect and retry, resume after network
 loss, and verify whether an interrupted save completed before resubmitting.
+
+## Manual Android debug build
+
+On branch `ios-readiness-v1`, Codemagic offers **PropRoster Android Debug APK
+(Capacitor, test only)**. It installs the locked mobile dependencies, syncs
+the existing Android project, compiles a debug APK, and runs Android lint.
+The workflow publishes the APK and lint report as downloadable build artifacts.
+It has no automatic trigger or Play Store publishing step.
+
+This is a test build of the Capacitor shell, not the existing Bubblewrap/TWA
+Google Play release. Do not upload it to Play Console or replace an existing
+installation that uses a different signing certificate. Android debug signing
+uses the runner's test key; do not assume it stays the same between builds.
+Use a separate test device/profile or emulator and fictional records.
+
+Building this APK does not deploy or rebuild the hosted Next.js website and
+does not require a Netlify deployment. It still loads the live production site;
+hosting availability and undeployed website fixes remain separate concerns.
+
+First cloud execution is pending. A passing compilation/lint result would not
+verify launch, login, uploads, back navigation, keyboard behavior, the new logo,
+or store acceptance. Those need emulator/device checks. The local execution
+environment was unavailable when this workflow was added, so no Android build
+or lint pass is claimed.
