@@ -125,7 +125,7 @@ describe('Section 4: reduced vertical space in Overview, scoped only to Overview
     // Section identity (OVERVIEW / At a glance / Edit property facts) is kept.
     expect(slice).toContain('<p className="eyebrow">OVERVIEW</p>')
     expect(slice).toContain('<h2>At a glance</h2>')
-    expect(slice).toContain('Edit property facts')
+    expect(slice).not.toContain('Edit property facts') // Edit remains in the compact property header.
   })
 
   it('the tightened spacing is modest (a reduction, not a removal) and scoped via its own classes rather than editing .workspaceContent/.workspaceHeading globally', () => {

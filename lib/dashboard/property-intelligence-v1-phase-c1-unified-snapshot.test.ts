@@ -178,8 +178,8 @@ describe('Phase C.1: everything else stays intact', () => {
     expect(pageSource).toContain("const tabs: Tab[] = ['Overview', 'Rent', 'Maintenance', 'Details', 'PropCrew', 'Documents', 'Tax']")
   })
 
-  it('Edit property (hero) and Edit property facts (Overview) both still open the same existing edit flow', () => {
-    expect((pageSource.match(/onClick=\{\(\) => openEditProperty\(selected\)\}/g) || []).length).toBeGreaterThanOrEqual(2)
+  it('the compact hero keeps one canonical property edit action', () => {
+    expect((pageSource.match(/onClick=\{\(\) => openEditProperty\(selected\)\}/g) || []).length).toBe(1)
   })
 
   it('Notes, Timeline, and Quick actions are untouched', () => {

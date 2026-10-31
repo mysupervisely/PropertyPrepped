@@ -392,3 +392,36 @@ status. The 393px screenshot was visually inspected. This supersedes the
 previous browser-install blocker for local isolated checks, but is not an
 authenticated React app, real iPhone/Safari, enlarged-text, or device pass.
 No deployment or store publication occurred.
+
+
+## Property workspace presentation and scoped sections
+
+Replaced the visible property dropdown/tab strip with a section grid for
+Overview, Rent, Tenant Connect, Maintenance, PropCrew, Documents, Tax and
+Details. Tenant Connect selects the existing Rent/Tenant view; maintenance
+and PropCrew remain scoped to selected.id through their existing panels.
+Existing handlers, entitlements, data reads and writes are unchanged. The
+legacy selector markup remains CSS-hidden for compatibility with existing
+wiring; it is not a separate visible menu. The new navigation has one pressed
+state and four behavioral tests for labels, routing and rent subtab selection.
+
+The selected-property header now uses a compact thumbnail beside identity
+and edit controls, replacing the tall photo banner. Duplicate Overview Edit
+property facts was removed, retaining the header edit action. The market rent
+heading now holds one Check rent/Refresh button and provider attribution;
+existing fetched values, estimate caveats and error handling are retained.
+The mortgage-balance note moved beside the financial figures. The shared
+logo uses multiply blending to merge its white background with light page
+surfaces; the supplied artwork is unchanged. Dashboard rows use more compact
+inline metrics and avoid visually repeating Rent status beside its status pill
+(the label remains available to assistive technology).
+
+Validation: 186 test files / 3,082 tests passed; production build and TypeScript
+passed. Two older source assertions were updated for deliberate removal of
+the duplicate Edit control. Isolated Chromium fixtures using full application
+CSS passed horizontal-overflow checks at 320, 375, 393, 430, 760 and 1024px;
+mobile navigation buttons measured at least 44px tall. Dashboard and property
+workspace screenshots were visually inspected. Fixtures use fictional data
+and placeholder photos, not an authenticated app session. Live property
+switching, network-backed actions, Safari and enlarged-text verification
+remain pending. No production merge or store submission occurred.

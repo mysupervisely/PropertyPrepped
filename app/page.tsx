@@ -15,6 +15,7 @@ import { toSafeErrorMessage } from '../lib/user-facing-errors'
 import { AuthHeader } from '../components/AuthHeader'
 import DocumentIntelligencePanel, { type ApplyAction } from '../components/DocumentIntelligencePanel'
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
+import { PropertySectionNav } from '../components/property-profile/PropertySectionNav'
 import { PropCrewPanel } from '../components/PropCrewPanel'
 import { PropertySystemsPanel, type PropertySystem } from '../components/property-profile/PropertySystemsPanel'
 import { PropertyNotesPanel, type PropertyNote } from '../components/property-profile/PropertyNotesPanel'
@@ -3306,6 +3307,11 @@ export default function Home() {
             replaced the horizontally-scrolling mobile version of this
             same strip with .mobilePropertyNav below — see its own
             comment). */}
+        <PropertySectionNav propertyAddress={selected.address} activeTab={activeTab} rentSubTab={rentSubTab} maintenanceCount={selectedOpenMaintenanceCount} onSelect={(tab, rentSection) => {
+          setActiveTab(tab)
+          if (rentSection) setRentSubTab(rentSection)
+        }} />
+
         <nav className="tabs" role="tablist" aria-label="Property sections">{tabs.map((tab) => <button key={tab} role="tab" aria-selected={activeTab === tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
 
         {/* Mobile Property Section Selector V1: below 761px (the exact
@@ -3353,7 +3359,7 @@ export default function Home() {
         </div>
 
         {activeTab === 'Overview' && <section className="workspaceContent workspaceContentTight">
-          <div className="sectionHead workspaceHeading workspaceHeadingTight"><div><p className="eyebrow">OVERVIEW</p><h2>At a glance</h2></div><button className="secondary" onClick={() => openEditProperty(selected)}>Edit property facts</button></div>
+          <div className="sectionHead workspaceHeading workspaceHeadingTight"><div><p className="eyebrow">OVERVIEW</p><h2>At a glance</h2></div></div>
 
           {/* Property Intelligence V1, Phase C.3 (Compact Property
               Snapshot): same ONE card, same data, same hierarchy as
@@ -3391,8 +3397,9 @@ export default function Home() {
               <div className="propertySnapshotMetric"><strong>{metricMoney(performance.contractMonthlyRent, '/mo')}</strong><span>Monthly Rent</span></div>
               <div className="propertySnapshotMetric"><strong>{performance.mortgageBalance.source === 'financing_status_confirmed' ? selected.financing_status : metricMoney(performance.mortgageBalance)}</strong><span>Mortgage</span></div>
             </div>
+            {performance.mortgageBalance.potentiallyStale && <p className="propertyPerformanceNote">Based on the mortgage balance saved in PropRoster.</p>}
             <div className="propertyMarketRentCard">
-              <div className="propertyMarketRentHeading"><strong>Market rent</strong><span>Powered by RentCast</span></div>
+              <div className="propertyMarketRentHeading"><div><strong>Market rent</strong><span>Powered by RentCast</span></div><button type="button" className="propertyMarketRentButton" disabled={rentEstimateLoading} onClick={() => requestMarketRent(selected.id)}>{rentEstimateLoading ? 'Checking…' : rentEstimateByProperty[selected.id] ? 'Refresh' : 'Check rent'}</button></div>
               {rentEstimateByProperty[selected.id] ? (
                 <>
                   <div className="propertyMarketRentValues">
@@ -3407,13 +3414,9 @@ export default function Home() {
                 </>
               ) : selected.market_rent_estimate != null && Number(selected.market_rent_estimate) > 0 ? (
                 <p className="propertyMarketRentEmpty">Your estimate: {money(Number(selected.market_rent_estimate))}/mo. Not independently verified.</p>
-              ) : <p className="propertyMarketRentEmpty">Check estimated market rent using nearby rental data.</p>}
-              <div className="propertyMarketRentActions">
-                <button type="button" className="propertyMarketRentButton" disabled={rentEstimateLoading} onClick={() => requestMarketRent(selected.id)}>{rentEstimateLoading ? 'Checking…' : rentEstimateByProperty[selected.id] ? 'Refresh estimate' : 'Get market estimate'}<span aria-hidden="true">↗</span></button>
-              </div>
+              ) : null}
               {rentEstimateError && <p className="propertyMarketRentError" role="status">{rentEstimateError}</p>}
             </div>
-            {performance.mortgageBalance.potentiallyStale && <p className="propertyPerformanceNote">Based on the mortgage balance saved in PropRoster.</p>}
             {/* Phase C.3 follow-up (2nd real-device round): the engine's
                 own explanatory note for a financing_status-confirmed $0
                 ("This property is marked 'Paid Off' — mortgage balance
