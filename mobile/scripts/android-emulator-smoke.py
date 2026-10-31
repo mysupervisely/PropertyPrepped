@@ -95,6 +95,11 @@ def main():
                 (evidence / 'crash.log').write_bytes(crash.stdout + crash.stderr)
             except (OSError, subprocess.SubprocessError):
                 pass
+            try:
+                web = device('logcat', '-d', '-s', 'chromium', 'Capacitor', check=False)
+                (evidence / 'webview.log').write_bytes(web.stdout + web.stderr)
+            except (OSError, subprocess.SubprocessError):
+                pass
             (evidence / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
             process.terminate()
             try:

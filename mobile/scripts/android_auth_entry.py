@@ -67,6 +67,13 @@ def run_auth_checks(device, evidence):
             raise RuntimeError('Auth capture did not return a PNG.')
         (evidence / f'{name}.png').write_bytes(png)
 
+    initial = hierarchy()
+    recovery_observed = find_node(initial, 'We couldn’t connect.') is not None
+    if recovery_observed:
+        capture('initial-connection-recovery')
+        tap('Try again')
+        wait_for('Log In', clickable=True)
+        capture('connection-retry-returned-to-landing')
     tap('Log In')
     wait_for('Sign in to PropRoster')
     wait_for('Enter your email')
@@ -84,5 +91,7 @@ def run_auth_checks(device, evidence):
     tap('Close')
     wait_for('Log In', clickable=True)
     capture('auth-returned-to-landing')
-    return ['login entry opened', 'reset entry opened and returned',
-            'signup role choice opened', 'dialogs closed to landing']
+    return {'initial_connection_recovery': recovery_observed,
+            'retry_returned_to_landing': recovery_observed,
+            'checks': ['login entry opened', 'reset entry opened and returned',
+                       'signup role choice opened', 'dialogs closed to landing']}
