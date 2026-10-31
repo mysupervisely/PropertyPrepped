@@ -214,3 +214,17 @@ verify launch, login, uploads, back navigation, keyboard behavior, the new logo,
 or store acceptance. Those need emulator/device checks. The local execution
 environment was unavailable when this workflow was added, so no Android build
 or lint pass is claimed.
+
+### APK packaging evidence
+
+The Android debug workflow also runs `mobile/scripts/verify-debug-apk.py`.
+It checks ZIP integrity, required Android entries, the bundled Capacitor
+identity and fixed production URL, exact recovery HTML bytes, absence of
+diagnostic start paths, and presence of launcher resource files. It writes
+`android-build-evidence/apk-packaging.json` with the APK SHA-256 checksum
+and check scope. A packaging failure fails the workflow.
+
+Launcher resource presence does not verify the artwork visually. This script
+does not parse the compiled manifest or verify the APK signature, launch,
+authentication, uploads, back navigation, keyboard behavior, or store readiness.
+Its first execution is pending; source review is not a passing Android build.

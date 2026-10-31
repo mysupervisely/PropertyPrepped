@@ -142,6 +142,9 @@ workflows:
         script: |
           cd mobile/android
           bash ./gradlew --no-daemon :app:assembleDebug :app:lintDebug
+      - name: Verify packaged Android configuration and recovery assets
+        script: python3 mobile/scripts/verify-debug-apk.py
     artifacts:
       - mobile/android/app/build/outputs/apk/debug/*.apk
       - mobile/android/app/build/reports/lint-results-debug.*
+      - android-build-evidence/**
