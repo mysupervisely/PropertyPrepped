@@ -37,6 +37,8 @@ const config: CapacitorConfig = {
   server: {
     url: 'https://proproster.com',
     androidScheme: 'https',
+    // Bundled recovery screen remains available if the hosted page cannot load.
+    errorPath: 'connection-error.html',
   },
 }
 

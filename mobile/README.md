@@ -17,7 +17,7 @@ mobile/
 ├── capacitor.config.ts       PRODUCTION config (https://proproster.com) — the default
 ├── capacitor.config.dev.json DEV-ONLY config — never used unless explicitly passed
 ├── assets/                   Source icon/splash art (see "Branding" below)
-├── www/                      Placeholder only — never actually shown (server.url wins)
+├── www/                      Placeholder index and bundled connection recovery screen
 ├── ios/                      Generated Xcode project (com.proproster.app)
 └── android/                  Generated Android Studio project (com.proproster.app)
 ```
@@ -53,34 +53,18 @@ and knows nothing about this directory.
 
 ## Branding / icons / splash
 
-Source art lives in `mobile/assets/` (`icon.png`, 1024×1024;
-`splash.png`, 2732×2732), generated from the **existing, unmodified**
-PropRoster brand mark at `public/icons/icon-512.png` (the same art the
-web app's PWA manifest already uses) — a resolution-only upscale for
-the icon, and the same unmodified logo centered on a plain canvas using
-the web manifest's own `background_color` (`#f5f7f9`) for the splash.
-**The logo itself was never redrawn, cropped, or altered.**
+The current iOS icon and launch screens use the user-supplied green roof/list
+logo (`IMG_6725.png`, supplied October 30, 2026). `assets/icon.png` preserves
+the original 1024 by 1024 image. The bundled iOS icon is opaque at 1024 by
+1024. `assets/splash.png` and `assets/splash-dark.png` center the supplied full PropRoster wordmark
+on a white 2732 by 2732 canvas, with no redesign. All six referenced iOS
+launch images use this artwork, including dark appearances.
 
-Native icons/splash screens for both platforms were generated from
-these via `@capacitor/assets` (`npm run assets`, from `mobile/`) and
-are already wired into both native projects (verified: iOS
-`LaunchScreen.storyboard` references the generated `Splash` image set;
-Android's launch theme references `@drawable/splash`).
-
-**Known quality caveat, disclosed rather than hidden:** the source art
-is only 512×512 natively; 1024×1024/2732×2732 versions used here are a
-clean upscale, not new detail. Apple's App Store listing icon
-requirement (1024×1024, no alpha) will accept this, but a true
-higher-resolution source from a designer would look sharper — worth
-doing before M13 submission, not required to keep testing/iterating
-now. Separately, Android's *adaptive* icon foreground layer was
-generated from the same full-bleed flat image (it has no transparent
-margin, since the source has no alpha channel) — on some Android
-launchers' circular/squircle masks this may crop a bit tighter than
-ideal. This is a real, known limitation of reusing the existing flat
-PWA icon as-is rather than a redesign; fixing it means asking for a
-transparent-background version of the mark, which we're explicitly not
-doing in M2 ("do not redesign the PropRoster logo").
+Android Capacitor icon and splash assets have also been regenerated from
+these sources. Hosted website branding and the separate Bubblewrap/TWA
+Google Play workflow have not been changed. Android build/release verification
+remains pending. Native rendering requires a new cloud
+build; it has not yet been verified with the new logo.
 
 ## Billing safety — no code change needed, verified from source
 
@@ -108,10 +92,9 @@ source (not assumed from documentation):
 add `stripe.com`/`checkout.stripe.com`/`billing.stripe.com` to it. The
 practical effect: a signed-in user tapping "Manage Subscription" or any
 Checkout link inside the app is handed off to Safari/Chrome, never
-shown a purchase flow inside PropRoster's own app chrome — the standard
-low-risk posture for avoiding an App Store Guideline 3.1.1 rejection
-without implementing Apple IAP or Google Play Billing (neither was
-implemented; none of this is a new billing system).
+shown a purchase flow inside PropRoster's own app chrome — a navigation behavior only. Browser handoff does not establish payment
+policy compliance. Review current storefront-specific requirements before
+distribution. Neither Apple IAP nor Google Play Billing is implemented.
 
 This mechanism was confirmed by reading the native source, **not** by
 running the app on a simulator/device/emulator — none were available in
@@ -170,7 +153,7 @@ Requires a Mac. None of this can be done from this Linux environment.
 3. `npx cap open ios` — opens `mobile/ios/App/App.xcodeproj` in Xcode (confirmed via the installed `@capacitor/cli` source: it opens the `.xcworkspace` only when CocoaPods is in use; this project's package manager is SPM, so it opens the `.xcodeproj` directly).
 4. In Xcode: select the `App` target → *Signing & Capabilities* → choose your own (free) Apple ID team so it can sign a debug build. (A paid Apple Developer account is only needed for TestFlight/App Store — not for running on your own device.)
 5. Plug in your iPhone, select it as the run destination, hit Run (▶). First launch will ask you to trust the developer certificate on the phone (Settings → General → VPN & Device Management).
-6. The app boots straight to `https://proproster.com` and behaves like the live site — sign in with your real PropRoster account.
+6. The app boots straight to `https://proproster.com` and behaves like the live site — use a dedicated test account with fictional data.
 
 Android equivalent: install Android Studio, `npx cap open android`, connect a device with USB debugging enabled (or use an emulator), Run.
 
@@ -192,3 +175,102 @@ named `appstore_credentials` (`APP_STORE_CONNECT_ISSUER_ID`,
 `APP_STORE_CONNECT_KEY_IDENTIFIER`, `APP_STORE_CONNECT_PRIVATE_KEY`) —
 none of that is stored in this repository. See the M4 milestone report
 for the exact one-at-a-time setup steps.
+
+## Connection recovery
+
+The production config sets `server.errorPath` to the bundled
+`www/connection-error.html`. Capacitor can show it when top-level web
+navigation fails, including when the initial hosted page cannot load.
+It has no external assets, scripts, plugins, credentials, or patient/tenant
+data. Try again navigates to the fixed production URL; it does not clear
+storage or retry writes. This does not detect HTTP error pages that load
+successfully, failed API requests, or provide offline access to records.
+
+Browser checks can validate layout and retry destination, but native
+fallback triggering and session retention still require simulator/device
+testing: cold-launch offline, reconnect and retry, resume after network
+loss, and verify whether an interrupted save completed before resubmitting.
+
+## Manual Android debug build
+
+On branch `ios-readiness-v1`, Codemagic offers **PropRoster Android Debug APK
+(Capacitor, test only)**. It installs the locked mobile dependencies, syncs
+the existing Android project, compiles a debug APK, and runs Android lint.
+The workflow publishes the APK and lint report as downloadable build artifacts.
+It has no automatic trigger or Play Store publishing step.
+
+This is a test build of the Capacitor shell, not the existing Bubblewrap/TWA
+Google Play release. Do not upload it to Play Console or replace an existing
+installation that uses a different signing certificate. Android debug signing
+uses the runner's test key; do not assume it stays the same between builds.
+Use a separate test device/profile or emulator and fictional records.
+
+Building this APK does not deploy or rebuild the hosted Next.js website and
+does not require a Netlify deployment. It still loads the live production site;
+hosting availability and undeployed website fixes remain separate concerns.
+
+First cloud execution is pending. A passing compilation/lint result would not
+verify launch, login, uploads, back navigation, keyboard behavior, the new logo,
+or store acceptance. Those need emulator/device checks. The local execution
+environment was unavailable when this workflow was added, so no Android build
+or lint pass is claimed.
+
+### APK packaging evidence
+
+The Android debug workflow also runs `mobile/scripts/verify-debug-apk.py`.
+It checks ZIP integrity, required Android entries, the bundled Capacitor
+identity and fixed production URL, exact recovery HTML bytes, absence of
+diagnostic start paths, and presence of launcher resource files. It writes
+`android-build-evidence/apk-packaging.json` with the APK SHA-256 checksum
+and check scope. A packaging failure fails the workflow.
+
+Launcher resource presence does not verify the artwork visually. This script
+does not parse the compiled manifest or verify the APK signature, launch,
+authentication, uploads, back navigation, keyboard behavior, or store readiness.
+Its first execution is pending; source review is not a passing Android build.
+
+Packaging verifier regression coverage: six local tests pass using synthetic
+ZIP fixtures. They cover the valid fixture, HTTP/localhost rejection, diagnostic
+and navigation overrides, wrong identity, stale recovery HTML, missing DEX,
+and missing launcher resources. The Android workflow runs these checks before
+installing dependencies. Codemagic YAML parsing and existing five simulator
+runner tests also pass. These are not a compiled APK or emulator run.
+
+## Android emulator screenshot workflow
+
+The uploaded first Android debug APK matched the packaging report checksum
+(f2de88ee854aa09a49787739113bce0b28d7589ecc56c7c66043f6e7ae8ea287),
+contained the supplied launcher/splash artwork and exact recovery HTML, and
+had an Android Debug certificate in its v2 signing block. This was certificate
+inspection, not full cryptographic signature verification. Lint reported 29
+warnings and zero errors. No app launch was performed during artifact review.
+
+**PropRoster Android Emulator Screenshots (test only)** is a separate manual
+Codemagic Linux X2 workflow. It builds the same Capacitor debug shell, runs the
+packaging verifier, selects the preinstalled API 36 AVD (API 35 fallback),
+installs and launches the APK, and captures screenshots after 10 and 30 seconds.
+Artifacts include android-emulator-evidence, startup logs, crash log, and a
+summary explicitly scoped to installation/foreground launch/capture. The AVD
+is ephemeral and wiped before launch. No credentials, account creation, login,
+upload, Play Store publication, or hosted deployment is performed.
+
+Linux is required because Codemagic Mac M2 runners cannot run Android emulators.
+First cloud execution remains pending. Syntax, AVD selection and workflow
+isolation checks pass locally; screenshots must be inspected to establish
+what actually rendered. The native shell still loads the production website,
+so unmerged hosted branding and viewport changes will not appear in it.
+
+### Codemagic Linux plan restriction and GitHub fallback
+
+The emulator workflow could not start because this Codemagic account's plan
+does not include the selected Linux instance. This is not an APK compilation
+or app runtime failure. The successful Mac M2 APK/lint workflow remains valid.
+
+`.github/workflows/android-emulator-smoke.yml` provides a standard GitHub-hosted
+Ubuntu 24.04 alternative for this public repository. It runs on PR changes to
+that workflow or the emulator smoke script (restricted to ios-readiness-v1),
+or manually after the workflow is available on the default branch. It uses
+Java 21, the same mobile build/packaging checks, and an API 36 Google APIs AVD.
+The job uses a read-only repository token, no secrets or publishing credentials,
+a 25-minute timeout, and three-day artifact retention. KVM access is limited to
+the ephemeral job user. Screenshot evidence remains pending until it runs.

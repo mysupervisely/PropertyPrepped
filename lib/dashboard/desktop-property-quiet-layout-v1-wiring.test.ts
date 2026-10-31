@@ -109,7 +109,7 @@ describe('Tenancy is preserved — same fields, same rent-status fix, quieter de
 
 describe('Notes and Timeline are preserved', () => {
   it('both panels are still rendered with the same props, inside the same quiet .overviewInfoGrid section', () => {
-    expect(overviewSlice).toContain('<h2 className="overviewSectionHeading">Notes &amp; history</h2>')
+    expect(overviewSlice).toContain('<h2 className="overviewSectionHeading">Activity &amp; notes</h2>')
     expect(overviewSlice).toContain('<PropertyNotesPanel propertyId={selected.id} ownerId={user.id} notes={selectedNotes} onRefresh={() => void loadPortfolio()} compact />')
     expect(overviewSlice).toContain('<PropertyTimelinePanel events={selectedTimeline} limit={6} />')
   })
@@ -124,9 +124,9 @@ describe('Quick Actions is unchanged — already fit the quieter desktop hierarc
     expect(overviewSlice).toContain('Add transaction')
   })
 
-  it('no new .quickActions CSS was added — still the quiet hairline + plain neutral buttons PR #67 already shipped', () => {
+  it('the base Quick Actions rule stays neutral, with separate scoped desktop spacing', () => {
     expect(cssSource).not.toMatch(/\.quickActions\s*\{[^}]*background: var\(--brand\)/)
-    expect((cssSource.match(/\.quickActionButtons\s*\{/g) || []).length).toBe(1)
+    expect((cssSource.match(/^\.quickActionButtons\s*\{/gm) || []).length).toBe(1)
   })
 })
 
