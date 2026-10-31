@@ -323,3 +323,20 @@ All ten focused receipt tests passed, including Storage rejection and a
 simulated committed insert whose response was lost. No live service requests,
 production deployment, full application build, or device verification were
 performed for this batch. Apple enrollment remains pending.
+
+
+## Property custom-item save recovery
+
+PropertyTaxPanel's custom-item save now uses catch/finally so a rejected
+picker-byte read or unexpected save request releases the Saving state and
+keeps the form/draft open. Unexpected outcomes advise checking existing items
+and Documents before trying again. Receipt-result messaging no longer claims
+an uncertain upload definitively failed. No automatic retry or write change
+was added. This does not prevent duplicate writes after a manual retry of an
+uncertain outcome and does not cover a request that never settles.
+
+Validation: TSX syntax transform passed; two focused files / eleven tests
+passed. The new test executes the actual extracted save handler with fake
+adapters for failed read, uncertain save, and successful save. This is handler
+isolation, not mounted React, browser, live Supabase, full build or device QA.
+Apple is still pending. Changes remain in review and undeployed.

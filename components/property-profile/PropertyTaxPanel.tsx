@@ -369,57 +369,61 @@ export function PropertyTaxPanel({
     if (!Number.isFinite(amount) || amount < 0) { setCustomItemError('Enter a valid, non-negative amount.'); return }
     setCustomItemSaving(true)
     setCustomItemError('')
+    try {
 
-    // Section 3 — a newly attached file takes priority over whatever was
-    // picked in the "existing document" dropdown; uploaded FIRST, exactly
-    // like the new Tax Center "+ Add Expense" flow, so a failed upload
-    // never saves an item that silently lost its receipt.
-    let documentId = customItemDraft.documentId || null
-    if (customItemReceiptFile && customItemReceiptBytesPromise) {
-      const durable = await toDurableUploadableFile(customItemReceiptFile, customItemReceiptFile.type || undefined, customItemReceiptBytesPromise)
-      const uploadResult = await uploadReceiptDocument(ownerId, propertyId, durable.file, {
-        uploadFile: async (path, file, contentType) => {
-          const { error: uploadError } = await supabase.storage.from('property-documents').upload(path, file, { contentType, upsert: false })
-          return { error: uploadError?.message || null }
-        },
-        insertDocumentRow: async (row) => {
-          const { data, error: rowError } = await supabase.from('property_documents').insert(row).select('id').single()
-          return { id: (data?.id as string) || null, error: rowError?.message || null }
-        },
-        removeFile: async (path) => { await supabase.storage.from('property-documents').remove([path]) },
-      })
-      if (!uploadResult.ok) {
-        setCustomItemError(`Item not saved — the receipt could not be uploaded. ${toSafeErrorMessage(uploadResult.error, 'Try again, or save without a receipt.')}`)
-        setCustomItemSaving(false)
+      // Section 3 — a newly attached file takes priority over whatever was
+      // picked in the "existing document" dropdown; uploaded FIRST, exactly
+      // like the new Tax Center "+ Add Expense" flow, so a failed upload
+      // never saves an item that silently lost its receipt.
+      let documentId = customItemDraft.documentId || null
+      if (customItemReceiptFile && customItemReceiptBytesPromise) {
+        const durable = await toDurableUploadableFile(customItemReceiptFile, customItemReceiptFile.type || undefined, customItemReceiptBytesPromise)
+        const uploadResult = await uploadReceiptDocument(ownerId, propertyId, durable.file, {
+          uploadFile: async (path, file, contentType) => {
+            const { error: uploadError } = await supabase.storage.from('property-documents').upload(path, file, { contentType, upsert: false })
+            return { error: uploadError?.message || null }
+          },
+          insertDocumentRow: async (row) => {
+            const { data, error: rowError } = await supabase.from('property_documents').insert(row).select('id').single()
+            return { id: (data?.id as string) || null, error: rowError?.message || null }
+          },
+          removeFile: async (path) => { await supabase.storage.from('property-documents').remove([path]) },
+        })
+        if (!uploadResult.ok) {
+          setCustomItemError(`Item not saved. ${toSafeErrorMessage(uploadResult.error, 'Check Documents before uploading again.')}`)
+          return
+        }
+        documentId = uploadResult.documentId
+      }
+
+      const payload = {
+        property_id: propertyId,
+        owner_id: ownerId,
+        tax_year: Number(year),
+        // Best-effort link to the parent annual record where one already
+        // exists — never required (see the migration's own comment); a
+        // custom item's real identity keys are property_id + tax_year.
+        tax_record_id: existingRecord?.id || null,
+        description,
+        amount,
+        category_group: customItemDraft.group,
+        notes: customItemDraft.notes.trim() || null,
+        document_id: documentId,
+      }
+      const { error: saveError } = customItemFormOpenId === 'new'
+        ? await supabase.from('property_tax_custom_items').insert(payload)
+        : await supabase.from('property_tax_custom_items').update(payload).eq('id', customItemFormOpenId)
+      if (saveError) {
+        setCustomItemError(toSafeErrorMessage(saveError, 'Unable to save this item.'))
         return
       }
-      documentId = uploadResult.documentId
+      setCustomItemFormOpenId(null)
+      onRefresh()
+    } catch {
+      setCustomItemError('Unable to finish saving this item. Check existing items and Documents before trying again.')
+    } finally {
+      setCustomItemSaving(false)
     }
-
-    const payload = {
-      property_id: propertyId,
-      owner_id: ownerId,
-      tax_year: Number(year),
-      // Best-effort link to the parent annual record where one already
-      // exists — never required (see the migration's own comment); a
-      // custom item's real identity keys are property_id + tax_year.
-      tax_record_id: existingRecord?.id || null,
-      description,
-      amount,
-      category_group: customItemDraft.group,
-      notes: customItemDraft.notes.trim() || null,
-      document_id: documentId,
-    }
-    const { error: saveError } = customItemFormOpenId === 'new'
-      ? await supabase.from('property_tax_custom_items').insert(payload)
-      : await supabase.from('property_tax_custom_items').update(payload).eq('id', customItemFormOpenId)
-    setCustomItemSaving(false)
-    if (saveError) {
-      setCustomItemError(toSafeErrorMessage(saveError, 'Unable to save this item.'))
-      return
-    }
-    setCustomItemFormOpenId(null)
-    onRefresh()
   }
 
   async function removeCustomItem(item: CustomTaxItemRow) {
