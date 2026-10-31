@@ -3247,7 +3247,7 @@ export default function Home() {
 
     return (
       <main className="shell workspaceShell">
-        <AuthHeader onBrandClick={closeProperty} onSmartUploadCompleted={() => void loadPortfolio()} registerSmartUploadTrigger={(fn) => { smartUploadTriggerRef.current = fn }} />
+        <AuthHeader onBrandClick={closeProperty} propertyId={selected.id} onSmartUploadCompleted={() => void loadPortfolio()} registerSmartUploadTrigger={(fn) => { smartUploadTriggerRef.current = fn }} />
         {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
         {/* Onboarding & First-Run Experience V2 — the one-time activation
             note (see addProperty()'s isFirstProperty branch). Plain,
@@ -3269,7 +3269,7 @@ export default function Home() {
         <button className="breadcrumbBack" onClick={closeProperty}>← All Properties</button>
 
         <section className="propertyHero">
-          <div className="heroPhoto">{selected.coverUrl ? <img src={selected.coverUrl} alt={selected.address} /> : <div className="heroPlaceholder"><span>Property photo</span><small>Add photos in the Photos tab</small></div>}</div>
+          <div className="heroPhoto">{selected.coverUrl ? <img src={selected.coverUrl} alt={selected.address} /> : <div className="heroPlaceholder"><span>Property photo</span><small>Add photos in the Photos tab</small></div>}<button type="button" className="propertyPhotoEdit" aria-label={`Edit ${selected.address}`} onClick={() => openEditProperty(selected)}>Edit</button></div>
           <div className="heroInfo">
             {/* Property Intelligence V1, Phase C.1 (Unified Property
                 Snapshot): the hero is identity only now — photo, address,
@@ -3286,13 +3286,7 @@ export default function Home() {
                   {currentRentRow && !(currentRentRow.status === 'Unknown' && rentAmountKnown) && <span className={`statusPill ${rentStatusPillClass(currentRentRow.status)}`}>Rent {rentStatusLabel(currentRentRow.status)}</span>}
                 </div>
               </div>
-              {/* Investment Analysis is a related but secondary action next
-                  to Edit — the same quiet brand-color text-link treatment
-                  as .needsAttentionViewAll (Simplification + Maintenance
-                  Workspace V2, Phase E1.1) so it no longer competes
-                  equal-weight with Edit for attention. Functionality and
-                  destination are unchanged. */}
-              <div className="heroInfoActions"><button className="secondary" onClick={() => openEditProperty(selected)}>Edit</button><Link className="heroInvestmentLink" href={`/investment-tools/property-evaluator?propertyId=${selected.id}`}>Investment Analysis</Link></div>
+
             </div>
           </div>
         </section>

@@ -104,7 +104,7 @@ const ACCOUNT_LINKS: { href: string; label: string }[] = [
 // new mobile bottom nav's "More" button, not a duplicate menu. See
 // components/MobileBottomNav.tsx's own header comment for why "More"
 // reuses this panel wholesale instead of building a second one.
-export function AuthNavMenu({ onDashboardNavigate, open, onOpenChange }: { onDashboardNavigate?: () => void; open: boolean; onOpenChange: (open: boolean) => void }) {
+export function AuthNavMenu({ onDashboardNavigate, open, onOpenChange, propertyId }: { propertyId?: string; onDashboardNavigate?: () => void; open: boolean; onOpenChange: (open: boolean) => void }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const { user } = useAuthUser()
 
@@ -146,7 +146,7 @@ export function AuthNavMenu({ onDashboardNavigate, open, onOpenChange }: { onDas
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}
-              href={link.href}
+              href={link.href === '/investment-tools' && propertyId ? `/investment-tools/property-evaluator?propertyId=${encodeURIComponent(propertyId)}` : link.href}
               onClick={(e) => {
                 onOpenChange(false)
                 // Dashboard Navigation Bug fix: the property workspace
@@ -171,7 +171,7 @@ export function AuthNavMenu({ onDashboardNavigate, open, onOpenChange }: { onDas
                 }
               }}
             >
-              {link.label}
+              {link.href === '/investment-tools' && propertyId ? 'Investment Analysis' : link.label}
             </Link>
           ))}
           <div className="authNavMenuDivider" role="separator" />

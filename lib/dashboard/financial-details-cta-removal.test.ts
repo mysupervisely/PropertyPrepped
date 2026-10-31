@@ -44,19 +44,15 @@ describe('The redundant bottom CTA is removed from the "Expenses & tax" card (fo
   })
 
   it('there is exactly one Link to the property evaluator on the whole page (the hero link) — not two', () => {
-    const matches = pageSource.match(/href={`\/investment-tools\/property-evaluator\?propertyId=\$\{selected\.id\}`}/g) || []
-    expect(matches.length).toBe(1)
+    expect(pageSource).not.toContain('className="heroInvestmentLink"')
+    expect(readFile('components/AuthNavMenu.tsx')).toContain('/investment-tools/property-evaluator?propertyId=${encodeURIComponent(propertyId)}')
   })
 })
 
 describe('The Investment Analysis entry point near the top of the property profile is untouched (Phase C.1: presentation-only de-emphasis)', () => {
   it('the hero still has its Edit + Investment Analysis actions, now with Investment Analysis as a quiet text link rather than a bordered button', () => {
-    const heroActionsIdx = pageSource.indexOf('heroInfoActions')
-    const slice = pageSource.slice(heroActionsIdx, heroActionsIdx + 400)
-    expect(slice).toContain('>Edit</button>')
-    expect(slice).toContain('>Investment Analysis</Link>')
-    expect(slice).toContain('className="heroInvestmentLink"')
-    expect(slice).toContain('/investment-tools/property-evaluator?propertyId=')
+    expect(pageSource).toContain('className="propertyPhotoEdit"')
+    expect(readFile('components/AuthNavMenu.tsx')).toContain("? 'Investment Analysis' : link.label")
   })
 })
 

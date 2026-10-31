@@ -425,3 +425,27 @@ workspace screenshots were visually inspected. Fixtures use fictional data
 and placeholder photos, not an authenticated app session. Live property
 switching, network-backed actions, Safari and enlarged-text verification
 remain pending. No production merge or store submission occurred.
+
+
+## Smaller property menu and wider photo
+
+Mobile property sections now use three compact columns, retaining 44px tall
+buttons and all eight destinations. The photo widens from 88px to a responsive
+112-152px with a 120px height. A small overlaid Edit button opens the same
+property edit form, with an address-specific accessible name. The previous
+Edit/Investment Analysis action row is removed.
+
+Investment Analysis is now in the existing avatar/profile tools menu when a
+property is selected. The selected ID is passed through AuthHeader to
+AuthNavMenu, and URL-encoded into the existing evaluator destination. Other
+pages keep the portfolio Investment Tools menu destination. No duplicate
+analysis workflow or new property state was introduced. Source regression
+checks were updated for this intentional relocation, preserving dashboard
+reset and menu open/close wiring assertions.
+
+Validation: all 186 files / 3,082 tests and production build/type checking
+passed. Isolated browser fixtures at 320, 375, 393, 430, 760 and 1024px had no
+horizontal page overflow; mobile menu has three rows. The 393px screenshot
+was visually inspected with a placeholder photo. Live authenticated menu,
+property switching and Safari remain unverified. Preview only; no production
+merge or store submission.

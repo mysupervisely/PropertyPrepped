@@ -248,7 +248,8 @@ describe('Phase C.3: hero, tabs, and Investment Analysis remain exactly as Phase
     const heroIdx = pageSource.indexOf('<section className="propertyHero">')
     const heroSlice = pageSource.slice(heroIdx, pageSource.indexOf('</section>', heroIdx))
     expect(heroSlice).not.toContain('heroMetrics')
-    expect(heroSlice).toContain('className="heroInvestmentLink"')
+    expect(heroSlice).toContain('className="propertyPhotoEdit"')
+    expect(heroSlice).not.toContain('heroInvestmentLink')
   })
 
   it('all seven property tabs are unchanged', () => {
