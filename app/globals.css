@@ -4750,3 +4750,7 @@ h2, h3, p { margin-top: 0; }
 /* Four equal-purpose cells stay in one row; labels wrap within their own cell. */
 .propertySummaryStrip { grid-template-columns: minmax(0,1.25fr) repeat(3,minmax(0,1fr)); }
 .propertySummaryStrip > div { font-size: 10px; gap: 2px 4px; }
+
+/* Dashboard shortcuts precede the greeting, without a redundant title. */
+.mobileQuickActionsHead { justify-content: flex-end; }
+@media (max-width: 760px) { .mobileQuickActions { margin-top: 8px; margin-bottom: 18px; } }

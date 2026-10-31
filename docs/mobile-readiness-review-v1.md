@@ -550,3 +550,17 @@ passed page/strip overflow checks at 320, 375, 393, 430, 760 and 1024 pixels;
 long labels wrap within their own cells. The 393px screenshot was inspected.
 These fixtures are not authenticated device verification. Preview review
 only, with no production merge or store submission.
+
+
+## Dashboard shortcuts above greeting
+
+Moved the existing mobile action section above the greeting, directly below
+the header/error area. Removed the visible Quick Actions heading and kept
+Customize right-aligned, with the same action mapping, handlers, selection
+preferences and customization modal. Desktop visibility remains unchanged.
+
+Validation: all 188 files / 3,092 tests passed. Source order, absent heading
+and retained action mapping checked. A stale local build-cache failure was
+resolved by moving the generated cache aside; the fresh production build
+and TypeScript passed. Actual iPhone preview confirmation remains pending.
+No production merge or store submission.

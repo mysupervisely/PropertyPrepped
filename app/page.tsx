@@ -4218,6 +4218,15 @@ export default function Home() {
           path, no second modal. */}
       <AuthHeader onSmartUploadCompleted={() => void loadPortfolio()} registerSmartUploadTrigger={(fn) => { smartUploadTriggerRef.current = fn }} />
       {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
+      <section className="mobileQuickActions">
+        <div className="mobileQuickActionsHead">
+          <button type="button" className="mobileQuickActionsCustomize" onClick={openQuickActionsCustomize}>Customize</button>
+        </div>
+        <div className="mobileQuickActionsRow">
+          {quickActions.map((id) => renderQuickAction(id))}
+        </div>
+      </section>
+
       <section className="intro welcomeIntro"><h1>Good {greetingTimeOfDay()}{profileReady ? `, ${resolveGreetingName(userProfile, user.email)}` : ''}.</h1><p>Here&apos;s your portfolio at a glance.</p></section>
 
       {/* Property Intelligence V1, Phase D (Portfolio Snapshot V1): the
@@ -4325,15 +4334,7 @@ export default function Home() {
           saveQuickActions() above); every id's actual destination is
           resolved by quickActionNav()/renderQuickAction() above, each
           one reusing an existing route or handler, never a new one. */}
-      <section className="mobileQuickActions">
-        <div className="mobileQuickActionsHead">
-          <h2 className="mobileQuickActionsHeading">Quick Actions</h2>
-          <button type="button" className="mobileQuickActionsCustomize" onClick={openQuickActionsCustomize}>Customize</button>
-        </div>
-        <div className="mobileQuickActionsRow">
-          {quickActions.map((id) => renderQuickAction(id))}
-        </div>
-      </section>
+
 
       {/* Mobile V2 — the Customize sheet: pick exactly 4 of the 8
           catalog actions. quickActionsDraft is a local working copy —
