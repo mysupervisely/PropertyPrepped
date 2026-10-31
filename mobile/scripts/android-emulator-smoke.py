@@ -4,6 +4,8 @@
 Screenshots require inspection. No account creation, login, or uploads occur.
 """
 import json
+import io
+import tarfile
 import os
 from pathlib import Path
 import subprocess
@@ -101,8 +103,13 @@ def main():
                 if tested.returncode or b'OK (1 test)' not in output:
                     raise AssertionError('Android auth instrumentation failed; inspect log and screenshots.')
             finally:
-                device('pull', '/sdcard/Android/data/com.proproster.app.test/files',
-                       str(evidence / 'auth-entry'), check=False, timeout=30)
+                collected = device('exec-out', 'run-as', package, 'tar', '-C', 'files',
+                                   '-cf', '-', 'auth-test-evidence', check=False, timeout=30)
+                if collected.returncode == 0 and collected.stdout:
+                    with tarfile.open(fileobj=io.BytesIO(collected.stdout)) as archive:
+                        archive.extractall(evidence / 'auth-entry', filter='data')
+                else:
+                    (evidence / 'auth-evidence-collection.log').write_bytes(collected.stderr)
             summary['auth_entry_checks'] = ['login opened', 'reset opened and returned',
                                             'signup role choice opened', 'dialogs closed to landing']
             summary['scope'] = 'Install, foreground launch, auth-entry navigation assertions, and screenshots. No credentials, account creation, reset email, or uploads submitted.'

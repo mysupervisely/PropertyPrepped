@@ -2,6 +2,7 @@ package com.proproster.app;
 
 import android.app.UiAutomation;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.os.SystemClock;
 import android.view.accessibility.AccessibilityNodeInfo;
@@ -18,12 +19,11 @@ import static org.junit.Assert.*;
 @RunWith(AndroidJUnit4.class)
 public class AuthEntryTest {
     private final UiAutomation ui = InstrumentationRegistry.getInstrumentation().getUiAutomation();
-    private final Context context = InstrumentationRegistry.getInstrumentation().getContext();
+    private final Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
 
     private File output(String name) {
-        File directory = context.getExternalFilesDir(null);
-        assertNotNull("Test evidence directory unavailable", directory);
-        directory.mkdirs();
+        File directory = new File(context.getFilesDir(), "auth-test-evidence");
+        assertTrue("Test evidence directory unavailable", directory.isDirectory() || directory.mkdirs());
         return new File(directory, name);
     }
 
@@ -83,8 +83,13 @@ public class AuthEntryTest {
         }
     }
 
-    @Test public void loginResetAndSignupEntry() throws Exception {
+    @Test public void loginResetAndSignupEntry() throws Throwable {
+        Throwable failure = null;
         try {
+            Intent launch = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
+            assertNotNull("Main activity launch intent missing", launch);
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            context.startActivity(launch);
             long entryDeadline = SystemClock.uptimeMillis() + 30000;
             while (find(ui.getRootInActiveWindow(), "Log In", true) == null
                 && find(ui.getRootInActiveWindow(), "We couldn’t connect.", false) == null
@@ -118,13 +123,21 @@ public class AuthEntryTest {
             tap("Close");
             await("Log In", true);
             capture("auth-returned-to-landing");
+        } catch (Throwable error) {
+            failure = error;
+            throw error;
         } finally {
+          try {
             capture("auth-final-state");
             StringBuilder description = new StringBuilder();
             describe(ui.getRootInActiveWindow(), description, 0);
             try (FileOutputStream stream = new FileOutputStream(output("auth-final-hierarchy.txt"))) {
                 stream.write(description.toString().getBytes(StandardCharsets.UTF_8));
             }
+          } catch (Throwable diagnosticError) {
+            if (failure != null) failure.addSuppressed(diagnosticError);
+            else throw diagnosticError;
+          }
         }
     }
 }
