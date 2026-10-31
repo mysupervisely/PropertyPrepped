@@ -466,3 +466,24 @@ fixtures had no horizontal page overflow at 320,375,393,430,760,1024px. The
 393px photo measured about 157px wide, versus 134px in the preceding revision.
 Screenshot visually inspected with a placeholder photo. Authenticated iPhone
 preview confirmation remains pending. No production merge or store release.
+
+
+## Actual-component local browser auth-entry checks
+
+The latest Netlify preview was ready, but the local browser runner received
+ERR_EMPTY_RESPONSE trying to reach it. Instead, started the actual Next.js
+application locally using dummy example.invalid Supabase configuration. No
+production credentials, authenticated session, account writes or remote
+Supabase service were used. This is local signed-out UI verification, not a
+live authentication pass or a preview connectivity fix.
+
+In Chromium at 320,393 and430px wide: opened Log In, confirmed heading focus,
+opened password reset, closed it, opened Start Free, and verified signup role
+choices. No page/dialog horizontal overflow. Visually inspected the actual
+393px signup screenshot. At each width, reduced viewport height to450px,
+confirmed Create account remained scroll-reachable, and verified Tab and
+Shift+Tab contained focus inside the dialog. No auth POST requests submitted.
+This approximates reduced space but does not emulate a real iPhone keyboard.
+No new product patch was needed. Real authentication, reset email delivery,
+Safari/device keyboard, sessions and uploads remain pending. Apple enrollment
+remains pending; no production deployment or store submission.
