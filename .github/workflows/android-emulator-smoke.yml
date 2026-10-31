@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/android-emulator-smoke.yml'
       - 'mobile/scripts/android-emulator-smoke.py'
+      - 'mobile/scripts/android_auth_entry.py'
+      - 'mobile/scripts/test-android-auth-entry.py'
   workflow_dispatch:
 
 permissions:
@@ -34,7 +36,9 @@ jobs:
           distribution: temurin
           java-version: '21'
       - name: Validate packaging checks
-        run: python3 mobile/scripts/test-debug-apk.py
+        run: |
+          python3 mobile/scripts/test-debug-apk.py
+          python3 mobile/scripts/test-android-auth-entry.py
       - name: Install and sync mobile dependencies
         working-directory: mobile
         run: |

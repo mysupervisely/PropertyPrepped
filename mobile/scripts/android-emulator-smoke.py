@@ -9,6 +9,8 @@ from pathlib import Path
 import subprocess
 import time
 
+from android_auth_entry import run_auth_checks
+
 
 def select_avd(names):
     for name in ('emulator-36', 'emulator-35'):
@@ -80,6 +82,8 @@ def main():
                        if 'mResumedActivity' in line or 'topResumedActivity' in line]
             if not any(package + '/' in line for line in resumed):
                 raise RuntimeError('PropRoster is not the foreground activity after capture.')
+            summary['auth_entry_checks'] = run_auth_checks(device, evidence)
+            summary['scope'] = 'Install, foreground launch, auth-entry navigation assertions, and screenshots. No credentials, account creation, reset email, or uploads submitted.'
             summary['status'] = 'captured'
         except Exception as error:
             summary['error'] = str(error)
