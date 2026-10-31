@@ -289,3 +289,21 @@ The graphics isolation run 41226223537 also lost its emulator and produced no
 usable auth-entry screenshots. Disabling Vulkan did not resolve the observed
 disconnect; its cause and Android auth-entry acceptance remain unresolved.
 No production deployment or store publication occurred.
+
+
+## Receipt cleanup error handling
+
+When Storage upload succeeds but the receipt row insert returns an error or
+no ID, cleanup now remains best effort even if removeFile rejects. The helper
+returns the original row-save error (or its existing safe fallback) instead
+of rejecting with a secondary cleanup exception. No automatic upload retry,
+new storage path, schema change, or auth change was introduced. A failed
+cleanup can still leave an orphaned file; this change does not claim removal
+succeeded. Thrown/ambiguous insert outcomes remain outside this narrow fix.
+
+Validation: all eight upload-receipt Vitest tests passed, including two new
+regressions covering cleanup rejection. Four additional Node behavioral
+checks passed against the helper with only its relative import adjusted for
+Node resolution. Full application tests/build were not rerun for this batch.
+No actual receipt or user data was uploaded, and nothing was deployed.
+Apple enrollment remains pending according to the user's latest update.

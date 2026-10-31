@@ -85,7 +85,13 @@ export async function uploadReceiptDocument(
   if (rowError || !id) {
     // Storage succeeded but the DB row failed — clean up the now-
     // orphaned object rather than leaving an unreferenced file behind.
-    await deps.removeFile(path)
+    // Cleanup is best effort. A rejected removal must not hide the
+    // record-save error or reject the caller's result-based workflow.
+    try {
+      await deps.removeFile(path)
+    } catch {
+      // Leave cleanup for later investigation; never retry the upload here.
+    }
     return { ok: false, error: rowError || 'Could not save the receipt record.' }
   }
   return { ok: true, documentId: id }
