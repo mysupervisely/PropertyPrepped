@@ -235,3 +235,27 @@ and navigation overrides, wrong identity, stale recovery HTML, missing DEX,
 and missing launcher resources. The Android workflow runs these checks before
 installing dependencies. Codemagic YAML parsing and existing five simulator
 runner tests also pass. These are not a compiled APK or emulator run.
+
+## Android emulator screenshot workflow
+
+The uploaded first Android debug APK matched the packaging report checksum
+(f2de88ee854aa09a49787739113bce0b28d7589ecc56c7c66043f6e7ae8ea287),
+contained the supplied launcher/splash artwork and exact recovery HTML, and
+had an Android Debug certificate in its v2 signing block. This was certificate
+inspection, not full cryptographic signature verification. Lint reported 29
+warnings and zero errors. No app launch was performed during artifact review.
+
+**PropRoster Android Emulator Screenshots (test only)** is a separate manual
+Codemagic Linux X2 workflow. It builds the same Capacitor debug shell, runs the
+packaging verifier, selects the preinstalled API 36 AVD (API 35 fallback),
+installs and launches the APK, and captures screenshots after 10 and 30 seconds.
+Artifacts include android-emulator-evidence, startup logs, crash log, and a
+summary explicitly scoped to installation/foreground launch/capture. The AVD
+is ephemeral and wiped before launch. No credentials, account creation, login,
+upload, Play Store publication, or hosted deployment is performed.
+
+Linux is required because Codemagic Mac M2 runners cannot run Android emulators.
+First cloud execution remains pending. Syntax, AVD selection and workflow
+isolation checks pass locally; screenshots must be inspected to establish
+what actually rendered. The native shell still loads the production website,
+so unmerged hosted branding and viewport changes will not appear in it.

@@ -150,3 +150,35 @@ workflows:
       - mobile/android/app/build/outputs/apk/debug/*.apk
       - mobile/android/app/build/reports/lint-results-debug.*
       - android-build-evidence/**
+
+  android-emulator-smoke:
+    name: PropRoster Android Emulator Screenshots (test only)
+    instance_type: linux_x2
+    max_build_duration: 60
+    environment:
+      node: 22
+      java: 21
+    scripts:
+      - name: Validate APK packaging checks
+        script: python3 mobile/scripts/test-debug-apk.py
+      - name: Install mobile dependencies
+        script: cd mobile && npm ci
+      - name: Sync existing native Android project
+        script: cd mobile && npx cap sync android
+      - name: Set Android SDK location
+        script: |
+          test -n "$ANDROID_SDK_ROOT"
+          printf 'sdk.dir=%s\n' "$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/mobile/android/local.properties"
+      - name: Compile debug APK and run Android lint
+        script: |
+          cd mobile/android
+          bash ./gradlew --no-daemon :app:assembleDebug :app:lintDebug
+      - name: Verify packaged Android configuration and recovery assets
+        script: python3 mobile/scripts/verify-debug-apk.py
+      - name: Install and launch on Android emulator
+        script: python3 mobile/scripts/android-emulator-smoke.py
+    artifacts:
+      - mobile/android/app/build/outputs/apk/debug/*.apk
+      - mobile/android/app/build/reports/lint-results-debug.*
+      - android-build-evidence/**
+      - android-emulator-evidence/**
