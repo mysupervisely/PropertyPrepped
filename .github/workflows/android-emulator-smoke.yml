@@ -6,8 +6,7 @@ on:
     paths:
       - '.github/workflows/android-emulator-smoke.yml'
       - 'mobile/scripts/android-emulator-smoke.py'
-      - 'mobile/scripts/android_auth_entry.py'
-      - 'mobile/scripts/test-android-auth-entry.py'
+      - 'mobile/android/app/src/androidTest/**'
   workflow_dispatch:
 
 permissions:
@@ -42,7 +41,6 @@ jobs:
       - name: Validate packaging checks
         run: |
           python3 mobile/scripts/test-debug-apk.py
-          python3 mobile/scripts/test-android-auth-entry.py
       - name: Install and sync mobile dependencies
         working-directory: mobile
         run: |
@@ -57,7 +55,7 @@ jobs:
       - name: Build and verify debug APK
         run: |
           cd mobile/android
-          bash ./gradlew --no-daemon :app:assembleDebug :app:lintDebug
+          bash ./gradlew --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug
           cd ../..
           python3 mobile/scripts/verify-debug-apk.py
       - name: Prepare ephemeral emulator

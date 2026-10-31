@@ -9,8 +9,6 @@ from pathlib import Path
 import subprocess
 import time
 
-from android_auth_entry import run_auth_checks
-
 
 def select_avd(names):
     for name in ('emulator-36', 'emulator-35'):
@@ -89,7 +87,24 @@ def main():
                        if 'mResumedActivity' in line or 'topResumedActivity' in line]
             if not any(package + '/' in line for line in resumed):
                 raise RuntimeError('PropRoster is not the foreground activity after capture.')
-            summary['auth_entry_checks'] = run_auth_checks(device, evidence)
+            test_apk = root / 'mobile/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk'
+            if not test_apk.is_file():
+                raise RuntimeError('Android instrumentation APK is missing.')
+            device('install', '-r', str(test_apk))
+            try:
+                tested = device('shell', 'am', 'instrument', '-w', '-r', '-e', 'class',
+                                'com.proproster.app.AuthEntryTest',
+                                'com.proproster.app.test/androidx.test.runner.AndroidJUnitRunner',
+                                check=False, timeout=300)
+                output = tested.stdout + tested.stderr
+                (evidence / 'auth-instrumentation.log').write_bytes(output)
+                if tested.returncode or b'OK (1 test)' not in output:
+                    raise AssertionError('Android auth instrumentation failed; inspect log and screenshots.')
+            finally:
+                device('pull', '/sdcard/Android/data/com.proproster.app.test/files',
+                       str(evidence / 'auth-entry'), check=False, timeout=30)
+            summary['auth_entry_checks'] = ['login opened', 'reset opened and returned',
+                                            'signup role choice opened', 'dialogs closed to landing']
             summary['scope'] = 'Install, foreground launch, auth-entry navigation assertions, and screenshots. No credentials, account creation, reset email, or uploads submitted.'
             summary['status'] = 'captured'
         except Exception as error:

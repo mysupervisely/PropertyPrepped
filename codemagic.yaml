@@ -172,7 +172,7 @@ workflows:
       - name: Compile debug APK and run Android lint
         script: |
           cd mobile/android
-          bash ./gradlew --no-daemon :app:assembleDebug :app:lintDebug
+          bash ./gradlew --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug
       - name: Verify packaged Android configuration and recovery assets
         script: python3 mobile/scripts/verify-debug-apk.py
       - name: Install and launch on Android emulator
