@@ -70,18 +70,33 @@ export async function uploadReceiptDocument(
   const uploadable = looksLikeImage ? toUploadableImageFile(file, contentType) : file
 
   const path = `${ownerId}/${propertyId}/documents/${crypto.randomUUID()}-${safeReceiptName(file.name)}`
-  const { error: uploadError } = await deps.uploadFile(path, uploadable, contentType)
+  let uploadResult: Awaited<ReturnType<UploadReceiptDeps['uploadFile']>>
+  try {
+    uploadResult = await deps.uploadFile(path, uploadable, contentType)
+  } catch {
+    // A rejected request does not establish whether Storage accepted bytes.
+    return { ok: false, error: 'The receipt upload could not be confirmed. Check Documents before uploading again.' }
+  }
+  const { error: uploadError } = uploadResult
   if (uploadError) return { ok: false, error: uploadError }
 
-  const { id, error: rowError } = await deps.insertDocumentRow({
-    owner_id: ownerId,
-    property_id: propertyId,
-    name: file.name,
-    category: 'Receipts',
-    storage_path: path,
-    size_bytes: uploadable.size,
-    mime_type: uploadable.type || null,
-  })
+  let rowResult: Awaited<ReturnType<UploadReceiptDeps['insertDocumentRow']>>
+  try {
+    rowResult = await deps.insertDocumentRow({
+      owner_id: ownerId,
+      property_id: propertyId,
+      name: file.name,
+      category: 'Receipts',
+      storage_path: path,
+      size_bytes: uploadable.size,
+      mime_type: uploadable.type || null,
+    })
+  } catch {
+    // The insert may have committed before its response was lost. Removing
+    // the file here could break that saved record, so keep it for review.
+    return { ok: false, error: 'The receipt record could not be confirmed. Check Documents before uploading again.' }
+  }
+  const { id, error: rowError } = rowResult
   if (rowError || !id) {
     // Storage succeeded but the DB row failed — clean up the now-
     // orphaned object rather than leaving an unreferenced file behind.

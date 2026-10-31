@@ -307,3 +307,19 @@ checks passed against the helper with only its relative import adjusted for
 Node resolution. Full application tests/build were not rerun for this batch.
 No actual receipt or user data was uploaded, and nothing was deployed.
 Apple enrollment remains pending according to the user's latest update.
+
+
+## Uncertain receipt request outcomes
+
+Unexpected upload and insert rejections now return actionable failure results
+rather than escaping the receipt helper. Both advise checking Documents before
+uploading again. No automatic retry occurs. If an insert throws, its commit
+outcome is unknown, so the uploaded object is retained rather than risking a
+saved record pointing to a deleted file. Explicit returned insert errors still
+use the existing best-effort cleanup. This does not provide transactional or
+idempotent upload guarantees; uncertain outcomes can require manual review.
+
+All ten focused receipt tests passed, including Storage rejection and a
+simulated committed insert whose response was lost. No live service requests,
+production deployment, full application build, or device verification were
+performed for this batch. Apple enrollment remains pending.
