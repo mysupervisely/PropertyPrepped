@@ -30,19 +30,23 @@ collect_evidence() {
   timeout 15 "$adb_tool" -s "$serial" logcat -b crash -d > "$evidence/crash.log" 2>&1
   timeout 15 "$adb_tool" -s "$serial" logcat -d -s chromium Capacitor > "$evidence/webview.log" 2>&1
   timeout 15 "$adb_tool" -s "$serial" shell dumpsys activity activities > "$evidence/activity.txt" 2>&1
-  timeout 15 "$adb_tool" -s "$serial" exec-out run-as com.proproster.app tar -C files -cf - auth-test-evidence > "$evidence/auth-entry.tar" 2> "$evidence/collection.log"
+  # Copy diagnostics separately so one stalled image cannot hide the hierarchy.
+  destination="$evidence/auth-entry/auth-test-evidence"
+  mkdir -p "$destination"
+  for name in auth-final-hierarchy.txt connection-recovery.txt login-entry.png password-reset-entry.png signup-entry.png auth-returned-to-landing.png auth-final-state.png; do
+    if timeout 30 "$adb_tool" -s "$serial" exec-out run-as com.proproster.app cat "files/auth-test-evidence/$name" > "$destination/$name.part" 2>> "$evidence/collection.log"; then
+      mv "$destination/$name.part" "$destination/$name"
+    else
+      rm -f "$destination/$name.part"
+    fi
+  done
   python3 - "$evidence" "$result" <<'PY'
-import json, sys, tarfile
+import json, sys
 from pathlib import Path
 folder = Path(sys.argv[1])
 status = int(sys.argv[2])
-try:
-    with tarfile.open(folder / 'auth-entry.tar') as archive:
-        archive.extractall(folder / 'auth-entry', filter='data')
-except (tarfile.TarError, OSError) as error:
-    (folder / 'collection-error.txt').write_text(str(error))
 required = ['login-entry.png', 'password-reset-entry.png', 'signup-entry.png', 'auth-returned-to-landing.png']
-missing = [name for name in required if not list((folder / 'auth-entry').rglob(name))]
+missing = [name for name in required if not any(p.stat().st_size for p in (folder / 'auth-entry').rglob(name))]
 if status == 0 and missing:
     status = 1
 (folder / 'summary.json').write_text(json.dumps({

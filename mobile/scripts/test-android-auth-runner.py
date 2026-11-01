@@ -28,15 +28,12 @@ class AuthRunnerExitTests(unittest.TestCase):
             adb = root / 'sdk/platform-tools/adb'
             adb.parent.mkdir(parents=True)
             adb.write_text('''#!/usr/bin/env python3
-import io, os, sys, tarfile
+import os, sys
 if 'exec-out' in sys.argv:
-    with tarfile.open(fileobj=sys.stdout.buffer, mode='w|') as archive:
-        if os.environ['FAKE_SCREENSHOTS'] == '1':
-            for name in ['login-entry', 'password-reset-entry', 'signup-entry', 'auth-returned-to-landing']:
-                data = b'fixture PNG'
-                member = tarfile.TarInfo('auth-test-evidence/' + name + '.png')
-                member.size = len(data)
-                archive.addfile(member, io.BytesIO(data))
+    if os.environ['FAKE_SCREENSHOTS'] == '1':
+        sys.stdout.buffer.write(b'fixture PNG')
+    else:
+        sys.exit(1)
 ''')
             adb.chmod(0o755)
             env = {**os.environ, 'CM_BUILD_DIR': str(root), 'ANDROID_HOME': str(root / 'sdk'),

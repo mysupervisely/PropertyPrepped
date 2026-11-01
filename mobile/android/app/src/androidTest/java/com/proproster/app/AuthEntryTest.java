@@ -4,6 +4,7 @@ import android.app.UiAutomation;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.Rect;
 import android.os.SystemClock;
 import android.view.accessibility.AccessibilityNodeInfo;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -66,6 +67,9 @@ public class AuthEntryTest {
             if (node != null) return node;
             SystemClock.sleep(500);
         } while (SystemClock.uptimeMillis() < deadline);
+        StringBuilder hierarchy = new StringBuilder();
+        describe(ui.getRootInActiveWindow(), hierarchy, 0);
+        System.out.println("Hierarchy at missing element " + label + ":\n" + hierarchy);
         throw new AssertionError("Accessible element not found: " + label);
     }
 
@@ -76,7 +80,12 @@ public class AuthEntryTest {
 
     private void describe(AccessibilityNodeInfo node, StringBuilder result, int depth) {
         if (node == null || depth > 60) return;
-        result.append(node.getClassName()).append(" | ")
+        Rect bounds = new Rect();
+        node.getBoundsInScreen(bounds);
+        result.append("visible=").append(node.isVisibleToUser())
+            .append(" clickable=").append(node.isClickable())
+            .append(" bounds=").append(bounds).append(" | ")
+            .append(node.getClassName()).append(" | ")
             .append(node.getText()).append(" | ").append(node.getContentDescription()).append('\n');
         for (int index = 0; index < node.getChildCount(); index++) {
             describe(node.getChild(index), result, depth + 1);
@@ -128,12 +137,12 @@ public class AuthEntryTest {
             throw error;
         } finally {
           try {
-            capture("auth-final-state");
             StringBuilder description = new StringBuilder();
             describe(ui.getRootInActiveWindow(), description, 0);
             try (FileOutputStream stream = new FileOutputStream(output("auth-final-hierarchy.txt"))) {
                 stream.write(description.toString().getBytes(StandardCharsets.UTF_8));
             }
+            capture("auth-final-state");
           } catch (Throwable diagnosticError) {
             if (failure != null) failure.addSuppressed(diagnosticError);
             else throw diagnosticError;
