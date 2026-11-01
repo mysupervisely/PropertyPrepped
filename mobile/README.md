@@ -274,3 +274,7 @@ Java 21, the same mobile build/packaging checks, and an API 36 Google APIs AVD.
 The job uses a read-only repository token, no secrets or publishing credentials,
 a 25-minute timeout, and three-day artifact retention. KVM access is limited to
 the ephemeral job user. Screenshot evidence remains pending until it runs.
+
+## Signed Android bundle for internal testing
+
+See [Android internal testing preparation](../docs/android-internal-testing.md) for the manual signed AAB workflow, upload-key compatibility check, explicit version settings, unsigned cloud validation and the Play Console handoff. Debug APKs and unsigned CI bundles are not Play upload candidates.

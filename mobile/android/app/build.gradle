@@ -1,5 +1,12 @@
 apply plugin: 'com.android.application'
 
+def releaseVersionCode = System.getenv('PROPROSTER_VERSION_CODE') ?: '1'
+if (!(releaseVersionCode ==~ /[1-9][0-9]*/) || releaseVersionCode.toLong() > 2100000000L) {
+    throw new GradleException('PROPROSTER_VERSION_CODE must be a positive Android version code.')
+}
+def signingNames = ['CM_KEYSTORE_PATH', 'CM_KEYSTORE_PASSWORD', 'CM_KEY_ALIAS', 'CM_KEY_PASSWORD']
+def hasReleaseSigning = signingNames.every { System.getenv(it) }
+
 android {
     namespace = "com.proproster.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,7 +14,7 @@ android {
         applicationId "com.proproster.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        versionCode releaseVersionCode.toInteger()
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -16,8 +23,19 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile file(System.getenv('CM_KEYSTORE_PATH'))
+                storePassword System.getenv('CM_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('CM_KEY_ALIAS')
+                keyPassword System.getenv('CM_KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
+            if (hasReleaseSigning) signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
@@ -51,4 +69,14 @@ try {
     }
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
+
+// Release signing must be deliberate. Debug builds need no release credentials.
+gradle.taskGraph.whenReady { graph ->
+    if (graph.allTasks.any { it.project == project && it.name in ['bundleRelease', 'assembleRelease'] }) {
+        if (project.findProperty('proprosterUnsignedValidation') != 'true' &&
+                (!hasReleaseSigning || !System.getenv('PROPROSTER_VERSION_CODE'))) {
+            throw new GradleException('Release requires the configured upload key and PROPROSTER_VERSION_CODE. Use the manual signed bundle workflow.')
+        }
+    }
 }
