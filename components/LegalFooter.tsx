@@ -13,7 +13,7 @@ export function LegalFooter() {
       <nav aria-label="Legal">
         <Link href="/privacy">Privacy Policy</Link>
         <Link href="/terms">Terms of Service</Link>
-        <a href="mailto:sales@proproster.com">Contact</a>
+        <a href="mailto:hello@proproster.com">Contact</a>
       </nav>
     </footer>
   )

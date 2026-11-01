@@ -36,7 +36,7 @@ const REACHED_LIMIT_COPY: Record<PlanId, string> = {
 
 // Placeholder contact address — replace with your real sales/support inbox
 // before launch (see the M9 completion report's Known Limitations).
-const CONTACT_EMAIL = 'sales@proproster.com'
+const CONTACT_EMAIL = 'hello@proproster.com'
 
 export function UpgradePrompt({
   supabase,

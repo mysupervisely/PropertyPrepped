@@ -31,7 +31,7 @@ export default function PrivacyPolicyPage() {
       <div className="legalBody">
         <h2>About this policy</h2>
         <p>This Privacy Policy explains how PropRoster collects, uses, and shares information through proproster.com and the PropRoster mobile app, including Tenant Connect, PropCrew maintenance coordination, and Tax Center features. PropRoster helps organize rental properties, documents, finances, and related communication. It does not provide tax, legal, or accounting advice.</p>
-        <p>For privacy questions, contact <a href="mailto:sales@proproster.com">sales@proproster.com</a>. To request account and data deletion, see <a href="#account-deletion">Delete your PropRoster account</a> below. This page is available without signing in.</p>
+        <p>For privacy questions, contact <a href="mailto:hello@proproster.com">hello@proproster.com</a>. To request account and data deletion, see <a href="#account-deletion">Delete your PropRoster account</a> below. This page is available without signing in.</p>
 
         <h2>Information we collect</h2>
         <ul>
@@ -69,7 +69,7 @@ export default function PrivacyPolicyPage() {
         <p>Deleting your account cannot remove copies another participant has already downloaded or independently retained. If your request concerns records managed by a landlord or another account holder, we will explain any coordination needed rather than treating account deactivation as deletion.</p>
 
         <h2 id="account-deletion">Delete your PropRoster account</h2>
-        <p>To request deletion of your PropRoster account and associated personal data, email <a href="mailto:sales@proproster.com?subject=Delete%20my%20PropRoster%20account">sales@proproster.com</a> with the subject <strong>Delete my PropRoster account</strong>. Send the request from the email address registered to your account when possible. You can make this request without signing in or having the app installed.</p>
+        <p>To request deletion of your PropRoster account and associated personal data, email <a href="mailto:hello@proproster.com?subject=Delete%20my%20PropRoster%20account">hello@proproster.com</a> with the subject <strong>Delete my PropRoster account</strong>. Send the request from the email address registered to your account when possible. You can make this request without signing in or having the app installed.</p>
         <p>We may verify account ownership before deleting information. Do not send your password, payment-card number, or identity documents with the initial request. We will respond with any verification steps, an expected completion timeline, and any applicable retention exceptions, and confirm when the request is completed. Requests are handled manually. You can also contact us to request deletion of particular information without deleting your entire account.</p>
         <p>If you have a paid subscription, mention it in your request so we can help address subscription cancellation and prevent unintended future billing. Deleting the app alone does not cancel a subscription.</p>
 
@@ -83,7 +83,7 @@ export default function PrivacyPolicyPage() {
         <p>Our service providers may process information in the United States and other locations where they operate. Privacy protections and legal requirements can differ between locations.</p>
 
         <h2>Changes and contact</h2>
-        <p>We may update this policy as features and data practices change. The date above identifies the latest revision. For privacy questions or requests, email <a href="mailto:sales@proproster.com">sales@proproster.com</a>.</p>
+        <p>We may update this policy as features and data practices change. The date above identifies the latest revision. For privacy questions or requests, email <a href="mailto:hello@proproster.com">hello@proproster.com</a>.</p>
       </div>
 
       <LegalFooter />

@@ -668,7 +668,7 @@ export default function LandingPage({ sessionExpired = false }: { sessionExpired
 
         <p className="landingPricingContact">
           More than 15 properties?{' '}
-          <a href="mailto:sales@proproster.com?subject=PropRoster%20%E2%80%94%2016%2B%20properties">Contact us</a>.
+          <a href="mailto:hello@proproster.com?subject=PropRoster%20%E2%80%94%2016%2B%20properties">Contact us</a>.
         </p>
 
         <Link href="/pricing" className="landingPricingFullLink">View full pricing details &rarr;</Link>

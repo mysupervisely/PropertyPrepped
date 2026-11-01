@@ -80,7 +80,7 @@ export default function TermsOfServicePage() {
         <p>To the fullest extent permitted by applicable law, PropRoster and its operators are not liable for indirect, incidental, or consequential damages arising from use of the service. This general concept is included here as a placeholder for attorney-drafted language appropriate to your jurisdiction before a broader public launch — no specific liability cap, indemnification obligation, arbitration clause, or governing-law/venue provision is included in this draft, since none has been decided.</p>
 
         <h2>Contact</h2>
-        <p>Questions about these terms can be sent to <a href="mailto:sales@proproster.com">sales@proproster.com</a>.</p>
+        <p>Questions about these terms can be sent to <a href="mailto:hello@proproster.com">hello@proproster.com</a>.</p>
       </div>
 
       <LegalFooter />
