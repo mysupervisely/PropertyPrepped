@@ -17,6 +17,7 @@ import DocumentIntelligencePanel, { type ApplyAction } from '../components/Docum
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
 import { PropertyNetGraph } from '../components/property-profile/PropertyNetGraph'
 import { propertyRecordedNet } from '../lib/dashboard/property-net'
+import { propertyYearTimeline } from '../lib/dashboard/property-year-timeline'
 import { computePropertyTaxSummary } from '../lib/tax-center/aggregate'
 import { aggregateRentCollection } from '../lib/dashboard/rent-collection'
 import { propertyLeaseSummary } from '../lib/dashboard/property-lease-summary'
@@ -1242,7 +1243,7 @@ export default function Home() {
         maintenanceRecords.filter(row => row.service_date.startsWith(year)),
         taxRecords.find(row => row.property_id === property.id && String(row.tax_year) === year) ?? null,
         taxCustomItems.filter(row => String(row.tax_year) === year).map(row => ({ id: row.id, propertyId: row.property_id, taxYear: row.tax_year, description: row.description, amount: Number(row.amount), group: row.category_group, notes: row.notes, documentId: row.document_id })))
-      return [property.id, propertyRecordedNet(summary, property.financing_status)]
+      return [property.id, { totals: propertyRecordedNet(summary, property.financing_status), timeline: propertyYearTimeline(property.id, transactions, summary) }]
     }))
   }, [properties, transactions, maintenanceRecords, taxRecords, taxCustomItems])
 
@@ -4525,7 +4526,7 @@ export default function Home() {
               </div>
             </button>
             <div className="cardBody">
-              {property.property_type === 'Rental Property' && <PropertyNetGraph totals={propertyNetById.get(property.id)} year={String(new Date().getFullYear())} />}
+              {property.property_type === 'Rental Property' && <PropertyNetGraph totals={propertyNetById.get(property.id)?.totals} timeline={propertyNetById.get(property.id)?.timeline} year={String(new Date().getFullYear())} />}
             </div>
             <dl className="propertySummaryStrip" aria-label={`Summary for ${property.address}`}>
               <div><dt className="propertySummaryStatusLabel">Status</dt><dd className={propertyOccupancy === 'Vacant' ? 'pillNeutral' : propertyRentRow ? rentStatusPillClass(propertyRentRow.status) : 'pillNeutral'}>{propertySummaryLabel(propertyRentRow?.status, propertyOccupancy === 'Vacant', propertyAlertCount)}</dd></div>
