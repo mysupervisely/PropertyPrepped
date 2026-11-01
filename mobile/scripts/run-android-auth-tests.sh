@@ -26,6 +26,7 @@ collect_evidence() {
   result=$?
   trap - EXIT
   set +e
+  if [ -n "${logcat_pid:-}" ]; then kill "$logcat_pid" 2>/dev/null; wait "$logcat_pid" 2>/dev/null; fi
   timeout 15 "$adb_tool" -s "$serial" logcat -b crash -d > "$evidence/crash.log" 2>&1
   timeout 15 "$adb_tool" -s "$serial" logcat -d -s chromium Capacitor > "$evidence/webview.log" 2>&1
   timeout 15 "$adb_tool" -s "$serial" shell dumpsys activity activities > "$evidence/activity.txt" 2>&1
@@ -57,6 +58,9 @@ PY
   exit "$result"
 }
 trap collect_evidence EXIT
+# Preserve logs even if the virtual device disappears before the EXIT trap.
+"$adb_tool" -s "$serial" logcat -v threadtime > "$evidence/live-logcat.log" 2>&1 &
+logcat_pid=$!
 cd "$root/mobile/android"
 timeout --kill-after=10s 300s bash ./gradlew --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.proproster.app.AuthEntryTest --stacktrace 2>&1 | tee "$evidence/auth-gradle.log"
 python3 - "$root/mobile/android/app/build/outputs/androidTest-results" <<'PY'

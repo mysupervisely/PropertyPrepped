@@ -67,6 +67,10 @@ jobs:
       - name: Run native Android auth-entry tests
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
+          # Controlled comparison after two 37.2.13 disconnects. Google archive:
+          # https://developer.android.com/studio/emulator_archive
+          emulator-build: '15004761' # Android Emulator 36.4.10 stable
+          pre-emulator-launch-script: adb start-server
           api-level: 35
           target: google_apis
           arch: x86_64
