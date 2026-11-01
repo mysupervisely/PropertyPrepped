@@ -44,3 +44,9 @@ The user reached the existing PropRoster app under their personal Google account
 Release readiness run [41318110110](https://github.com/mysupervisely/PropertyPrepped/actions/runs/41318110110) passed unsigned release compilation, release lint and production-shell bundle packaging. The cloud JDK regression verified a temporary fixture signature and rejected an incorrect certificate and unsigned additions. This is not a real signed upload candidate or Play acceptance.
 
 The user supplied a Codemagic screenshot showing reference proproster_upload successfully saved, common name/issuer PropRoster Android Upload, expiration March 19, 2054. The generated key was independently verified locally as a private-key entry under alias upload. The encrypted keystore and private setup instructions were saved for the owner; neither was committed to GitHub. The setup instructions' former android_release group is now superseded by the public YAML settings above. Actual Codemagic signed execution and Google Play import remain unverified.
+
+## Codemagic machine eligibility
+
+The first signed workflow attempt was blocked before execution: the selected linux_x2 machine was unavailable under the user's billing plan. Codemagic's current YAML reference restricts Linux instances to billing-enabled accounts. The signed AAB workflow now uses mac_mini_m2, also used by the existing Android debug workflow. Android compilation/signing does not require an Android emulator. The SDK path accepts ANDROID_SDK_ROOT or ANDROID_HOME. No billing settings were changed, no keystore was replaced, and the signed build still requires a new manual start on the updated branch. Remaining build minutes and actual execution are unverified.
+
+Reference: https://docs.codemagic.io/yaml-basic-configuration/yaml-getting-started/
