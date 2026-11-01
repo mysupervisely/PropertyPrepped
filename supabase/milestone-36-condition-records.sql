@@ -50,6 +50,12 @@ create table if not exists public.condition_record_events (
 create index if not exists condition_inspections_property_idx on public.condition_inspections(property_id, owner_id);
 create index if not exists condition_media_inspection_idx on public.condition_media(inspection_id);
 create index if not exists condition_events_inspection_idx on public.condition_record_events(inspection_id);
+create index if not exists condition_inspections_owner_idx on public.condition_inspections(owner_id);
+create index if not exists condition_inspections_lease_idx on public.condition_inspections(lease_id,property_id,owner_id);
+create index if not exists condition_inspections_baseline_idx on public.condition_inspections(baseline_id);
+create index if not exists condition_inspections_amendment_idx on public.condition_inspections(amendment_of);
+create index if not exists condition_media_property_owner_idx on public.condition_media(property_id,owner_id);
+create index if not exists condition_media_owner_idx on public.condition_media(owner_id);
 alter table public.condition_inspections enable row level security;
 alter table public.condition_media enable row level security;
 alter table public.condition_record_events enable row level security;
@@ -127,7 +133,7 @@ begin
   end if;
   return new;
 end $$;
-revoke all on function public.guard_condition_inspection() from public;
+revoke all on function public.guard_condition_inspection() from public, anon, authenticated;
 drop trigger if exists guard_condition_inspection on public.condition_inspections;
 create trigger guard_condition_inspection before insert or update on public.condition_inspections for each row execute function public.guard_condition_inspection();
 
@@ -135,7 +141,7 @@ create or replace function public.audit_condition_inspection() returns trigger
 language plpgsql security definer set search_path='' as $$ begin
   insert into public.condition_record_events(inspection_id,actor_id,version,snapshot) values(new.id,auth.uid(),new.version,to_jsonb(new)); return new;
 end $$;
-revoke all on function public.audit_condition_inspection() from public;
+revoke all on function public.audit_condition_inspection() from public, anon, authenticated;
 drop trigger if exists audit_condition_inspection on public.condition_inspections;
 create trigger audit_condition_inspection after insert or update on public.condition_inspections for each row execute function public.audit_condition_inspection();
 
@@ -157,7 +163,7 @@ begin
   if new.status='ready' and not exists(select 1 from storage.objects o where o.bucket_id='condition-record-media' and o.name=m.storage_path and (o.metadata->>'size')::bigint=m.size_bytes and o.metadata->>'mimetype'=m.mime_type) then raise exception 'Uploaded file metadata does not match'; end if;
   return new;
 end $$;
-revoke all on function public.guard_condition_media() from public;
+revoke all on function public.guard_condition_media() from public, anon, authenticated;
 drop trigger if exists guard_condition_media on public.condition_media;
 create trigger guard_condition_media before insert or update or delete on public.condition_media for each row execute function public.guard_condition_media();
 
@@ -178,7 +184,7 @@ begin
   select r.* into i from public.condition_inspections r join public.condition_media m on m.inspection_id=r.id where m.storage_path=p_name and m.owner_id=auth.uid() and m.status='removing' for update of r;
   return found and i.owner_id=auth.uid() and i.status='draft';
 end $$;
-revoke all on function public.can_remove_condition_file(text) from public;
+revoke all on function public.can_remove_condition_file(text) from public, anon, authenticated;
 grant execute on function public.can_remove_condition_file(text) to authenticated;
 -- Restrictive guards also protect this bucket from unrelated permissive
 -- policies that may already exist on the project's Storage objects table.

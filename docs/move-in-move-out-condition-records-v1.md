@@ -1,6 +1,6 @@
 # Move-in and move-out condition records: V1
 
-Status: implemented for review on `ios-readiness-v1`. Requires the M36 database migration before use. Not released to production or verified against live Storage yet.
+Status: implemented for review on `ios-readiness-v1`. M36 has been applied to the connected PropertyPrepped database. The feature is available in the review preview. No production frontend release or live device/Storage smoke test has been completed.
 
 ## Purpose and location
 
@@ -106,7 +106,7 @@ Broader turnover planning, cleaning/repair coordination, AI suggestions, tenant 
 
 ## Implementation and activation
 
-Run `supabase/milestone-36-condition-records.sql` in the existing project's Supabase SQL Editor as the database owner. It depends on the existing `properties` and `leases` schema, `auth.users`, and Supabase Storage. The script is transactional and can be rerun. It creates three new tables, ownership policies, inspection/media guards and a private `condition-record-media` bucket. It adds composite indexes and foreign keys to preserve property/lease ownership. No live migration was executed from this development session.
+Run `supabase/milestone-36-condition-records.sql` in the existing project's Supabase SQL Editor as the database owner. It depends on the existing `properties` and `leases` schema, `auth.users`, and Supabase Storage. The script is transactional and can be rerun. It creates three new tables, ownership policies, inspection/media guards and a private `condition-record-media` bucket. It adds composite indexes and foreign keys to preserve property/lease ownership. The migration was applied through the connected Supabase project after confirming the three inspection tables were absent. The Data API schema cache was refreshed.
 
 The fresh-install schema also contains M36. Existing installations should use the standalone migration. The panel displays a setup-needed message if its tables are absent, without substituting temporary browser storage.
 
@@ -123,6 +123,7 @@ Export downloads printable HTML, with escaped notes, checklist results, before/a
 - PostgreSQL tests execute the migration twice and check ownership, lease matching, immutable finalized records, server-stamped completion history, upload metadata, removal reservations, restrictive Storage policies, amendments and parent retention.
 - Model/report and repository tests cover independent checklists, N/A progress, comparison boundaries, report escaping, lost upload responses, optimistic conflicts and removal ordering.
 - A local browser harness using fictional records checks create, checkbox/N/A save, custom tasks, room notes, reload/resume, incomplete-finalization blocking and independent move-out checklists. Responsive checks cover 320, 375, 393, 430, 768 and 1024 pixels.
-- Live Supabase Storage, real iPhone camera/video capture, device playback, browser PDF output and multi-session real-network interruption testing still require a configured preview environment. Local mocks and PostgreSQL tests do not replace those checks.
+- A live authenticated-role transaction created an inspection, saved a checklist completion, verified the server completion actor and audit history, then confirmed a different owner could not read it. The transaction was rolled back with no inspection or media left behind. All three tables have RLS enabled and the media bucket is private.
+- Live Supabase Storage upload, real iPhone camera/video capture, device playback, browser PDF output and multi-session real-network interruption testing remain to be completed. Local mocks and PostgreSQL tests do not replace those checks.
 
 After migration, open Property -> Rent -> Move-in / Move-out. Use a test lease first: save a move-in record, add room photos and a short video, reload and download originals, resolve checklist/rooms, finalize, create a same-lease move-out comparison, export and create an amendment. Verify a second account cannot access these files or records. Do not promote the feature to production until this live smoke test passes.
