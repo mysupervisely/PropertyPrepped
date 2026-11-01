@@ -4822,3 +4822,61 @@ h2, h3, p { margin-top: 0; }
 .propertyTimelineNote { font-size: 9px !important; }
 
 .propertyNetLine.propertyNetCosts b { color: #b42318; }
+
+/* Property-level expense composition. Exact category amounts remain readable beside the donut. */
+.propertyExpenseBreakdown { margin: 16px 0; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); min-width: 0; }
+.propertyExpenseHeading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.propertyExpenseHeading h3 { margin: 0; font-size: 18px; }
+.propertyExpenseHeading > span { color: var(--muted); font-size: 13px; }
+.propertyExpenseLayout { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 22px; align-items: center; }
+.propertyExpenseDonut { position: relative; width: 150px; height: 150px; }
+.propertyExpenseDonut svg { display: block; width: 100%; height: 100%; }
+.propertyExpenseCenter { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 23px; text-align: center; }
+.propertyExpenseCenter strong { font-size: 18px; color: #b42318; max-width: 100%; overflow-wrap: anywhere; }
+.propertyExpenseCenter span { font-size: 10px; color: var(--muted); }
+.propertyExpenseNet { margin: 0; min-width: 0; display: grid; gap: 10px; }
+.propertyExpenseNet dt { color: var(--muted); font-size: 11px; line-height: 1.4; }
+.propertyExpenseNet dd { margin: 2px 0 0; color: #1d2320; font-size: 16px; font-weight: 650; overflow-wrap: anywhere; }
+.propertyExpenseNetTotal { padding-top: 9px; border-top: 1px solid var(--line); }
+.propertyExpenseNetTotal dd { font-size: 23px; }
+.propertyExpenseNet dd.propertyExpenseNegative { color: #b42318; }
+.propertyExpenseLegend { list-style: none; padding: 0; margin: 18px 0 0; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px 20px; }
+.propertyExpenseLegend li { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 7px 0; border-bottom: 1px solid #edf0ee; min-width: 0; font-size: 12px; }
+.propertyExpenseLegend li > span { min-width: 0; overflow-wrap: anywhere; }
+.propertyExpenseLegend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.propertyExpenseLegend strong { white-space: nowrap; color: #b42318; font-weight: 600; }
+.propertyExpenseNote { margin: 12px 0 0; font-size: 11px; line-height: 1.5; color: var(--muted); }
+@media (max-width: 480px) { .propertyExpenseBreakdown { padding: 16px; } .propertyExpenseLayout { grid-template-columns: 124px minmax(0,1fr); gap: 14px; } .propertyExpenseDonut { width: 124px; height: 124px; } .propertyExpenseCenter { padding: 22px; } .propertyExpenseCenter strong { font-size: 15px; } .propertyExpenseNetTotal dd { font-size: 20px; } .propertyExpenseLegend { grid-template-columns: minmax(0,1fr); gap: 0; } }
+
+/* Match the dashboard: identity above, photo left, compact expense snapshot right. */
+.propertyHero { display: grid; grid-template-columns: minmax(0,42fr) minmax(0,58fr); gap: 14px; align-items: start; }
+.propertyHero > .heroInfo { grid-column: 1 / -1; grid-row: 1; min-width: 0; }
+.propertyHero .heroInfoHead { display: block; }
+.propertyHero .heroInfoHead > div { display: grid; grid-template-columns: minmax(0,1fr) minmax(90px,32%); column-gap: 14px; row-gap: 0; }
+.propertyHero .heroInfo h1 { grid-column: 1; grid-row: 1; font-size: 20px; line-height: 1.25; margin: 0 0 4px; overflow-wrap: anywhere; }
+.propertyHero .heroCity { grid-column: 1; grid-row: 2; margin: 0; font-size: 13px; }
+.propertyHero .heroInfo .eyebrow { grid-column: 2; grid-row: 1; padding: 3px 0 4px 12px; margin: 0; border-left: 1px solid #cbd6d0; font-size: 10px; letter-spacing: 0; }
+.propertyHero .heroStatusPills { grid-column: 2; grid-row: 2; border-left: 1px solid #cbd6d0; padding: 0 0 3px 12px; margin: 0; gap: 4px; }
+.propertyHero .heroStatusPills .statusPill { padding: 0; background: transparent; font-size: 10px; white-space: normal; }
+.propertyHero > .heroPhoto { grid-column: 1; grid-row: 2; width: 100%; height: clamp(190px, 48vw, 250px); border-radius: 12px; }
+.propertyHero > .propertyExpenseCompact { grid-column: 2; grid-row: 2; }
+.propertyExpenseCompact { padding: 0; margin: 0; background: transparent; border: 0; border-radius: 0; min-width: 0; }
+.propertyExpenseCompact .propertyExpenseHeading { margin-bottom: 3px; gap: 5px; }
+.propertyExpenseCompact .propertyExpenseHeading h3 { font-size: 10px; color: var(--muted); font-weight: 500; }
+.propertyExpenseCompact .propertyExpenseHeading > span { font-size: 10px; }
+.propertyExpenseCompact .propertyExpenseLayout { display: flex; flex-direction: column; gap: 2px; }
+.propertyExpenseCompact .propertyExpenseDonut { width: 112px; height: 112px; }
+.propertyExpenseCompact .propertyExpenseCenter { padding: 22px; }
+.propertyExpenseCompact .propertyExpenseCenter strong { font-size: 14px; }
+.propertyExpenseCompact .propertyExpenseCenter span { font-size: 9px; }
+.propertyExpenseCompact .propertyExpenseNet { display: flex; flex-direction: column; gap: 3px; width: 100%; }
+.propertyExpenseCompact .propertyExpenseNet > div { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0 5px; }
+.propertyExpenseCompact .propertyExpenseNet dt { font-size: 10px; }
+.propertyExpenseCompact .propertyExpenseNet dd { font-size: 11px; margin: 0; }
+.propertyExpenseCompact .propertyExpenseNet .propertyExpenseNetTotal { order: -1; border: 0; padding: 0 0 4px; display: block; }
+.propertyExpenseCompact .propertyExpenseNetTotal dd { font-size: 20px; line-height: 1.3; }
+.propertyExpenseDetails { margin-top: 6px; font-size: 10px; }
+.propertyExpenseDetails > summary { min-height: 32px; display: flex; align-items: center; cursor: pointer; color: #273b31; text-decoration: underline; }
+.propertyExpenseDetails .propertyExpenseLegend { grid-template-columns: minmax(0,1fr); margin-top: 3px; gap: 0; }
+.propertyExpenseDetails .propertyExpenseLegend li { flex-wrap: wrap; font-size: 10px; gap: 0 5px; }
+@media (max-width: 380px) { .propertyHero, .propertyHero .heroInfoHead > div { column-gap: 10px; } .propertyHero .heroInfo h1 { font-size: 18px; } }

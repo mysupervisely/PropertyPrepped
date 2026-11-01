@@ -16,6 +16,7 @@ import { AuthHeader } from '../components/AuthHeader'
 import DocumentIntelligencePanel, { type ApplyAction } from '../components/DocumentIntelligencePanel'
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
 import { PropertyNetGraph } from '../components/property-profile/PropertyNetGraph'
+import { PropertyExpenseDonut } from '../components/property-profile/PropertyExpenseDonut'
 import { propertyRecordedNet } from '../lib/dashboard/property-net'
 import { propertyYearTimeline } from '../lib/dashboard/property-year-timeline'
 import { computePropertyTaxSummary } from '../lib/tax-center/aggregate'
@@ -3210,6 +3211,10 @@ export default function Home() {
     const performanceYearCustomItems = selectedTaxCustomItems
       .filter((r) => String(r.tax_year) === performanceYear)
       .map((r) => ({ id: r.id, propertyId: r.property_id, taxYear: r.tax_year, description: r.description, amount: Number(r.amount), group: r.category_group, notes: r.notes, documentId: r.document_id }))
+    const performanceExpenseSummary = computePropertyTaxSummary(selected,
+      selectedTransactions.filter(tx => tx.transaction_date.startsWith(performanceYear)),
+      selectedMaintenance.filter(row => row.service_date.startsWith(performanceYear)),
+      performanceYearTaxRecord, performanceYearCustomItems)
     const performance = computePropertyPerformance(buildPropertyPerformanceInput({
       property: selected,
       leases: selectedLeases,
@@ -3292,14 +3297,8 @@ export default function Home() {
         <section className="propertyHero">
           <div className="heroPhoto">{selected.coverUrl ? <img src={selected.coverUrl} alt={selected.address} /> : <div className="heroPlaceholder"><span>Property photo</span><small>Add photos in the Photos tab</small></div>}</div>
           <div className="heroInfo">
-            {/* Property Intelligence V1, Phase C.1 (Unified Property
-                Snapshot): the hero is identity only now — photo, address,
-                city, status, and the property-scoped actions. It no longer
-                repeats Value/Mortgage/Equity/Rent/Tax (the old five-metric
-                hero strip): every financial number lives in exactly ONE
-                place, the Property Snapshot on the Overview tab below, so
-                a landlord never sees two different numbers answering the
-                same question at the same time. */}
+            {/* Property identity sits above the photo and compact, resolved expense
+                snapshot. Value/equity/rent metrics stay in Overview below. */}
             <div className="heroInfoHead">
               <div><p className="eyebrow">{selected.property_type.toUpperCase()}</p><h1>{selected.address}</h1><p className="heroCity">{selected.city}</p>
                 <div className="heroStatusPills">
@@ -3310,6 +3309,7 @@ export default function Home() {
 
             </div>
           </div>
+          <PropertyExpenseDonut summary={performanceExpenseSummary} year={performanceYear} financingStatus={selected.financing_status} compact />
         </section>
 
         {/* role="tablist"/"tab" matches the same semantic pattern the
