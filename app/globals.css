@@ -4765,3 +4765,57 @@ h2, h3, p { margin-top: 0; }
 .propertyAlertRow small { display: block; margin-top: 3px; color: var(--muted); }
 .propertyTaxActions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 16px; }
 .propertyTaxActions small { flex-basis: 100%; color: var(--muted); }
+
+/* Lease-specific move-in and move-out condition records. */
+.conditionWorkspace { min-width: 0; }
+.conditionWorkspace h2 { font-size: 24px; margin: 0 0 5px; }
+.conditionWorkspace h3 { font-size: 19px; margin: 16px 0 8px; }
+.conditionWorkspace h4 { font-size: 15px; margin: 14px 0 8px; }
+.conditionWorkspace p { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.conditionHint, .conditionWorkspace small { color: var(--muted); }
+.conditionNotice { padding: 10px 12px; border-radius: 9px; background: #e9f3ed; }
+.conditionActions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
+.conditionWorkspace button, .conditionFilePicker { min-height: 40px; }
+.conditionStageFilter { display: flex; gap: 8px; margin: 16px 0 10px; }
+.conditionStageFilter button { border: 1px solid var(--line); background: var(--surface); border-radius: 9px; padding: 8px 14px; }
+.conditionStageFilter button[aria-pressed=true] { background: var(--brand); color: white; }
+.conditionRecordList { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,220px),1fr)); gap: 8px; margin: 8px 0 16px; }
+.conditionRecordList > button { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 11px; text-align: left; min-width: 0; }
+.conditionRecordList > button[aria-pressed=true] { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
+.conditionRecordList strong, .conditionRecordList small { display: block; font-size: 12px; overflow-wrap: anywhere; }
+.conditionForm { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; margin: 14px 0; min-width: 0; }
+.conditionForm legend { font-size: 14px; font-weight: 650; padding: 0 4px; }
+.conditionForm label { display: grid; gap: 5px; font-size: 12px; min-width: 0; }
+.conditionForm input, .conditionForm select, .conditionForm textarea, .conditionInlineAdd input { min-width: 0; max-width: 100%; width: 100%; padding: 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; box-sizing: border-box; }
+.conditionForm textarea { min-height: 84px; resize: vertical; }
+.conditionForm p, .conditionForm .conditionActions { grid-column: 1 / -1; margin: 0; }
+.conditionEditorHead { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 4px; }
+.conditionChecklist progress { width: 100%; height: 9px; accent-color: var(--brand); }
+.conditionTask { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.conditionTaskTop { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.conditionTaskTop > label { display: flex; gap: 9px; align-items: flex-start; font-size: 13px; line-height: 1.5; }
+.conditionTaskTop input { flex-shrink: 0; width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--brand); }
+.conditionTask.completed .conditionTaskTop label span { text-decoration: line-through; color: var(--muted); }
+.conditionNa { flex-shrink: 0; border: 1px solid var(--line); border-radius: 7px; padding: 5px 7px; font-size: 10px; color: var(--brand); background: transparent; }
+.conditionNa[aria-pressed=true] { background: #e5ece7; }
+.conditionTask details > summary, .conditionFinalization > summary { font-size: 12px; cursor: pointer; padding: 9px 0; color: var(--brand); }
+.conditionTask > small { display: block; font-size: 10px; margin: 4px 0 0 29px; }
+.conditionInlineAdd { display: flex; gap: 8px; align-items: center; margin: 14px 0; }
+.conditionInlineAdd input { flex: 1; }
+.conditionInlineAdd button { flex-shrink: 0; }
+.conditionRoom { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 12px 0; min-width: 0; }
+.conditionRoom > h4 { margin-top: 0; }
+.conditionRoom .conditionForm { border: 0; padding: 0; }
+.conditionMediaGrid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,180px),1fr)); gap: 12px; }
+.conditionMediaCard { min-width: 0; margin: 0; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.conditionMediaCard img, .conditionMediaCard video { display: block; width: 100%; max-height: 260px; object-fit: contain; border-radius: 7px; background: #edf1ee; }
+.conditionMediaCard strong, .conditionMediaCard small { display: block; overflow-wrap: anywhere; font-size: 11px; margin-top: 5px; }
+.conditionMediaCard .conditionActions button { font-size: 11px; padding: 6px 8px; }
+.conditionComparison { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.conditionComparison > section { min-width: 0; }
+.conditionFilePicker { position: relative; display: inline-flex; align-items: center; cursor: pointer; overflow: hidden; }
+.conditionFilePicker input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.conditionFilePicker:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }
+.conditionFinalization { margin: 12px 0; }
+.conditionFinalization li { font-size: 12px; margin: 6px 0; }
+@media(max-width:620px) { .conditionForm, .conditionComparison { grid-template-columns: minmax(0,1fr); } .conditionWorkspace h2 { font-size: 21px; } .conditionTaskTop { gap: 6px; } .conditionForm input, .conditionForm select, .conditionForm textarea { font-size: 16px; } }

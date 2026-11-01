@@ -36,7 +36,7 @@ import { classifyDate, daysUntil, type Urgency } from './date-classification'
 // builder below). NavPropertySubTab loses 'Maintenance' accordingly.
 export type NavTab = 'Overview' | 'Rent' | 'Maintenance' | 'Details' | 'PropCrew' | 'Documents' | 'Tax'
 export type NavPropertySubTab = 'Mortgage' | 'Insurance' | 'Systems'
-export type NavRentSubTab = 'Lease' | 'Ledger' | 'Tenant'
+export type NavRentSubTab = 'Lease' | 'Ledger' | 'Tenant' | 'Conditions'
 export type NavDocsSubTab = 'Documents' | 'Photos'
 
 export type NavTarget = {

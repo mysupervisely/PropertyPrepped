@@ -19,6 +19,8 @@ import { buildPropertyTaxExport } from '../lib/tax-center/property-export'
 import { aggregateRentCollection } from '../lib/dashboard/rent-collection'
 import { propertyLeaseSummary } from '../lib/dashboard/property-lease-summary'
 import { propertySummaryLabel } from '../lib/dashboard/property-rent-label'
+import { ConditionRecordsPanel } from '../components/property-profile/ConditionRecordsPanel'
+import { isMissingConditionSetup } from '../lib/condition-records/model'
 import { PropertyAlertsPanel } from '../components/property-profile/PropertyAlertsPanel'
 import { PropertySectionNav } from '../components/property-profile/PropertySectionNav'
 import { PropCrewPanel } from '../components/PropCrewPanel'
@@ -319,12 +321,12 @@ type PropertySubTab = 'Mortgage' | 'Insurance' | 'Systems' | 'Ownership'
 // belong under "Rent," so they get their own lightweight sub-tabs rather
 // than one long scroll (the same pattern Property's own sub-tabs already
 // use, not a new UI concept).
-type RentSubTab = 'Lease' | 'Ledger' | 'Tenant'
+type RentSubTab = 'Lease' | 'Ledger' | 'Tenant' | 'Conditions'
 type DocumentsSubTab = 'Documents' | 'Photos'
 
 const tabs: Tab[] = ['Overview', 'Rent', 'Maintenance', 'Details', 'PropCrew', 'Documents', 'Tax']
 const propertySubTabs: PropertySubTab[] = ['Mortgage', 'Insurance', 'Systems', 'Ownership']
-const rentSubTabs: RentSubTab[] = ['Lease', 'Ledger', 'Tenant']
+const rentSubTabs: RentSubTab[] = ['Lease', 'Ledger', 'Tenant', 'Conditions']
 const docCategories = ['All', ...DOCUMENT_CATEGORIES]
 
 const money = (n: number) => new Intl.NumberFormat('en-US', {
@@ -883,6 +885,12 @@ export default function Home() {
   const [propertyNotes, setPropertyNotes] = useState<PropertyNote[]>([])
   const [propertyOwnership, setPropertyOwnership] = useState<PropertyOwnership[]>([])
   const [propertySubTab, setPropertySubTab] = useState<PropertySubTab>('Mortgage')
+  const conditionUnsavedRef = useRef(false)
+  function mayLeaveConditions() {
+    if (conditionUnsavedRef.current && !window.confirm('Leave unsaved inspection changes or an upload in progress? Saved records will be retained.')) return false
+    conditionUnsavedRef.current = false
+    return true
+  }
   const [rentSubTab, setRentSubTab] = useState<RentSubTab>('Lease')
   const [documentsSubTab, setDocumentsSubTab] = useState<DocumentsSubTab>('Documents')
   // Documents redesign: which category chip is active in the "Add
@@ -1946,6 +1954,9 @@ export default function Home() {
 
   async function deleteProperty() {
     if (!supabase || !user || !selected) return
+    const conditionCheck = await supabase.from('condition_inspections').select('id', { count: 'exact', head: true }).eq('property_id', selected.id).eq('owner_id', user.id)
+    if (conditionCheck.error && !isMissingConditionSetup(conditionCheck.error)) { setError('Could not check retained inspection records. No property files were removed.'); return }
+    if ((conditionCheck.count ?? 0) > 0) { setError('This property has retained condition reports and cannot be deleted. Keep it to preserve inspection records.'); return }
     setBusy(true)
     setError('')
 
@@ -1978,6 +1989,7 @@ export default function Home() {
   }
 
   const openProperty = (id: string, tab: Tab = 'Overview', docsSubTab?: DocumentsSubTab, propSubTab?: PropertySubTab, rentSubTab?: RentSubTab) => {
+    if (!mayLeaveConditions()) return
     // Mobile V2 — Area E: give the dashboard-to-property transition its own
     // history entry so the native/browser back gesture returns to the
     // dashboard instead of leaving the app. Only pushed when we're actually
@@ -2004,6 +2016,7 @@ export default function Home() {
   // real back-press would be a silent no-op (popstate firing on an already-
   // null selectedId) before it actually left the page.
   function closeProperty() {
+    if (!mayLeaveConditions()) return
     if (typeof window !== 'undefined' && (window.history.state as { proproster?: string } | null)?.proproster === 'property') {
       window.history.back()
     } else {
@@ -2022,6 +2035,7 @@ export default function Home() {
   // with any other history traffic (e.g. a future route change).
   useEffect(() => {
     const onPopState = () => {
+      if (!mayLeaveConditions()) { window.history.pushState({ proproster: 'property' }, '', window.location.href); return }
       setSelectedId((current) => (current === null ? current : null))
     }
     window.addEventListener('popstate', onPopState)
@@ -3304,11 +3318,12 @@ export default function Home() {
             same strip with .mobilePropertyNav below — see its own
             comment). */}
         <PropertySectionNav onEdit={() => openEditProperty(selected)} propertyAddress={selected.address} activeTab={activeTab} rentSubTab={rentSubTab} maintenanceCount={selectedOpenMaintenanceCount} onSelect={(tab, rentSection) => {
+          if (!mayLeaveConditions()) return
           setActiveTab(tab)
           if (rentSection) setRentSubTab(rentSection)
         }} />
 
-        <nav className="tabs" role="tablist" aria-label="Property sections">{tabs.map((tab) => <button key={tab} role="tab" aria-selected={activeTab === tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
+        <nav className="tabs" role="tablist" aria-label="Property sections">{tabs.map((tab) => <button key={tab} role="tab" aria-selected={activeTab === tab} className={activeTab === tab ? 'active' : ''} onClick={() => { if (mayLeaveConditions()) setActiveTab(tab) }}>{tab}</button>)}</nav>
 
         {/* Mobile Property Section Selector V1: below 761px (the exact
             width .tabs used to become a horizontal scroller at — see
@@ -3337,7 +3352,7 @@ export default function Home() {
             <ul className="mobilePropertyNavMenu" role="listbox" aria-label="Property sections">
               {tabs.map((tab) => (
                 <li key={tab} role="option" aria-selected={activeTab === tab}>
-                  <button type="button" className={activeTab === tab ? 'active' : ''} onClick={() => { setActiveTab(tab); setMobileTabMenuOpen(false) }}>
+                  <button type="button" className={activeTab === tab ? 'active' : ''} onClick={() => { if (!mayLeaveConditions()) return; setActiveTab(tab); setMobileTabMenuOpen(false) }}>
                     <span className="mobilePropertyNavCheck" aria-hidden="true">{activeTab === tab ? '✓' : ''}</span>
                     {tab}
                     {/* Mobile V2: an open-case count on Maintenance only —
@@ -3691,7 +3706,9 @@ export default function Home() {
               Requests" to "Tenant" — the internal RentSubTab value was
               already 'Tenant', so this is a label-only change, no
               route/state rename. */}
-          <div className="subTabs" role="tablist" aria-label="Rent sections">{rentSubTabs.map((sub) => <button key={sub} role="tab" aria-selected={rentSubTab === sub} className={rentSubTab === sub ? 'active' : ''} onClick={() => setRentSubTab(sub)}>{sub === 'Tenant' ? 'Tenant' : sub === 'Ledger' ? 'Ledger' : 'Lease & Rent'}</button>)}</div>
+          <div className="subTabs" role="tablist" aria-label="Rent sections">{rentSubTabs.map((sub) => <button key={sub} role="tab" aria-selected={rentSubTab === sub} className={rentSubTab === sub ? 'active' : ''} onClick={() => { if (mayLeaveConditions()) setRentSubTab(sub) }}>{sub === 'Tenant' ? 'Tenant' : sub === 'Ledger' ? 'Ledger' : sub === 'Conditions' ? 'Move-in / Move-out' : 'Lease & Rent'}</button>)}</div>
+
+          {rentSubTab === 'Conditions' && supabase && <ConditionRecordsPanel key={selected.id} client={supabase} propertyId={selected.id} ownerId={user.id} address={selected.address} leases={selectedLeases} onDirtyChange={value => { conditionUnsavedRef.current = value }} />}
 
           {rentSubTab === 'Lease' && (() => {
             // Ungated by property_type (unlike the hero/Overview occupancy

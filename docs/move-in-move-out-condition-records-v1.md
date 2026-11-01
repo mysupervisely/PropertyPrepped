@@ -1,10 +1,10 @@
-# Move-in and move-out condition records: proposed V1
+# Move-in and move-out condition records: V1
 
-Status: scoped, not implemented. Requested after the property-chart experiment was removed.
+Status: implemented for review on `ios-readiness-v1`. Requires the M36 database migration before use. Not released to production or verified against live Storage yet.
 
 ## Purpose and location
 
-Property -> Rent -> Condition records. Record a property's condition before a tenant moves in, then document it again after that same tenancy ends. This is a focused inspection feature, separate from a full tenant-turnover or deposit-accounting workflow.
+Property -> Rent -> Move-in / Move-out. Record a property's condition before a tenant moves in, then document it again after that same tenancy ends. This is a focused inspection feature, separate from a full tenant-turnover or deposit-accounting workflow.
 
 ## Existing foundation
 
@@ -103,3 +103,26 @@ Comparison records support the landlord's review; they do not automatically esta
 - Mobile capture and interrupted upload tests, cross-owner/cross-tenancy access tests, finalized-record amendment checks, video playback and export checks.
 
 Broader turnover planning, cleaning/repair coordination, AI suggestions, tenant acknowledgements and deposit accounting remain outside this first phase.
+
+## Implementation and activation
+
+Run `supabase/milestone-36-condition-records.sql` in the existing project's Supabase SQL Editor as the database owner. It depends on the existing `properties` and `leases` schema, `auth.users`, and Supabase Storage. The script is transactional and can be rerun. It creates three new tables, ownership policies, inspection/media guards and a private `condition-record-media` bucket. It adds composite indexes and foreign keys to preserve property/lease ownership. No live migration was executed from this development session.
+
+The fresh-install schema also contains M36. Existing installations should use the standalone migration. The panel displays a setup-needed message if its tables are absent, without substituting temporary browser storage.
+
+The bucket permits JPEG, PNG, WebP, HEIC/HEIF photos up to 20 MB and MP4, QuickTime/MOV and WebM video up to 50 MB. File selection is limited to ten files / 100 MB per batch. Device codec support varies: unsupported previews retain the original download. No video transcoding is provided.
+
+Upload references are reserved before bytes are sent; failed or uncertain uploads remain pending for explicit Check upload or Remove. Storage bytes are never overwritten. Removal is reserved persistently before the Storage API call; pending removals prevent finalization even across interrupted requests. Finalization checks actual stored file size/type metadata and requires one verified file per applicable room, resolved checklist tasks, an inspector and a lease. Notes and dates use Save draft; checkbox and N/A changes save immediately. Concurrent edits use record versions and report conflicts without automatically retrying stale writes.
+
+Finalized records are read-only. Corrections create amendments with reasons, copied room notes, independent checklists and inherited original media. A server audit snapshot records inspection changes and completion actors/times. Final reports freeze the tenant/date/address labels. Condition records prevent destructive property/lease deletion; even saved drafts are retained in this first version. Retention cleanup and account deletion must use a separately reviewed administrator process.
+
+Export downloads printable HTML, with escaped notes, checklist results, before/after references and up to 40 supported photo previews. Open the report in a browser to print or save PDF. Original videos and unsupported photos are downloaded individually through authenticated Storage. There is no bulk ZIP, tenant acknowledgement, signature or tenant sharing in V1.
+
+## Verification and release limits
+
+- PostgreSQL tests execute the migration twice and check ownership, lease matching, immutable finalized records, server-stamped completion history, upload metadata, removal reservations, restrictive Storage policies, amendments and parent retention.
+- Model/report and repository tests cover independent checklists, N/A progress, comparison boundaries, report escaping, lost upload responses, optimistic conflicts and removal ordering.
+- A local browser harness using fictional records checks create, checkbox/N/A save, custom tasks, room notes, reload/resume, incomplete-finalization blocking and independent move-out checklists. Responsive checks cover 320, 375, 393, 430, 768 and 1024 pixels.
+- Live Supabase Storage, real iPhone camera/video capture, device playback, browser PDF output and multi-session real-network interruption testing still require a configured preview environment. Local mocks and PostgreSQL tests do not replace those checks.
+
+After migration, open Property -> Rent -> Move-in / Move-out. Use a test lease first: save a move-in record, add room photos and a short video, reload and download originals, resolve checklist/rooms, finalize, create a same-lease move-out comparison, export and create an amendment. Verify a second account cannot access these files or records. Do not promote the feature to production until this live smoke test passes.

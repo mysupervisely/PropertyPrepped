@@ -16,7 +16,7 @@ export function PropertySectionNav({ propertyAddress, activeTab, rentSubTab, mai
   onEdit: () => void
   propertyAddress: string
   activeTab: PropertyTab
-  rentSubTab: 'Lease' | 'Ledger' | 'Tenant'
+  rentSubTab: 'Lease' | 'Ledger' | 'Tenant' | 'Conditions'
   maintenanceCount: number
   onSelect: (tab: PropertyTab, rent?: 'Lease' | 'Tenant') => void
 }) {
