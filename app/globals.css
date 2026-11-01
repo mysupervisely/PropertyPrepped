@@ -4754,3 +4754,14 @@ h2, h3, p { margin-top: 0; }
 /* Dashboard shortcuts precede the greeting, without a redundant title. */
 .mobileQuickActionsHead { justify-content: flex-end; }
 @media (max-width: 760px) { .mobileQuickActions { margin-top: 8px; margin-bottom: 18px; } }
+
+.propertyStatusButton { border: 0; background: transparent; color: inherit; font: inherit; font-weight: inherit; cursor: pointer; padding: 6px 2px; min-height: 36px; text-decoration: underline; text-underline-offset: 3px; }
+.propertyStatusButton:focus-visible, .propertyAlertRow:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+.propertyAlertsDetails { grid-column: 1 / -1; padding: 12px 14px; margin: 4px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.propertyAlertsHeading { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; }
+.propertyAlertsHeading > button { background: transparent; border: 0; color: var(--brand); padding: 8px; min-height: 36px; cursor: pointer; }
+.propertyAlertRow { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; width: 100%; text-align: left; padding: 12px 0; border: 0; border-bottom: 1px solid var(--line); background: transparent; font-size: 12px; color: var(--text); cursor: pointer; }
+.propertyAlertRow > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.propertyAlertRow small { display: block; margin-top: 3px; color: var(--muted); }
+.propertyTaxActions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 16px; }
+.propertyTaxActions small { flex-basis: 100%; color: var(--muted); }

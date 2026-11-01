@@ -35,7 +35,7 @@ describe('property-scoped section navigation', () => {
       buttons.find(button => button.key === tab)!.props.onClick()
       expect(onSelect).toHaveBeenLastCalledWith(tab, undefined)
     }
-    expect(buttons.find(button => button.key === 'Maintenance')!.props.children[1]).toMatchObject({ props: { children: 2 } })
+    expect(buttons.find(button => button.key === 'Maintenance')!.props.children[1]).toMatchObject({ props: { children: ['- ', 2] } })
   })
   it('opens editing without changing the selected section', () => {
     const { buttons, onEdit, onSelect } = render()

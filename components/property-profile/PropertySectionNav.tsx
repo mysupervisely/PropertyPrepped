@@ -25,7 +25,7 @@ export function PropertySectionNav({ propertyAddress, activeTab, rentSubTab, mai
       const current = activeTab === section.tab && (section.tab !== 'Rent'
         || (section.rent === 'Tenant' ? rentSubTab === 'Tenant' : rentSubTab !== 'Tenant'))
       return <button type="button" key={section.label} aria-pressed={current} className={current ? 'active' : ''} onClick={() => onSelect(section.tab, section.rent)}>
-        {section.label}{section.tab === 'Maintenance' && maintenanceCount > 0 && <span className="propertySectionCount">{maintenanceCount}</span>}
+        {section.label}{section.tab === 'Maintenance' && maintenanceCount > 0 && <span className="propertySectionCount">- {maintenanceCount}</span>}
       </button>
     })}
     <button key="Edit" type="button" onClick={onEdit} aria-label={`Edit ${propertyAddress}`}>Edit</button>

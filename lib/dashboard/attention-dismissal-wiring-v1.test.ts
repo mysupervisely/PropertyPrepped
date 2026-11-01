@@ -71,7 +71,7 @@ describe('Clear persists a dismissal and never touches canonical business state'
 
 describe('Filtering wiring: dismissed items are excluded from the SAME canonical lists, count included', () => {
   const memoBody = sliceFunction(
-    'const { attentionItems, upcomingItems, openMaintenanceItems, recentActivity, vacancyItems, attentionCountByProperty, rentStatusByProperty, rentCollectionByProperty } = useMemo(',
+    'const { attentionItems, upcomingItems, openMaintenanceItems, recentActivity, vacancyItems, attentionCountByProperty, rentStatusByProperty, rentCollectionByProperty, propertyAttentionItems } = useMemo(',
     'function goToNav(',
   )
 

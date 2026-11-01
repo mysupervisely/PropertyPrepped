@@ -120,7 +120,7 @@ describe('Existing Dashboard behavior this milestone must not change', () => {
   })
 
   it('the useMemo\'s own output shape (attentionItems/vacancyItems/openMaintenanceItems/etc) is unchanged — only dismissal filtering was layered on top, in the approved follow-up', () => {
-    const memoStart = pageSource.indexOf('const { attentionItems, upcomingItems, openMaintenanceItems, recentActivity, vacancyItems, attentionCountByProperty, rentStatusByProperty, rentCollectionByProperty } = useMemo(')
+    const memoStart = pageSource.indexOf('const { attentionItems, upcomingItems, openMaintenanceItems, recentActivity, vacancyItems, attentionCountByProperty, rentStatusByProperty, rentCollectionByProperty, propertyAttentionItems } = useMemo(')
     expect(memoStart).toBeGreaterThan(-1)
   })
 })

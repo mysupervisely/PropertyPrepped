@@ -15,9 +15,11 @@ import { toSafeErrorMessage } from '../lib/user-facing-errors'
 import { AuthHeader } from '../components/AuthHeader'
 import DocumentIntelligencePanel, { type ApplyAction } from '../components/DocumentIntelligencePanel'
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
+import { buildPropertyTaxExport } from '../lib/tax-center/property-export'
 import { aggregateRentCollection } from '../lib/dashboard/rent-collection'
 import { propertyLeaseSummary } from '../lib/dashboard/property-lease-summary'
 import { propertySummaryLabel } from '../lib/dashboard/property-rent-label'
+import { PropertyAlertsPanel } from '../components/property-profile/PropertyAlertsPanel'
 import { PropertySectionNav } from '../components/property-profile/PropertySectionNav'
 import { PropCrewPanel } from '../components/PropCrewPanel'
 import { PropertySystemsPanel, type PropertySystem } from '../components/property-profile/PropertySystemsPanel'
@@ -917,6 +919,7 @@ export default function Home() {
   const [insuranceDraft, setInsuranceDraft] = useState({ carrier:'', policyNumber:'', annualPremium:'', deductible:'', effectiveDate:'', expirationDate:'', documentId:'' })
   const [maintenanceDraft, setMaintenanceDraft] = useState({ serviceDate:new Date().toISOString().slice(0,10), status:'Completed', category:'Repair', vendor:'', description:'', cost:'', documentId:'', addToFinancials:true })
   const [financialYear, setFinancialYear] = useState(String(new Date().getFullYear()))
+  const [propertyAlertsId, setPropertyAlertsId] = useState<string | null>(null)
   const [transactionDraft, setTransactionDraft] = useState({ date: new Date().toISOString().slice(0, 10), type: 'Expense' as 'Income' | 'Expense', category: 'Repairs', vendor: '', description: '', amount: '', documentId: '', recurring: false })
   const [showAdd, setShowAdd] = useState(false)
   // Onboarding & First-Run Experience V2: shown once, on the property
@@ -1232,7 +1235,7 @@ export default function Home() {
 
   const propertyLabelById = useMemo(() => new Map(properties.map((p) => [p.id, p.address])), [properties])
 
-  const { attentionItems, upcomingItems, openMaintenanceItems, recentActivity, vacancyItems, attentionCountByProperty, rentStatusByProperty, rentCollectionByProperty } = useMemo(() => {
+  const { attentionItems, upcomingItems, openMaintenanceItems, recentActivity, vacancyItems, attentionCountByProperty, rentStatusByProperty, rentCollectionByProperty, propertyAttentionItems } = useMemo(() => {
     // Milestone 18: PropWatch's rent + warranty signals fold into the
     // SAME dateItems list Milestone 16 already builds — same
     // classifyDate() thresholds, same Needs Attention/Upcoming split,
@@ -1339,6 +1342,7 @@ export default function Home() {
       recentActivity: limitItems(activity, RECENT_ACTIVITY_LIMIT),
       vacancyItems: visibleVacancy,
       attentionCountByProperty: attentionCounts,
+      propertyAttentionItems: sortByDaysUntilAscending(visibleNeedsAttention),
       rentStatusByProperty: rentByProperty,
       rentCollectionByProperty: aggregateRentCollection(rentRows),
     }
@@ -2779,7 +2783,7 @@ export default function Home() {
   }
 
   async function addTransaction() {
-    if (!supabase || !user || !selectedId || !transactionDraft.description.trim() || Number(transactionDraft.amount) <= 0) return
+    if (!supabase || !user || !selectedId || !transactionDraft.date || !transactionDraft.description.trim() || Number(transactionDraft.amount) <= 0) return
     setBusy(true)
     setError('')
     const { error: insertError } = await supabase.from('financial_transactions').insert({
@@ -3834,7 +3838,7 @@ export default function Home() {
               itself (calculation engine, override semantics, collapsible
               groups, manual entry) is completely untouched below. */}
           <div className="sectionHead workspaceHeading taxSectionHead">
-            <div><p className="eyebrow">TAX</p><h2>Property tax workspace</h2></div>
+            <div><p className="eyebrow">TAX</p><h2>{selected.address}</h2><p>Property tax workspace. Expenses and annual records here belong to this property.</p></div>
             <button className="primary" onClick={() => { setUploadCategory('Tax'); setShowAddDocumentChooser(true) }}>+ Add Tax Document</button>
           </div>
 
@@ -3860,8 +3864,22 @@ export default function Home() {
           )}
 
           <PropertyTaxPanel
+            key={selected.id}
             supabase={supabase}
             propertyId={selected.id}
+            onAddExpense={(year) => {
+              setTransactionDraft({ date: year === String(new Date().getFullYear()) ? new Date().toISOString().slice(0, 10) : '', type: 'Expense', category: 'Repairs', vendor: '', description: '', amount: '', documentId: '', recurring: false })
+              setShowTransaction(true)
+            }}
+            onExport={(year) => {
+              const csv = buildPropertyTaxExport({ property: selected, year, transactions: selectedTransactions, maintenanceRecords: selectedMaintenance, taxRecords: selectedTaxRecords, customItems: selectedTaxCustomItems.map(row => ({ id: row.id, propertyId: row.property_id, taxYear: row.tax_year, description: row.description, amount: Number(row.amount), group: row.category_group, notes: row.notes, documentId: row.document_id })) })
+              const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
+              const link = document.createElement('a')
+              link.href = url
+              link.download = `proproster-${selected.address.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${year}-tax-records.csv`
+              link.click()
+              URL.revokeObjectURL(url)
+            }}
             ownerId={user.id}
             transactions={selectedTransactions}
             maintenanceRecords={selectedMaintenance}
@@ -4070,7 +4088,7 @@ export default function Home() {
 
         {showDeleteConfirm && <div className="overlay deleteOverlay" onMouseDown={(e) => e.target === e.currentTarget && setShowDeleteConfirm(false)}><div className="modal deleteModal"><div className="modalTop"><div><p className="eyebrow dangerEyebrow">PERMANENT ACTION</p><h2>Delete this property?</h2></div><button className="iconButton" onClick={() => setShowDeleteConfirm(false)}>×</button></div><p className="deleteWarning">This permanently removes <strong>{selected.address}</strong> and its associated documents, photos, financial transactions, lease, mortgage, insurance, maintenance records, contacts, and maintenance requests. This cannot be undone.</p><div className="modalActions"><button className="secondary" onClick={() => setShowDeleteConfirm(false)}>Keep Property</button><button className="dangerButton solidDanger" disabled={busy} onClick={() => void deleteProperty()}>{busy ? 'Deleting…' : 'Delete Permanently'}</button></div></div></div>}
 
-        {showTransaction && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowTransaction(false)}><div className="modal transactionModal"><div className="modalTop"><div><p className="eyebrow">LEDGER</p><h2>Add transaction</h2></div><button className="iconButton" onClick={() => setShowTransaction(false)}>×</button></div><div className="formGrid transactionGrid"><label>Date<input type="date" value={transactionDraft.date} onChange={(e) => setTransactionDraft({ ...transactionDraft, date: e.target.value })} /></label><label>Type<select value={transactionDraft.type} onChange={(e) => setTransactionDraft({ ...transactionDraft, type: e.target.value as 'Income' | 'Expense', category: e.target.value === 'Income' ? 'Rent' : 'Repairs' })}><option>Income</option><option>Expense</option></select></label><label>Category<select value={transactionDraft.category} onChange={(e) => setTransactionDraft({ ...transactionDraft, category: e.target.value })}>{FINANCIAL_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></label><label>Amount<input inputMode="decimal" value={transactionDraft.amount} onChange={(e) => setTransactionDraft({ ...transactionDraft, amount: e.target.value })} placeholder="1250.00" /></label><label>Vendor / payer<input value={transactionDraft.vendor} onChange={(e) => setTransactionDraft({ ...transactionDraft, vendor: e.target.value })} placeholder={transactionDraft.type === 'Income' ? 'Tenant name' : 'Vendor or company'} /></label><label>Attach document<select value={transactionDraft.documentId} onChange={(e) => setTransactionDraft({ ...transactionDraft, documentId: e.target.value })}><option value="">No attachment</option>{selectedDocs.map((doc) => <option value={doc.id} key={doc.id}>{doc.name}</option>)}</select></label><label className="fullField">Description<input value={transactionDraft.description} onChange={(e) => setTransactionDraft({ ...transactionDraft, description: e.target.value })} placeholder="August rent, HVAC repair, property tax…" /></label><label className="recurringCheck fullField"><input type="checkbox" checked={transactionDraft.recurring} onChange={(e) => setTransactionDraft({ ...transactionDraft, recurring: e.target.checked })} /><span>Mark as recurring monthly</span><small>This labels the transaction as recurring; automatic future posting can be enabled in a later milestone.</small></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowTransaction(false)}>Cancel</button><button className="primary" disabled={busy || !transactionDraft.description.trim() || Number(transactionDraft.amount) <= 0} onClick={() => void addTransaction()}>{busy ? 'Saving…' : 'Save transaction'}</button></div></div></div>}
+        {showTransaction && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowTransaction(false)}><div className="modal transactionModal"><div className="modalTop"><div><p className="eyebrow">LEDGER</p><h2>Add transaction</h2></div><button className="iconButton" onClick={() => setShowTransaction(false)}>×</button></div><div className="formGrid transactionGrid"><label>Date<input type="date" value={transactionDraft.date} onChange={(e) => setTransactionDraft({ ...transactionDraft, date: e.target.value })} /></label><label>Type<select value={transactionDraft.type} onChange={(e) => setTransactionDraft({ ...transactionDraft, type: e.target.value as 'Income' | 'Expense', category: e.target.value === 'Income' ? 'Rent' : 'Repairs' })}><option>Income</option><option>Expense</option></select></label><label>Category<select value={transactionDraft.category} onChange={(e) => setTransactionDraft({ ...transactionDraft, category: e.target.value })}>{FINANCIAL_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></label><label>Amount<input inputMode="decimal" value={transactionDraft.amount} onChange={(e) => setTransactionDraft({ ...transactionDraft, amount: e.target.value })} placeholder="1250.00" /></label><label>Vendor / payer<input value={transactionDraft.vendor} onChange={(e) => setTransactionDraft({ ...transactionDraft, vendor: e.target.value })} placeholder={transactionDraft.type === 'Income' ? 'Tenant name' : 'Vendor or company'} /></label><label>Attach document<select value={transactionDraft.documentId} onChange={(e) => setTransactionDraft({ ...transactionDraft, documentId: e.target.value })}><option value="">No attachment</option>{selectedDocs.map((doc) => <option value={doc.id} key={doc.id}>{doc.name}</option>)}</select></label><label className="fullField">Description<input value={transactionDraft.description} onChange={(e) => setTransactionDraft({ ...transactionDraft, description: e.target.value })} placeholder="August rent, HVAC repair, property tax…" /></label><label className="recurringCheck fullField"><input type="checkbox" checked={transactionDraft.recurring} onChange={(e) => setTransactionDraft({ ...transactionDraft, recurring: e.target.checked })} /><span>Mark as recurring monthly</span><small>This labels the transaction as recurring; automatic future posting can be enabled in a later milestone.</small></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowTransaction(false)}>Cancel</button><button className="primary" disabled={busy || !transactionDraft.date || !transactionDraft.description.trim() || Number(transactionDraft.amount) <= 0} onClick={() => void addTransaction()}>{busy ? 'Saving…' : 'Save transaction'}</button></div></div></div>}
 
         {showDocIntelId && (() => {
           const activeDoc = selectedDocs.find((d) => d.id === showDocIntelId)
@@ -4505,11 +4523,12 @@ export default function Home() {
               <button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button><div className="propertyMobileLabels" aria-label="Property type and occupancy"><span className="propertyMobileType">{property.property_type}</span>{propertyOccupancy && <span className={`propertyMobileOccupancy ${occupancyPillClass(propertyOccupancy)}`}>{propertyOccupancy === 'Occupancy unknown' ? 'Unknown' : propertyOccupancy === 'Upcoming tenancy' ? 'Upcoming' : propertyOccupancy}</span>}</div>
             </div>
             <dl className="propertySummaryStrip" aria-label={`Summary for ${property.address}`}>
-              <div><dt className="propertySummaryStatusLabel">Status</dt><dd className={propertyOccupancy === 'Vacant' ? 'pillNeutral' : propertyRentRow ? rentStatusPillClass(propertyRentRow.status) : 'pillNeutral'}>{propertySummaryLabel(propertyRentRow?.status, propertyOccupancy === 'Vacant', propertyAlertCount)}</dd></div>
+              <div><dt className="propertySummaryStatusLabel">Status</dt><dd className={propertyOccupancy === 'Vacant' ? 'pillNeutral' : propertyRentRow ? rentStatusPillClass(propertyRentRow.status) : 'pillNeutral'}>{propertyAlertCount > 0 || (propertyOccupancy !== 'Vacant' && propertyRentRow && ['Overdue', 'Partial', 'Due'].includes(propertyRentRow.status)) ? <button type="button" className="propertyStatusButton" id={`property-alert-trigger-${property.id}`} aria-label={`View alerts for ${property.address}`} aria-expanded={propertyAlertCount > 0 ? propertyAlertsId === property.id : undefined} aria-controls={propertyAlertCount > 0 ? `property-alerts-${property.id}` : undefined} onClick={() => propertyAlertCount > 0 ? setPropertyAlertsId(current => current === property.id ? null : property.id) : openProperty(property.id, 'Rent', undefined, undefined, 'Ledger')}>{propertySummaryLabel(propertyRentRow?.status, propertyOccupancy === 'Vacant', propertyAlertCount)}</button> : propertySummaryLabel(propertyRentRow?.status, propertyOccupancy === 'Vacant', propertyAlertCount)}</dd></div>
               <div><dt>Rent</dt><dd>{money(property.monthly_rent)}</dd></div>
               <div><dt>Value</dt><dd>{compactMoney(Number(property.estimated_value))}</dd></div>
               <div><dt>{leaseSummary.label}</dt><dd>{leaseSummary.value}</dd></div>
             </dl>
+            {propertyAlertsId === property.id && propertyAlertCount > 0 && <PropertyAlertsPanel propertyId={property.id} address={property.address} items={propertyAttentionItems} onClose={() => { setPropertyAlertsId(null); document.getElementById(`property-alert-trigger-${property.id}`)?.focus() }} onOpen={(propertyId, nav) => { setPropertyAlertsId(null); goToNav(propertyId, nav) }} />}
           </article>
         })}
           {!busy && properties.length === 0 && <button className="emptyPropertyCard" onClick={() => openAddProperty()}><strong>+ Add your first property</strong><span>Start building your organized property file.</span></button>}

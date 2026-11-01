@@ -143,7 +143,7 @@ function emptyCustomItemDraft(): { description: string; amount: string; group: C
 }
 
 export function PropertyTaxPanel({
-  supabase, propertyId, ownerId, transactions, maintenanceRecords, documents, taxRecords, customItems, onRefresh,
+  supabase, propertyId, ownerId, transactions, maintenanceRecords, documents, taxRecords, customItems, onRefresh, onAddExpense, onExport,
 }: {
   supabase: SupabaseClient
   propertyId: string
@@ -154,8 +154,10 @@ export function PropertyTaxPanel({
   taxRecords: PropertyTaxRecordRow[]
   customItems: CustomTaxItemRow[]
   onRefresh: () => void
+  onAddExpense?: (year: string) => void
+  onExport?: (year: string) => void
 }) {
-  const availableYears = useMemo(() => getAvailableTaxYears(transactions), [transactions])
+  const availableYears = useMemo(() => Array.from(new Set([...getAvailableTaxYears(transactions), ...taxRecords.filter(row => row.property_id === propertyId).map(row => String(row.tax_year)), ...customItems.filter(row => row.property_id === propertyId).map(row => String(row.tax_year))])).sort().reverse(), [transactions, taxRecords, customItems, propertyId])
   const [year, setYear] = useState<string>(availableYears[0] || String(new Date().getFullYear()))
   const existingRecord = useMemo(() => taxRecords.find((r) => String(r.tax_year) === year), [taxRecords, year])
   const [draftFields, setDraftFields] = useState<DraftFields>(() => draftFromRecord(existingRecord).fields)
@@ -448,6 +450,12 @@ export function PropertyTaxPanel({
             {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
         </label>
+      </div>
+
+      <div className="propertyTaxActions">
+        {onAddExpense && <button type="button" className="primary" disabled={dirty || saving} onClick={() => onAddExpense(year)}>+ Add expense</button>}
+        {onExport && <button type="button" className="secondary" disabled={dirty || saving} onClick={() => onExport(year)}>Export {year} for CPA</button>}
+        {onExport && dirty && <small>Save your annual changes before adding expenses or exporting.</small>}
       </div>
 
       {/* Concise annual summary — the comprehensive category list below
