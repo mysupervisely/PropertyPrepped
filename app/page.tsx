@@ -3708,7 +3708,7 @@ export default function Home() {
               route/state rename. */}
           <div className="subTabs" role="tablist" aria-label="Rent sections">{rentSubTabs.map((sub) => <button key={sub} role="tab" aria-selected={rentSubTab === sub} className={rentSubTab === sub ? 'active' : ''} onClick={() => { if (mayLeaveConditions()) setRentSubTab(sub) }}>{sub === 'Tenant' ? 'Tenant' : sub === 'Ledger' ? 'Ledger' : sub === 'Conditions' ? 'Move-in / Move-out' : 'Lease & Rent'}</button>)}</div>
 
-          {rentSubTab === 'Conditions' && supabase && <ConditionRecordsPanel key={selected.id} client={supabase} propertyId={selected.id} ownerId={user.id} address={selected.address} leases={selectedLeases} onDirtyChange={value => { conditionUnsavedRef.current = value }} />}
+          {rentSubTab === 'Conditions' && supabase && <ConditionRecordsPanel key={selected.id} client={supabase} propertyId={selected.id} ownerId={user.id} address={selected.address} leases={selectedLeases} completedBy={[userProfile?.first_name, userProfile?.last_name].filter(Boolean).join(' ') || userProfile?.display_name || ''} onDirtyChange={value => { conditionUnsavedRef.current = value }} />}
 
           {rentSubTab === 'Lease' && (() => {
             // Ungated by property_type (unlike the hero/Overview occupancy

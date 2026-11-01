@@ -4823,3 +4823,44 @@ h2, h3, p { margin-top: 0; }
 /* Keep every Rent destination visible, including inspection records. */
 .subTabs[aria-label="Rent sections"] { flex-wrap: wrap; overflow-x: visible; }
 @media(max-width:620px) { .subTabs[aria-label="Rent sections"] { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); } .subTabs[aria-label="Rent sections"] button { min-height: 42px; padding: 8px; } }
+
+/* Compact walkthrough workspace: media first, details on demand. */
+.conditionWorkspace button, .conditionWorkspace .conditionFilePicker { font-size: 12px; line-height: 1.25; min-height: 36px; padding: 8px 11px; border-radius: 9px; box-sizing: border-box; }
+.conditionWorkspace button:not(.primary):not([aria-pressed=true]) { color: var(--text); }
+.conditionTopline { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin: 14px 0; }
+.conditionTopline h2 { font-size: 21px; margin: 0; }
+.conditionTopline p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+.conditionWorkspace .conditionTextButton { border: 0; background: transparent; color: var(--brand); padding: 3px; min-height: 32px; font-size: 11px; }
+.conditionToolbar { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin: 14px 0; }
+.conditionStageFilter { display: inline-flex; background: #e7eeeb; border-radius: 9px; padding: 3px; gap: 2px; margin: 0; }
+.conditionStageFilter button { padding: 7px 12px; border: 0; min-height: 32px; background: transparent; font-size: 12px; color: var(--brand); }
+.conditionStageFilter button[aria-pressed=true] { background: white; color: var(--brand); box-shadow: 0 1px 3px #15251c1c; }
+.conditionRecordList { margin: 8px 0; }
+.conditionWorkspace > .conditionForm { background: var(--surface); padding: 12px; gap: 10px; }
+.conditionForm { gap: 10px; padding: 12px; }
+.conditionForm input, .conditionForm select { min-height: 38px; padding: 8px; }
+.conditionEditorHead { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; justify-content: space-between; padding: 12px 0 8px; margin-top: 12px; }
+.conditionEditorHead h3 { font-size: 16px; margin: 0 0 3px; }
+.conditionEditorHead small { font-size: 11px; }
+.conditionEditorHead .conditionActions { margin: 0; }
+.conditionPhotoPanel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin: 8px 0 14px; }
+.conditionPhotoHeading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.conditionPhotoHeading h3 { font-size: 16px; margin: 0; }
+.conditionPhotoHeading small { font-size: 11px; }
+.conditionPhotoPanel p { font-size: 12px; color: var(--muted); margin: 6px 0 10px; }
+.conditionUploadForm { padding: 0; border: 0; margin: 10px 0; grid-template-columns: minmax(0,1fr); }
+.conditionUploadForm .conditionActions { display: flex; gap: 8px; margin: 0; }
+.conditionUploadOptions { font-size: 11px; }
+.conditionUploadOptions summary { color: var(--brand); cursor: pointer; padding: 7px 0; }
+.conditionUploadOptions > label { margin: 8px 0; }
+.conditionUploadOptions > small { display: block; font-size: 11px; line-height: 1.5; }
+.conditionPhotoPanel .conditionPhotoEmpty { border: 1px dashed var(--line); border-radius: 9px; padding: 14px; text-align: center; margin-bottom: 0; }
+.conditionDetails { border-bottom: 1px solid var(--line); padding: 0 0 6px; margin: 0 0 6px; }
+.conditionDetails > summary { display: flex; gap: 10px; align-items: center; cursor: pointer; font-size: 14px; font-weight: 650; padding: 13px 0; list-style: none; }
+.conditionDetails > summary::-webkit-details-marker { display: none; }
+.conditionDetails > summary::after { content: '+'; color: var(--muted); margin-left: auto; font-size: 17px; }
+.conditionDetails[open] > summary::after { content: '−'; }
+.conditionDetails > summary small { font-size: 11px; font-weight: 400; }
+.conditionWorkspace .conditionHint { font-size: 11px; line-height: 1.5; }
+@media(max-width:620px) { .conditionWorkspace > .conditionForm { grid-template-columns: repeat(2,minmax(0,1fr)); } .conditionWorkspace > .conditionForm > label:first-of-type { grid-column: 1 / -1; } .conditionTopline h2 { font-size: 20px; } }
+.conditionWorkspace .visuallyHidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }

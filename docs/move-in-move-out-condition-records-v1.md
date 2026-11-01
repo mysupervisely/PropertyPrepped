@@ -127,3 +127,9 @@ Export downloads printable HTML, with escaped notes, checklist results, before/a
 - Live Supabase Storage upload, real iPhone camera/video capture, device playback, browser PDF output and multi-session real-network interruption testing remain to be completed. Local mocks and PostgreSQL tests do not replace those checks.
 
 After migration, open Property -> Rent -> Move-in / Move-out. Use a test lease first: save a move-in record, add room photos and a short video, reload and download originals, resolve checklist/rooms, finalize, create a same-lease move-out comparison, export and create an amendment. Verify a second account cannot access these files or records. Do not promote the feature to production until this live smoke test passes.
+
+## Walkthrough screen simplification
+
+The review UI uses one compact stage selector and one New walkthrough action. Completed by replaces Inspector name and starts with the user's saved profile name when available. The person can edit that name. Starting the walkthrough immediately exposes the room picker, photo/video library upload and camera controls above the checklist. Extra video/date options, walkthrough details, checklist and room notes expand on demand. Small scoped buttons replace oversized inherited styles.
+
+Rechecked creation, profile-name prefill, library-file byte capture and upload calls with a fictional adapter, per-room media references, checklist saves, N/A progress, notes, resume and independent move-out records at six widths. This UI test does not represent a live Storage upload or an iPhone camera test. iOS identity/workflow source verification and six Android packaging tests also pass; native compilation, device and store checks remain separate.
