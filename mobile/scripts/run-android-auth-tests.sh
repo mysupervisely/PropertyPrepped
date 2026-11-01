@@ -62,7 +62,9 @@ trap collect_evidence EXIT
 "$adb_tool" -s "$serial" logcat -v threadtime > "$evidence/live-logcat.log" 2>&1 &
 logcat_pid=$!
 cd "$root/mobile/android"
-timeout --kill-after=10s 300s bash ./gradlew --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.proproster.app.AuthEntryTest --stacktrace 2>&1 | tee "$evidence/auth-gradle.log"
+# Keep the test APK and its private screenshots until collection completes.
+# This is confined to the ephemeral emulator; the shipping APK is unchanged.
+timeout --kill-after=10s 300s bash ./gradlew --no-daemon -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.proproster.app.AuthEntryTest --stacktrace 2>&1 | tee "$evidence/auth-gradle.log"
 python3 - "$root/mobile/android/app/build/outputs/androidTest-results" <<'PY'
 from pathlib import Path
 import sys, xml.etree.ElementTree as ET

@@ -14,7 +14,7 @@ class AuthRunnerExitTests(unittest.TestCase):
             root = Path(directory)
             android = root / 'mobile/android'
             android.mkdir(parents=True)
-            (android / 'gradlew').write_text(f'#!/bin/bash\nif [ -f pending-report.xml ]; then cp pending-report.xml app/build/outputs/androidTest-results/connected/debug/TEST-fixture.xml; fi\nexit {gradle_exit}\n')
+            (android / 'gradlew').write_text(f'#!/bin/bash\ncase "$*" in *-Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true*) ;; *) exit 97;; esac\nif [ -f pending-report.xml ]; then cp pending-report.xml app/build/outputs/androidTest-results/connected/debug/TEST-fixture.xml; fi\nexit {gradle_exit}\n')
             reports = android / 'app/build/outputs/androidTest-results/connected/debug'
             reports.mkdir(parents=True)
             if report:
