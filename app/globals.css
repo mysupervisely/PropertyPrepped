@@ -4784,3 +4784,20 @@ h2, h3, p { margin-top: 0; }
 .propertyNetTrack i { display: block; height: 100%; background: #2f7052; border-radius: inherit; }
 .propertyNetCostTrack i { background: #ba7962; }
 @media (min-width: 1000px) { .grid > .propertyCard .cardBody { grid-template-columns: minmax(0,1fr) 130px; } .propertyNetGraph { grid-column: 2; grid-row: 1 / span 2; width: 130px; margin-top: 0; } }
+
+/* Property snapshot: full-width address, photo left, financial context right. */
+.grid > .propertyCard { display: grid; grid-template-columns: minmax(0, 42fr) minmax(0, 58fr); align-items: start; gap: 12px 14px; padding: 16px; }
+.grid > .propertyCard .propertyCardHeading { grid-column: 1 / -1; min-width: 0; }
+.grid > .propertyCard .propertyCardHeading .titleButton h3 { margin: 0 0 3px; font-size: 18px; line-height: 1.25; overflow-wrap: anywhere; }
+.grid > .propertyCard .propertyCardHeading .titleButton p { margin: 0; font-size: 13px; line-height: 1.4; }
+.grid > .propertyCard > .cardOpen { grid-column: 1; grid-row: 2; width: 100%; min-width: 0; align-self: start; }
+.grid > .propertyCard .photo { width: 100%; height: auto; aspect-ratio: 1 / 1; min-height: 120px; max-height: 180px; border-radius: 12px; }
+.grid > .propertyCard .photo .badge, .grid > .propertyCard .photo .occupancyBadge { display: none !important; }
+.grid > .propertyCard .cardBody { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; align-items: stretch; gap: 7px; padding: 0; min-width: 0; }
+.grid > .propertyCard .propertyMobileLabels { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; }
+.grid > .propertyCard .propertyMobileLabels > span { font-size: 10px; line-height: 1.3; padding: 2px 5px; border-radius: 6px; background: #eef1ef; color: #46554c; max-width: 100%; white-space: normal; }
+.grid > .propertyCard .propertyNetGraph { margin: 0; width: 100%; min-width: 0; }
+.grid > .propertyCard .propertyNetLine { flex-wrap: wrap; gap: 0 5px; }
+.grid > .propertyCard .propertySummaryStrip { grid-column: 1 / -1; margin: 0; }
+@media (max-width: 760px) { .grid > .propertyCard { padding: 14px 0 16px; } }
+@media (max-width: 380px) { .grid > .propertyCard { column-gap: 10px; } }
