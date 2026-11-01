@@ -20,13 +20,11 @@ export function PropertyNetGraph({ totals, year, timeline }: { totals?: Property
         <title>January to December · dated activity through {currentMonth}</title>
         <line x1="4" x2="236" y1="52" y2="52" stroke="#d5ded8" />
         {[0, 3, 6, 9, 12].map(month => <line key={month} x1={x(month / 12)} x2={x(month / 12)} y1="50" y2="55" stroke="#d5ded8" />)}
-        <line x1={x(timeline.progress)} x2={x(timeline.progress)} y1="3" y2="53" stroke="#8e9e94" strokeDasharray="2 3" />
         {timeline.hasData && <>
-          <polyline points={line('income')} fill="none" stroke="#2f7052" strokeWidth="2.5" strokeLinejoin="round" />
-          <polyline points={line('costs')} fill="none" stroke="#ba7962" strokeWidth="2.5" strokeLinejoin="round" />
+          <polyline points={line('income')} fill="none" stroke="#1d2320" strokeWidth="2.5" strokeLinejoin="round" />
+          <polyline points={line('costs')} fill="none" stroke="#b42318" strokeWidth="2.5" strokeLinejoin="round" />
         </>}
         <text x="4" y="70">Jan</text><text x="120" y="70" textAnchor="middle">Jul</text><text x="236" y="70" textAnchor="end">Dec</text>
-        <text x={Math.min(232, Math.max(15, x(timeline.progress)))} y="10" textAnchor="middle">{currentMonth}</text>
       </svg>}
       {timeline && <small className="propertyTimelineNote">{!timeline.hasData ? 'No dated activity' : timeline.hasUndatedTotals ? 'Dated activity · annual totals not plotted' : 'Dated activity · cumulative'}</small>}
       <small>{totals.interestMissing ? 'Partial · interest missing' : 'Saved records only'}</small>
