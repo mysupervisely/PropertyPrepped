@@ -4801,3 +4801,12 @@ h2, h3, p { margin-top: 0; }
 .grid > .propertyCard .propertySummaryStrip { grid-column: 1 / -1; margin: 0; }
 @media (max-width: 760px) { .grid > .propertyCard { padding: 14px 0 16px; } }
 @media (max-width: 380px) { .grid > .propertyCard { column-gap: 10px; } }
+
+/* Address stays over the photo; type and occupancy share the heading across a divider. */
+.grid > .propertyCard .propertyCardHeading { display: grid; grid-template-columns: minmax(0,42fr) minmax(0,58fr); align-items: center; gap: 14px; }
+.grid > .propertyCard .propertyCardHeading .titleButton { min-width: 0; }
+.grid > .propertyCard .propertyCardHeading .titleButton h3 { font-size: 17px; }
+.grid > .propertyCard .propertyCardHeading .propertyMobileLabels { border-left: 1px solid #cbd6d0; padding: 3px 0 3px 12px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.grid > .propertyCard .propertyCardHeading .propertyMobileLabels > span { padding: 0; background: transparent; border-radius: 0; font-size: 11px; }
+.grid > .propertyCard .propertyCardHeading .propertyMobileOccupancy.occupied { color: #246747; }
+@media (max-width: 380px) { .grid > .propertyCard .propertyCardHeading { column-gap: 10px; } }

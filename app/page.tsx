@@ -4517,7 +4517,7 @@ export default function Home() {
           const propertyRentRow = rentStatusByProperty.get(property.id)
           const propertyAlertCount = attentionCountByProperty.get(property.id) || 0
           return <article className="propertyCard" key={property.id}>
-            <div className="propertyCardHeading"><button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button></div>
+            <div className="propertyCardHeading"><button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button><div className="propertyMobileLabels" aria-label="Property type and occupancy"><span className="propertyMobileType">{property.property_type}</span>{propertyOccupancy && <span className={`propertyMobileOccupancy ${occupancyPillClass(propertyOccupancy)}`}>{propertyOccupancy === 'Occupancy unknown' ? 'Unknown' : propertyOccupancy === 'Upcoming tenancy' ? 'Upcoming' : propertyOccupancy}</span>}</div></div>
             <button className="cardOpen" onClick={() => openProperty(property.id)}>
               <div className="photo">{property.coverUrl ? <img src={property.coverUrl} alt={property.address} /> : <div className="photoPlaceholder"><span>⌂</span><small>Add property photos</small></div>}
                 <span className="badge">{property.property_type}</span>
@@ -4525,7 +4525,6 @@ export default function Home() {
               </div>
             </button>
             <div className="cardBody">
-              <div className="propertyMobileLabels" aria-label="Property type and occupancy"><span className="propertyMobileType">{property.property_type}</span>{propertyOccupancy && <span className={`propertyMobileOccupancy ${occupancyPillClass(propertyOccupancy)}`}>{propertyOccupancy === 'Occupancy unknown' ? 'Unknown' : propertyOccupancy === 'Upcoming tenancy' ? 'Upcoming' : propertyOccupancy}</span>}</div>
               {property.property_type === 'Rental Property' && <PropertyNetGraph totals={propertyNetById.get(property.id)} year={String(new Date().getFullYear())} />}
             </div>
             <dl className="propertySummaryStrip" aria-label={`Summary for ${property.address}`}>
