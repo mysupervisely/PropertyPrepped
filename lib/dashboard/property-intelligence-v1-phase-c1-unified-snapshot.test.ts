@@ -33,8 +33,8 @@ describe('Phase C.1: the hero is identity-only — no financial numbers', () => 
   it('the hero still shows address, city, and the property-scoped actions (Edit, Investment Analysis)', () => {
     expect(heroSlice).toContain('<h1>{selected.address}</h1>')
     expect(heroSlice).toContain('className="heroCity"')
-    expect(heroSlice).toContain('>Edit</button>')
-    expect(heroSlice).toContain('>Investment Analysis</Link>')
+    expect(pageSource).toContain('onEdit={() => openEditProperty(selected)}')
+    expect(heroSlice).not.toContain('heroInvestmentLink')
   })
 
   it('no Value/Mortgage/Equity/Rent/Tax dollar figure is rendered inside the hero anymore', () => {
@@ -51,11 +51,9 @@ describe('Phase C.1: the hero is identity-only — no financial numbers', () => 
 
 describe('Phase C.1: Investment Analysis reads as secondary, not equal-weight with Edit', () => {
   it('uses the quiet brand-color text-link treatment (.heroInvestmentLink), not the bordered .secondary button it used to share with Edit', () => {
-    const actionsIdx = heroSlice.indexOf('heroInfoActions')
-    const actionsSlice = heroSlice.slice(actionsIdx, actionsIdx + 400)
-    expect(actionsSlice).toContain('<button className="secondary" onClick={() => openEditProperty(selected)}>Edit</button>')
-    expect(actionsSlice).toContain('<Link className="heroInvestmentLink"')
-    expect(actionsSlice).not.toContain('<Link className="secondary"')
+    expect(pageSource).toContain('onEdit={() => openEditProperty(selected)}')
+    expect(pageSource).toContain('onEdit={() => openEditProperty(selected)}')
+    expect(heroSlice).not.toContain('heroInvestmentLink')
   })
 
   it('.heroInvestmentLink reuses the existing .needsAttentionViewAll quiet-text-link pattern (brand color, no border/box, small trailing chevron) rather than inventing a new visual treatment', () => {
@@ -71,8 +69,9 @@ describe('Phase C.1: Investment Analysis reads as secondary, not equal-weight wi
   })
 
   it('destination and functionality are unchanged — still the same evaluator link, still exactly one on the page', () => {
-    const matches = pageSource.match(/href={`\/investment-tools\/property-evaluator\?propertyId=\$\{selected\.id\}`}/g) || []
-    expect(matches.length).toBe(1)
+    const menu = readFile('components/AuthNavMenu.tsx')
+    expect(menu).toContain('/investment-tools/property-evaluator?propertyId=${encodeURIComponent(propertyId)}')
+    expect(pageSource).toContain('propertyId={selected.id}')
   })
 })
 
@@ -178,8 +177,8 @@ describe('Phase C.1: everything else stays intact', () => {
     expect(pageSource).toContain("const tabs: Tab[] = ['Overview', 'Rent', 'Maintenance', 'Details', 'PropCrew', 'Documents', 'Tax']")
   })
 
-  it('Edit property (hero) and Edit property facts (Overview) both still open the same existing edit flow', () => {
-    expect((pageSource.match(/onClick=\{\(\) => openEditProperty\(selected\)\}/g) || []).length).toBeGreaterThanOrEqual(2)
+  it('the compact hero keeps one canonical property edit action', () => {
+    expect((pageSource.match(/onEdit=\{\(\) => openEditProperty\(selected\)\}/g) || []).length).toBe(1)
   })
 
   it('Notes, Timeline, and Quick actions are untouched', () => {

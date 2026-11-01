@@ -1,0 +1,22 @@
+# Standalone Codemagic workflow fragment for review.
+# Merge the ios-simulator-unsigned entry into codemagic.yaml when ready.
+# This file alone is NOT automatically discovered by Codemagic.
+workflows:
+  ios-simulator-unsigned:
+    name: PropRoster iOS Simulator (unsigned)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      node: 22
+      xcode: latest
+    scripts:
+      - name: Install mobile dependencies
+        script: cd mobile && npm ci
+      - name: Sync native iOS project
+        script: cd mobile && npx cap sync ios
+      - name: Build iPhone Simulator without signing
+        script: |
+          cd mobile
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$CM_BUILD_DIR/ios-simulator-derived" CODE_SIGNING_ALLOWED=NO build
+    artifacts:
+      - ios-simulator-derived/Build/Products/Debug-iphonesimulator/*.app

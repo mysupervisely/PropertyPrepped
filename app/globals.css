@@ -160,12 +160,12 @@ button { cursor: pointer; }
 .previewBanner { position: sticky; top: 0; z-index: 30; background: #7a3b12; color: white; text-align: center; font-size: 12px; font-weight: 700; letter-spacing: .02em; padding: 8px 12px; padding-top: max(8px, env(safe-area-inset-top)); }
 .topbar { min-height: 86px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); }
 .brand { font-size: 25px; font-weight: 750; letter-spacing: -0.7px; display: block; }
-/* Wordmark two-tone treatment (components/Wordmark.tsx) — "Prop" stays the
-   standard text color, "Roster" uses the same green as .primary/--brand.
-   Explicit colors rather than inherited, so this can't silently change if
-   .brand's container ever sets a different color for some other reason. */
-.wordmarkProp { color: var(--text); }
-.wordmarkRoster { color: var(--brand); }
+/* Shared identity uses the supplied symbol and its deep green wordmark.
+   em sizing follows each existing compact header's font-size. */
+.wordmarkLockup { display: inline-flex; align-items: center; gap: 0.12em; vertical-align: middle; white-space: nowrap; }
+.wordmarkIcon { display: block; width: 1.6em; height: 1.6em; flex: 0 0 auto; object-fit: contain; }
+.wordmarkText { display: inline-flex; }
+.wordmarkProp, .wordmarkRoster { color: #075740; }
 .tagline { color: var(--muted); font-size: 13px; margin-top: 2px; display: block; }
 .brandButton { border: 0; padding: 0; background: transparent; color: inherit; text-align: left; text-decoration: none; }
 /* Phase B button foundation: .primary/.secondary are already the
@@ -1944,8 +1944,18 @@ h2, h3, p { margin-top: 0; }
    overlay, opened by "Log In" / "Start Free" — reuses the existing
    .overlay/.modal pattern (app/globals.css, shared with every other
    modal in the app) rather than a new one. */
-.landingAuthOverlay { z-index: 20; }
-.landingAuthModal { width: min(440px, 100%); padding: 0; background: transparent; }
+.landingAuthOverlay {
+  z-index: 20;
+  top: var(--auth-viewport-top, 0px);
+  bottom: auto;
+  height: 100vh;
+  height: var(--auth-viewport-height, 100dvh);
+  box-sizing: border-box;
+  padding-top: max(22px, env(safe-area-inset-top));
+  padding-bottom: max(22px, env(safe-area-inset-bottom));
+  grid-template-rows: minmax(0, 1fr);
+}
+.landingAuthModal { width: min(440px, 100%); max-height: 100%; min-height: 0; padding: 0; background: transparent; overscroll-behavior: contain; }
 .landingSignInCard { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 32px 28px; box-shadow: 0 28px 64px -28px rgba(20, 35, 28, .5); }
 .landingSignInCardTop { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .landingSignInCard h2 { font-size: 22px; margin: 4px 0 0; letter-spacing: -.4px; }
@@ -4629,3 +4639,228 @@ h2, h3, p { margin-top: 0; }
   .propertyMarketRentValues strong { font-size: 16px; }
   .propertySnapshotCard .propertySnapshotPerformanceGrid, .propertySnapshotCard .propertySnapshotPerformanceGrid + .propertyPerformanceNote { display: none; }
 }
+
+/* Mobile property rows: use the available right edge for existing details. */
+@media (max-width: 760px) {
+  .grid > .propertyCard .miniStats {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+  }
+  .grid > .propertyCard .miniStats > div {
+    flex-direction: column;
+    gap: 2px;
+    overflow-wrap: anywhere;
+  }
+  .grid > .propertyCard .miniStats > div:last-child {
+    align-items: flex-end;
+    text-align: right;
+  }
+  .grid > .propertyCard .cardActions {
+    justify-content: flex-end;
+    gap: 12px;
+  }
+  .grid > .propertyCard .cardActions button {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 6px 8px;
+    font-size: 12px;
+    line-height: 1.3;
+  }
+}
+
+
+/* Selected property: compact identity and visible, property-scoped sections. */
+.wordmarkIcon { mix-blend-mode: multiply; }
+.propertyWorkspaceSections { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; padding: 12px 0 18px; border-bottom: 1px solid var(--line); }
+.propertyWorkspaceSections button { min-width: 0; min-height: 44px; padding: 10px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.propertyWorkspaceSections button.active { background: var(--brand); color: white; border-color: var(--brand); }
+.propertySectionCount { display: inline-block; margin-left: 6px; font-size: 11px; }
+.propertyWorkspaceSections + .tabs, .propertyWorkspaceSections ~ .mobilePropertyNav { display: none; }
+.propertyHero { grid-template-columns: 160px minmax(0,1fr); gap: 18px; padding: 16px 0; }
+.propertyHero .heroPhoto { height: 130px; }
+.propertyMarketRentHeading { align-items: center; margin-bottom: 0; }
+.propertyMarketRentHeading > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.propertyMarketRentHeading > div > span { font-size: 10px; color: var(--muted); }
+.propertyMarketRentButton { flex-shrink: 0; min-height: 44px; padding: 8px 14px; border-radius: 8px; background: var(--brand); border-color: var(--brand); color: white; }
+.propertyMarketRentButton:hover { background: #163e2c; border-color: #163e2c; }
+.propertyMarketRentValues, .propertyMarketRentEmpty { margin-top: 12px; }
+.propertySnapshotCard .propertyPerformanceNote { font-size: 11px; line-height: 1.45; color: var(--muted); margin: 6px 0 0; }
+@media (max-width: 760px) {
+  .propertyHero { display: grid; grid-template-columns: 88px minmax(0,1fr); gap: 12px; align-items: start; padding: 12px 0; }
+  .propertyHero .heroPhoto { height: 96px; border-radius: 10px; }
+  .propertyHero .heroInfo { min-width: 0; }
+  .propertyHero .heroInfoHead { display: flex; flex-direction: column; gap: 4px; }
+  .propertyHero .heroInfo .eyebrow { font-size: 9px; margin-bottom: 4px; }
+  .propertyHero .heroInfo h1 { font-size: 20px; line-height: 1.2; overflow-wrap: anywhere; margin-bottom: 4px; }
+  .propertyHero .heroCity { font-size: 12px; margin-bottom: 6px; }
+  .propertyHero .heroInfoActions { margin-top: 0; gap: 10px; }
+  .propertyHero .heroInfoActions .secondary { min-height: 44px; padding: 6px 10px; }
+  .propertyHero .heroInvestmentLink { font-size: 11px; }
+  .propertyWorkspaceSections { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; padding: 8px 0 14px; }
+  .propertyWorkspaceSections button { min-height: 44px; padding: 8px; font-size: 12px; }
+  .propertySnapshotCard { padding: 14px; }
+  .propertySnapshotCard .propertySnapshotMetric { padding: 10px; min-height: 64px; }
+}
+@media (max-width: 760px) {
+  .grid > .propertyCard .cardBody { gap: 3px; }
+  .grid > .propertyCard .miniStats > div { flex-direction: row; align-items: baseline; gap: 4px; }
+  .grid > .propertyCard .miniStats > div:last-child { justify-content: flex-end; align-items: baseline; }
+  .grid > .propertyCard .miniStats > div:has(.statusPill) > span:first-child { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .grid > .propertyCard .cardActions { margin-top: 0; }
+  .propertySnapshotCard .propertySnapshotSecondaryGrid .propertySnapshotMetric strong { font-size: 17px; }
+}
+
+
+/* Compact section menu and a wider, photo-led identity block. */
+.propertyHero .heroPhoto { position: relative; }
+@media (max-width: 760px) {
+  .propertyHero { grid-template-columns: clamp(128px,40vw,180px) minmax(0,1fr); gap: 12px; }
+  .propertyHero .heroPhoto { height: 132px; }
+  .propertyHero .heroInfo h1 { font-size: 19px; }
+  .propertyWorkspaceSections { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 5px; padding: 6px 0 12px; }
+  .propertyWorkspaceSections button { padding: 5px; font-size: 11px; border-radius: 8px; min-height: 44px; }
+}
+
+
+/* Every property has the same footer: status and alerts, then destinations. */
+.propertyCardFooter { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 19px 12px; }
+.propertyCardFooterMeta { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; flex-wrap: wrap; }
+.propertyCardFooter .statusPill { font-size: 10px; line-height: 1.35; padding: 4px 6px; max-width: 100%; overflow-wrap: anywhere; }
+.grid > .propertyCard .propertyCardFooter .cardAlertBadge { width: auto; min-height: 44px; margin: 0; padding: 4px 0; border: 0; background: transparent; font-size: 10px; line-height: 1.3; flex-shrink: 0; }
+.grid > .propertyCard .propertyCardFooter .cardActions { margin: 0; padding: 0; flex-wrap: nowrap; gap: 8px; flex-shrink: 0; }
+.grid > .propertyCard .propertyCardFooter .cardActions button { min-width: 44px; min-height: 44px; padding: 4px; font-size: 11px; }
+@media (max-width: 760px) {
+  .grid > .propertyCard .propertyCardFooter { grid-column: 1 / -1; padding: 0; gap: 8px; }
+}
+
+
+/* Read-only property summary: one connected row, not navigation controls. */
+.propertySummaryStrip { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1fr) minmax(0,1fr); margin: 0 14px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden; }
+.propertySummaryStrip > div { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 3px; padding: 9px 5px; min-width: 0; text-align: center; font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.propertySummaryStrip > div + div { border-left: 1px solid var(--line); }
+.propertySummaryStrip dt { color: var(--muted); }
+.propertySummaryStrip dd { margin: 0; font-weight: 650; background: transparent; border: 0; }
+.propertySummaryStrip .pillBad { color: #963e38; }
+.propertySummaryStrip .pillGood { color: #246747; }
+.propertySummaryStatusLabel { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 760px) { .grid > .propertyCard .propertySummaryStrip { grid-column: 1 / -1; margin: 0; } }
+
+/* Four equal-purpose cells stay in one row; labels wrap within their own cell. */
+.propertySummaryStrip { grid-template-columns: minmax(0,1.25fr) repeat(3,minmax(0,1fr)); }
+.propertySummaryStrip > div { font-size: 10px; gap: 2px 4px; }
+
+/* Dashboard shortcuts precede the greeting, without a redundant title. */
+.mobileQuickActionsHead { justify-content: flex-end; }
+@media (max-width: 760px) { .mobileQuickActions { margin-top: 8px; margin-bottom: 18px; } }
+
+.propertyStatusButton { border: 0; background: transparent; color: inherit; font: inherit; font-weight: inherit; cursor: pointer; padding: 6px 2px; min-height: 36px; text-decoration: underline; text-underline-offset: 3px; }
+.propertyStatusButton:focus-visible, .propertyAlertRow:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+.propertyAlertsDetails { grid-column: 1 / -1; padding: 12px 14px; margin: 4px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.propertyAlertsHeading { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; }
+.propertyAlertsHeading > button { background: transparent; border: 0; color: var(--brand); padding: 8px; min-height: 36px; cursor: pointer; }
+.propertyAlertRow { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; width: 100%; text-align: left; padding: 12px 0; border: 0; border-bottom: 1px solid var(--line); background: transparent; font-size: 12px; color: var(--text); cursor: pointer; }
+.propertyAlertRow > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.propertyAlertRow small { display: block; margin-top: 3px; color: var(--muted); }
+.propertyTaxActions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 16px; }
+.propertyTaxActions small { flex-basis: 100%; color: var(--muted); }
+
+/* Lease-specific move-in and move-out condition records. */
+.conditionWorkspace { min-width: 0; }
+.conditionWorkspace h2 { font-size: 24px; margin: 0 0 5px; }
+.conditionWorkspace h3 { font-size: 19px; margin: 16px 0 8px; }
+.conditionWorkspace h4 { font-size: 15px; margin: 14px 0 8px; }
+.conditionWorkspace p { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.conditionHint, .conditionWorkspace small { color: var(--muted); }
+.conditionNotice { padding: 10px 12px; border-radius: 9px; background: #e9f3ed; }
+.conditionActions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
+.conditionWorkspace button, .conditionFilePicker { min-height: 40px; }
+.conditionStageFilter { display: flex; gap: 8px; margin: 16px 0 10px; }
+.conditionStageFilter button { border: 1px solid var(--line); background: var(--surface); border-radius: 9px; padding: 8px 14px; }
+.conditionStageFilter button[aria-pressed=true] { background: var(--brand); color: white; }
+.conditionRecordList { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,220px),1fr)); gap: 8px; margin: 8px 0 16px; }
+.conditionRecordList > button { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 11px; text-align: left; min-width: 0; }
+.conditionRecordList > button[aria-pressed=true] { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
+.conditionRecordList strong, .conditionRecordList small { display: block; font-size: 12px; overflow-wrap: anywhere; }
+.conditionForm { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; margin: 14px 0; min-width: 0; }
+.conditionForm legend { font-size: 14px; font-weight: 650; padding: 0 4px; }
+.conditionForm label { display: grid; gap: 5px; font-size: 12px; min-width: 0; }
+.conditionForm input, .conditionForm select, .conditionForm textarea, .conditionInlineAdd input { min-width: 0; max-width: 100%; width: 100%; padding: 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; box-sizing: border-box; }
+.conditionForm textarea { min-height: 84px; resize: vertical; }
+.conditionForm p, .conditionForm .conditionActions { grid-column: 1 / -1; margin: 0; }
+.conditionEditorHead { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 4px; }
+.conditionChecklist progress { width: 100%; height: 9px; accent-color: var(--brand); }
+.conditionTask { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.conditionTaskTop { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.conditionTaskTop > label { display: flex; gap: 9px; align-items: flex-start; font-size: 13px; line-height: 1.5; }
+.conditionTaskTop input { flex-shrink: 0; width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--brand); }
+.conditionTask.completed .conditionTaskTop label span { text-decoration: line-through; color: var(--muted); }
+.conditionNa { flex-shrink: 0; border: 1px solid var(--line); border-radius: 7px; padding: 5px 7px; font-size: 10px; color: var(--brand); background: transparent; }
+.conditionNa[aria-pressed=true] { background: #e5ece7; }
+.conditionTask details > summary, .conditionFinalization > summary { font-size: 12px; cursor: pointer; padding: 9px 0; color: var(--brand); }
+.conditionTask > small { display: block; font-size: 10px; margin: 4px 0 0 29px; }
+.conditionInlineAdd { display: flex; gap: 8px; align-items: center; margin: 14px 0; }
+.conditionInlineAdd input { flex: 1; }
+.conditionInlineAdd button { flex-shrink: 0; }
+.conditionRoom { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 12px 0; min-width: 0; }
+.conditionRoom > h4 { margin-top: 0; }
+.conditionRoom .conditionForm { border: 0; padding: 0; }
+.conditionMediaGrid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,180px),1fr)); gap: 12px; }
+.conditionMediaCard { min-width: 0; margin: 0; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.conditionMediaCard img, .conditionMediaCard video { display: block; width: 100%; max-height: 260px; object-fit: contain; border-radius: 7px; background: #edf1ee; }
+.conditionMediaCard strong, .conditionMediaCard small { display: block; overflow-wrap: anywhere; font-size: 11px; margin-top: 5px; }
+.conditionMediaCard .conditionActions button { font-size: 11px; padding: 6px 8px; }
+.conditionComparison { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.conditionComparison > section { min-width: 0; }
+.conditionFilePicker { position: relative; display: inline-flex; align-items: center; cursor: pointer; overflow: hidden; }
+.conditionFilePicker input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.conditionFilePicker:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }
+.conditionFinalization { margin: 12px 0; }
+.conditionFinalization li { font-size: 12px; margin: 6px 0; }
+@media(max-width:620px) { .conditionForm, .conditionComparison { grid-template-columns: minmax(0,1fr); } .conditionWorkspace h2 { font-size: 21px; } .conditionTaskTop { gap: 6px; } .conditionForm input, .conditionForm select, .conditionForm textarea { font-size: 16px; } }
+
+/* Keep every Rent destination visible, including inspection records. */
+.subTabs[aria-label="Rent sections"] { flex-wrap: wrap; overflow-x: visible; }
+@media(max-width:620px) { .subTabs[aria-label="Rent sections"] { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); } .subTabs[aria-label="Rent sections"] button { min-height: 42px; padding: 8px; } }
+
+/* Compact walkthrough workspace: media first, details on demand. */
+.conditionWorkspace button, .conditionWorkspace .conditionFilePicker { font-size: 12px; line-height: 1.25; min-height: 36px; padding: 8px 11px; border-radius: 9px; box-sizing: border-box; }
+.conditionWorkspace button:not(.primary):not([aria-pressed=true]) { color: var(--text); }
+.conditionTopline { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin: 14px 0; }
+.conditionTopline h2 { font-size: 21px; margin: 0; }
+.conditionTopline p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+.conditionWorkspace .conditionTextButton { border: 0; background: transparent; color: var(--brand); padding: 3px; min-height: 32px; font-size: 11px; }
+.conditionToolbar { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin: 14px 0; }
+.conditionStageFilter { display: inline-flex; background: #e7eeeb; border-radius: 9px; padding: 3px; gap: 2px; margin: 0; }
+.conditionStageFilter button { padding: 7px 12px; border: 0; min-height: 32px; background: transparent; font-size: 12px; color: var(--brand); }
+.conditionStageFilter button[aria-pressed=true] { background: white; color: var(--brand); box-shadow: 0 1px 3px #15251c1c; }
+.conditionRecordList { margin: 8px 0; }
+.conditionWorkspace > .conditionForm { background: var(--surface); padding: 12px; gap: 10px; }
+.conditionForm { gap: 10px; padding: 12px; }
+.conditionForm input, .conditionForm select { min-height: 38px; padding: 8px; }
+.conditionEditorHead { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; justify-content: space-between; padding: 12px 0 8px; margin-top: 12px; }
+.conditionEditorHead h3 { font-size: 16px; margin: 0 0 3px; }
+.conditionEditorHead small { font-size: 11px; }
+.conditionEditorHead .conditionActions { margin: 0; }
+.conditionPhotoPanel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin: 8px 0 14px; }
+.conditionPhotoHeading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.conditionPhotoHeading h3 { font-size: 16px; margin: 0; }
+.conditionPhotoHeading small { font-size: 11px; }
+.conditionPhotoPanel p { font-size: 12px; color: var(--muted); margin: 6px 0 10px; }
+.conditionUploadForm { padding: 0; border: 0; margin: 10px 0; grid-template-columns: minmax(0,1fr); }
+.conditionUploadForm .conditionActions { display: flex; gap: 8px; margin: 0; }
+.conditionUploadOptions { font-size: 11px; }
+.conditionUploadOptions summary { color: var(--brand); cursor: pointer; padding: 7px 0; }
+.conditionUploadOptions > label { margin: 8px 0; }
+.conditionUploadOptions > small { display: block; font-size: 11px; line-height: 1.5; }
+.conditionPhotoPanel .conditionPhotoEmpty { border: 1px dashed var(--line); border-radius: 9px; padding: 14px; text-align: center; margin-bottom: 0; }
+.conditionDetails { border-bottom: 1px solid var(--line); padding: 0 0 6px; margin: 0 0 6px; }
+.conditionDetails > summary { display: flex; gap: 10px; align-items: center; cursor: pointer; font-size: 14px; font-weight: 650; padding: 13px 0; list-style: none; }
+.conditionDetails > summary::-webkit-details-marker { display: none; }
+.conditionDetails > summary::after { content: '+'; color: var(--muted); margin-left: auto; font-size: 17px; }
+.conditionDetails[open] > summary::after { content: '−'; }
+.conditionDetails > summary small { font-size: 11px; font-weight: 400; }
+.conditionWorkspace .conditionHint { font-size: 11px; line-height: 1.5; }
+@media(max-width:620px) { .conditionWorkspace > .conditionForm { grid-template-columns: repeat(2,minmax(0,1fr)); } .conditionWorkspace > .conditionForm > label:first-of-type { grid-column: 1 / -1; } .conditionTopline h2 { font-size: 20px; } }
+.conditionWorkspace .visuallyHidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }

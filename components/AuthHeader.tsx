@@ -41,8 +41,9 @@ import { useAuthUser } from '../lib/useAuthUser'
 import { useUnreadNotificationCount } from '../lib/notifications/useUnreadCount'
 
 export function AuthHeader({
-  onBrandClick, onSmartUploadCompleted, registerSmartUploadTrigger,
+  onBrandClick, onSmartUploadCompleted, registerSmartUploadTrigger, propertyId,
 }: {
+  propertyId?: string
   onBrandClick?: () => void
   onSmartUploadCompleted?: () => void
   registerSmartUploadTrigger?: (fn: () => void) => void
@@ -127,7 +128,7 @@ export function AuthHeader({
               onBrandClick this header already threads to the wordmark
               below for the identical single-page-app reason — see
               AuthNavMenu's own comment on onDashboardNavigate. */}
-          <AuthNavMenu onDashboardNavigate={onBrandClick} open={navMenuOpen} onOpenChange={setNavMenuOpen} />
+          <AuthNavMenu onDashboardNavigate={onBrandClick} open={navMenuOpen} onOpenChange={setNavMenuOpen} propertyId={propertyId} />
         </div>
       </header>
       {/* Mobile V2 (Quick Actions + navigation simplification): the

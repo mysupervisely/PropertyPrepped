@@ -81,7 +81,8 @@ describe('Removed destinations are mobile-primary-nav-only — the routes/featur
   })
 
   it('a property\'s own Documents tab (contextual, property-level navigation) is untouched', () => {
-    expect(pageSource).toContain("openProperty(property.id, 'Documents', 'Documents')")
+    expect(pageSource).toContain("activeTab === 'Documents'")
+    expect(pageSource).toContain('documentCardGrid')
   })
 })
 

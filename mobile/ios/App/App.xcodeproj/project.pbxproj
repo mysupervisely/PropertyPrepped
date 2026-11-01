@@ -16,6 +16,7 @@
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
+        A10000000000000000000001 = {isa = PBXBuildFile; fileRef = A10000000000000000000002; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -30,6 +31,8 @@
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
+        A10000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUITests/AuthEntryUITests.swift; sourceTree = SOURCE_ROOT; };
+        A10000000000000000000003 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -41,6 +44,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+        A10000000000000000000005 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -48,6 +52,7 @@
 			isa = PBXGroup;
 			children = (
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
+                A10000000000000000000002 /* AuthEntryUITests.swift */,
 				504EC3061FED79650016851F /* App */,
 				504EC3051FED79650016851F /* Products */,
 			);
@@ -57,6 +62,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* App.app */,
+                A10000000000000000000003 /* AppUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -100,8 +106,25 @@
 			productReference = 504EC3041FED79650016851F /* App.app */;
 			productType = "com.apple.product-type.application";
 		};
+        A10000000000000000000007 /* AppUITests */ = {
+            isa = PBXNativeTarget;
+            buildConfigurationList = A10000000000000000000008;
+            buildPhases = (A10000000000000000000004, A10000000000000000000005, A10000000000000000000006,);
+            buildRules = ();
+            dependencies = (A1000000000000000000000B,);
+            name = AppUITests;
+            productName = AppUITests;
+            productReference = A10000000000000000000003;
+            productType = "com.apple.product-type.bundle.ui-testing";
+        };
 /* End PBXNativeTarget section */
 
+/* Begin PBXContainerItemProxy section */
+        A1000000000000000000000C = {isa = PBXContainerItemProxy; containerPortal = 504EC2FC1FED79650016851F; proxyType = 1; remoteGlobalIDString = 504EC3031FED79650016851F; remoteInfo = App; };
+/* End PBXContainerItemProxy section */
+/* Begin PBXTargetDependency section */
+        A1000000000000000000000B = {isa = PBXTargetDependency; target = 504EC3031FED79650016851F; targetProxy = A1000000000000000000000C; };
+/* End PBXTargetDependency section */
 /* Begin PBXProject section */
 		504EC2FC1FED79650016851F /* Project object */ = {
 			isa = PBXProject;
@@ -132,6 +155,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+                A10000000000000000000007 /* AppUITests */,
 				504EC3031FED79650016851F /* App */,
 			);
 		};
@@ -151,6 +175,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+        A10000000000000000000006 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -163,6 +188,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+        A10000000000000000000004 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXVariantGroup section */
@@ -338,6 +364,26 @@
 			};
 			name = Release;
 		};
+        A10000000000000000000009 = {isa = XCBuildConfiguration; buildSettings = {
+            GENERATE_INFOPLIST_FILE = YES;
+            IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+            PRODUCT_BUNDLE_IDENTIFIER = com.proproster.app.uitests;
+            PRODUCT_NAME = "$(TARGET_NAME)";
+            SDKROOT = iphoneos;
+            SWIFT_VERSION = 5.0;
+            TARGETED_DEVICE_FAMILY = "1,2";
+            TEST_TARGET_NAME = App;
+        }; name = Debug; };
+        A1000000000000000000000A = {isa = XCBuildConfiguration; buildSettings = {
+            GENERATE_INFOPLIST_FILE = YES;
+            IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+            PRODUCT_BUNDLE_IDENTIFIER = com.proproster.app.uitests;
+            PRODUCT_NAME = "$(TARGET_NAME)";
+            SDKROOT = iphoneos;
+            SWIFT_VERSION = 5.0;
+            TARGETED_DEVICE_FAMILY = "1,2";
+            TEST_TARGET_NAME = App;
+        }; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -359,6 +405,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+        A10000000000000000000008 = {isa = XCConfigurationList; buildConfigurations = (A10000000000000000000009, A1000000000000000000000A,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */

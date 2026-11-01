@@ -32,12 +32,13 @@
 // or Supabase will refuse the redirect and bounce the recovery link to
 // the default Site URL instead.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { runAuthSubmission } from '../../lib/auth/form-submission'
+import { watchRecoverySession, type RecoveryState } from '../../lib/auth/recovery-session'
 import Link from 'next/link'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase'
 import { toSafeErrorMessage } from '../../lib/user-facing-errors'
 
-type RecoveryState = 'checking' | 'ready' | 'invalid'
 
 export default function ResetPasswordPage() {
   const [recoveryState, setRecoveryState] = useState<RecoveryState>('checking')
@@ -47,6 +48,8 @@ export default function ResetPasswordPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
+  const [recoveryAttempt, setRecoveryAttempt] = useState(0)
+  const submission = useRef(false)
 
   useEffect(() => {
     if (!supabase) {
@@ -54,37 +57,21 @@ export default function ResetPasswordPage() {
       return
     }
     const client = supabase
-    let settled = false
-
-    const { data: listener } = client.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        settled = true
-        setRecoveryState('ready')
-      }
-    })
-
-    // detectSessionInUrl usually finishes processing the link's URL
-    // fragment before this runs, so a session already existing is treated
-    // the same as PASSWORD_RECOVERY firing. If neither has happened after
-    // a short window, the link is genuinely missing, already used, or
-    // expired.
-    client.auth.getSession().then(({ data }) => {
-      if (settled) return
-      if (data.session) {
-        settled = true
-        setRecoveryState('ready')
-        return
-      }
-      setTimeout(() => {
-        if (!settled) setRecoveryState('invalid')
-      }, 2500)
-    })
-
-    return () => listener.subscription.unsubscribe()
-  }, [])
+    setRecoveryState('checking')
+    return watchRecoverySession(
+      () => client.auth.getSession(),
+      (onRecovery) => {
+        const { data: listener } = client.auth.onAuthStateChange((event) => {
+          if (event === 'PASSWORD_RECOVERY') onRecovery()
+        })
+        return () => listener.subscription.unsubscribe()
+      },
+      setRecoveryState,
+    )
+  }, [recoveryAttempt])
 
   async function submitNewPassword() {
-    if (!supabase || recoveryState !== 'ready') return
+    if (!supabase || recoveryState !== 'ready' || submission.current) return
     setError('')
     if (password.length < 6) {
       setError('Password must be at least 6 characters.')
@@ -94,21 +81,20 @@ export default function ResetPasswordPage() {
       setError('Passwords do not match.')
       return
     }
-    setBusy(true)
-    const { error: updateError } = await supabase.auth.updateUser({ password })
-    if (updateError) {
-      setError(toSafeErrorMessage(updateError, updateError.message))
-      setBusy(false)
-      return
-    }
-    setDone(true)
-    setBusy(false)
-    // The recovery session is a real, valid session, but this app asks
-    // for a fresh sign-in with the new password afterward rather than
-    // silently continuing on a session that started from an emailed
-    // link — the safer default if that email was opened on a shared or
-    // public device.
-    void supabase.auth.signOut()
+    await runAuthSubmission(submission, setBusy, async () => {
+      if (!supabase) throw new Error('Authentication client unavailable')
+      const { error: updateError } = await supabase.auth.updateUser({ password })
+      if (updateError) {
+        setError(toSafeErrorMessage(updateError, updateError.message))
+        return
+      }
+      setDone(true)
+      // A password update is complete even if the subsequent sign-out fails.
+      const { error: signOutError } = await supabase.auth.signOut()
+      if (signOutError) throw signOutError
+    }, (requestError) => {
+      setError(toSafeErrorMessage(requestError, 'Unable to complete your request. Please try again.'))
+    })
   }
 
   if (!isSupabaseConfigured) {
@@ -131,6 +117,7 @@ export default function ResetPasswordPage() {
           <p className="eyebrow">PROPROSTER</p>
           <h1>Password updated</h1>
           <p className="authIntro">Your password has been changed. Sign in with your new password to continue.</p>
+          {error && <div className="statusMessage errorMessage" role="alert">Your password was updated, but sign-out could not be confirmed. Close this session on a shared device before leaving it unattended.</div>}
           <Link className="primary authSubmit" href="/">Go to sign in</Link>
         </section>
       </main>
@@ -139,6 +126,20 @@ export default function ResetPasswordPage() {
 
   if (recoveryState === 'checking') {
     return <main className="authShell"><div className="loadingState">Checking your reset link…</div></main>
+  }
+
+  if (recoveryState === 'unavailable') {
+    return (
+      <main className="authShell">
+        <section className="authCard">
+          <p className="eyebrow">PROPROSTER</p>
+          <h1>We couldn’t check your reset link</h1>
+          <p className="authIntro">Check your connection and try again. This does not mean your link has expired.</p>
+          <button className="primary authSubmit" onClick={() => setRecoveryAttempt((attempt) => attempt + 1)}>Try again</button>
+          <Link className="secondary authSubmit" href="/">Return to PropRoster</Link>
+        </section>
+      </main>
+    )
   }
 
   if (recoveryState === 'invalid') {

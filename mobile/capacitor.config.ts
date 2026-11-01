@@ -34,9 +34,13 @@ const config: CapacitorConfig = {
   appId: 'com.proproster.app',
   appName: 'PropRoster',
   webDir: 'www',
+  // Match the hosted Next.js browser baseline; old WebViews use recovery.
+  android: { minWebViewVersion: 111 },
   server: {
     url: 'https://proproster.com',
     androidScheme: 'https',
+    // Bundled recovery screen remains available if the hosted page cannot load.
+    errorPath: 'connection-error.html',
   },
 }
 

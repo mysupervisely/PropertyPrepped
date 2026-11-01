@@ -41,7 +41,7 @@ describe('Property-First UX Cleanup — app/page.tsx tab structure', () => {
   })
 
   it('Rent has its own Lease / Ledger / Tenant sub-tabs', () => {
-    expect(source).toContain("const rentSubTabs: RentSubTab[] = ['Lease', 'Ledger', 'Tenant']")
+    expect(source).toContain("const rentSubTabs: RentSubTab[] = ['Lease', 'Ledger', 'Tenant', 'Conditions']")
   })
 
   it('PropCrew is promoted to a top-level tab, scoped to the open property', () => {

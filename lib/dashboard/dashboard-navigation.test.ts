@@ -55,7 +55,7 @@ describe('Dashboard Navigation Bug fix — AuthHeader threads the same reset it 
   // open the exact same panel — the onDashboardNavigate wiring this
   // test protects is otherwise unchanged.
   it('passes onBrandClick to AuthNavMenu as onDashboardNavigate', () => {
-    expect(source).toContain('<AuthNavMenu onDashboardNavigate={onBrandClick} open={navMenuOpen} onOpenChange={setNavMenuOpen} />')
+    expect(source).toContain('<AuthNavMenu onDashboardNavigate={onBrandClick} open={navMenuOpen} onOpenChange={setNavMenuOpen} propertyId={propertyId} />')
   })
 })
 

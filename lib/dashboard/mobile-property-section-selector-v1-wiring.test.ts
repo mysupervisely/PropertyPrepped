@@ -81,7 +81,7 @@ describe('Part A — mobile uses the new compact primary section selector, not a
 
   it('selecting a section updates the trigger label and closes the menu', () => {
     expect(pageSource).toContain('<span>{activeTab}</span>')
-    expect(pageSource).toContain('onClick={() => { setActiveTab(tab); setMobileTabMenuOpen(false) }}')
+    expect(pageSource).toContain('onClick={() => { if (!mayLeaveConditions()) return; setActiveTab(tab); setMobileTabMenuOpen(false) }}')
   })
 
   it('the selected section has a programmatically-understandable state (aria-selected + a visible checkmark/highlight)', () => {
@@ -123,8 +123,8 @@ describe('Part A — accessibility', () => {
     expect(cssSource).toContain('a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }')
   })
 
-  it('does not regress desktop keyboard navigation — the desktop .tabs buttons are unchanged (role="tab", no new handlers)', () => {
-    expect(pageSource).toContain('<nav className="tabs" role="tablist" aria-label="Property sections">{tabs.map((tab) => <button key={tab} role="tab" aria-selected={activeTab === tab} className={activeTab === tab ? \'active\' : \'\'} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>')
+  it('does not regress desktop keyboard navigation — the desktop tabs keep tab semantics and protect unsaved inspection edits', () => {
+    expect(pageSource).toContain('<nav className="tabs" role="tablist" aria-label="Property sections">{tabs.map((tab) => <button key={tab} role="tab" aria-selected={activeTab === tab} className={activeTab === tab ? \'active\' : \'\'} onClick={() => { if (mayLeaveConditions()) setActiveTab(tab) }}>{tab}</button>)}</nav>')
   })
 })
 
@@ -153,7 +153,7 @@ describe('Part A — no full-screen sheet, no grid of boxes, no scroll trapping,
 
 describe('Secondary Rent navigation (Lease & Rent / Ledger / Tenant) remains separate and untouched', () => {
   it('the Rent sub-tabs are still their own distinct control, not folded into .mobilePropertyNav', () => {
-    expect(pageSource).toContain("const rentSubTabs: RentSubTab[] = ['Lease', 'Ledger', 'Tenant']")
+    expect(pageSource).toContain("const rentSubTabs: RentSubTab[] = ['Lease', 'Ledger', 'Tenant', 'Conditions']")
     expect(pageSource).toContain('<div className="subTabs" role="tablist" aria-label="Rent sections">{rentSubTabs.map((sub) =>')
   })
 })
@@ -177,9 +177,10 @@ describe('Part B — Rent status label clarity', () => {
     expect((pageSource.match(/function rentStatusLabel\(/g) || []).length).toBe(1)
   })
 
-  it('every user-facing rent-status pill in app/page.tsx renders through rentStatusLabel(), not the raw enum value', () => {
+  it('workspace rent pills use rentStatusLabel and dashboard footer uses its explicit presentation helper', () => {
     expect(pageSource).not.toMatch(/statusPill \$\{rentStatusPillClass\([^)]+\)\}`\}>\{(?!rentStatusLabel)[a-zA-Z.]+\.status\}/)
-    expect((pageSource.match(/rentStatusLabel\((currentRentRow|row|propertyRentRow)\.status\)/g) || []).length).toBe(4)
+    expect((pageSource.match(/rentStatusLabel\((currentRentRow|row|propertyRentRow)\.status\)/g) || []).length).toBe(3)
+    expect(pageSource).toContain("propertySummaryLabel(propertyRentRow?.status, propertyOccupancy === 'Vacant', propertyAlertCount)")
   })
 
   it('the legacy Rent Ledger compatibility route (app/rent-ledger/page.tsx) gets the same truthful label, not left showing the old word', () => {

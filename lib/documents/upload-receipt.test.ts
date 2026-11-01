@@ -68,3 +68,60 @@ describe('uploadReceiptDocument — failure handling', () => {
     expect(deps.removeFile).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('uploadReceiptDocument - cleanup rejection', () => {
+  it('preserves the record error when orphan cleanup rejects', async () => {
+    const deps = fakeDeps({
+      insertDocumentRow: vi.fn(async () => ({ id: null, error: 'insert failed' })),
+      removeFile: vi.fn(async () => { throw new Error('cleanup unavailable') }),
+    })
+    const result = await uploadReceiptDocument('owner-1', 'prop-1',
+      new File(['receipt'], 'receipt.pdf', { type: 'application/pdf' }), deps)
+    expect(result).toEqual({ ok: false, error: 'insert failed' })
+    expect(deps.uploadFile).toHaveBeenCalledTimes(1)
+    expect(deps.insertDocumentRow).toHaveBeenCalledTimes(1)
+    expect(deps.removeFile).toHaveBeenCalledTimes(1)
+    const uploadedPath = (deps.uploadFile as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(deps.removeFile).toHaveBeenCalledWith(uploadedPath)
+  })
+
+  it('returns the missing-record fallback even when cleanup rejects', async () => {
+    const deps = fakeDeps({
+      insertDocumentRow: vi.fn(async () => ({ id: null, error: null })),
+      removeFile: vi.fn(async () => { throw new Error('cleanup unavailable') }),
+    })
+    await expect(uploadReceiptDocument('owner-1', 'prop-1',
+      new File(['receipt'], 'receipt.pdf', { type: 'application/pdf' }), deps))
+      .resolves.toEqual({ ok: false, error: 'Could not save the receipt record.' })
+    expect(deps.uploadFile).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('uploadReceiptDocument - uncertain request outcomes', () => {
+  it('returns actionable guidance when Storage rejects, without inserting or removing', async () => {
+    const deps = fakeDeps({ uploadFile: vi.fn(async () => { throw new Error('transport error') }) })
+    const result = await uploadReceiptDocument('owner-1', 'prop-1',
+      new File(['receipt'], 'receipt.pdf'), deps)
+    expect(result).toEqual({ ok: false, error: 'The receipt upload could not be confirmed. Check Documents before uploading again.' })
+    expect(deps.uploadFile).toHaveBeenCalledTimes(1)
+    expect(deps.insertDocumentRow).not.toHaveBeenCalled()
+    expect(deps.removeFile).not.toHaveBeenCalled()
+  })
+
+  it('keeps the uploaded object if the insert committed but its response was lost', async () => {
+    const savedRows: unknown[] = []
+    const deps = fakeDeps({
+      insertDocumentRow: vi.fn(async row => {
+        savedRows.push(row) // emulate a committed write followed by a lost response
+        throw new Error('connection lost')
+      }),
+    })
+    const result = await uploadReceiptDocument('owner-1', 'prop-1',
+      new File(['receipt'], 'receipt.pdf'), deps)
+    expect(result).toEqual({ ok: false, error: 'The receipt record could not be confirmed. Check Documents before uploading again.' })
+    expect(savedRows).toHaveLength(1)
+    expect(deps.uploadFile).toHaveBeenCalledTimes(1)
+    expect(deps.insertDocumentRow).toHaveBeenCalledTimes(1)
+    expect(deps.removeFile).not.toHaveBeenCalled()
+  })
+})

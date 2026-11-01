@@ -80,6 +80,15 @@ describe('isYearComplete', () => {
     expect(isYearComplete('2025', new Date('2026-01-01T00:00:01Z'))).toBe(true)
   })
 
+  it('uses the UTC snapshot date even when an offset date has crossed New Year', () => {
+    expect(isYearComplete('2026', new Date('2027-01-01T00:30:00+14:00'))).toBe(false)
+    expect(isYearComplete('2026', new Date('2026-12-31T23:30:00-10:00'))).toBe(true)
+  })
+
+  it('does not treat an invalid date as a completed period', () => {
+    expect(isYearComplete('2026', new Date('invalid'))).toBe(false)
+  })
+
   it('a future year is not complete', () => {
     expect(isYearComplete('2027', NOW_MID_2026)).toBe(false)
   })

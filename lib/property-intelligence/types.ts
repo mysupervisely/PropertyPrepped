@@ -236,7 +236,7 @@ export type PropertyPerformanceInput = {
    * still-in-progress, YTD period), but may also be a completed prior
    * year (e.g. a landlord reviewing "last year's" performance from Tax
    * Center's own year selector). Whichever year is passed, calculate.ts
-   * derives `isYearComplete` from it (year < the calendar year `now`
+   * derives `isYearComplete` from it (year < the UTC calendar year `now`
    * falls in) — it is never assumed complete just because a caller
    * labeled it that way.
    */
@@ -246,7 +246,7 @@ export type PropertyPerformanceInput = {
 export type PropertyPerformancePeriod = {
   /** The tax year taxYearSummary covers — always taxYearSummary.year, never independently recomputed (one source of truth for "what year is this"). */
   taxYear: string
-  /** ISO date (YYYY-MM-DD) this snapshot was computed as of. */
+  /** UTC ISO date (YYYY-MM-DD) this snapshot was computed as of. */
   asOf: string
   /**
    * True only when `taxYear` has fully elapsed relative to `asOf` (i.e.

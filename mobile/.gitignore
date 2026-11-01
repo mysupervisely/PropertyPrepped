@@ -26,3 +26,9 @@ android/captures/
 # Never commit a signing keystore or its credentials.
 android/app/*.keystore
 android/app/*.jks
+
+# Signing material can be placed outside app/ during local setup.
+*.jks
+*.keystore
+key.properties
+keystore.properties

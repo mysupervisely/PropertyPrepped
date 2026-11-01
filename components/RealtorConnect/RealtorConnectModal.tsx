@@ -68,6 +68,7 @@ export function RealtorConnectModal({
   // where safe — best-effort only, never blocks the form, never
   // overwrites something the user already typed.
   useEffect(() => {
+    let active = true
     if (!open) return
     setDraft(emptyDraft())
     setError('')
@@ -75,13 +76,13 @@ export function RealtorConnectModal({
     if (!user || !supabase) return
     setDraft((d) => ({ ...d, email: user.email || '' }))
     supabase.from('user_profiles').select('first_name,last_name,display_name,phone').eq('id', user.id).maybeSingle().then(({ data }) => {
-      if (!data) return
+      if (!active || !data) return
       const profile = data as { first_name: string | null; last_name: string | null; display_name: string | null; phone: string | null }
       const name = profile.display_name || [profile.first_name, profile.last_name].filter(Boolean).join(' ')
       setDraft((d) => ({ ...d, name: d.name || name, phone: d.phone || profile.phone || '' }))
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, user?.id])
+    return () => { active = false }
+  }, [open, user?.id, user?.email, supabase])
 
   if (!open) return null
 

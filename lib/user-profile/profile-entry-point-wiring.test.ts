@@ -34,7 +34,7 @@ describe('Profile avatar is the single trigger for the shared account/tools menu
   it('AuthHeader renders ProfileEntryButton unconditionally (every authenticated page, not gated behind hideMobileNav), wired to the same lifted menu state AuthNavMenu uses', () => {
     expect(authHeaderSource).toContain("import { ProfileEntryButton } from './ProfileEntryButton'")
     expect(authHeaderSource).toContain('<ProfileEntryButton menuOpen={navMenuOpen} onOpenMenu={() => setNavMenuOpen((o) => !o)} />')
-    expect(authHeaderSource).toContain('<AuthNavMenu onDashboardNavigate={onBrandClick} open={navMenuOpen} onOpenChange={setNavMenuOpen} />')
+    expect(authHeaderSource).toContain('<AuthNavMenu onDashboardNavigate={onBrandClick} open={navMenuOpen} onOpenChange={setNavMenuOpen} propertyId={propertyId} />')
   })
 
   it('renders exactly one real button element — no separate desktop Link and mobile button anymore', () => {

@@ -15,6 +15,14 @@ import { toSafeErrorMessage } from '../lib/user-facing-errors'
 import { AuthHeader } from '../components/AuthHeader'
 import DocumentIntelligencePanel, { type ApplyAction } from '../components/DocumentIntelligencePanel'
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
+import { buildPropertyTaxExport } from '../lib/tax-center/property-export'
+import { aggregateRentCollection } from '../lib/dashboard/rent-collection'
+import { propertyLeaseSummary } from '../lib/dashboard/property-lease-summary'
+import { propertySummaryLabel } from '../lib/dashboard/property-rent-label'
+import { ConditionRecordsPanel } from '../components/property-profile/ConditionRecordsPanel'
+import { isMissingConditionSetup } from '../lib/condition-records/model'
+import { PropertyAlertsPanel } from '../components/property-profile/PropertyAlertsPanel'
+import { PropertySectionNav } from '../components/property-profile/PropertySectionNav'
 import { PropCrewPanel } from '../components/PropCrewPanel'
 import { PropertySystemsPanel, type PropertySystem } from '../components/property-profile/PropertySystemsPanel'
 import { PropertyNotesPanel, type PropertyNote } from '../components/property-profile/PropertyNotesPanel'
@@ -313,12 +321,12 @@ type PropertySubTab = 'Mortgage' | 'Insurance' | 'Systems' | 'Ownership'
 // belong under "Rent," so they get their own lightweight sub-tabs rather
 // than one long scroll (the same pattern Property's own sub-tabs already
 // use, not a new UI concept).
-type RentSubTab = 'Lease' | 'Ledger' | 'Tenant'
+type RentSubTab = 'Lease' | 'Ledger' | 'Tenant' | 'Conditions'
 type DocumentsSubTab = 'Documents' | 'Photos'
 
 const tabs: Tab[] = ['Overview', 'Rent', 'Maintenance', 'Details', 'PropCrew', 'Documents', 'Tax']
 const propertySubTabs: PropertySubTab[] = ['Mortgage', 'Insurance', 'Systems', 'Ownership']
-const rentSubTabs: RentSubTab[] = ['Lease', 'Ledger', 'Tenant']
+const rentSubTabs: RentSubTab[] = ['Lease', 'Ledger', 'Tenant', 'Conditions']
 const docCategories = ['All', ...DOCUMENT_CATEGORIES]
 
 const money = (n: number) => new Intl.NumberFormat('en-US', {
@@ -877,6 +885,12 @@ export default function Home() {
   const [propertyNotes, setPropertyNotes] = useState<PropertyNote[]>([])
   const [propertyOwnership, setPropertyOwnership] = useState<PropertyOwnership[]>([])
   const [propertySubTab, setPropertySubTab] = useState<PropertySubTab>('Mortgage')
+  const conditionUnsavedRef = useRef(false)
+  function mayLeaveConditions() {
+    if (conditionUnsavedRef.current && !window.confirm('Leave unsaved inspection changes or an upload in progress? Saved records will be retained.')) return false
+    conditionUnsavedRef.current = false
+    return true
+  }
   const [rentSubTab, setRentSubTab] = useState<RentSubTab>('Lease')
   const [documentsSubTab, setDocumentsSubTab] = useState<DocumentsSubTab>('Documents')
   // Documents redesign: which category chip is active in the "Add
@@ -913,6 +927,7 @@ export default function Home() {
   const [insuranceDraft, setInsuranceDraft] = useState({ carrier:'', policyNumber:'', annualPremium:'', deductible:'', effectiveDate:'', expirationDate:'', documentId:'' })
   const [maintenanceDraft, setMaintenanceDraft] = useState({ serviceDate:new Date().toISOString().slice(0,10), status:'Completed', category:'Repair', vendor:'', description:'', cost:'', documentId:'', addToFinancials:true })
   const [financialYear, setFinancialYear] = useState(String(new Date().getFullYear()))
+  const [propertyAlertsId, setPropertyAlertsId] = useState<string | null>(null)
   const [transactionDraft, setTransactionDraft] = useState({ date: new Date().toISOString().slice(0, 10), type: 'Expense' as 'Income' | 'Expense', category: 'Repairs', vendor: '', description: '', amount: '', documentId: '', recurring: false })
   const [showAdd, setShowAdd] = useState(false)
   // Onboarding & First-Run Experience V2: shown once, on the property
@@ -1228,7 +1243,7 @@ export default function Home() {
 
   const propertyLabelById = useMemo(() => new Map(properties.map((p) => [p.id, p.address])), [properties])
 
-  const { attentionItems, upcomingItems, openMaintenanceItems, recentActivity, vacancyItems, attentionCountByProperty, rentStatusByProperty } = useMemo(() => {
+  const { attentionItems, upcomingItems, openMaintenanceItems, recentActivity, vacancyItems, attentionCountByProperty, rentStatusByProperty, rentCollectionByProperty, propertyAttentionItems } = useMemo(() => {
     // Milestone 18: PropWatch's rent + warranty signals fold into the
     // SAME dateItems list Milestone 16 already builds — same
     // classifyDate() thresholds, same Needs Attention/Upcoming split,
@@ -1335,7 +1350,9 @@ export default function Home() {
       recentActivity: limitItems(activity, RECENT_ACTIVITY_LIMIT),
       vacancyItems: visibleVacancy,
       attentionCountByProperty: attentionCounts,
+      propertyAttentionItems: sortByDaysUntilAscending(visibleNeedsAttention),
       rentStatusByProperty: rentByProperty,
+      rentCollectionByProperty: aggregateRentCollection(rentRows),
     }
   }, [leases, insurancePolicies, mortgages, maintenanceRecords, maintenanceRequests, intakeSessions, documents, transactions, propertyNotes, properties, contacts, propertyLabelById, rentPayments, propertySystems, entitlements, tenantRequests, dismissedAttentionKeys])
 
@@ -1937,6 +1954,9 @@ export default function Home() {
 
   async function deleteProperty() {
     if (!supabase || !user || !selected) return
+    const conditionCheck = await supabase.from('condition_inspections').select('id', { count: 'exact', head: true }).eq('property_id', selected.id).eq('owner_id', user.id)
+    if (conditionCheck.error && !isMissingConditionSetup(conditionCheck.error)) { setError('Could not check retained inspection records. No property files were removed.'); return }
+    if ((conditionCheck.count ?? 0) > 0) { setError('This property has retained condition reports and cannot be deleted. Keep it to preserve inspection records.'); return }
     setBusy(true)
     setError('')
 
@@ -1969,6 +1989,7 @@ export default function Home() {
   }
 
   const openProperty = (id: string, tab: Tab = 'Overview', docsSubTab?: DocumentsSubTab, propSubTab?: PropertySubTab, rentSubTab?: RentSubTab) => {
+    if (!mayLeaveConditions()) return
     // Mobile V2 — Area E: give the dashboard-to-property transition its own
     // history entry so the native/browser back gesture returns to the
     // dashboard instead of leaving the app. Only pushed when we're actually
@@ -1995,6 +2016,7 @@ export default function Home() {
   // real back-press would be a silent no-op (popstate firing on an already-
   // null selectedId) before it actually left the page.
   function closeProperty() {
+    if (!mayLeaveConditions()) return
     if (typeof window !== 'undefined' && (window.history.state as { proproster?: string } | null)?.proproster === 'property') {
       window.history.back()
     } else {
@@ -2013,6 +2035,7 @@ export default function Home() {
   // with any other history traffic (e.g. a future route change).
   useEffect(() => {
     const onPopState = () => {
+      if (!mayLeaveConditions()) { window.history.pushState({ proproster: 'property' }, '', window.location.href); return }
       setSelectedId((current) => (current === null ? current : null))
     }
     window.addEventListener('popstate', onPopState)
@@ -2774,7 +2797,7 @@ export default function Home() {
   }
 
   async function addTransaction() {
-    if (!supabase || !user || !selectedId || !transactionDraft.description.trim() || Number(transactionDraft.amount) <= 0) return
+    if (!supabase || !user || !selectedId || !transactionDraft.date || !transactionDraft.description.trim() || Number(transactionDraft.amount) <= 0) return
     setBusy(true)
     setError('')
     const { error: insertError } = await supabase.from('financial_transactions').insert({
@@ -3246,7 +3269,7 @@ export default function Home() {
 
     return (
       <main className="shell workspaceShell">
-        <AuthHeader onBrandClick={closeProperty} onSmartUploadCompleted={() => void loadPortfolio()} registerSmartUploadTrigger={(fn) => { smartUploadTriggerRef.current = fn }} />
+        <AuthHeader onBrandClick={closeProperty} propertyId={selected.id} onSmartUploadCompleted={() => void loadPortfolio()} registerSmartUploadTrigger={(fn) => { smartUploadTriggerRef.current = fn }} />
         {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
         {/* Onboarding & First-Run Experience V2 — the one-time activation
             note (see addProperty()'s isFirstProperty branch). Plain,
@@ -3270,14 +3293,8 @@ export default function Home() {
         <section className="propertyHero">
           <div className="heroPhoto">{selected.coverUrl ? <img src={selected.coverUrl} alt={selected.address} /> : <div className="heroPlaceholder"><span>Property photo</span><small>Add photos in the Photos tab</small></div>}</div>
           <div className="heroInfo">
-            {/* Property Intelligence V1, Phase C.1 (Unified Property
-                Snapshot): the hero is identity only now — photo, address,
-                city, status, and the property-scoped actions. It no longer
-                repeats Value/Mortgage/Equity/Rent/Tax (the old five-metric
-                hero strip): every financial number lives in exactly ONE
-                place, the Property Snapshot on the Overview tab below, so
-                a landlord never sees two different numbers answering the
-                same question at the same time. */}
+            {/* Simple property identity: photo, address, city, and status.
+                Financial metrics stay in the Overview snapshot below. */}
             <div className="heroInfoHead">
               <div><p className="eyebrow">{selected.property_type.toUpperCase()}</p><h1>{selected.address}</h1><p className="heroCity">{selected.city}</p>
                 <div className="heroStatusPills">
@@ -3285,13 +3302,7 @@ export default function Home() {
                   {currentRentRow && !(currentRentRow.status === 'Unknown' && rentAmountKnown) && <span className={`statusPill ${rentStatusPillClass(currentRentRow.status)}`}>Rent {rentStatusLabel(currentRentRow.status)}</span>}
                 </div>
               </div>
-              {/* Investment Analysis is a related but secondary action next
-                  to Edit — the same quiet brand-color text-link treatment
-                  as .needsAttentionViewAll (Simplification + Maintenance
-                  Workspace V2, Phase E1.1) so it no longer competes
-                  equal-weight with Edit for attention. Functionality and
-                  destination are unchanged. */}
-              <div className="heroInfoActions"><button className="secondary" onClick={() => openEditProperty(selected)}>Edit</button><Link className="heroInvestmentLink" href={`/investment-tools/property-evaluator?propertyId=${selected.id}`}>Investment Analysis</Link></div>
+
             </div>
           </div>
         </section>
@@ -3306,7 +3317,13 @@ export default function Home() {
             replaced the horizontally-scrolling mobile version of this
             same strip with .mobilePropertyNav below — see its own
             comment). */}
-        <nav className="tabs" role="tablist" aria-label="Property sections">{tabs.map((tab) => <button key={tab} role="tab" aria-selected={activeTab === tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
+        <PropertySectionNav onEdit={() => openEditProperty(selected)} propertyAddress={selected.address} activeTab={activeTab} rentSubTab={rentSubTab} maintenanceCount={selectedOpenMaintenanceCount} onSelect={(tab, rentSection) => {
+          if (!mayLeaveConditions()) return
+          setActiveTab(tab)
+          if (rentSection) setRentSubTab(rentSection)
+        }} />
+
+        <nav className="tabs" role="tablist" aria-label="Property sections">{tabs.map((tab) => <button key={tab} role="tab" aria-selected={activeTab === tab} className={activeTab === tab ? 'active' : ''} onClick={() => { if (mayLeaveConditions()) setActiveTab(tab) }}>{tab}</button>)}</nav>
 
         {/* Mobile Property Section Selector V1: below 761px (the exact
             width .tabs used to become a horizontal scroller at — see
@@ -3335,7 +3352,7 @@ export default function Home() {
             <ul className="mobilePropertyNavMenu" role="listbox" aria-label="Property sections">
               {tabs.map((tab) => (
                 <li key={tab} role="option" aria-selected={activeTab === tab}>
-                  <button type="button" className={activeTab === tab ? 'active' : ''} onClick={() => { setActiveTab(tab); setMobileTabMenuOpen(false) }}>
+                  <button type="button" className={activeTab === tab ? 'active' : ''} onClick={() => { if (!mayLeaveConditions()) return; setActiveTab(tab); setMobileTabMenuOpen(false) }}>
                     <span className="mobilePropertyNavCheck" aria-hidden="true">{activeTab === tab ? '✓' : ''}</span>
                     {tab}
                     {/* Mobile V2: an open-case count on Maintenance only —
@@ -3353,7 +3370,7 @@ export default function Home() {
         </div>
 
         {activeTab === 'Overview' && <section className="workspaceContent workspaceContentTight">
-          <div className="sectionHead workspaceHeading workspaceHeadingTight"><div><p className="eyebrow">OVERVIEW</p><h2>At a glance</h2></div><button className="secondary" onClick={() => openEditProperty(selected)}>Edit property facts</button></div>
+          <div className="sectionHead workspaceHeading workspaceHeadingTight"><div><p className="eyebrow">OVERVIEW</p><h2>At a glance</h2></div></div>
 
           {/* Property Intelligence V1, Phase C.3 (Compact Property
               Snapshot): same ONE card, same data, same hierarchy as
@@ -3391,8 +3408,9 @@ export default function Home() {
               <div className="propertySnapshotMetric"><strong>{metricMoney(performance.contractMonthlyRent, '/mo')}</strong><span>Monthly Rent</span></div>
               <div className="propertySnapshotMetric"><strong>{performance.mortgageBalance.source === 'financing_status_confirmed' ? selected.financing_status : metricMoney(performance.mortgageBalance)}</strong><span>Mortgage</span></div>
             </div>
+            {performance.mortgageBalance.potentiallyStale && <p className="propertyPerformanceNote">Based on the mortgage balance saved in PropRoster.</p>}
             <div className="propertyMarketRentCard">
-              <div className="propertyMarketRentHeading"><strong>Market rent</strong><span>Powered by RentCast</span></div>
+              <div className="propertyMarketRentHeading"><div><strong>Market rent</strong><span>Powered by RentCast</span></div><button type="button" className="propertyMarketRentButton" disabled={rentEstimateLoading} onClick={() => requestMarketRent(selected.id)}>{rentEstimateLoading ? 'Checking…' : rentEstimateByProperty[selected.id] ? 'Refresh' : 'Check rent'}</button></div>
               {rentEstimateByProperty[selected.id] ? (
                 <>
                   <div className="propertyMarketRentValues">
@@ -3407,13 +3425,9 @@ export default function Home() {
                 </>
               ) : selected.market_rent_estimate != null && Number(selected.market_rent_estimate) > 0 ? (
                 <p className="propertyMarketRentEmpty">Your estimate: {money(Number(selected.market_rent_estimate))}/mo. Not independently verified.</p>
-              ) : <p className="propertyMarketRentEmpty">Check estimated market rent using nearby rental data.</p>}
-              <div className="propertyMarketRentActions">
-                <button type="button" className="propertyMarketRentButton" disabled={rentEstimateLoading} onClick={() => requestMarketRent(selected.id)}>{rentEstimateLoading ? 'Checking…' : rentEstimateByProperty[selected.id] ? 'Refresh estimate' : 'Get market estimate'}<span aria-hidden="true">↗</span></button>
-              </div>
+              ) : null}
               {rentEstimateError && <p className="propertyMarketRentError" role="status">{rentEstimateError}</p>}
             </div>
-            {performance.mortgageBalance.potentiallyStale && <p className="propertyPerformanceNote">Based on the mortgage balance saved in PropRoster.</p>}
             {/* Phase C.3 follow-up (2nd real-device round): the engine's
                 own explanatory note for a financing_status-confirmed $0
                 ("This property is marked 'Paid Off' — mortgage balance
@@ -3692,7 +3706,9 @@ export default function Home() {
               Requests" to "Tenant" — the internal RentSubTab value was
               already 'Tenant', so this is a label-only change, no
               route/state rename. */}
-          <div className="subTabs" role="tablist" aria-label="Rent sections">{rentSubTabs.map((sub) => <button key={sub} role="tab" aria-selected={rentSubTab === sub} className={rentSubTab === sub ? 'active' : ''} onClick={() => setRentSubTab(sub)}>{sub === 'Tenant' ? 'Tenant' : sub === 'Ledger' ? 'Ledger' : 'Lease & Rent'}</button>)}</div>
+          <div className="subTabs" role="tablist" aria-label="Rent sections">{rentSubTabs.map((sub) => <button key={sub} role="tab" aria-selected={rentSubTab === sub} className={rentSubTab === sub ? 'active' : ''} onClick={() => { if (mayLeaveConditions()) setRentSubTab(sub) }}>{sub === 'Tenant' ? 'Tenant' : sub === 'Ledger' ? 'Ledger' : sub === 'Conditions' ? 'Move-in / Move-out' : 'Lease & Rent'}</button>)}</div>
+
+          {rentSubTab === 'Conditions' && supabase && <ConditionRecordsPanel key={selected.id} client={supabase} propertyId={selected.id} ownerId={user.id} address={selected.address} leases={selectedLeases} completedBy={[userProfile?.first_name, userProfile?.last_name].filter(Boolean).join(' ') || userProfile?.display_name || ''} onDirtyChange={value => { conditionUnsavedRef.current = value }} />}
 
           {rentSubTab === 'Lease' && (() => {
             // Ungated by property_type (unlike the hero/Overview occupancy
@@ -3839,7 +3855,7 @@ export default function Home() {
               itself (calculation engine, override semantics, collapsible
               groups, manual entry) is completely untouched below. */}
           <div className="sectionHead workspaceHeading taxSectionHead">
-            <div><p className="eyebrow">TAX</p><h2>Property tax workspace</h2></div>
+            <div><p className="eyebrow">TAX</p><h2>{selected.address}</h2><p>Property tax workspace. Expenses and annual records here belong to this property.</p></div>
             <button className="primary" onClick={() => { setUploadCategory('Tax'); setShowAddDocumentChooser(true) }}>+ Add Tax Document</button>
           </div>
 
@@ -3865,8 +3881,22 @@ export default function Home() {
           )}
 
           <PropertyTaxPanel
+            key={selected.id}
             supabase={supabase}
             propertyId={selected.id}
+            onAddExpense={(year) => {
+              setTransactionDraft({ date: year === String(new Date().getFullYear()) ? new Date().toISOString().slice(0, 10) : '', type: 'Expense', category: 'Repairs', vendor: '', description: '', amount: '', documentId: '', recurring: false })
+              setShowTransaction(true)
+            }}
+            onExport={(year) => {
+              const csv = buildPropertyTaxExport({ property: selected, year, transactions: selectedTransactions, maintenanceRecords: selectedMaintenance, taxRecords: selectedTaxRecords, customItems: selectedTaxCustomItems.map(row => ({ id: row.id, propertyId: row.property_id, taxYear: row.tax_year, description: row.description, amount: Number(row.amount), group: row.category_group, notes: row.notes, documentId: row.document_id })) })
+              const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
+              const link = document.createElement('a')
+              link.href = url
+              link.download = `proproster-${selected.address.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${year}-tax-records.csv`
+              link.click()
+              URL.revokeObjectURL(url)
+            }}
             ownerId={user.id}
             transactions={selectedTransactions}
             maintenanceRecords={selectedMaintenance}
@@ -4075,7 +4105,7 @@ export default function Home() {
 
         {showDeleteConfirm && <div className="overlay deleteOverlay" onMouseDown={(e) => e.target === e.currentTarget && setShowDeleteConfirm(false)}><div className="modal deleteModal"><div className="modalTop"><div><p className="eyebrow dangerEyebrow">PERMANENT ACTION</p><h2>Delete this property?</h2></div><button className="iconButton" onClick={() => setShowDeleteConfirm(false)}>×</button></div><p className="deleteWarning">This permanently removes <strong>{selected.address}</strong> and its associated documents, photos, financial transactions, lease, mortgage, insurance, maintenance records, contacts, and maintenance requests. This cannot be undone.</p><div className="modalActions"><button className="secondary" onClick={() => setShowDeleteConfirm(false)}>Keep Property</button><button className="dangerButton solidDanger" disabled={busy} onClick={() => void deleteProperty()}>{busy ? 'Deleting…' : 'Delete Permanently'}</button></div></div></div>}
 
-        {showTransaction && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowTransaction(false)}><div className="modal transactionModal"><div className="modalTop"><div><p className="eyebrow">LEDGER</p><h2>Add transaction</h2></div><button className="iconButton" onClick={() => setShowTransaction(false)}>×</button></div><div className="formGrid transactionGrid"><label>Date<input type="date" value={transactionDraft.date} onChange={(e) => setTransactionDraft({ ...transactionDraft, date: e.target.value })} /></label><label>Type<select value={transactionDraft.type} onChange={(e) => setTransactionDraft({ ...transactionDraft, type: e.target.value as 'Income' | 'Expense', category: e.target.value === 'Income' ? 'Rent' : 'Repairs' })}><option>Income</option><option>Expense</option></select></label><label>Category<select value={transactionDraft.category} onChange={(e) => setTransactionDraft({ ...transactionDraft, category: e.target.value })}>{FINANCIAL_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></label><label>Amount<input inputMode="decimal" value={transactionDraft.amount} onChange={(e) => setTransactionDraft({ ...transactionDraft, amount: e.target.value })} placeholder="1250.00" /></label><label>Vendor / payer<input value={transactionDraft.vendor} onChange={(e) => setTransactionDraft({ ...transactionDraft, vendor: e.target.value })} placeholder={transactionDraft.type === 'Income' ? 'Tenant name' : 'Vendor or company'} /></label><label>Attach document<select value={transactionDraft.documentId} onChange={(e) => setTransactionDraft({ ...transactionDraft, documentId: e.target.value })}><option value="">No attachment</option>{selectedDocs.map((doc) => <option value={doc.id} key={doc.id}>{doc.name}</option>)}</select></label><label className="fullField">Description<input value={transactionDraft.description} onChange={(e) => setTransactionDraft({ ...transactionDraft, description: e.target.value })} placeholder="August rent, HVAC repair, property tax…" /></label><label className="recurringCheck fullField"><input type="checkbox" checked={transactionDraft.recurring} onChange={(e) => setTransactionDraft({ ...transactionDraft, recurring: e.target.checked })} /><span>Mark as recurring monthly</span><small>This labels the transaction as recurring; automatic future posting can be enabled in a later milestone.</small></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowTransaction(false)}>Cancel</button><button className="primary" disabled={busy || !transactionDraft.description.trim() || Number(transactionDraft.amount) <= 0} onClick={() => void addTransaction()}>{busy ? 'Saving…' : 'Save transaction'}</button></div></div></div>}
+        {showTransaction && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowTransaction(false)}><div className="modal transactionModal"><div className="modalTop"><div><p className="eyebrow">LEDGER</p><h2>Add transaction</h2></div><button className="iconButton" onClick={() => setShowTransaction(false)}>×</button></div><div className="formGrid transactionGrid"><label>Date<input type="date" value={transactionDraft.date} onChange={(e) => setTransactionDraft({ ...transactionDraft, date: e.target.value })} /></label><label>Type<select value={transactionDraft.type} onChange={(e) => setTransactionDraft({ ...transactionDraft, type: e.target.value as 'Income' | 'Expense', category: e.target.value === 'Income' ? 'Rent' : 'Repairs' })}><option>Income</option><option>Expense</option></select></label><label>Category<select value={transactionDraft.category} onChange={(e) => setTransactionDraft({ ...transactionDraft, category: e.target.value })}>{FINANCIAL_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></label><label>Amount<input inputMode="decimal" value={transactionDraft.amount} onChange={(e) => setTransactionDraft({ ...transactionDraft, amount: e.target.value })} placeholder="1250.00" /></label><label>Vendor / payer<input value={transactionDraft.vendor} onChange={(e) => setTransactionDraft({ ...transactionDraft, vendor: e.target.value })} placeholder={transactionDraft.type === 'Income' ? 'Tenant name' : 'Vendor or company'} /></label><label>Attach document<select value={transactionDraft.documentId} onChange={(e) => setTransactionDraft({ ...transactionDraft, documentId: e.target.value })}><option value="">No attachment</option>{selectedDocs.map((doc) => <option value={doc.id} key={doc.id}>{doc.name}</option>)}</select></label><label className="fullField">Description<input value={transactionDraft.description} onChange={(e) => setTransactionDraft({ ...transactionDraft, description: e.target.value })} placeholder="August rent, HVAC repair, property tax…" /></label><label className="recurringCheck fullField"><input type="checkbox" checked={transactionDraft.recurring} onChange={(e) => setTransactionDraft({ ...transactionDraft, recurring: e.target.checked })} /><span>Mark as recurring monthly</span><small>This labels the transaction as recurring; automatic future posting can be enabled in a later milestone.</small></label></div><div className="modalActions"><button className="secondary" onClick={() => setShowTransaction(false)}>Cancel</button><button className="primary" disabled={busy || !transactionDraft.date || !transactionDraft.description.trim() || Number(transactionDraft.amount) <= 0} onClick={() => void addTransaction()}>{busy ? 'Saving…' : 'Save transaction'}</button></div></div></div>}
 
         {showDocIntelId && (() => {
           const activeDoc = selectedDocs.find((d) => d.id === showDocIntelId)
@@ -4219,6 +4249,15 @@ export default function Home() {
           path, no second modal. */}
       <AuthHeader onSmartUploadCompleted={() => void loadPortfolio()} registerSmartUploadTrigger={(fn) => { smartUploadTriggerRef.current = fn }} />
       {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
+      <section className="mobileQuickActions">
+        <div className="mobileQuickActionsHead">
+          <button type="button" className="mobileQuickActionsCustomize" onClick={openQuickActionsCustomize}>Customize</button>
+        </div>
+        <div className="mobileQuickActionsRow">
+          {quickActions.map((id) => renderQuickAction(id))}
+        </div>
+      </section>
+
       <section className="intro welcomeIntro"><h1>Good {greetingTimeOfDay()}{profileReady ? `, ${resolveGreetingName(userProfile, user.email)}` : ''}.</h1><p>Here&apos;s your portfolio at a glance.</p></section>
 
       {/* Property Intelligence V1, Phase D (Portfolio Snapshot V1): the
@@ -4326,15 +4365,7 @@ export default function Home() {
           saveQuickActions() above); every id's actual destination is
           resolved by quickActionNav()/renderQuickAction() above, each
           one reusing an existing route or handler, never a new one. */}
-      <section className="mobileQuickActions">
-        <div className="mobileQuickActionsHead">
-          <h2 className="mobileQuickActionsHeading">Quick Actions</h2>
-          <button type="button" className="mobileQuickActionsCustomize" onClick={openQuickActionsCustomize}>Customize</button>
-        </div>
-        <div className="mobileQuickActionsRow">
-          {quickActions.map((id) => renderQuickAction(id))}
-        </div>
-      </section>
+
 
       {/* Mobile V2 — the Customize sheet: pick exactly 4 of the 8
           catalog actions. quickActionsDraft is a local working copy —
@@ -4493,7 +4524,9 @@ export default function Home() {
             out as the natural property-level home for money and files:
             Rent and Documents. */}
         <div className="grid">{properties.map((property) => {
-          const propertyOccupancy = property.property_type === 'Rental Property' ? deriveOccupancy(leases.filter((l) => l.property_id === property.id)) : null
+          const propertyLeases = leases.filter((l) => l.property_id === property.id)
+          const propertyOccupancy = property.property_type === 'Rental Property' ? deriveOccupancy(propertyLeases) : null
+          const leaseSummary = propertyLeaseSummary(propertyLeases, property.property_type === 'Rental Property')
           const propertyRentRow = rentStatusByProperty.get(property.id)
           const propertyAlertCount = attentionCountByProperty.get(property.id) || 0
           return <article className="propertyCard" key={property.id}>
@@ -4504,18 +4537,15 @@ export default function Home() {
               </div>
             </button>
             <div className="cardBody">
-              <button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button>
-              <div className="propertyMobileLabels" aria-label="Property type and occupancy"><span className="propertyMobileType">{property.property_type}</span>{propertyOccupancy && <span className={`propertyMobileOccupancy ${occupancyPillClass(propertyOccupancy)}`}>{propertyOccupancy === 'Occupancy unknown' ? 'Unknown' : propertyOccupancy === 'Upcoming tenancy' ? 'Upcoming' : propertyOccupancy}</span>}</div>
-              <div className="miniStats">
-                <div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div>
-                {propertyRentRow ? <div><span>Rent status</span><strong><span className={`statusPill ${rentStatusPillClass(propertyRentRow.status)}`}>{rentStatusLabel(propertyRentRow.status)}</span></strong></div> : <div><span>Value</span><strong>{money(property.estimated_value)}</strong></div>}
-              </div>
-              {propertyAlertCount > 0 && <button className="cardAlertBadge" onClick={() => openProperty(property.id, 'Overview')}>{propertyAlertCount} alert{propertyAlertCount === 1 ? '' : 's'} need{propertyAlertCount === 1 ? 's' : ''} attention</button>}
-              <div className="cardActions">
-                <button onClick={() => openProperty(property.id, 'Rent', undefined, undefined, 'Lease')}>Rent</button>
-                <button onClick={() => openProperty(property.id, 'Documents', 'Documents')}>Documents</button>
-              </div>
+              <button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button><div className="propertyMobileLabels" aria-label="Property type and occupancy"><span className="propertyMobileType">{property.property_type}</span>{propertyOccupancy && <span className={`propertyMobileOccupancy ${occupancyPillClass(propertyOccupancy)}`}>{propertyOccupancy === 'Occupancy unknown' ? 'Unknown' : propertyOccupancy === 'Upcoming tenancy' ? 'Upcoming' : propertyOccupancy}</span>}</div>
             </div>
+            <dl className="propertySummaryStrip" aria-label={`Summary for ${property.address}`}>
+              <div><dt className="propertySummaryStatusLabel">Status</dt><dd className={propertyOccupancy === 'Vacant' ? 'pillNeutral' : propertyRentRow ? rentStatusPillClass(propertyRentRow.status) : 'pillNeutral'}>{propertyAlertCount > 0 || (propertyOccupancy !== 'Vacant' && propertyRentRow && ['Overdue', 'Partial', 'Due'].includes(propertyRentRow.status)) ? <button type="button" className="propertyStatusButton" id={`property-alert-trigger-${property.id}`} aria-label={`View alerts for ${property.address}`} aria-expanded={propertyAlertCount > 0 ? propertyAlertsId === property.id : undefined} aria-controls={propertyAlertCount > 0 ? `property-alerts-${property.id}` : undefined} onClick={() => propertyAlertCount > 0 ? setPropertyAlertsId(current => current === property.id ? null : property.id) : openProperty(property.id, 'Rent', undefined, undefined, 'Ledger')}>{propertySummaryLabel(propertyRentRow?.status, propertyOccupancy === 'Vacant', propertyAlertCount)}</button> : propertySummaryLabel(propertyRentRow?.status, propertyOccupancy === 'Vacant', propertyAlertCount)}</dd></div>
+              <div><dt>Rent</dt><dd>{money(property.monthly_rent)}</dd></div>
+              <div><dt>Value</dt><dd>{compactMoney(Number(property.estimated_value))}</dd></div>
+              <div><dt>{leaseSummary.label}</dt><dd>{leaseSummary.value}</dd></div>
+            </dl>
+            {propertyAlertsId === property.id && propertyAlertCount > 0 && <PropertyAlertsPanel propertyId={property.id} address={property.address} items={propertyAttentionItems} onClose={() => { setPropertyAlertsId(null); document.getElementById(`property-alert-trigger-${property.id}`)?.focus() }} onOpen={(propertyId, nav) => { setPropertyAlertsId(null); goToNav(propertyId, nav) }} />}
           </article>
         })}
           {!busy && properties.length === 0 && <button className="emptyPropertyCard" onClick={() => openAddProperty()}><strong>+ Add your first property</strong><span>Start building your organized property file.</span></button>}
