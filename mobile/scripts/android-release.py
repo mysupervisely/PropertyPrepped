@@ -14,7 +14,7 @@ import zipfile
 def fingerprint(value):
     value = value.replace(':', '').strip().upper()
     if not re.fullmatch(r'[0-9A-F]{64}', value):
-        raise ValueError('Set PROPROSTER_UPLOAD_CERT_SHA256 to the upload certificate SHA-256 from Play Console.')
+        raise ValueError('Set PROPROSTER_UPLOAD_CERT_SHA256 to the backed-up upload key certificate SHA-256 (first upload), or the registered upload certificate from Play Console (updates).')
     return value
 
 

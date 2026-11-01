@@ -9,7 +9,7 @@ The existing Play app is PropRoster, package `com.proproster.app`; prior setup r
 
 ## One-time signing setup
 
-In Play Console, open the existing PropRoster app and its App integrity / App signing page. Use the **upload key certificate** SHA-256, not the app signing certificate. Check the highest version code already used across all tracks. If this listing has no previous uploads, use 0 for that maximum. Do not guess, replace a registered key or create another listing. If no upload certificate is registered yet, first establish the owner's backed-up upload key and enrollment before using the signed workflow.
+In Play Console, open the existing PropRoster app and its App integrity / App signing page. Use the **upload key certificate** SHA-256, not the app signing certificate. Check the highest version code already used across all tracks. If this listing has no previous uploads, use 0 for that maximum. Do not guess, replace a registered key or create another listing. If no upload certificate is registered and there are no uploaded bundles, use the owner's backed-up first upload key. Export that key's public certificate with keytool and pin its SHA-256 in PROPROSTER_UPLOAD_CERT_SHA256 before running the signed workflow. Google Play has not yet supplied an upload fingerprint in this first-upload case. The Google-managed app signing fingerprint is not the upload fingerprint. Keep the same pin for the subsequent bundle verification; no check is bypassed.
 
 In Codemagic Team settings > Code signing identities > Android keystores, add the existing upload keystore with reference **proproster_upload**, its alias and passwords. Preserve an independent secure backup. Do not send passwords or keystores through chat or commit them to GitHub.
 
@@ -17,7 +17,7 @@ Create an **android_release** environment group with:
 
 | Name | Value |
 | --- | --- |
-| `PROPROSTER_UPLOAD_CERT_SHA256` | Expected upload certificate SHA-256, copied from the existing Play app |
+| `PROPROSTER_UPLOAD_CERT_SHA256` | First upload: SHA-256 of the backed-up upload keystore certificate. Updates: registered upload certificate SHA-256 from Play |
 | `PLAY_MAX_VERSION_CODE` | Highest version already used on Play, or 0 only when none exists |
 | `PROPROSTER_VERSION_CODE` | New positive integer strictly greater than that maximum |
 
@@ -34,3 +34,9 @@ Start `android-play-internal-bundle` on branch `ios-readiness-v1`. No Play servi
 Current status: workflow preparation only. No signed upload artifact, Google Play upload or internal rollout is claimed until actual execution and console acceptance are verified. The current connected tools cannot read Codemagic signing identities or Play Console state; account setup must be inspected in those services.
 
 References: [Android app signing](https://developer.android.com/studio/publish/app-signing), [Codemagic Android signing](https://docs.codemagic.io/yaml-code-signing/signing-android/).
+
+## Console evidence supplied November 1, 2026
+
+The user reached the existing PropRoster app under their personal Google account; proprosterteam@gmail.com showed registration instead. Protected with Play lists com.proproster.app with Play App Signing enabled. The supplied A3:54:4A:8A:A6:C0:56:67:D3:E1:38:0E:ED:C9:D5:85:2D:DA:FA:F0:D6:EA:18:B0:13:CC:2A:37:93:F3:45:91 fingerprint is an app signing certificate, not verified as an upload certificate. The internal track is inactive, its draft has no attached bundle, and Add from library reports No app bundles. No upload key has been located or changed. Next: inspect Codemagic Android keystores and establish the owner's backed-up upload key before signed execution. Do not assume the app signing key can sign our upload.
+
+Release readiness run [41318110110](https://github.com/mysupervisely/PropertyPrepped/actions/runs/41318110110) passed unsigned release compilation, release lint and production-shell bundle packaging. The cloud JDK regression verified a temporary fixture signature and rejected an incorrect certificate and unsigned additions. This is not a real signed upload candidate or Play acceptance.
