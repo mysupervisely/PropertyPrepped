@@ -165,9 +165,10 @@ describe('Session expiration — distinguishing an expired session from an expli
 })
 
 describe('Privacy Policy and Terms of Service surfaces', () => {
-  it('both routes exist with a visible, non-hidden "Draft — Attorney Review Required" marker rendered in the page (not just a code comment)', () => {
-    expect(privacySource).toContain('<div className="legalReviewBanner">')
-    expect(privacySource).toContain('Draft — Attorney Review Required.')
+  it('Privacy Policy provides a public deletion path; Terms retains its existing review marker', () => {
+    expect(privacySource).toContain('id="account-deletion"')
+    expect(privacySource).toContain('subject=Delete%20my%20PropRoster%20account')
+    expect(privacySource).not.toContain('Draft — Attorney Review Required.')
     expect(termsSource).toContain('<div className="legalReviewBanner">')
     expect(termsSource).toContain('Draft — Attorney Review Required.')
   })

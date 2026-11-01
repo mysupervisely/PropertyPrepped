@@ -1,19 +1,6 @@
 'use client'
 
-// PropRoster — Launch Essentials V1: Privacy Policy surface.
-//
-// Public/marketing-style page, reachable signed-in or signed-out —
-// mirrors app/pricing/page.tsx's own header pattern exactly (AuthHeader
-// when signed in, the lightweight marketing header otherwise) rather
-// than inventing a second convention.
-//
-// This is a beta-ready baseline written to accurately describe this
-// codebase's actual architecture and behavior (owner-scoped RLS, the 8
-// analytics events in lib/analytics.ts, the real third-party services
-// this app calls), not a template with unverified claims pasted in. It
-// is explicitly marked as a draft requiring attorney review before a
-// broader public launch — see the banner below, which is not hidden in
-// a comment.
+// Public privacy policy for the PropRoster website and mobile app.
 
 import Link from 'next/link'
 import { useAuthUser } from '../../lib/useAuthUser'
@@ -41,52 +28,62 @@ export default function PrivacyPolicyPage() {
         <p>Last updated: {LAST_UPDATED}</p>
       </section>
 
-      <div className="legalReviewBanner">
-        Draft — Attorney Review Required. This page describes PropRoster&rsquo;s current data practices as accurately as we can, to support an early beta with a small number of landlords. It has not been reviewed by an attorney and should not be treated as a final, legally-binding policy before a broader public launch.
-      </div>
-
       <div className="legalBody">
-        <h2>What PropRoster is</h2>
-        <p>PropRoster is a tool that helps landlords organize information about their rental properties — property details, documents, financial records, leases, maintenance, and related tenant communication. PropRoster organizes information entered into your account; it does not provide tax, legal, or accounting advice.</p>
+        <h2>About this policy</h2>
+        <p>This Privacy Policy explains how PropRoster collects, uses, and shares information through proproster.com and the PropRoster mobile app, including Tenant Connect, PropCrew maintenance coordination, and Tax Center features. PropRoster helps organize rental properties, documents, finances, and related communication. It does not provide tax, legal, or accounting advice.</p>
+        <p>For privacy questions, contact <a href="mailto:sales@proproster.com">sales@proproster.com</a>. To request account and data deletion, see <a href="#account-deletion">Delete your PropRoster account</a> below. This page is available without signing in.</p>
 
-        <h2>Account information</h2>
-        <p>When you create a PropRoster account, we (through Supabase, our authentication and database provider) store your email address and an encrypted password credential. We use this to authenticate you and to communicate with you about your account.</p>
+        <h2>Information we collect</h2>
+        <ul>
+          <li><strong>Account and contact information:</strong> email address, authentication records, and names or contact details you provide. Supabase handles authentication and password credentials; do not send your password to support.</li>
+          <li><strong>Property and financial records:</strong> property addresses, purchase details, valuations, mortgages, insurance, leases, rent records, income, expenses, receipts, and tax-related information you enter or import.</li>
+          <li><strong>Tenant and service-provider information:</strong> names, email addresses, phone numbers, tenancy details, maintenance requests, messages, scheduling information, and responses submitted by you or participants in a property workflow.</li>
+          <li><strong>Files and photos:</strong> documents, receipts, leases, property images, maintenance photos, and information contained in files you choose to upload.</li>
+          <li><strong>Billing information:</strong> subscription status and billing records associated with your account. Stripe processes payment details provided through its checkout and billing services.</li>
+          <li><strong>Technical and usage information:</strong> pages visited, feature activity, browser and device information, network information such as IP addresses processed by our infrastructure providers, and diagnostic information needed to operate and troubleshoot the service. Google Analytics uses cookies and identifiers for usage measurement.</li>
+          <li><strong>Support and referral requests:</strong> information you send to support or provide when requesting contact from a real estate professional.</li>
+        </ul>
+        <p>Some information comes from landlords, tenants, or service providers participating in the same workflow. Property lookup and valuation services may also return information about an address you submit. Only provide information about others that you are authorized to use for the relevant property-management purpose.</p>
 
-        <h2>Property information</h2>
-        <p>Information you enter about your properties — addresses, valuations, mortgage and insurance details, purchase information, and similar records — is stored in our database and associated with your account only. It is not shared with or visible to other PropRoster users.</p>
+        <h2>How we use information</h2>
+        <p>We use information to create and authenticate accounts; organize property and financial records; store and retrieve files; coordinate tenant communication, maintenance, and appointments; provide requested property lookups and document analysis; manage subscriptions; send service notifications; respond to support requests; understand product usage; and protect, maintain, and improve the service.</p>
 
-        <h2>Tenant-related information you enter</h2>
-        <p>If you use PropRoster to record information related to your tenants (for example, lease terms, rent payment records, or maintenance requests), that information is entered by you, the landlord, and is stored as part of your account&rsquo;s records. If a tenant uses PropRoster&rsquo;s Tenant Connect features directly, their account and the information they submit through it are handled the same way — access is scoped to the landlord and tenant involved in that property relationship, not shared more broadly.</p>
+        <h2>When information is shared</h2>
+        <p>Information is shared with service providers as needed to perform their functions and with participants in workflows you use. For example, a landlord can receive a tenant&rsquo;s maintenance request, photos, and replies; an invited tenant can access relevant lease or maintenance information; and an assigned maintenance provider can receive property, issue, and scheduling details. Provider outreach may use a private response link, so recipients should not forward that link to others. If you request a real estate referral, the contact and property information needed for that request may be shared with the receiving professional.</p>
+        <p>Our service providers include Supabase for authentication, databases, and file storage; Netlify for hosting; Stripe for subscription billing; Google Analytics for usage measurement; Resend for service emails; Anthropic for AI-assisted document analysis; and Mapbox and configured property-data services, such as RentCast or ATTOM, for address and valuation features. Availability depends on the feature and service configuration. Providers receive the information needed for the function used, rather than unrestricted access to your account.</p>
+        <p>Authorized personnel may access information when necessary to provide support, operate the service, investigate misuse, or meet legal obligations. We may disclose information when required by law or reasonably necessary to protect users, enforce our terms, or address fraud or security incidents.</p>
 
-        <h2>Uploaded documents</h2>
-        <p>Documents you upload (leases, receipts, insurance policies, and similar files) are stored in private cloud storage. They are not publicly accessible; access requires a signed, time-limited link generated only for an authenticated request from your account. Some uploaded documents may be analyzed by an AI document-processing service (see Service Providers below) to help extract structured information for your review.</p>
+        <h2>AI-assisted document analysis</h2>
+        <p>When you use document-analysis features, the selected file and relevant processing instructions are sent to Anthropic&rsquo;s API to extract and organize information for your review. Files may contain personal or financial information. Avoid submitting information that is unnecessary for the task. AI output may be inaccurate; review extracted information before relying on it. AI processing is subject to the provider&rsquo;s applicable data-handling terms.</p>
 
-        <h2>Financial and property records</h2>
-        <p>Income and expense records, rent ledger entries, and tax-related figures you enter or import are stored as part of your account&rsquo;s data. PropRoster organizes this information; it does not verify it, and it does not report it to any tax authority.</p>
+        <h2>Analytics, cookies, and device storage</h2>
+        <p>Google Analytics measures page visits and product usage. Our custom product events record actions such as account creation, property creation, document upload, or a search being used. Those custom events do not include email addresses, property addresses, search text, document names, file contents, or dollar amounts. Google Analytics separately processes standard analytics data under its own practices.</p>
+        <p>The website and mobile app&rsquo;s embedded web experience use local storage and similar technologies to maintain sign-in sessions and interface preferences. Analytics may use cookies. Browser or device controls may allow you to clear storage, restrict cookies, or block analytics; doing so can affect sign-in and other functionality. Removing the mobile app does not delete your PropRoster account or server-stored information.</p>
 
-        <h2>Usage and analytics data</h2>
-        <p>We use Google Analytics (GA4) to understand overall product usage and a small set of internal PropRoster events — for example, that an account was created, that a property was added, or that a search was run — to help us understand which parts of the product are being used. These internal events are deliberately limited: they do not include your email address, property addresses, search text, document names, file contents, or dollar amounts. Google Analytics also independently collects standard web-analytics information (such as pages visited and general device/browser information) under its own privacy practices.</p>
+        <h2>Security</h2>
+        <p>PropRoster uses account-based access controls and database access policies to restrict access to records. Uploaded documents use private storage and time-limited access links where supported by the relevant workflow. Access may also be granted to authorized tenants or service providers as described above. Keep your login credentials and private file or response links secure.</p>
+        <p>No system can guarantee absolute security, and we do not claim compliance with any specific security certification or regulatory framework. Contact us if you believe someone has accessed your account without authorization.</p>
 
-        <h2>Cookies and similar technologies</h2>
-        <p>PropRoster uses your browser&rsquo;s local storage to keep you signed in between visits and to remember a small number of interface preferences. Google Analytics sets its own cookies as part of its standard measurement functionality.</p>
+        <h2>Retention</h2>
+        <p>We retain account information and records while needed to provide the service. Following a verified deletion request, we process deletion of the account and its associated data, subject to limited information that must be retained for legal, billing, fraud-prevention, security, or dispute-resolution purposes. Where an exception applies, we will explain the relevant retained information and reason when responding to your request. Provider backups and records may follow separate deletion cycles; information may not disappear from all backup copies immediately.</p>
+        <p>Deleting your account cannot remove copies another participant has already downloaded or independently retained. If your request concerns records managed by a landlord or another account holder, we will explain any coordination needed rather than treating account deactivation as deletion.</p>
 
-        <h2>Service providers</h2>
-        <p>PropRoster relies on a small number of third-party services to operate: Supabase (database, authentication, and file storage), Netlify (application hosting), Stripe (subscription billing, for paid plans), Google Analytics (usage analytics), and, for optional features, Anthropic&rsquo;s API (AI-assisted document analysis) and property-data providers such as Mapbox (address lookup) and third-party valuation data sources. Each of these providers processes the specific data necessary to provide its function and is subject to its own privacy practices.</p>
+        <h2 id="account-deletion">Delete your PropRoster account</h2>
+        <p>To request deletion of your PropRoster account and associated personal data, email <a href="mailto:sales@proproster.com?subject=Delete%20my%20PropRoster%20account">sales@proproster.com</a> with the subject <strong>Delete my PropRoster account</strong>. Send the request from the email address registered to your account when possible. You can make this request without signing in or having the app installed.</p>
+        <p>We may verify account ownership before deleting information. Do not send your password, payment-card number, or identity documents with the initial request. We will respond with any verification steps, an expected completion timeline, and any applicable retention exceptions, and confirm when the request is completed. Requests are handled manually. You can also contact us to request deletion of particular information without deleting your entire account.</p>
+        <p>If you have a paid subscription, mention it in your request so we can help address subscription cancellation and prevent unintended future billing. Deleting the app alone does not cancel a subscription.</p>
 
-        <h2>Security practices</h2>
-        <p>Property, financial, tenant, and document data is scoped to your account at the database level, so that in the ordinary course of using the product, other PropRoster users cannot see it. Uploaded files are stored in private storage and served only via signed, time-limited links. We cannot guarantee absolute security of any system, and we do not claim compliance with any specific security certification or regulatory framework (such as SOC 2, HIPAA, GDPR, or CCPA) at this time.</p>
+        <h2>Your choices and privacy requests</h2>
+        <p>You can review and update information through available account and property features. Contact us for information you cannot access or change, or to request access, correction, or deletion. Depending on where you live and the laws that apply, you may have additional privacy rights. We review requests under applicable requirements and may need to verify your identity and authority over the information requested.</p>
 
-        <h2>Data retention and deletion</h2>
-        <p>We retain your account data for as long as your account is active, so that PropRoster can continue to provide the service to you. If you would like your account and its associated data deleted, contact us using the information below and we will process that request manually during this beta period.</p>
+        <h2>Children</h2>
+        <p>PropRoster is intended for adults managing rental properties and related services, rather than children. If you believe a child has provided personal information directly through an account, contact us so we can investigate and address it.</p>
 
-        <h2>Your choices</h2>
-        <p>You can access, update, or remove most of the information you&rsquo;ve entered directly within the product. For anything you cannot change yourself — including a full account deletion request — contact us using the information below.</p>
+        <h2>Processing locations</h2>
+        <p>Our service providers may process information in the United States and other locations where they operate. Privacy protections and legal requirements can differ between locations.</p>
 
-        <h2>Changes to this policy</h2>
-        <p>Because PropRoster is in an early beta, this policy may change as the product and its legal review evolve. We will update the &ldquo;Last updated&rdquo; date above when it does.</p>
-
-        <h2>Contact</h2>
-        <p>Questions about this policy or your data can be sent to <a href="mailto:sales@proproster.com">sales@proproster.com</a>.</p>
+        <h2>Changes and contact</h2>
+        <p>We may update this policy as features and data practices change. The date above identifies the latest revision. For privacy questions or requests, email <a href="mailto:sales@proproster.com">sales@proproster.com</a>.</p>
       </div>
 
       <LegalFooter />
@@ -94,4 +91,4 @@ export default function PrivacyPolicyPage() {
   )
 }
 
-const LAST_UPDATED = 'September 2026'
+const LAST_UPDATED = 'November 1, 2026'
