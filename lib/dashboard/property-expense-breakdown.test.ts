@@ -1,5 +1,5 @@
 import { it, expect } from 'vitest'
-import { propertyExpenseBreakdown } from './property-expense-breakdown'
+import { propertyExpenseBreakdown, propertyMoneyActivity } from './property-expense-breakdown'
 import { computePropertyTaxSummary } from '../tax-center/aggregate'
 import { emptyManualFields, emptyMileageFields } from '../tax-center/manual-entry'
 import type { TransactionInput } from '../tax-center/types'
@@ -26,4 +26,13 @@ it('keeps absent data distinct from a recorded income file with no expense amoun
   const result = propertyExpenseBreakdown(computePropertyTaxSummary(property, [tx('r', 'Rent', 1000)], []))!
   expect(result.slices).toEqual([])
   expect(result.interestMissing).toBe(true)
+})
+
+it('charts income plus non-overlapping costs, never adding net as a slice', () => {
+  const summary = computePropertyTaxSummary(property, [tx('r', 'Rent', 6500), tx('m', 'Maintenance', 2500)], [])
+  const result = propertyMoneyActivity(summary)!
+  expect(result.activityTotal).toBe(9000)
+  expect(result.net).toBe(4000)
+  expect(result.activitySlices.map(slice => slice.key)).toEqual(['rent', 'maintenance'])
+  expect(result.activitySlices.reduce((sum, slice) => sum + slice.amount, 0)).toBe(9000)
 })

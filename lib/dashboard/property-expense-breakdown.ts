@@ -23,3 +23,25 @@ export function propertyExpenseBreakdown(summary: PropertyTaxSummary, financingS
   if (remainder > 0.000001) slices.push({ key: 'other', label: 'Other operating costs', amount: remainder, color: '#554343' })
   return { ...recordedNet, slices: slices.filter(slice => slice.amount > 0) }
 }
+
+// A pie of gross recorded money activity: inflows and distinct cost categories.
+// Net is displayed separately and never included as another overlapping slice.
+export function propertyMoneyActivity(summary: PropertyTaxSummary, financingStatus?: string | null) {
+  const breakdown = propertyExpenseBreakdown(summary, financingStatus)
+  if (!breakdown) return null
+  const incomeSlices: ExpenseSlice[] = [
+    { key: 'rent', label: 'Rent income', amount: summary.categoryBreakdown.rentalIncome.effective, color: '#1d2320' },
+    { key: 'otherIncome', label: 'Other income', amount: summary.categoryBreakdown.otherIncome.effective, color: '#68716c' },
+  ]
+  if (incomeSlices.some(slice => !Number.isFinite(slice.amount) || slice.amount < 0)) return null
+  const activityTotal = breakdown.income + breakdown.expenses
+  if (!Number.isFinite(activityTotal)) return null
+  return { ...breakdown, activityTotal, activitySlices: [...incomeSlices.filter(slice => slice.amount > 0), ...breakdown.slices] }
+}
+
+/** Filled SVG wedge, starting at twelve o'clock. A single full slice uses a circle. */
+export function filledPieWedge(start: number, fraction: number): string {
+  const point = (turn: number) => [60 + 52 * Math.cos(turn * 2 * Math.PI - Math.PI / 2), 60 + 52 * Math.sin(turn * 2 * Math.PI - Math.PI / 2)]
+  const [sx, sy] = point(start), [ex, ey] = point(start + fraction)
+  return `M 60 60 L ${sx} ${sy} A 52 52 0 ${fraction > 0.5 ? 1 : 0} 1 ${ex} ${ey} Z`
+}

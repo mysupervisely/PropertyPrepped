@@ -4880,3 +4880,11 @@ h2, h3, p { margin-top: 0; }
 .propertyExpenseDetails .propertyExpenseLegend { grid-template-columns: minmax(0,1fr); margin-top: 3px; gap: 0; }
 .propertyExpenseDetails .propertyExpenseLegend li { flex-wrap: wrap; font-size: 10px; gap: 0 5px; }
 @media (max-width: 380px) { .propertyHero, .propertyHero .heroInfoHead > div { column-gap: 10px; } .propertyHero .heroInfo h1 { font-size: 18px; } }
+
+/* Filled pie: rent is black and distinct recorded costs use red shades. */
+.propertyPieKeys { display: flex; flex-wrap: wrap; gap: 3px 8px; align-self: stretch; margin: 0 0 6px; }
+.propertyPieKeys span { display: inline-flex; align-items: baseline; gap: 4px; font-size: 9px; color: var(--muted); }
+.propertyPieKeys i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.propertyFilledPie svg { overflow: visible; }
+
+.propertyExpenseLegend strong.propertyPieIncomeValue { color: #1d2320; }
