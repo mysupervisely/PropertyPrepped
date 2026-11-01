@@ -20,6 +20,11 @@ concurrency:
 
 jobs:
   screenshots:
+    name: Native auth entry (API ${{ matrix.api }})
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [30, 35]
     if: github.event_name == 'workflow_dispatch' || github.head_ref == 'ios-readiness-v1'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -71,7 +76,7 @@ jobs:
           # https://developer.android.com/studio/emulator_archive
           emulator-build: '15004761' # Android Emulator 36.4.10 stable
           pre-emulator-launch-script: adb start-server
-          api-level: 35
+          api-level: ${{ matrix.api }}
           target: google_apis
           arch: x86_64
           profile: pixel_4
@@ -94,7 +99,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: proproster-android-emulator
+          name: proproster-android-emulator-api-${{ matrix.api }}
           retention-days: 3
           if-no-files-found: warn
           path: |
