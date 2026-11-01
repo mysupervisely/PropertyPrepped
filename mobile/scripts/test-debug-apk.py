@@ -19,7 +19,7 @@ class PackagingTests(unittest.TestCase):
         page = self.root / 'mobile/www/connection-error.html'
         page.parent.mkdir(parents=True)
         page.write_text('<a href="https://proproster.com">Try again</a>')
-        self.config = {'appId': 'com.proproster.app', 'appName': 'PropRoster',
+        self.config = {'appId': 'com.proproster.app', 'appName': 'PropRoster', 'android': {'minWebViewVersion': 111},
                        'server': {'url': 'https://proproster.com', 'errorPath': 'connection-error.html'}}
         self.entries = {'AndroidManifest.xml': b'fixture', 'classes.dex': b'fixture',
                         'res/mipmap-mdpi-v4/ic_launcher.png': b'fixture',
@@ -37,6 +37,11 @@ class PackagingTests(unittest.TestCase):
         report = self.inspect()
         self.assertEqual(len(report['sha256']), 64)
         self.assertIn('no device', report['scope'])
+
+    def test_rejects_missing_browser_baseline(self):
+        self.config.pop('android')
+        with self.assertRaisesRegex(ValueError, 'WebView baseline'):
+            self.inspect()
 
     def test_rejects_localhost_and_http(self):
         for url in ('https://localhost:3000', 'http://proproster.com'):

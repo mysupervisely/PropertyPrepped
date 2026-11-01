@@ -22,6 +22,8 @@ def inspect_apk(apk, root):
                 raise ValueError(f'Missing APK entry: {required}')
         config = json.loads(archive.read('assets/capacitor.config.json'))
         server = config.get('server', {})
+        if config.get('android', {}).get('minWebViewVersion') != 111:
+            raise ValueError('APK must enforce the hosted app WebView baseline.')
         if config.get('appId') != 'com.proproster.app':
             raise ValueError('Unexpected Capacitor application identity.')
         if config.get('appName') != 'PropRoster':

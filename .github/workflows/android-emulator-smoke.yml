@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        api: [30, 35]
+        api: [34, 35]
     if: github.event_name == 'workflow_dispatch' || github.head_ref == 'ios-readiness-v1'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -84,7 +84,7 @@ jobs:
           heap-size: 256M
           disable-animations: true
           # Android's documented graphics troubleshooting flags; app settings stay unchanged.
-          emulator-options: -no-window -gpu swiftshader -feature -Vulkan -no-snapshot -noaudio -no-boot-anim
+          emulator-options: -no-window -gpu swangle -feature -Vulkan -no-snapshot -noaudio -no-boot-anim
           emulator-boot-timeout: 300
           script: bash mobile/scripts/run-android-auth-tests.sh
       - name: Capture host resource diagnostics
