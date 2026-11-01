@@ -1,5 +1,7 @@
 # Android emulator validation status
 
+Current result: Android 14 and 15 auth-entry jobs passed in run [41317054836](https://github.com/mysupervisely/PropertyPrepped/actions/runs/41317054836). Earlier findings below record the investigation; the verified result and acceptance limits are at the end.
+
 The user reports the current review app works in their manual testing. This is accepted as user-reported shared-app testing, not proof of Android emulator or store readiness.
 
 GitHub run 41305389143 attempts 1 and 2 built the APK and test APK and passed packaging checks. The API 35 emulator using binary 37.2.13 disconnected during the instrumentation run. Attempt 2 booted successfully, started one test, then produced a blank failure and device-not-found cleanup errors. No passing native result is claimed. Host diagnostics did not show an out-of-memory kill; the exact disconnect cause remains unproven.
@@ -31,3 +33,7 @@ The collector now retrieves the hierarchy first and each screenshot independentl
 Run 41316512274: API 34 passed again. API 35 reproduced Back to sign in failure, with full diagnostics now collected. Its final screenshot visibly shows the reset form and Back to sign in, while the accessibility tree retains the previous sign-in form's Password/Forgot password?/Sign in nodes. This is evidence of stale accessibility descendants; clearing the automation cache is the next targeted test correction, not yet a verified fix. UiAutomation.clearCache is public from API 34 (https://developer.android.com/reference/android/app/UiAutomation#clearCache()). The test now refreshes the tree for polling, waits for closed headings to disappear, and waits for UI idle before screenshots. All original navigation assertions remain.
 
 Android exec-out also returned cat error text with host exit code zero for screenshots that were never reached. Screenshot acceptance now requires the PNG signature. Nine runner regressions cover missing, empty, stale and remote-error output, independent collection and preserved failure exits; seven packaging regressions also pass.
+
+Verified result: run 41317054836 at source commit fe81202ca597a16d14e91ce58eba785405a959cd passed both native auth-entry jobs on API 34 and API 35. APK compilation, lint, packaging checks, the native login/reset/back/sign-up/close flow and mandatory screenshot collection passed. The API 35 reset and returned-to-landing screenshots were visually inspected; the reset button is visible and the final modal is closed. Sixteen local runner/packaging regressions passed.
+
+This clears the reported auth-entry automation blocker. It is not credentialed sign-in, account creation, password-reset email delivery, file-upload, physical-device or app-store acceptance. No release was published; Apple enrollment is still user-reported pending. Evidence: https://github.com/mysupervisely/PropertyPrepped/actions/runs/41317054836
