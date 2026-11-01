@@ -13,13 +13,15 @@ In Play Console, open the existing PropRoster app and its App integrity / App si
 
 In Codemagic Team settings > Code signing identities > Android keystores, add the existing upload keystore with reference **proproster_upload**, its alias and passwords. Preserve an independent secure backup. Do not send passwords or keystores through chat or commit them to GitHub.
 
-Create an **android_release** environment group with:
+The signed workflow now includes its non-secret first-upload settings directly in YAML. No environment-variable group is required:
 
-| Name | Value |
+| Name | First-upload value |
 | --- | --- |
-| `PROPROSTER_UPLOAD_CERT_SHA256` | First upload: SHA-256 of the backed-up upload keystore certificate. Updates: registered upload certificate SHA-256 from Play |
-| `PLAY_MAX_VERSION_CODE` | Highest version already used on Play, or 0 only when none exists |
-| `PROPROSTER_VERSION_CODE` | New positive integer strictly greater than that maximum |
+| `PROPROSTER_UPLOAD_CERT_SHA256` | `8881A844D49C4344872F8366CC8A68825D7BA31D19A4206768BCB4B5B0E1D14D` |
+| `PLAY_MAX_VERSION_CODE` | `0` |
+| `PROPROSTER_VERSION_CODE` | `1` |
+
+These values match the newly generated upload certificate, not the Google-managed app signing certificate. Update the two version values after a successful Play upload before building the next release. Keystore passwords stay in Codemagic Code signing identities and never in source control.
 
 Start `android-play-internal-bundle` on branch `ios-readiness-v1`. No Play service-account credentials are needed because this workflow does not publish. Download `app-release.aab` and `bundle-verification.json` only after all steps pass. The report's version is the configured Gradle version; compiled-manifest acceptance remains part of Play import validation. Packaging checks do not establish storefront payment-policy compliance.
 
@@ -40,3 +42,5 @@ References: [Android app signing](https://developer.android.com/studio/publish/a
 The user reached the existing PropRoster app under their personal Google account; proprosterteam@gmail.com showed registration instead. Protected with Play lists com.proproster.app with Play App Signing enabled. The supplied A3:54:4A:8A:A6:C0:56:67:D3:E1:38:0E:ED:C9:D5:85:2D:DA:FA:F0:D6:EA:18:B0:13:CC:2A:37:93:F3:45:91 fingerprint is an app signing certificate, not verified as an upload certificate. The internal track is inactive, its draft has no attached bundle, and Add from library reports No app bundles. No upload key has been located or changed. Next: inspect Codemagic Android keystores and establish the owner's backed-up upload key before signed execution. Do not assume the app signing key can sign our upload.
 
 Release readiness run [41318110110](https://github.com/mysupervisely/PropertyPrepped/actions/runs/41318110110) passed unsigned release compilation, release lint and production-shell bundle packaging. The cloud JDK regression verified a temporary fixture signature and rejected an incorrect certificate and unsigned additions. This is not a real signed upload candidate or Play acceptance.
+
+The user supplied a Codemagic screenshot showing reference proproster_upload successfully saved, common name/issuer PropRoster Android Upload, expiration March 19, 2054. The generated key was independently verified locally as a private-key entry under alias upload. The encrypted keystore and private setup instructions were saved for the owner; neither was committed to GitHub. The setup instructions' former android_release group is now superseded by the public YAML settings above. Actual Codemagic signed execution and Google Play import remain unverified.

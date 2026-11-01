@@ -192,8 +192,12 @@ workflows:
       java: 21
       android_signing:
         - proproster_upload
-      groups:
-        - android_release
+      # Public first-upload settings. Passwords come only from the saved keystore.
+      # After Play accepts a bundle, update both version values before the next upload.
+      vars:
+        PROPROSTER_UPLOAD_CERT_SHA256: "8881A844D49C4344872F8366CC8A68825D7BA31D19A4206768BCB4B5B0E1D14D"
+        PLAY_MAX_VERSION_CODE: "0"
+        PROPROSTER_VERSION_CODE: "1"
     scripts:
       - name: Verify upload key and explicit version configuration
         script: python3 mobile/scripts/android-release.py preflight
