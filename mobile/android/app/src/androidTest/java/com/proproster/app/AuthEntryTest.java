@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.os.SystemClock;
+import android.os.Build;
 import android.view.accessibility.AccessibilityNodeInfo;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -29,11 +30,18 @@ public class AuthEntryTest {
     }
 
     private void capture(String name) throws Exception {
+        ui.waitForIdle(500, 5000);
         Bitmap screenshot = ui.takeScreenshot();
         assertNotNull("Screenshot unavailable", screenshot);
         try (FileOutputStream stream = new FileOutputStream(output(name + ".png"))) {
             assertTrue(screenshot.compress(Bitmap.CompressFormat.PNG, 100, stream));
         } finally { screenshot.recycle(); }
+    }
+
+    private AccessibilityNodeInfo freshRoot() {
+        // WebView updates can leave cached descendants from the previous form.
+        if (Build.VERSION.SDK_INT >= 34) ui.clearCache();
+        return ui.getRootInActiveWindow();
     }
 
     private boolean named(AccessibilityNodeInfo node, String label) {
@@ -63,14 +71,24 @@ public class AuthEntryTest {
         System.out.println("Checking accessible element: " + label);
         long deadline = SystemClock.uptimeMillis() + 30000;
         do {
-            AccessibilityNodeInfo node = find(ui.getRootInActiveWindow(), label, clickable);
+            AccessibilityNodeInfo node = find(freshRoot(), label, clickable);
             if (node != null) return node;
             SystemClock.sleep(500);
         } while (SystemClock.uptimeMillis() < deadline);
         StringBuilder hierarchy = new StringBuilder();
-        describe(ui.getRootInActiveWindow(), hierarchy, 0);
+        describe(freshRoot(), hierarchy, 0);
         System.out.println("Hierarchy at missing element " + label + ":\n" + hierarchy);
         throw new AssertionError("Accessible element not found: " + label);
+    }
+
+    private void awaitGone(String label) {
+        long deadline = SystemClock.uptimeMillis() + 30000;
+        while (find(freshRoot(), label, false) != null) {
+            if (SystemClock.uptimeMillis() >= deadline) {
+                throw new AssertionError("Accessible element still present: " + label);
+            }
+            SystemClock.sleep(500);
+        }
     }
 
     private void tap(String label) {
@@ -100,12 +118,12 @@ public class AuthEntryTest {
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             context.startActivity(launch);
             long entryDeadline = SystemClock.uptimeMillis() + 30000;
-            while (find(ui.getRootInActiveWindow(), "Log In", true) == null
-                && find(ui.getRootInActiveWindow(), "We couldn’t connect.", false) == null
+            while (find(freshRoot(), "Log In", true) == null
+                && find(freshRoot(), "We couldn’t connect.", false) == null
                 && SystemClock.uptimeMillis() < entryDeadline) {
                 SystemClock.sleep(500);
             }
-            boolean recovery = find(ui.getRootInActiveWindow(), "We couldn’t connect.", false) != null;
+            boolean recovery = find(freshRoot(), "We couldn’t connect.", false) != null;
             try (FileOutputStream stream = new FileOutputStream(output("connection-recovery.txt"))) {
                 stream.write(("Initial recovery screen: " + recovery + "\n").getBytes(StandardCharsets.UTF_8));
             }
@@ -125,11 +143,13 @@ public class AuthEntryTest {
             tap("Back to sign in");
             await("Sign in to PropRoster", false);
             tap("Close");
+            awaitGone("Sign in to PropRoster");
             tap("Start Free");
             await("Create your PropRoster account", false);
             await("I manage properties", false);
             capture("signup-entry");
             tap("Close");
+            awaitGone("Create your PropRoster account");
             await("Log In", true);
             capture("auth-returned-to-landing");
         } catch (Throwable error) {
@@ -138,7 +158,7 @@ public class AuthEntryTest {
         } finally {
           try {
             StringBuilder description = new StringBuilder();
-            describe(ui.getRootInActiveWindow(), description, 0);
+            describe(freshRoot(), description, 0);
             try (FileOutputStream stream = new FileOutputStream(output("auth-final-hierarchy.txt"))) {
                 stream.write(description.toString().getBytes(StandardCharsets.UTF_8));
             }
