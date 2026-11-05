@@ -32,6 +32,7 @@
 // actions, and reads/writes nothing except one localStorage flag.
 
 import { useEffect, useState } from 'react'
+import { isNativeShell } from '../lib/mobile/platform'
 
 const DISMISS_KEY = 'proproster-install-hint-dismissed'
 
@@ -66,7 +67,7 @@ export function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
 
   useEffect(() => {
-    if (isStandalone() || wasDismissed()) return
+    if (isNativeShell() || isStandalone() || wasDismissed()) return
 
     if (isIOS()) {
       setIosHint(true)
