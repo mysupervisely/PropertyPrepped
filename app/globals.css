@@ -4629,3 +4629,86 @@ h2, h3, p { margin-top: 0; }
   .propertyMarketRentValues strong { font-size: 16px; }
   .propertySnapshotCard .propertySnapshotPerformanceGrid, .propertySnapshotCard .propertySnapshotPerformanceGrid + .propertyPerformanceNote { display: none; }
 }
+
+/* Property scan layout: identity first, compact status strip, opt-in detail. */
+.wordmarkIcon { display: inline-block; width: 29px; height: 29px; margin-right: 7px; vertical-align: -5px; flex-shrink: 0; }
+.propertyRowType { display: none; }
+.propertyRowStatuses { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 18px 14px; }
+.propertyRowStatuses .statusPill { font-size: 11px; border: 0; margin: 0; padding: 4px 8px; }
+.propertyRowAlert { border: 0; border-radius: 7px; padding: 4px 8px; font-size: 11px; font-weight: 600; background: #fff3df; color: #855d24; }
+.propertyDesktopRentStatus, .propertyDesktopAlert { display: none !important; }
+.propertySectionTiles { display: none; }
+.propertyOverviewDisclosure > summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.propertyOverviewDisclosure > summary::-webkit-details-marker { display: none; }
+.propertyOverviewDisclosure > summary::after { content: '+'; font-size: 19px; color: var(--muted); font-weight: 400; }
+.propertyOverviewDisclosure[open] > summary::after { content: '−'; }
+.propertyDisclosureBody { padding-top: 14px; }
+.propertyOverviewDisclosure > .overviewSectionHeading { margin-bottom: 0 !important; }
+.propertyPerformanceDetails[open] .propertySnapshotPerformanceGrid { display: grid; }
+.propertyPerformanceDetails[open] .propertySnapshotPerformanceGrid + .propertyPerformanceNote { display: block; }
+@media (max-width: 760px) {
+  .authHeader .brand { font-size: 19px; white-space: nowrap; }
+  .authHeader .wordmarkIcon { width: 24px; height: 24px; margin-right: 5px; vertical-align: -4px; }
+  .grid > .propertyCard { grid-template-columns: 94px minmax(0,1fr); column-gap: 12px; row-gap: 10px; padding: 15px 0; }
+  .grid > .propertyCard > .cardOpen { width: 94px; }
+  .grid > .propertyCard .photo { height: 90px; }
+  .grid > .propertyCard .cardBody { padding: 0; }
+  .grid > .propertyCard .titleButton h3 { font-size: 16px; line-height: 1.25; margin-bottom: 3px; }
+  .grid > .propertyCard .titleButton p { font-size: 12px; margin-bottom: 4px; }
+  .grid > .propertyCard .propertyRowType { display: block; font-size: 10px; color: var(--muted); margin: 0 0 6px; }
+  .grid > .propertyCard .miniStats { margin: 5px 0; gap: 4px; }
+  .grid > .propertyCard .miniStats > div { padding: 0; }
+  .grid > .propertyCard .miniStats span, .grid > .propertyCard .miniStats strong { font-size: 12px; }
+  .grid > .propertyCard .cardActions { margin-top: 5px; padding-top: 0; gap: 14px; }
+  .grid > .propertyCard .cardActions button { font-size: 11px; padding: 3px 0; }
+  .grid > .propertyCard .propertyRowStatuses { grid-column: 1 / -1; padding: 0; align-items: center; }
+  .propertyHero { display: grid; grid-template-columns: 88px minmax(0,1fr); gap: 12px; padding: 12px 0; align-items: start; }
+  .propertyHero .heroPhoto { width: 88px; height: 92px; min-height: 0; border-radius: 11px; }
+  .propertyHero .heroInfo { min-width: 0; }
+  .propertyHero .heroInfoHead { gap: 5px; flex-direction: column; align-items: stretch; }
+  .propertyHero .heroInfo h1 { font-size: 20px; line-height: 1.18; }
+  .propertyHero .eyebrow { font-size: 9px; margin-bottom: 4px; }
+  .propertyHero .heroCity { margin: 4px 0; font-size: 12px; }
+  .propertyHero .heroStatusPills { margin-top: 5px; }
+  .propertyHero .heroStatusPills .statusPill { font-size: 10px; padding: 3px 6px; }
+  .propertyHero .heroInfoActions { margin: 4px 0 0; gap: 10px; }
+  .propertyHero .heroInfoActions .secondary { min-height: 30px; padding: 5px 9px; font-size: 11px; }
+  .heroInvestmentLink { font-size: 11px; }
+  .propertySectionTiles { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; margin: 5px 0 16px; }
+  .propertySectionTiles button { position: relative; min-width: 0; min-height: 62px; border: 1px solid #e1e9e4; background: #fff; color: #52665a; border-radius: 11px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 8px 3px; font-size: 10px; font-weight: 550; }
+  .propertySectionTiles button.active { color: var(--brand); background: #e9f2ec; border-color: #acc6b5; font-weight: 650; }
+  .propertySectionTiles svg { width: 19px; height: 19px; }
+  .propertySectionTiles .propertyTileBadge { position: absolute; top: 4px; right: 5px; font-size: 9px; background: #fff0d7; color: #855d24; padding: 2px 5px; border-radius: 20px; }
+  .workspaceContent.workspaceContentTight { padding-top: 0; }
+  .workspaceHeading.workspaceHeadingTight { margin-bottom: 8px; }
+  .workspaceHeading.workspaceHeadingTight h2 { font-size: 17px; }
+  .propertySnapshotCard .propertySnapshotMetric { min-height: 58px; padding: 8px 7px; }
+  .propertySnapshotCard .propertySnapshotMetric strong { font-size: 19px; }
+  .propertyMarketRentCard { margin-top: 9px; padding-top: 10px; }
+  .propertyMarketRentHeading { margin-bottom: 6px; }
+  .propertyMarketRentHeading > span { font-size: 9px; }
+  .propertyMarketRentEmpty { font-size: 11px; line-height: 1.4; }
+  .propertyMarketRentActions { margin-top: 7px; }
+  .propertyMarketRentButton { border: 0; border-radius: 7px; min-height: 34px; padding: 6px 9px; font-size: 11px; background: var(--brand-soft); }
+  .propertyPerformanceDetails { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .propertyPerformanceSummary { font-size: 12px; }
+  .workspaceContentTight > .overviewInfoSection { margin-top: 9px; padding: 13px 14px; border-radius: 12px; }
+  .workspaceContentTight > .propertyOverviewDisclosure .overviewSectionHeading { font-size: 14px; }
+  .workspaceContentTight > .quickActions { display: none; }
+}
+@media (max-width: 370px) {
+  .authHeader .brand { font-size: 17px; }
+  .authHeader .wordmarkIcon { width: 21px; height: 21px; margin-right: 4px; }
+}
+/* Native app opens directly to the existing sign-in form. Web keeps its story. */
+.nativeLoginPage { min-height: 100dvh; max-width: 460px; margin: 0 auto; padding: 30px 20px 20px; display: flex; flex-direction: column; }
+.nativeLoginPage > :not(.landingHeader):not(.landingAuthOverlay):not(.legalFooter) { display: none; }
+.nativeLoginPage .landingHeader { padding: 10px 0 28px; justify-content: center; border: 0; }
+.nativeLoginPage .landingNav { display: none; }
+.nativeLoginPage .landingBrandText { align-items: center; }
+.nativeLoginPage .landingBrand .tagline { display: block; font-size: 13px; margin-top: 7px; }
+.nativeLoginPage .landingAuthOverlay { position: static; display: block; padding: 0; background: none; backdrop-filter: none; }
+.nativeLoginPage .landingAuthModal { width: 100%; max-width: none; max-height: none; overflow: visible; border: 0; padding: 0; box-shadow: none; background: transparent; }
+.nativeLoginPage .landingSignInCard { box-shadow: none; border: 0; padding: 0; background: transparent; }
+.nativeLoginPage .landingSignInCardTop .iconButton { display: none; }
+.nativeLoginPage .legalFooter { margin-top: auto; padding-top: 32px; }

@@ -58,6 +58,7 @@ import { useScrollReveal } from '../lib/homepage/use-scroll-reveal'
 import { trackEvent } from '../lib/analytics'
 import { toSafeErrorMessage } from '../lib/user-facing-errors'
 import { LegalFooter } from './LegalFooter'
+import { isNativeShell } from '../lib/mobile/platform'
 
 function HouseIcon() {
   return (
@@ -323,6 +324,8 @@ const TENANT_CONNECT_STEPS = [
 
 export default function LandingPage({ sessionExpired = false }: { sessionExpired?: boolean } = {}) {
   const [authOpen, setAuthOpen] = useState(false)
+  const [nativeShell, setNativeShell] = useState(false)
+  useEffect(() => { setNativeShell(isNativeShell()) }, [])
   const [authMode, setAuthMode] = useState<'signin' | 'signup' | 'reset'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -480,10 +483,9 @@ export default function LandingPage({ sessionExpired = false }: { sessionExpired
   }, [authOpen])
 
   return (
-    <main className="landingPage">
+    <main className={`landingPage${nativeShell ? ' nativeLoginPage' : ''}`}>
       <header className="landingHeader">
         <div className="landingBrand">
-          <HouseIcon />
           <span className="landingBrandText">
             <span className="brand"><Wordmark /></span>
             <span className="tagline">Your properties. Organized.</span>
@@ -697,9 +699,9 @@ export default function LandingPage({ sessionExpired = false }: { sessionExpired
 
       <LegalFooter />
 
-      {authOpen && (
+      {(authOpen || nativeShell) && (
         <div className="overlay landingAuthOverlay" onMouseDown={(e) => e.target === e.currentTarget && closeAuth()}>
-          <div className="modal landingAuthModal" role="dialog" aria-modal="true" aria-labelledby="landing-auth-title">
+          <div className="modal landingAuthModal" role={nativeShell ? undefined : 'dialog'} aria-modal={nativeShell ? undefined : true} aria-labelledby="landing-auth-title">
             <div className="landingSignInCard">
               <div className="landingSignInCardTop">
                 <div>

@@ -29,7 +29,7 @@ import {
   QUICK_ACTION_IDS, QUICK_ACTION_LABELS, QUICK_ACTION_SELECTION_SIZE, DEFAULT_QUICK_ACTIONS,
   isValidQuickActionSelection, normalizeQuickActionSelection, type QuickActionId,
 } from '../lib/dashboard/quick-actions'
-import { DollarIcon, UploadIcon, WrenchIcon, PersonIcon, ReceiptIcon, PeopleIcon, HomeIcon, ChatIcon } from '../components/icons/NavIcons'
+import { DollarIcon, UploadIcon, WrenchIcon, PersonIcon, ReceiptIcon, PeopleIcon, HomeIcon, ChatIcon, GridIcon, DocumentIcon } from '../components/icons/NavIcons'
 import { DOCUMENT_TYPES } from '../lib/document-intelligence/types'
 import { findDocumentLinks } from '../lib/documents/document-links'
 import {
@@ -3308,52 +3308,28 @@ export default function Home() {
             comment). */}
         <nav className="tabs" role="tablist" aria-label="Property sections">{tabs.map((tab) => <button key={tab} role="tab" aria-selected={activeTab === tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
 
-        {/* Mobile Property Section Selector V1: below 761px (the exact
-            width .tabs used to become a horizontal scroller at — see
-            that rule's own removal in globals.css), the seven-tab strip
-            no longer fits without sections disappearing off-screen.
-            This compact "current section ▾" control replaces it at
-            that breakpoint only; desktop keeps .tabs above, hidden here
-            via CSS, not a second navigation implementation — same
-            `tabs` array, same activeTab/setActiveTab. Opens a small
-            anchored menu (not a full-screen sheet — six/seven short
-            labels don't need one), closed by an outside click, Escape,
-            or picking a section. */}
-        <div className="mobilePropertyNav" ref={mobileTabMenuRef}>
-          <button
-            type="button"
-            className="mobilePropertyNavTrigger"
-            aria-haspopup="listbox"
-            aria-expanded={mobileTabMenuOpen}
-            aria-label={`Property section: ${activeTab}. Change section`}
-            onClick={() => setMobileTabMenuOpen((open) => !open)}
-          >
-            <span>{activeTab}</span>
-            <span className="mobilePropertyNavChevron" aria-hidden="true">⌄</span>
-          </button>
-          {mobileTabMenuOpen && (
-            <ul className="mobilePropertyNavMenu" role="listbox" aria-label="Property sections">
-              {tabs.map((tab) => (
-                <li key={tab} role="option" aria-selected={activeTab === tab}>
-                  <button type="button" className={activeTab === tab ? 'active' : ''} onClick={() => { setActiveTab(tab); setMobileTabMenuOpen(false) }}>
-                    <span className="mobilePropertyNavCheck" aria-hidden="true">{activeTab === tab ? '✓' : ''}</span>
-                    {tab}
-                    {/* Mobile V2: an open-case count on Maintenance only —
-                        the same selectedRequests this property's own
-                        Maintenance tab renders, just surfaced one tap
-                        earlier so a landlord knows where to look. */}
-                    {tab === 'Maintenance' && selectedOpenMaintenanceCount > 0 && (
-                      <span className="mobilePropertyNavBadge">{selectedOpenMaintenanceCount}</span>
-                    )}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <nav className="propertySectionTiles" aria-label="Property sections">
+          {([
+            { id: 'overview', label: 'Overview', tab: 'Overview', Icon: GridIcon },
+            { id: 'rent', label: 'Rent', tab: 'Rent', rent: 'Lease', Icon: DollarIcon },
+            { id: 'maintenance', label: 'Maintenance', tab: 'Maintenance', Icon: WrenchIcon },
+            { id: 'documents', label: 'Documents', tab: 'Documents', docs: 'Documents', Icon: DocumentIcon },
+            { id: 'photos', label: 'Photos', tab: 'Documents', docs: 'Photos', Icon: HomeIcon },
+            { id: 'propcrew', label: 'PropCrew', tab: 'PropCrew', Icon: PeopleIcon },
+            { id: 'details', label: 'Details', tab: 'Details', Icon: HomeIcon },
+            { id: 'tax', label: 'Tax', tab: 'Tax', Icon: ReceiptIcon },
+            { id: 'tenant', label: 'Tenant Connect', tab: 'Rent', rent: 'Tenant', Icon: ChatIcon },
+          ] as { id: string; label: string; tab: Tab; rent?: RentSubTab; docs?: DocumentsSubTab; Icon: typeof HomeIcon }[]).map(({ id, label, tab, rent, docs, Icon }) => {
+            const active = activeTab === tab && (!docs || documentsSubTab === docs) && (!rent || (rent === 'Lease' ? rentSubTab !== 'Tenant' : rentSubTab === rent))
+            return <button type="button" key={id} aria-pressed={active} className={active ? 'active' : ''} onClick={() => { setActiveTab(tab); if (rent) setRentSubTab(rent); if (docs) setDocumentsSubTab(docs) }}>
+              <Icon /><span>{label}</span>
+              {tab === 'Maintenance' && selectedOpenMaintenanceCount > 0 && <span className="propertyTileBadge">{selectedOpenMaintenanceCount}</span>}
+            </button>
+          })}
+        </nav>
 
         {activeTab === 'Overview' && <section className="workspaceContent workspaceContentTight">
-          <div className="sectionHead workspaceHeading workspaceHeadingTight"><div><p className="eyebrow">OVERVIEW</p><h2>At a glance</h2></div><button className="secondary" onClick={() => openEditProperty(selected)}>Edit property facts</button></div>
+          <div className="sectionHead workspaceHeading workspaceHeadingTight"><div><h2>At a glance</h2></div></div>
 
           {/* Property Intelligence V1, Phase C.3 (Compact Property
               Snapshot): same ONE card, same data, same hierarchy as
@@ -3413,6 +3389,8 @@ export default function Home() {
               </div>
               {rentEstimateError && <p className="propertyMarketRentError" role="status">{rentEstimateError}</p>}
             </div>
+            <details className="propertyPerformanceDetails">
+              <summary className="propertyPerformanceSummary">Financial details &amp; performance</summary>
             {performance.mortgageBalance.potentiallyStale && <p className="propertyPerformanceNote">Based on the mortgage balance saved in PropRoster.</p>}
             {/* Phase C.3 follow-up (2nd real-device round): the engine's
                 own explanatory note for a financing_status-confirmed $0
@@ -3488,8 +3466,7 @@ export default function Home() {
                 qualifying prior year exists, Annual NOI is omitted
                 entirely rather than repeating the same explanation the
                 Performance section's own note already gave. */}
-            <details className="propertyPerformanceDetails">
-              <summary className="propertyPerformanceSummary">View performance</summary>
+
               <div className="detailRows propertyPerformanceRows">
                 {priorYearPerformance && (
                   <>
@@ -3534,8 +3511,8 @@ export default function Home() {
             <div className="quickActionButtons"><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Documents') }}>Documents <span className="quickActionCount">{selectedDocs.length}</span></button><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Photos') }}>Photos <span className="quickActionCount">{selectedPhotos.length}</span></button><button onClick={() => setActiveTab('Maintenance')}>Maintenance <span className="quickActionCount">{selectedMaintenance.length}</span></button><button onClick={() => { setActiveTab('Rent'); setRentSubTab('Ledger') }}>Add transaction</button></div>
           </section>
 
-          <section className="overviewInfoSection">
-            <h2 className="overviewSectionHeading">Property information</h2>
+          <details className="overviewInfoSection propertyOverviewDisclosure">
+            <summary className="overviewSectionHeading">Property information</summary><div className="propertyDisclosureBody">
             <div className="overviewInfoGrid">
               <div className="overviewInfoGroup financialDetailsCard">
                 <h3 className="overviewInfoGroupLabel">Expenses &amp; tax</h3>
@@ -3557,11 +3534,11 @@ export default function Home() {
                 </div>
               </div>
             </div>
-          </section>
+          </div></details>
 
           {selected.property_type === 'Rental Property' && (
-            <section className="overviewInfoSection">
-              <h2 className="overviewSectionHeading">Tenancy</h2>
+            <details className="overviewInfoSection propertyOverviewDisclosure">
+              <summary className="overviewSectionHeading">Tenancy</summary><div className="propertyDisclosureBody">
               {/* Desktop Property Page Quiet Layout V1: same .detailRows
                   fields, values, conditionals and rent-status pill as
                   before — tenancyGrid only changes the CONTAINER at
@@ -3582,11 +3559,11 @@ export default function Home() {
                 {currentRentRow && <div><span>{formatPeriodLabel(currentRentPeriod)} rent</span><strong>{money(currentRentRow.expectedAmount)}</strong> {!(currentRentRow.status === 'Unknown' && rentAmountKnown) && <span className={`statusPill ${rentStatusPillClass(currentRentRow.status)}`}>{rentStatusLabel(currentRentRow.status)}</span>}</div>}
               </div>
               <button className="secondary overviewSectionAction" onClick={() => { setActiveTab('Rent'); setRentSubTab('Lease') }}>Open Rent</button>
-            </section>
+            </div></details>
           )}
 
-          <section className="overviewInfoSection">
-            <h2 className="overviewSectionHeading">Activity &amp; notes</h2>
+          <details className="overviewInfoSection propertyOverviewDisclosure">
+            <summary className="overviewSectionHeading">Activity &amp; notes</summary><div className="propertyDisclosureBody">
             <div className="overviewInfoGrid">
               <div className="overviewInfoGroup">
                 <h3 className="overviewInfoGroupLabel">Notes</h3>
@@ -3597,7 +3574,7 @@ export default function Home() {
                 <PropertyTimelinePanel events={selectedTimeline} limit={6} />
               </div>
             </div>
-          </section>
+          </div></details>
 
 
         </section>}
@@ -4505,16 +4482,21 @@ export default function Home() {
             </button>
             <div className="cardBody">
               <button className="titleButton" onClick={() => openProperty(property.id)}><h3>{property.address}</h3><p className="muted">{property.city}</p></button>
-              <div className="propertyMobileLabels" aria-label="Property type and occupancy"><span className="propertyMobileType">{property.property_type}</span>{propertyOccupancy && <span className={`propertyMobileOccupancy ${occupancyPillClass(propertyOccupancy)}`}>{propertyOccupancy === 'Occupancy unknown' ? 'Unknown' : propertyOccupancy === 'Upcoming tenancy' ? 'Upcoming' : propertyOccupancy}</span>}</div>
+              <p className="propertyRowType">{property.property_type}</p>
               <div className="miniStats">
                 <div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div>
-                {propertyRentRow ? <div><span>Rent status</span><strong><span className={`statusPill ${rentStatusPillClass(propertyRentRow.status)}`}>{rentStatusLabel(propertyRentRow.status)}</span></strong></div> : <div><span>Value</span><strong>{money(property.estimated_value)}</strong></div>}
+                {propertyRentRow ? <div className="propertyDesktopRentStatus"><span>Rent status</span><strong><span className={`statusPill ${rentStatusPillClass(propertyRentRow.status)}`}>{rentStatusLabel(propertyRentRow.status)}</span></strong></div> : <div><span>Value</span><strong>{money(property.estimated_value)}</strong></div>}
               </div>
-              {propertyAlertCount > 0 && <button className="cardAlertBadge" onClick={() => openProperty(property.id, 'Overview')}>{propertyAlertCount} alert{propertyAlertCount === 1 ? '' : 's'} need{propertyAlertCount === 1 ? 's' : ''} attention</button>}
+              {propertyAlertCount > 0 && <button className="cardAlertBadge propertyDesktopAlert" onClick={() => openProperty(property.id, 'Overview')}>{propertyAlertCount} alert{propertyAlertCount === 1 ? '' : 's'} need{propertyAlertCount === 1 ? 's' : ''} attention</button>}
               <div className="cardActions">
                 <button onClick={() => openProperty(property.id, 'Rent', undefined, undefined, 'Lease')}>Rent</button>
                 <button onClick={() => openProperty(property.id, 'Documents', 'Documents')}>Documents</button>
               </div>
+            </div>
+            <div className="propertyRowStatuses" aria-label="Property status">
+              {propertyOccupancy && <span className={`statusPill ${occupancyPillClass(propertyOccupancy)}`}>{propertyOccupancy === 'Occupancy unknown' ? 'Occupancy unknown' : propertyOccupancy === 'Upcoming tenancy' ? 'Upcoming' : propertyOccupancy}</span>}
+              {propertyRentRow && <button type="button" className={`statusPill ${rentStatusPillClass(propertyRentRow.status)}`} onClick={() => openProperty(property.id, 'Rent', undefined, undefined, 'Ledger')}>Rent {rentStatusLabel(propertyRentRow.status)}</button>}
+              {propertyAlertCount > 0 && <button type="button" className="propertyRowAlert" onClick={() => openProperty(property.id, 'Overview')}>{propertyAlertCount} alert{propertyAlertCount === 1 ? '' : 's'}</button>}
             </div>
           </article>
         })}
