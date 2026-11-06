@@ -5154,3 +5154,35 @@ h2, h3, p { margin-top: 0; }
   .propertyExpenseFields { gap: 12px 10px; }
   .propertyExpenseBox { padding: 12px; }
 }
+
+/* Match expanded property sections to the snapshot, with a compact rent action. */
+.workspaceContentTight > .propertyOverviewDisclosure {
+  border: 1px solid var(--card-outline);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.propertyOverviewDisclosure[open] > .overviewSectionHeading { padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.propertyMarketRentCard { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 8px 12px; }
+.propertyMarketRentCard > * { grid-column: 1 / -1; min-width: 0; }
+.propertyMarketRentCard .propertyMarketRentHeading { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; margin: 0; }
+.propertyMarketRentCard .propertyMarketRentActions { grid-column: 2; grid-row: 1; margin: 0; }
+.propertyMarketRentCard .propertyMarketRentButton { white-space: nowrap; }
+.dashboardHome .recentActivitySummary h2 { font-family: inherit; font-size: 22px; font-weight: var(--weight-semibold); line-height: 1.25; letter-spacing: -.025em; }
+@media (max-width: 760px) {
+  .dashboardHome .recentActivitySummary h2 { font-size: 19px; }
+  .dashboardHome .dashboardPropertiesSection > .grid { gap: 10px; }
+  .dashboardHome .grid > .propertyCard { grid-template-columns: 128px minmax(0,1fr); gap: 7px 10px; padding: 7px; }
+  .dashboardHome .grid > .propertyCard .photo { height: 100px; }
+  .dashboardHome .grid > .propertyCard .propertyRowStatuses { padding-top: 6px; }
+  .propertyHero { grid-template-columns: 100px minmax(0,1fr); gap: 10px; }
+  .propertyHero .heroPhoto { width: 100px; height: 92px; }
+  .propertySectionTiles { gap: 6px; margin-bottom: 12px; }
+  .propertySectionTiles button { min-height: 54px; gap: 4px; padding: 6px 3px; }
+  .propertySectionTiles svg { width: 17px; height: 17px; }
+}
+@media (max-width: 370px) {
+  .dashboardHome .grid > .propertyCard { grid-template-columns: 112px minmax(0,1fr); }
+  .dashboardHome .grid > .propertyCard .photo { height: 94px; }
+  .propertyHero { grid-template-columns: 94px minmax(0,1fr); }
+  .propertyHero .heroPhoto { width: 94px; }
+}

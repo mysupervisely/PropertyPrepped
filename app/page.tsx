@@ -3374,6 +3374,9 @@ export default function Home() {
             </div>
             <div className="propertyMarketRentCard">
               <div className="propertyMarketRentHeading"><strong>Market rent</strong><span>Powered by RentCast</span></div>
+              <div className="propertyMarketRentActions">
+                <button type="button" className="propertyMarketRentButton" disabled={rentEstimateLoading} onClick={() => requestMarketRent(selected.id)}>{rentEstimateLoading ? 'Checking…' : rentEstimateByProperty[selected.id] ? 'Refresh estimate' : 'Estimate rent'}</button>
+              </div>
               {rentEstimateByProperty[selected.id] ? (
                 <>
                   <div className="propertyMarketRentValues">
@@ -3388,10 +3391,8 @@ export default function Home() {
                 </>
               ) : selected.market_rent_estimate != null && Number(selected.market_rent_estimate) > 0 ? (
                 <p className="propertyMarketRentEmpty">Your estimate: {money(Number(selected.market_rent_estimate))}/mo. Not independently verified.</p>
-              ) : <p className="propertyMarketRentEmpty">Check estimated market rent using nearby rental data.</p>}
-              <div className="propertyMarketRentActions">
-                <button type="button" className="propertyMarketRentButton" disabled={rentEstimateLoading} onClick={() => requestMarketRent(selected.id)}>{rentEstimateLoading ? 'Checking…' : rentEstimateByProperty[selected.id] ? 'Refresh estimate' : 'Estimate rent'}</button>
-              </div>
+              ) : null}
+
               {rentEstimateError && <p className="propertyMarketRentError" role="status">{rentEstimateError}</p>}
             </div>
             <details className="propertyPerformanceDetails">
