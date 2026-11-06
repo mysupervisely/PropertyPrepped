@@ -6,7 +6,7 @@ The candidate page replaces the September beta text with service-specific provis
 
 ## Decisions needed before adoption
 
-1. Identify the contracting legal entity, formation state, business address, and official notice contact. PropRoster is a brand; an Apple developer organization name does not establish the correct contracting entity.
+1. Confirmed by the owner: R&K Investment Group, LLC, formed in Florida. Confirm the business address and official notice contact before adoption. PropRoster is a brand; an Apple developer organization name does not establish the correct contracting entity.
 2. Have counsel select a monetary liability cap, measurement period, treatment of free accounts, protected persons, and legally required exceptions. No numeric cap is invented in this proposal.
 3. Have counsel decide governing law, court venue, any third-party indemnity, and whether arbitration and a class-action waiver are appropriate. If selected, settle consumer exceptions, fees, procedure, administrator, and any opt-out process. No such waiver is activated here.
 4. Confirm subscription, cancellation, refund, and privacy language matches actual operations and current state-specific requirements.

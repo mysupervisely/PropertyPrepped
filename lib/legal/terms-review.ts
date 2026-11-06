@@ -5,7 +5,7 @@ export const TERMS_REVIEW_SECTIONS = [
   {
     title: '1. Scope, eligibility, and account authority',
     paragraphs: [
-      'These proposed terms cover the PropRoster website, mobile applications, and related property-organization services. The legal entity operating PropRoster must be identified before these terms are adopted. You must be at least 18 and legally able to enter into a contract. If acting for a business or property owner, you must have authority to act for that person or organization.',
+      'These proposed terms cover the PropRoster website, mobile applications, and related property-organization services. PropRoster is operated by R&K Investment Group, LLC, a Florida limited liability company. This entity identification was confirmed by the owner; this draft still requires legal review before adoption. You must be at least 18 and legally able to enter into a contract. If acting for a business or property owner, you must have authority to act for that person or organization.',
       'You are responsible for protecting your credentials, managing access you authorize, providing accurate account information, and promptly reporting suspected unauthorized access. Do not share accounts in ways that bypass access controls. These responsibilities do not excuse obligations the service operator has under applicable law.',
     ],
   },
