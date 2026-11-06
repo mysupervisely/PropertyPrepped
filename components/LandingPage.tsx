@@ -692,8 +692,6 @@ export default function LandingPage({ sessionExpired = false }: { sessionExpired
         <button type="button" className="primary landingCtaPrimary" onClick={() => openAuth('signup')}>Start Free</button>
       </section>
 
-      <LegalFooter />
-
       {(authOpen || nativeShell) && (
         <div className="overlay landingAuthOverlay" onMouseDown={(e) => e.target === e.currentTarget && closeAuth()}>
           <div className="modal landingAuthModal" role={nativeShell ? undefined : 'dialog'} aria-modal={nativeShell ? undefined : true} aria-labelledby="landing-auth-title">
@@ -701,15 +699,15 @@ export default function LandingPage({ sessionExpired = false }: { sessionExpired
               <div className="landingSignInCardTop">
                 <div>
                   <p className="eyebrow">{authMode === 'signin' ? 'WELCOME BACK' : authMode === 'signup' ? 'CREATE YOUR ACCOUNT' : 'RESET PASSWORD'}</p>
-                  <h2 id="landing-auth-title">{authMode === 'signin' ? 'Sign in to PropRoster' : authMode === 'signup' ? 'Create your PropRoster account' : 'Reset your password'}</h2>
+                  <h2 id="landing-auth-title">{authMode === 'signin' ? (nativeShell ? 'Sign in' : 'Sign in to PropRoster') : authMode === 'signup' ? (nativeShell ? 'Create an account' : 'Create your PropRoster account') : 'Reset your password'}</h2>
                 </div>
                 <button type="button" className="iconButton" aria-label="Close" onClick={closeAuth}>&times;</button>
               </div>
-              <p className="landingCardSub">
+              {(!nativeShell || authMode === 'reset') && <p className="landingCardSub">
                 {authMode === 'signin' ? 'Access your properties, documents, financials and investment tools.'
                   : authMode === 'signup' ? 'Free to start. Organize your first property in minutes.'
                   : "Enter your account email and we'll send you a link to reset your password."}
-              </p>
+              </p>}
 
               {/* Launch Essentials V1 — shown only when app/page.tsx sent
                   us here because a real session expired on its own (never
@@ -792,6 +790,7 @@ export default function LandingPage({ sessionExpired = false }: { sessionExpired
           </div>
         </div>
       )}
+      <LegalFooter />
     </main>
   )
 }

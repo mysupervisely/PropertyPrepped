@@ -4711,7 +4711,7 @@ h2, h3, p { margin-top: 0; }
 .nativeLoginPage .landingAuthModal { width: 100%; max-width: none; max-height: none; overflow: visible; border: 0; padding: 0; box-shadow: none; background: transparent; }
 .nativeLoginPage .landingSignInCard { box-shadow: none; border: 0; padding: 0; background: transparent; }
 .nativeLoginPage .landingSignInCardTop .iconButton { display: none; }
-.nativeLoginPage .legalFooter { margin-top: auto; padding-top: 32px; }
+.nativeLoginPage .legalFooter { margin-top: 28px; padding-top: 18px; }
 
 
 /* Keep property editing beside the identity banner, out of the section navigation. */
@@ -5054,3 +5054,14 @@ h2, h3, p { margin-top: 0; }
   .dashboardHome .grid > .propertyCard { grid-template-columns: 104px minmax(0,1fr); }
   .dashboardHome .grid > .propertyCard .photo { height: 96px; }
 }
+
+/* Native sign-in is one compact page, with legal links after the form. */
+.nativeLoginPage { max-width: 420px; min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)); padding: 24px 20px; }
+.nativeLoginPage .landingHeader { flex: 0 0 auto; margin: 0; padding: 12px 0 28px; }
+.nativeLoginPage .landingBrand .tagline { display: none; }
+.nativeLoginPage .landingAuthOverlay { flex: 0 0 auto; }
+.nativeLoginPage .landingSignInCardTop .eyebrow { display: none; }
+.nativeLoginPage .landingSignInCard h2 { margin: 0 0 8px; font-size: 22px; }
+.nativeLoginPage .landingSubmit { min-height: 46px; }
+.nativeLoginPage .legalFooter { width: 100%; padding: 16px 0 0; margin: 24px 0 0; align-items: center; justify-content: center; text-align: center; font-size: 11px; gap: 8px; }
+.nativeLoginPage .legalFooter nav { justify-content: center; gap: 14px; }
