@@ -32,6 +32,7 @@
 // actions, and reads/writes nothing except one localStorage flag.
 
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { isNativeShell } from '../lib/mobile/platform'
 
 const DISMISS_KEY = 'proproster-install-hint-dismissed'
@@ -62,6 +63,7 @@ function wasDismissed(): boolean {
 }
 
 export function InstallPrompt() {
+  const pathname = usePathname()
   const [visible, setVisible] = useState(false)
   const [iosHint, setIosHint] = useState(false)
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
@@ -101,7 +103,7 @@ export function InstallPrompt() {
     dismiss()
   }
 
-  if (!visible) return null
+  if (!visible || pathname === '/tenant' || pathname.startsWith('/tenant/')) return null
 
   return (
     <div className="installHint" role="note">

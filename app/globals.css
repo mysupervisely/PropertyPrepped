@@ -5066,15 +5066,16 @@ h2, h3, p { margin-top: 0; }
 .nativeLoginPage .legalFooter { width: 100%; padding: 16px 0 0; margin: 24px 0 0; align-items: center; justify-content: center; text-align: center; font-size: 11px; gap: 8px; }
 .nativeLoginPage .legalFooter nav { justify-content: center; gap: 14px; }
 
-/* Tenant portal: compact cards and swipeable navigation, no page overflow. */
+/* Tenant portal: compact cards and boxed navigation, no page overflow. */
 .tenantPortalShell { width: 100%; min-width: 0; min-height: 100dvh; padding: 0 16px 32px; }
 .tenantPortalPropertyHead { padding: 18px 0 12px; }
 .tenantPortalPropertyHead h1 { font-size: clamp(22px,6vw,30px); line-height: 1.2; overflow-wrap: anywhere; margin: 4px 0 6px; }
 .tenantPortalQuickActions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
 .tenantPortalQuickActions button { min-width: 0; font-size: 13px; padding: 12px 8px; min-height: 46px; border-radius: 11px; }
 .tenantPortalHelp, .tenantMediaHint { font-size: 12px; color: var(--muted); line-height: 1.5; margin: 10px 0 16px; }
-.tenantPortalTabs { border: 0; gap: 8px; padding: 2px 0 10px; margin: 8px 0; scroll-snap-type: x proximity; scrollbar-width: thin; }
-.tenantPortalTabs button { flex: 0 0 auto; min-width: 106px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 11px; background: #fff; font-size: 13px; scroll-snap-align: start; }
+.tenantPortalTabs { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); border: 0; gap: 8px; padding: 2px 0 10px; margin: 8px 0; overflow: visible; scroll-snap-type: none; }
+.tenantPortalTabs button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; min-width: 0; min-height: 78px; padding: 12px 4px; border: 1px solid var(--line); border-radius: 11px; background: #fff; font-size: 12px; line-height: 1.25; white-space: normal; overflow-wrap: anywhere; }
+.tenantPortalTabs button svg { width: 23px; height: 23px; flex-shrink: 0; }
 .tenantPortalTabs button.active { border: 1px solid var(--brand); background: var(--brand-soft); }
 .tenantPortalSection { padding: 16px; margin: 10px 0; border: 1px solid var(--line); border-radius: 14px; background: #fff; min-width: 0; }
 .tenantPortalSection .detailRows > div { align-items: flex-start; gap: 12px; }

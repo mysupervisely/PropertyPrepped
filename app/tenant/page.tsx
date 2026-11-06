@@ -46,6 +46,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { markExplicitSignOut } from '../../lib/auth/session-signal'
 import { Wordmark } from '../../components/Wordmark'
+import { HomeIcon, DocumentIcon, DollarIcon, WrenchIcon, ChatIcon, ReceiptIcon } from '../../components/icons/NavIcons'
 import type { TenantRequest } from '../../lib/tenant-connect/types'
 import type { TenantPropertyAccess, PropertyMessage } from '../../lib/tenant-connect/types'
 import { notifyTenantConnect } from '../../lib/tenant-connect/notify-client'
@@ -147,6 +148,7 @@ function TenantSignIn() {
 
 type TenantView = 'My Rental' | 'Lease' | 'Rent' | 'Requests' | 'Documents' | 'Messages'
 const TENANT_VIEWS: TenantView[] = ['My Rental', 'Lease', 'Rent', 'Requests', 'Messages', 'Documents']
+const TENANT_VIEW_ICONS = { 'My Rental': HomeIcon, Lease: DocumentIcon, Rent: DollarIcon, Requests: WrenchIcon, Messages: ChatIcon, Documents: ReceiptIcon }
 
 function TenantPortal({ userId }: { userId: string }) {
   const [access, setAccess] = useState<TenantPropertyAccess[]>([])
@@ -276,9 +278,10 @@ function TenantPortal({ userId }: { userId: string }) {
             setMaintenanceOpen(false); setView('Requests'); setSubmissionNotice(failures ? `Request sent. ${failures} attachment(s) could not upload. Open your request to attach them again.` : 'Request sent to your landlord. You can follow updates in Maintenance.'); void notifyTenantConnect(supabase!, 'new_request', {requestId:id})
           }} />}
           <nav className="tenantPortalTabs" role="tablist" aria-label="Tenant Portal sections">
-            {TENANT_VIEWS.map((tab) => (
-              <button key={tab} role="tab" aria-selected={view === tab} className={view === tab ? 'active' : ''} onClick={() => setView(tab)}>{tab === 'Requests' ? 'Maintenance' : tab}</button>
-            ))}
+            {TENANT_VIEWS.map((tab) => {
+              const Icon = TENANT_VIEW_ICONS[tab]
+              return <button key={tab} role="tab" aria-selected={view === tab} className={view === tab ? 'active' : ''} onClick={() => setView(tab)}><Icon /><span>{tab === 'Requests' ? 'Maintenance' : tab}</span></button>
+            })}
           </nav>
 
           {view === 'Messages' && supabase && <TenantLandlordMessages key={selected.id} client={supabase} propertyId={selected.property_id} ownerId={selected.owner_id} accessId={selected.id} />}
