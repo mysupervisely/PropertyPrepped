@@ -5186,3 +5186,33 @@ h2, h3, p { margin-top: 0; }
   .propertyHero { grid-template-columns: 94px minmax(0,1fr); }
   .propertyHero .heroPhoto { width: 94px; }
 }
+
+/* Quiet property document library: compact header, category select, focused actions. */
+.workspaceContent .documentLibraryHeading,
+.workspaceContent .rentWorkspaceHeading { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.workspaceContent .documentLibraryHeading h2,
+.workspaceContent .rentWorkspaceHeading h2 { margin: 0; font-size: 20px; }
+.workspaceContent .documentLibraryHeading p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+.workspaceContent .documentLibraryHeading > button,
+.workspaceContent .rentWorkspaceHeading > button { flex-shrink: 0; min-height: 36px; padding: 8px 10px; font-size: 12px; border-radius: 9px; white-space: nowrap; }
+.documentCategoryFilter { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 12px; color: var(--muted); }
+.documentCategoryFilter select { min-width: 0; max-width: 100%; flex: 1; min-height: 42px; padding: 8px 10px; font-size: 16px; color: var(--text); background: var(--surface); border: 1px solid var(--card-outline); border-radius: 9px; }
+.propertyDocumentsWorkspace .documentCardGrid { grid-template-columns: repeat(auto-fit,minmax(min(100%,300px),1fr)); gap: 12px; }
+.propertyDocumentsWorkspace .documentCard { position: relative; min-width: 0; gap: 8px; padding: 13px; border-color: var(--card-outline); border-radius: 12px; box-shadow: none; }
+.propertyDocumentsWorkspace .documentCardTop { align-items: flex-start; gap: 10px; }
+.propertyDocumentsWorkspace .fileIcon { width: 34px; height: 38px; flex-shrink: 0; border-radius: 8px; font-size: 10px; }
+.propertyDocumentsWorkspace .fileName { min-width: 0; }
+.propertyDocumentsWorkspace .fileName strong { font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
+.propertyDocumentsWorkspace .fileName span { font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.propertyDocumentsWorkspace .aiStatusPill { align-self: flex-start; width: auto; margin: 0 0 0 44px; padding: 2px 6px; font-size: 10px; line-height: 1.3; border-radius: 5px; }
+.propertyDocumentsWorkspace .documentCardActions { display: flex; gap: 8px; align-items: center; padding-top: 9px; border-top: 1px solid var(--line); }
+.propertyDocumentsWorkspace .documentCardActions > button,
+.documentMoreActions > summary { min-height: 36px; padding: 7px 10px; font-size: 12px; line-height: 1.5; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--brand); }
+.documentMoreActions { margin-left: auto; position: relative; }
+.documentMoreActions > summary { cursor: pointer; list-style: none; }
+.documentMoreActions > summary::-webkit-details-marker { display: none; }
+.documentMoreActions[open] { z-index: 2; }
+.documentMoreActions > div { position: absolute; right: 0; top: calc(100% + 5px); width: 205px; padding: 5px; background: var(--surface); border: 1px solid var(--card-outline); border-radius: 9px; box-shadow: 0 6px 20px #15201b1a; }
+.documentMoreActions > div > button { display: block; width: 100%; text-align: left; border: 0; border-radius: 5px; padding: 10px; font-size: 12px; background: transparent; color: var(--text); }
+.documentMoreActions > div > button:hover { background: var(--brand-soft); }
+.documentMoreActions > div > .documentRemoveAction { color: #8a3d35; }

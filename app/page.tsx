@@ -3311,7 +3311,10 @@ export default function Home() {
             replaced the horizontally-scrolling mobile version of this
             same strip with .mobilePropertyNav below — see its own
             comment). */}
-        <nav className="tabs" role="tablist" aria-label="Property sections">{tabs.map((tab) => <button key={tab} role="tab" aria-selected={activeTab === tab} className={activeTab === tab ? 'active' : ''} onClick={() => { if (mayLeaveConditions()) setActiveTab(tab) }}>{tab}</button>)}</nav>
+        <nav className="tabs" role="tablist" aria-label="Property sections">{tabs.map((tab) => {
+          const active = activeTab === tab && (tab !== 'Documents' || documentsSubTab === 'Documents')
+          return <button key={tab} role="tab" aria-selected={active} className={active ? 'active' : ''} onClick={() => { if (mayLeaveConditions()) { setActiveTab(tab); if (tab === 'Documents') setDocumentsSubTab('Documents') } }}>{tab}</button>
+        })}<button role="tab" aria-selected={activeTab === 'Documents' && documentsSubTab === 'Photos'} className={activeTab === 'Documents' && documentsSubTab === 'Photos' ? 'active' : ''} onClick={() => { if (mayLeaveConditions()) { setActiveTab('Documents'); setDocumentsSubTab('Photos') } }}>Photos</button></nav>
 
         <nav className="propertySectionTiles" aria-label="Property sections">
           {([
@@ -3585,8 +3588,7 @@ export default function Home() {
 
         </section>}
 
-        {activeTab === 'Documents' && <section className="workspaceContent">
-          <div className="subTabs" role="tablist" aria-label="Documents sections">{(['Documents', 'Photos'] as DocumentsSubTab[]).map((sub) => <button key={sub} role="tab" aria-selected={documentsSubTab === sub} className={documentsSubTab === sub ? 'active' : ''} onClick={() => setDocumentsSubTab(sub)}>{sub}</button>)}</div>
+        {activeTab === 'Documents' && <section className="workspaceContent propertyDocumentsWorkspace">
 
           {/* Documents redesign (Property-First UX Cleanup, "Major
               Cleanup Priority"): a categorized library, not a sidebar +
@@ -3600,15 +3602,23 @@ export default function Home() {
               upload path nor Smart Upload's own AI pipeline is rebuilt;
               this only changes how the entry point is presented. */}
           {documentsSubTab === 'Documents' && <>
-          <div className="sectionHead workspaceHeading"><div><p className="eyebrow">DOCUMENTS</p><h2>Everything important, filed correctly</h2></div><button className="primary" onClick={() => setShowAddDocumentChooser(true)}>+ Add Document</button></div>
-          <div className="docFilterChips" role="tablist" aria-label="Filter documents by category">{docCategories.map((category) => <button key={category} role="tab" aria-selected={docCategory === category} className={docCategory === category ? 'active' : ''} onClick={() => setDocCategory(category)}>{category}<small>{category === 'All' ? selectedDocs.length : selectedDocs.filter((d) => d.category === category).length}</small></button>)}</div>
+          <div className="sectionHead workspaceHeading documentLibraryHeading"><div><h2>Documents</h2><p>{selectedDocs.length} {selectedDocs.length === 1 ? 'file' : 'files'}</p></div><button type="button" className="primary compactAction" onClick={() => setShowAddDocumentChooser(true)}>+ Add document</button></div>
+          <label className="documentCategoryFilter">Category<select value={docCategory} onChange={(event) => setDocCategory(event.target.value)}>{docCategories.map((category) => <option key={category} value={category}>{category === 'All' ? 'All documents' : category} ({category === 'All' ? selectedDocs.length : selectedDocs.filter((doc) => doc.category === category).length})</option>)}</select></label>
           <div className="documentCardGrid">{filteredDocs.length ? filteredDocs.map((doc) => <div className="documentCard" key={doc.id}>
             <div className="documentCardTop">
               <div className="fileIcon">{doc.name.split('.').pop()?.toUpperCase().slice(0, 4) || 'FILE'}</div>
               <div className="fileName"><strong>{doc.name}</strong><span>{doc.category}{doc.document_type ? ` · ${doc.document_type}` : ''} · {new Date(doc.created_at).toLocaleDateString()}</span></div>
             </div>
-            {doc.analysis_status && doc.analysis_status !== 'Not Analyzed' && <span className={`aiStatusPill ${doc.analysis_status === 'Completed' ? 'pillGood' : doc.analysis_status === 'Failed' ? 'pillBad' : 'pillWarn'}`}>{doc.analysis_status === 'Completed' ? 'AI Analyzed' : doc.analysis_status === 'Failed' ? 'Needs attention' : doc.analysis_status}</span>}
-            <div className="rowActions documentCardActions"><button onClick={() => void openDocument(doc)}>Open</button><button className="aiButton" onClick={() => setShowDocIntelId(doc.id)}>{doc.analysis_status === 'Completed' ? 'View AI Analysis' : 'Analyze with PropRoster AI'}</button><button onClick={() => openMoveDocument(doc)}>Move</button><button className={doc.tenant_visible ? 'active' : ''} onClick={() => void toggleDocumentTenantVisible(doc)}>{doc.tenant_visible ? 'Shared with tenant ✓' : 'Share with tenant'}</button><button onClick={() => void removeDocument(doc)}>Remove</button></div>
+            {doc.analysis_status && doc.analysis_status !== 'Not Analyzed' && <span className={`aiStatusPill ${doc.analysis_status === 'Completed' ? 'pillGood' : doc.analysis_status === 'Failed' ? 'pillBad' : 'pillWarn'}`}>{doc.analysis_status === 'Completed' ? 'Analyzed' : doc.analysis_status === 'Failed' ? 'Needs attention' : doc.analysis_status}</span>}
+            <div className="rowActions documentCardActions">
+              <button type="button" onClick={() => void openDocument(doc)}>Open</button>
+              <button type="button" className="aiButton" onClick={() => setShowDocIntelId(doc.id)}>{doc.analysis_status === 'Completed' ? 'View analysis' : 'Analyze'}</button>
+              <details className="documentMoreActions"><summary aria-label={`More actions for ${doc.name}`}>More</summary><div>
+                <button type="button" onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); openMoveDocument(doc) }}>Move</button>
+                <button type="button" onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); void toggleDocumentTenantVisible(doc) }}>{doc.tenant_visible ? 'Stop sharing with tenant' : 'Share with tenant'}</button>
+                <button type="button" className="documentRemoveAction" onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); void removeDocument(doc) }}>Remove</button>
+              </div></details>
+            </div>
           </div>) : <div className="emptyState"><strong>{docCategory === 'All' ? 'No documents here yet' : `No ${docCategory} documents yet`}</strong><span>Use + Add Document above to upload a file or run Smart Upload.</span></div>}</div>
           </>}
 
@@ -3682,7 +3692,7 @@ export default function Home() {
             const leaseOccupancy = deriveOccupancy(selectedLeases)
             const history = sortLeaseHistory(selectedLeases).filter((l) => l.id !== currentLease?.id)
             return <>
-              <div className="sectionHead workspaceHeading"><div><p className="eyebrow">RENT &amp; LEASE</p><h2>Rent &amp; tenancy</h2></div><button className="primary" onClick={() => openLeaseForm()}>+ Add lease</button></div>
+              <div className="sectionHead workspaceHeading rentWorkspaceHeading"><div><h2>Rent &amp; tenancy</h2></div><button className="primary" onClick={() => openLeaseForm()}>+ Add lease</button></div>
 
               {currentLease ? (
                 <LeaseCard
