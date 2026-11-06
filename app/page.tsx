@@ -2,6 +2,7 @@
 
 import { ChangeEvent, DragEvent, ReactElement, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { shouldResetWorkspace } from '../lib/auth/session-navigation'
 import { isAuthSessionMissingError, type User } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { DOCUMENT_CATEGORIES, FINANCIAL_CATEGORIES, MAINTENANCE_CATEGORIES, RENT_PAYMENT_METHODS } from '../lib/property-categories'
@@ -669,6 +670,7 @@ export default function Home() {
   // for both.
   const [sessionExpired, setSessionExpired] = useState(false)
   const hadUserRef = useRef(false)
+  const authUserIdRef = useRef<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   // Mobile Authentication & Layout Reliability V1 — see
@@ -924,6 +926,8 @@ export default function Home() {
   // Never re-shown for property #2 onward, and never persisted (a page
   // refresh naturally clears it, which is fine — it's a one-time nudge,
   // not a record of anything).
+  const [csvExport, setCsvExport] = useState<{ name: string; text: string } | null>(null)
+  const [csvCopied, setCsvCopied] = useState(false)
   const [showFirstPropertyNotice, setShowFirstPropertyNotice] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -1037,6 +1041,7 @@ export default function Home() {
       if (cancelled) return
       if (data.user) {
         hadUserRef.current = true
+        authUserIdRef.current = data.user.id
         setUser(data.user)
         setAuthReady(true)
         redirectIfIntendedTenant()
@@ -1046,6 +1051,7 @@ export default function Home() {
         const { data: refreshed } = await client.auth.refreshSession()
         if (cancelled) return
         hadUserRef.current = Boolean(refreshed.user)
+        authUserIdRef.current = refreshed.user?.id ?? null
         setUser(refreshed.user ?? null)
         setAuthReady(true)
         if (refreshed.user) redirectIfIntendedTenant()
@@ -1064,8 +1070,10 @@ export default function Home() {
         setSessionExpired(true)
       }
       hadUserRef.current = Boolean(session?.user)
+      const nextUserId = session?.user?.id ?? null
+      if (shouldResetWorkspace(authUserIdRef.current, nextUserId)) setSelectedId(null)
+      authUserIdRef.current = nextUserId
       setUser(session?.user ?? null)
-      setSelectedId(null)
       if (session?.user) {
         setSessionExpired(false)
         redirectIfIntendedTenant()
@@ -3022,7 +3030,7 @@ export default function Home() {
     setBusy(false)
   }
 
-  function exportTransactionsCsv() {
+  async function exportTransactionsCsv() {
     if (!selected) return
     const esc = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`
     const rows = [['Date','Type','Category','Vendor','Description','Amount','Recurring','Document']]
@@ -3031,13 +3039,17 @@ export default function Home() {
       rows.push([tx.transaction_date, tx.transaction_type, tx.category, tx.vendor || '', tx.description, String(tx.amount), tx.is_recurring ? 'Yes' : 'No', doc?.name || ''])
     })
     const csv = rows.map((row) => row.map(esc).join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${safeName(selected.address)}-${financialYear}-financials.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    const name = `${safeName(selected.address)}-${financialYear}-financials.csv`
+    const file = new File(['\uFEFF' + csv], name, { type: 'text/csv;charset=utf-8' })
+    if (navigator.canShare?.({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: 'Property ledger' }); return }
+      catch (error) { if (error instanceof Error && error.name === 'AbortError') return }
+    }
+    // Some embedded browsers cannot download blob URLs. Keep a copyable export
+    // available instead of silently doing nothing when the OS blocks the link.
+    setCsvCopied(false)
+    setCsvExport({ name, text: csv })
+
   }
 
   function parseCsvLine(line: string) {
@@ -3776,9 +3788,9 @@ export default function Home() {
             const monthCashFlow = monthRows.reduce((sum, t) => sum + (t.transaction_type === 'Income' ? Number(t.amount) : -Number(t.amount)), 0)
             const years = Array.from(new Set([String(new Date().getFullYear()), ...selectedTransactions.map((t) => t.transaction_date.slice(0,4))])).sort().reverse()
             return <>
-              <div className="sectionHead workspaceHeading financialHeading"><div><p className="eyebrow">LEDGER</p><h2>Income &amp; expense ledger</h2><p>Track every dollar with receipts and source documents attached to the transaction.</p></div><div className="financialActions"><select aria-label="Financial year" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)}>{years.map((year) => <option key={year}>{year}</option>)}</select><label className="secondary csvButton">Import CSV<input type="file" accept=".csv,text/csv" onChange={(e) => { const file = e.target.files?.[0]; if (file) void importTransactionsCsv(file); e.target.value = '' }} /></label><button className="secondary" onClick={exportTransactionsCsv}>Export CSV</button><button className="primary" onClick={() => setShowTransaction(true)}>+ Add transaction</button></div></div>
+              <div className="sectionHead workspaceHeading financialHeading"><div><p className="eyebrow">LEDGER</p><h2>Income &amp; expense ledger</h2><p>Track every dollar with receipts and source documents attached to the transaction.</p></div><div className="financialActions"><select aria-label="Financial year" value={financialYear} onChange={(e) => setFinancialYear(e.target.value)}>{years.map((year) => <option key={year}>{year}</option>)}</select><label className="secondary csvButton">Import<input type="file" accept=".csv,text/csv" onChange={(e) => { const file = e.target.files?.[0]; if (file) void importTransactionsCsv(file); e.target.value = '' }} /></label><button className="secondary" onClick={() => void exportTransactionsCsv()}>Export</button><button className="primary" onClick={() => setShowTransaction(true)}>+ Add</button></div></div>
               <div className="financialStats"><div className="financialStat"><span>{financialYear} income</span><strong>{money(income)}</strong></div><div className="financialStat"><span>{financialYear} expenses</span><strong>{money(expenses)}</strong></div><div className="financialStat"><span>NOI</span><strong>{money(noi)}</strong><small>Excludes mortgage & CapEx</small></div><div className="financialStat"><span>Net cash flow</span><strong>{money(cashFlow)}</strong><small>{money(monthCashFlow)} this month</small></div></div>
-              <div className="ledgerWrap"><table className="ledger"><thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Vendor</th><th>Description</th><th>Income</th><th>Expense</th><th>Attachment</th><th></th></tr></thead><tbody>{selectedYearTransactions.length ? selectedYearTransactions.map((tx) => { const doc = selectedDocs.find((d) => d.id === tx.document_id); return <tr key={tx.id}><td>{new Date(`${tx.transaction_date}T12:00:00`).toLocaleDateString()}</td><td><span className={`transactionType ${tx.transaction_type.toLowerCase()}`}>{tx.transaction_type}</span>{tx.is_recurring && <small className="recurringLabel">Recurring</small>}</td><td>{tx.category}</td><td>{tx.vendor || '—'}</td><td className="descriptionCell">{tx.description}</td><td className="moneyCell incomeCell">{tx.transaction_type === 'Income' ? money(tx.amount) : '—'}</td><td className="moneyCell">{tx.transaction_type === 'Expense' ? money(tx.amount) : '—'}</td><td>{doc ? <button className="attachmentButton" onClick={() => void openDocument(doc)}>{doc.name}</button> : <span className="muted">—</span>}</td><td><button className="deleteTransaction" aria-label={`Delete ${tx.description}`} onClick={() => void removeTransaction(tx.id)}>×</button></td></tr>}) : <tr><td colSpan={9}><div className="emptyLedger"><strong>No {financialYear} transactions yet</strong><span>Add your first rent payment or expense, or import a CSV.</span><button className="primary" onClick={() => setShowTransaction(true)}>+ Add transaction</button></div></td></tr>}</tbody></table></div>
+              <div className="ledgerWrap"><table className="ledger"><thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Vendor</th><th>Description</th><th>Income</th><th>Expense</th><th>Attachment</th><th></th></tr></thead><tbody>{selectedYearTransactions.length ? selectedYearTransactions.map((tx) => { const doc = selectedDocs.find((d) => d.id === tx.document_id); return <tr key={tx.id}><td>{new Date(`${tx.transaction_date}T12:00:00`).toLocaleDateString()}</td><td><span className={`transactionType ${tx.transaction_type.toLowerCase()}`}>{tx.transaction_type}</span>{tx.is_recurring && <small className="recurringLabel">Recurring</small>}</td><td>{tx.category}</td><td>{tx.vendor || '—'}</td><td className="descriptionCell">{tx.description}</td><td className="moneyCell incomeCell">{tx.transaction_type === 'Income' ? money(tx.amount) : '—'}</td><td className="moneyCell">{tx.transaction_type === 'Expense' ? money(tx.amount) : '—'}</td><td>{doc ? <button className="attachmentButton" onClick={() => void openDocument(doc)}>{doc.name}</button> : <span className="muted">—</span>}</td><td><button className="deleteTransaction" aria-label={`Delete ${tx.description}`} onClick={() => void removeTransaction(tx.id)}>×</button></td></tr>}) : <tr><td colSpan={9}><div className="emptyLedger"><strong>No {financialYear} transactions yet</strong><span>Add your first rent payment or expense, or import a CSV.</span><button className="primary" onClick={() => setShowTransaction(true)}>+ Add</button></div></td></tr>}</tbody></table></div>
               <p className="ledgerNote">NOI is shown as income less operating expenses and excludes transactions categorized as Mortgage or CapEx. PropRoster is an organization tool, not tax or accounting advice.</p>
             </>
           })()}
@@ -4009,6 +4021,7 @@ export default function Home() {
           />
         )}
 
+        {csvExport && <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && setCsvExport(null)}><section className="modal csvExportModal" role="dialog" aria-modal="true" aria-labelledby="csvExportTitle"><div className="modalTop"><div><h2 id="csvExportTitle">Export ledger</h2><p>{csvExport.name}</p></div><button type="button" className="iconButton" aria-label="Close export" onClick={() => setCsvExport(null)}>×</button></div><p>Save the CSV file, or copy the data into a spreadsheet.</p><textarea aria-label="CSV data" readOnly value={csvExport.text} onFocus={(event) => event.currentTarget.select()} /><div className="modalActions"><button type="button" className="secondary" onClick={async () => { try { await navigator.clipboard.writeText(csvExport.text); setCsvCopied(true) } catch { setError('Select the CSV text and choose Copy.') } }}>{csvCopied ? 'Copied' : 'Copy data'}</button><button type="button" className="primary" onClick={() => { const url = URL.createObjectURL(new Blob(['\uFEFF' + csvExport.text], { type: 'text/csv;charset=utf-8' })); const link = document.createElement('a'); link.href = url; link.download = csvExport.name; document.body.appendChild(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 60000) }}>Save CSV</button></div></section></div>}
         {showModuleForm && <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowModuleForm(null)}><div className="modal moduleModal"><div className="modalTop"><div><p className="eyebrow">{showModuleForm.toUpperCase()}</p><h2>{showModuleForm === 'Lease' ? (editingLeaseId ? 'Edit lease' : 'Add lease') : `Add ${showModuleForm.toLowerCase()}`}</h2></div><button className="iconButton" onClick={() => setShowModuleForm(null)}>×</button></div>
           {showModuleForm === 'Lease' && <div className="leaseFormGroups">
             <fieldset className="formFieldset"><legend>Tenant information</legend><div className="formGrid">

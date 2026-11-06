@@ -10,6 +10,7 @@
 // every apply still requires the user's own explicit Save (Section O).
 
 import { useEffect, useMemo, useState } from 'react'
+import { summaryPoints } from '../lib/document-intelligence/readable-summary'
 import { supabase } from '../lib/supabase'
 import { DOCUMENT_TYPES, type DocumentType } from '../lib/document-intelligence/types'
 import type { DocumentAnalysisOutput, ExtractedField, FieldGroup } from '../lib/document-intelligence/schemas'
@@ -184,23 +185,18 @@ export default function DocumentIntelligencePanel({
   const af = latest?.structured_data.applyFields
 
   return (
-    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal docIntelModal">
+    <div className="overlay docIntelOverlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal docIntelModal" role="dialog" aria-modal="true" aria-label="Document analysis">
         <div className="modalTop">
           <div>
-            <p className="eyebrow">DOCUMENT INTELLIGENCE</p>
+            <p className="eyebrow">DOCUMENT SUMMARY</p>
             <h2>{document.name}</h2>
           </div>
-          <button className="iconButton" onClick={onClose}>×</button>
+          <button className="iconButton" aria-label="Close summary" onClick={onClose}>×</button>
         </div>
 
         <div className="docIntelMeta">
-          <label className="docTypeSelect">
-            <span>Document type</span>
-            <select value={docTypeDraft} onChange={(e) => void updateDocType(e.target.value as DocumentType)}>
-              {DOCUMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </label>
+          <div className="docTypeExplanation"><span>Filed as <strong>{docTypeDraft}</strong></span><p>This label organizes the file. It does not confirm the document is final or that coverage is active.</p><details><summary>Change type</summary><label className="docTypeSelect"><span>Choose filing type</span><select value={docTypeDraft} onChange={(e) => void updateDocType(e.target.value as DocumentType)}>{DOCUMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select></label></details></div>
           <div className="docIntelStatusBlock">
             <span className={`statusPill ${statusTone[status] || 'pillMuted'}`}>{status === 'Completed' ? 'AI Analysis Complete' : status}</span>
             {document.classification_source && <small>Classified by {document.classification_source}{document.classification_confidence ? ` · ${document.classification_confidence} confidence` : ''}</small>}
@@ -240,12 +236,12 @@ export default function DocumentIntelligencePanel({
             )}
 
             <section className="docIntelSection">
-              <p className="eyebrow">OVERVIEW</p>
+              <p className="eyebrow">AT A GLANCE</p>
               <p className="docOverview">{latest.structured_data.overview}</p>
-              <p className="docSummary">{latest.structured_data.summary}</p>
+              <ul className="docSummaryPoints">{summaryPoints(latest.structured_data.summary).map((point, index) => <li key={index}>{point}</li>)}</ul>
             </section>
 
-            {latest.structured_data.groups.map((g, i) => <section className="docIntelSection" key={i}><GroupSection group={g} /></section>)}
+            {latest.structured_data.groups.map((g, i) => <details className="docIntelSection docExtractedGroup" key={i}><summary>{g.title}</summary><GroupSection group={g} /></details>)}
 
             {latest.structured_data.itemsToReview.length > 0 && (
               <section className="docIntelSection">
