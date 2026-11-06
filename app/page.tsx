@@ -3126,7 +3126,7 @@ export default function Home() {
   // {error} banner (stale-but-real data, not a misleading zero-state).
   if (!hasLoadedPortfolio && busy) {
     return (
-      <main className="shell dashboardHome">
+      <main className="shell">
         <AuthHeader onSmartUploadCompleted={() => void loadPortfolio()} />
         <div className="loadingState portfolioLoadingState">Loading your portfolio…</div>
       </main>
@@ -4193,7 +4193,7 @@ export default function Home() {
   const visibleAttentionRows = showAllAttention ? attentionRows : attentionRows.slice(0, NEEDS_ATTENTION_PREVIEW_LIMIT)
 
   return (
-    <main className="shell">
+    <main className="shell dashboardHome">
       {/* Mobile V2 — Dashboard Quick Actions' Smart Upload: registers the
           exact same openSmartUpload() trigger the property-workspace
           header already wires below, so this view's Quick Action can

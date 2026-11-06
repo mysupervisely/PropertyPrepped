@@ -92,3 +92,17 @@ describe('Mobile V2 — Quick Actions: migration (account isolation)', () => {
     expect(migrationSource).toContain('owner_id uuid primary key references auth.users(id) on delete cascade')
   })
 })
+
+
+describe('Dashboard styling container', () => {
+  it('applies the dashboard class to the main containing the shortcuts and property rows, not a loading screen', () => {
+    const shortcuts = pageSource.indexOf('<section className="mobileQuickActions">')
+    const mainStart = pageSource.lastIndexOf('<main ', shortcuts)
+    const mainTag = pageSource.slice(mainStart, pageSource.indexOf('>', mainStart) + 1)
+    expect(mainTag).toBe('<main className="shell dashboardHome">')
+    expect(pageSource.slice(mainStart, shortcuts)).toContain('<AuthHeader')
+    expect((pageSource.match(/className="shell dashboardHome"/g) || []).length).toBe(1)
+    expect(pageSource.slice(mainStart)).toContain('className="dashboardPropertiesSection"')
+    expect(pageSource.indexOf('className="intro welcomeIntro"', mainStart)).toBeGreaterThan(shortcuts)
+  })
+})

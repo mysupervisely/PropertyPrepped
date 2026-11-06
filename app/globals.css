@@ -4985,7 +4985,7 @@ h2, h3, p { margin-top: 0; }
 .dashboardHome .mobileQuickAction { border: 1px solid #e2e9e5; background: #f7faf8; padding: 10px 4px; border-radius: 11px; }
 .dashboardHome .mobileQuickActionIcon { background: transparent; }
 .dashboardHome .dashboardPropertiesSection > .grid { gap: 14px; }
-.dashboardHome .grid > .propertyCard { border: 1px solid #d8e3dd; border-radius: 13px; background: #f8faf9; }
+.dashboardHome .grid > .propertyCard { border: 1.5px solid #8ca598; border-radius: 13px; background: #f8faf9; }
 .dashboardHome .propertyRowStatuses { border-top: 1px solid #dfe7e2; }
 .dashboardHome .recentActivitySummary { margin: 0; }
 .dashboardHome .recentActivityDetails[open] .recentActivitySummary { border-bottom: 1px solid var(--line); padding-bottom: 12px; margin-bottom: 12px; }
@@ -5021,7 +5021,7 @@ h2, h3, p { margin-top: 0; }
   .dashboardHome .sectionHead h2 { font-size: 19px; }
   .dashboardHome .sectionHead p { font-size: 11px; }
   .dashboardHome .sectionHead > .primary { font-size: 11px; padding: 8px 10px; white-space: nowrap; min-height: 36px; }
-  .dashboardHome .grid > .propertyCard { padding: 10px; margin: 0; border: 1px solid #d8e3dd; }
+  .dashboardHome .grid > .propertyCard { padding: 10px; margin: 0; border: 1.5px solid #8ca598; }
   .dashboardHome .grid > .propertyCard .propertyRowStatuses { padding: 10px 0 0; margin: 0; }
   .dashboardHome .grid > .propertyCard:hover { transform: none; }
   .dashboardHome .mobileQuickActionLabel { font-size: 10px; }
@@ -5098,10 +5098,10 @@ h2, h3, p { margin-top: 0; }
 .tenantPortalRentRow > * { min-width: 0; overflow-wrap: anywhere; }
 
 /* Compact dashboard shortcuts immediately beneath the header. */
-.dashboardHome > .mobileQuickActions { padding: 9px 10px; margin: 10px 0 16px; }
+.dashboardHome > .mobileQuickActions { padding: 12px 10px 9px; margin: 18px 0 16px; }
 .dashboardHome .mobileQuickActionsHead { padding-bottom: 7px; margin-bottom: 6px; }
 .dashboardHome .mobileQuickActionsHeading { font-size: 10px; }
-.dashboardHome .mobileQuickActionsCustomize { font-size: 11px; }
+.dashboardHome .mobileQuickActionsCustomize { font-size: 11px; margin: 0; padding: 6px 2px; min-height: 32px; line-height: 1.4; }
 .dashboardHome .mobileQuickActionsRow { gap: 6px; }
 .dashboardHome .mobileQuickAction { min-height: 52px; padding: 5px 3px; gap: 3px; border-radius: 9px; }
 .dashboardHome .mobileQuickActionIcon { width: 28px; height: 28px; }
