@@ -53,7 +53,8 @@ describe('Property photo upload — M2.1 fixes (still in place)', () => {
   it('the gallery photo-upload input resets its value after each selection', () => {
     const idx = source.indexOf("<input type=\"file\" accept=\"image/*\" multiple disabled={busy}")
     expect(idx).toBeGreaterThan(-1)
-    expect(source.slice(idx, idx + 700)).toContain("e.target.value = ''")
+    expect(source.slice(idx, idx + 700)).toContain("capturePhotoPicker(e.currentTarget)")
+    expect(readFileSync(join(__dirname, 'picker.ts'), 'utf8')).toContain("input.value = ''")
   })
 
   it('still uses the existing property-photos bucket and property_photos table — no new storage system was introduced', () => {
@@ -186,18 +187,20 @@ describe('Property photo upload — V2 post-selection-failure investigation', ()
 
   it("the gallery input captures e.target.files into a local const BEFORE resetting e.target.value, so the reset can't clear what was already captured", () => {
     const idx = source.indexOf("<input type=\"file\" accept=\"image/*\" multiple disabled={busy}")
-    const handlerBody = source.slice(idx, idx + 700)
-    const filesIdx = handlerBody.indexOf('const files = e.target.files')
-    const resetIdx = handlerBody.indexOf("e.target.value = ''")
+    expect(source.slice(idx, idx + 700)).toContain("capturePhotoPicker(e.currentTarget)")
+    const handlerBody = readFileSync(join(__dirname, 'picker.ts'), 'utf8')
+    const filesIdx = handlerBody.indexOf('const files = Array.from(input.files || [])')
+    const resetIdx = handlerBody.indexOf("input.value = ''")
     expect(filesIdx).toBeGreaterThan(-1)
     expect(resetIdx).toBeGreaterThan(filesIdx)
   })
 
   it('V1.2: that same input also begins reading every selected file\'s bytes BEFORE resetting its value — see lib/uploads/durable-file.ts for why this matters beyond the FileList-emptiness class of bug above', () => {
     const idx = source.indexOf("<input type=\"file\" accept=\"image/*\" multiple disabled={busy}")
-    const handlerBody = source.slice(idx, idx + 700)
+    expect(source.slice(idx, idx + 700)).toContain("capturePhotoPicker(e.currentTarget)")
+    const handlerBody = readFileSync(join(__dirname, 'picker.ts'), 'utf8')
     const readIdx = handlerBody.indexOf('beginReadingFileBytes')
-    const resetIdx = handlerBody.indexOf("e.target.value = ''")
+    const resetIdx = handlerBody.indexOf("input.value = ''")
     expect(readIdx).toBeGreaterThan(-1)
     expect(resetIdx).toBeGreaterThan(readIdx)
   })

@@ -13,6 +13,7 @@ import { postSignupRedirectPath, INTENDED_ROLE_STORAGE_KEY, type IntendedRole } 
 import { consumeExplicitSignOutFlag } from '../lib/auth/session-signal'
 import { toSafeErrorMessage } from '../lib/user-facing-errors'
 import { AuthHeader } from '../components/AuthHeader'
+import { PropertyPhotoImage } from '../components/PropertyPhotoImage'
 import DocumentIntelligencePanel, { type ApplyAction } from '../components/DocumentIntelligencePanel'
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
 import { PropCrewPanel } from '../components/PropCrewPanel'
@@ -124,6 +125,7 @@ type Property = {
   monthly_expenses: number
   cover_photo_path: string | null
   coverUrl?: string
+  coverStoragePath?: string
   // Property Profile 2.0, Section 5: additional Overview fields — all
   // nullable, all optional, never fabricated when absent.
   beds: number | null
@@ -1602,10 +1604,14 @@ export default function Home() {
     // failed to un-cover the OLD row: the NEW cover still displays
     // correctly instead of the stale old one.
     const coverMap = new Map<string, string | undefined>()
+    const coverPaths = new Map<string, string>()
     for (const p of signedPhotos) {
-      if (p.is_cover && !coverMap.has(p.property_id)) coverMap.set(p.property_id, p.signedUrl)
+      if (p.is_cover && !coverMap.has(p.property_id)) {
+        coverMap.set(p.property_id, p.signedUrl)
+        coverPaths.set(p.property_id, p.storage_path)
+      }
     }
-    setProperties(rawProperties.map((p) => ({ ...p, coverUrl: coverMap.get(p.id) })))
+    setProperties(rawProperties.map((p) => ({ ...p, coverUrl: coverMap.get(p.id), coverStoragePath: coverPaths.get(p.id) })))
     setDocuments((docRows || []) as PropertyDocument[])
     setPhotos(signedPhotos)
     // Property + Attention Usability V1, Part 3-C: a plain Set of the
@@ -3273,7 +3279,7 @@ export default function Home() {
         <button className="breadcrumbBack" onClick={closeProperty}>← All Properties</button>
 
         <section className="propertyHero">
-          <div className="heroPhoto">{selected.coverUrl ? <img src={selected.coverUrl} alt={selected.address} /> : <div className="heroPlaceholder"><span>Property photo</span><small>Add photos in the Photos tab</small></div>}</div>
+          <div className="heroPhoto">{(selected.coverUrl || selected.coverStoragePath) ? <PropertyPhotoImage storagePath={selected.coverStoragePath} initialUrl={selected.coverUrl} alt={selected.address} /> : <div className="heroPlaceholder"><span>Property photo</span><small>Add photos in the Photos tab</small></div>}</div>
           <div className="heroInfo">
             {/* Property Intelligence V1, Phase C.1 (Unified Property
                 Snapshot): the hero is identity only now — photo, address,
@@ -3612,7 +3618,7 @@ export default function Home() {
                 if (files.length) void addPhotoFiles(files, bytesPromises)
               }} /></label>
           {error && <p className="photoUploadError" role="alert">{error}</p>}
-          <div className="photoGallery">{selectedPhotos.length ? selectedPhotos.map((photo) => <div className={`galleryItem ${photo.is_cover ? 'coverItem' : ''}`} key={photo.id}>{photo.signedUrl ? <img src={photo.signedUrl} alt={photo.name} /> : <div className="heroPlaceholder">Photo unavailable</div>}<div className="galleryMeta"><span>{photo.name}</span><div className="galleryButtons"><button onClick={() => void downloadPropertyPhoto(photo)}>Download original</button>{!photo.is_cover && <button onClick={() => void setCover(photo)}>Set cover</button>}<button className="removePhoto" onClick={() => void removePhoto(photo)}>×</button></div></div></div>) : <div className="emptyGallery"><strong>No photos uploaded yet</strong><span>Add photos to build this property's visual history.</span></div>}</div>
+          <div className="photoGallery">{selectedPhotos.length ? selectedPhotos.map((photo) => <div className={`galleryItem ${photo.is_cover ? 'coverItem' : ''}`} key={photo.id}>{photo.storage_path ? <PropertyPhotoImage storagePath={photo.storage_path} initialUrl={photo.signedUrl} alt={photo.name} /> : <div className="heroPlaceholder">Photo unavailable</div>}<div className="galleryMeta"><span>{photo.name}</span><div className="galleryButtons"><button onClick={() => void downloadPropertyPhoto(photo)}>Download original</button>{!photo.is_cover && <button onClick={() => void setCover(photo)}>Set cover</button>}<button className="removePhoto" onClick={() => void removePhoto(photo)}>×</button></div></div></div>) : <div className="emptyGallery"><strong>No photos uploaded yet</strong><span>Add photos to build this property's visual history.</span></div>}</div>
           </>}
         </section>}
 
@@ -4030,7 +4036,7 @@ export default function Home() {
               itself is unchanged and still works for additional,
               non-cover photos. */}
           <div className="editPropertyPhotoSection">
-            <div className="editPropertyPhotoPreview">{selected.coverUrl ? <img src={selected.coverUrl} alt={selected.address} /> : <div className="editPropertyPhotoPlaceholder">+</div>}</div>
+            <div className="editPropertyPhotoPreview">{(selected.coverUrl || selected.coverStoragePath) ? <PropertyPhotoImage storagePath={selected.coverStoragePath} initialUrl={selected.coverUrl} alt={selected.address} /> : <div className="editPropertyPhotoPlaceholder">+</div>}</div>
             <div className="editPropertyPhotoActions">
               <label className="secondary editPropertyPhotoButton">{busy ? 'Uploading…' : selected.coverUrl ? 'Change photo' : 'Add photo'}<input type="file" accept="image/*" disabled={busy} onChange={(e) => {
                 const file = e.target.files?.[0]
@@ -4474,7 +4480,7 @@ export default function Home() {
           const propertyAlertCount = attentionCountByProperty.get(property.id) || 0
           return <article className="propertyCard" key={property.id}>
             <button className="cardOpen" onClick={() => openProperty(property.id)}>
-              <div className="photo">{property.coverUrl ? <img src={property.coverUrl} alt={property.address} /> : <div className="photoPlaceholder"><span>⌂</span><small>Add property photos</small></div>}
+              <div className="photo">{(property.coverUrl || property.coverStoragePath) ? <PropertyPhotoImage storagePath={property.coverStoragePath} initialUrl={property.coverUrl} alt={property.address} /> : <div className="photoPlaceholder"><span>⌂</span><small>Add property photos</small></div>}
                 <span className="badge">{property.property_type}</span>
                 {propertyOccupancy && <span className={`occupancyBadge ${occupancyPillClass(propertyOccupancy)}`}>{propertyOccupancy === 'Occupancy unknown' ? 'Unknown' : propertyOccupancy === 'Upcoming tenancy' ? 'Upcoming' : propertyOccupancy}</span>}
               </div>

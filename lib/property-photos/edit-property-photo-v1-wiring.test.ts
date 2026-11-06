@@ -140,7 +140,7 @@ describe('loadPortfolio() coverMap — prefers the newest is_cover row, defendin
 
   it('builds coverMap with an explicit first-match-wins loop instead', () => {
     expect(fnBody).toContain('const coverMap = new Map<string, string | undefined>()')
-    expect(fnBody).toMatch(/for \(const p of signedPhotos\) \{\s*if \(p\.is_cover && !coverMap\.has\(p\.property_id\)\) coverMap\.set\(p\.property_id, p\.signedUrl\)/)
+    expect(fnBody).toMatch(/for \(const p of signedPhotos\) \{\s*if \(p\.is_cover && !coverMap\.has\(p\.property_id\)\) \{\s*coverMap\.set\(p\.property_id, p\.signedUrl\)/)
   })
 
   it('rawPhotos is still fetched newest-first, which is what makes "first match" mean "newest"', () => {
@@ -161,7 +161,7 @@ describe('Edit Property modal — primary/cover photo management moved directly 
   })
 
   it('shows the current cover via selected.coverUrl — the SAME canonical field the Property hero and Dashboard card already use — or a placeholder when there is none', () => {
-    expect(modalBody).toContain('{selected.coverUrl ? <img src={selected.coverUrl} alt={selected.address} /> : <div className="editPropertyPhotoPlaceholder">+</div>}')
+    expect(modalBody).toContain('{(selected.coverUrl || selected.coverStoragePath) ? <PropertyPhotoImage storagePath={selected.coverStoragePath} initialUrl={selected.coverUrl} alt={selected.address} /> : <div className="editPropertyPhotoPlaceholder">+</div>}')
   })
 
   it('the button label switches between "Add photo" (no cover) and "Change photo" (has cover) — same control either way, wired to changeCoverPhoto', () => {
@@ -196,6 +196,6 @@ describe('Edit Property modal — primary/cover photo management moved directly 
   it('does not introduce a second photo gallery UI — the existing Documents > Photos tab and its photoGallery/photoUploader markup are untouched', () => {
     expect(source).toContain('className="photoUploader"')
     expect(source).toContain('className="photoGallery"')
-    expect(source).toContain("Select multiple images at once. The first photo becomes the cover if there is no cover yet.")
+    expect(source).toContain("Choose multiple photos. Originals are kept at their uploaded quality.")
   })
 })

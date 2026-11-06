@@ -5036,3 +5036,21 @@ h2, h3, p { margin-top: 0; }
   .dashboardHome .dashboardPropertiesSection > .grid { border-top: 0; }
   .dashboardHome .grid > .propertyCard > .cardOpen { width: 100%; }
 }
+
+/* Private photo links renew independently of the surrounding forms. */
+.propertyPhotoUnavailable { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; min-height: 90px; background: #e8eeea; color: var(--muted); font-size: 11px; text-align: center; padding: 8px; }
+@media (max-width: 760px) {
+  .dashboardHome .grid > .propertyCard { grid-template-columns: 120px minmax(0,1fr); }
+  .dashboardHome .grid > .propertyCard > .cardOpen { width: 100%; }
+  .dashboardHome .grid > .propertyCard .photo { height: 104px; }
+}
+@media (max-width: 420px) {
+  .dashboardHome .grid > .propertyCard .cardBody { grid-template-columns: minmax(0,1fr); }
+  .dashboardHome .grid > .propertyCard .miniStats { grid-column: 1; grid-row: 3; flex-direction: row; align-items: center; gap: 12px; }
+  .dashboardHome .grid > .propertyCard .miniStats > div { flex-direction: row; align-items: baseline; gap: 5px; }
+  .dashboardHome .grid > .propertyCard .cardActions { grid-row: 4; }
+}
+@media (max-width: 370px) {
+  .dashboardHome .grid > .propertyCard { grid-template-columns: 104px minmax(0,1fr); }
+  .dashboardHome .grid > .propertyCard .photo { height: 96px; }
+}
