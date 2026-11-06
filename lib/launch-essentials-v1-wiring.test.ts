@@ -23,7 +23,7 @@ const pageSource = readFile('app/page.tsx')
 const authNavMenuSource = readFile('components/AuthNavMenu.tsx')
 const tenantSource = readFile('app/tenant/page.tsx')
 const privacySource = readFile('app/privacy/page.tsx')
-const termsSource = readFile('app/terms/page.tsx')
+const termsSource = readFile('app/terms/page.tsx') + readFile('lib/legal/terms-review.ts')
 const legalFooterSource = readFile('components/LegalFooter.tsx')
 const pricingSource = readFile('app/pricing/page.tsx')
 const googleAnalyticsSource = readFile('components/GoogleAnalytics.tsx')
@@ -169,8 +169,8 @@ describe('Privacy Policy and Terms of Service surfaces', () => {
     expect(privacySource).toContain('id="account-deletion"')
     expect(privacySource).toContain('subject=Delete%20my%20PropRoster%20account')
     expect(privacySource).not.toContain('Draft — Attorney Review Required.')
-    expect(termsSource).toContain('<div className="legalReviewBanner">')
-    expect(termsSource).toContain('Draft — Attorney Review Required.')
+    expect(termsSource).toContain('<div className="legalReviewBanner" role="note">')
+    expect(termsSource).toContain('This version has not been adopted or approved by an attorney.')
   })
 
   it('does not claim compliance certifications the product does not have (mentioning them only to explicitly disclaim is fine)', () => {
@@ -184,7 +184,7 @@ describe('Privacy Policy and Terms of Service surfaces', () => {
     const clauses = [/agree to arbitrate/i, /binding arbitration/i, /shall be governed by the laws of/i, /exclusive venue/i, /you agree to indemnify/i, /waive (your |the )?right to (participate in|bring) a class/i]
     for (const pattern of clauses) expect(termsSource).not.toMatch(pattern)
     // The one place these words appear is this explicit "not included" disclaimer.
-    expect(termsSource).toContain('no specific liability cap, indemnification obligation, arbitration clause, or governing-law/venue provision is included in this draft, since none has been decided.')
+    expect(termsSource).toContain('This draft does not impose mandatory arbitration, a class-action waiver, a jury-trial waiver, a shortened claim deadline, an indemnification obligation, or an exclusive court location.')
   })
 
   it('both legal pages are reachable without redesigning the header — reuse AuthHeader/pricing-style public header', () => {
@@ -213,7 +213,7 @@ describe('Tax/legal disclaimer consistency (Phase 17) — Tax Center\'s existing
 
   it('Privacy and Terms use the same positioning, never claiming individualized advice', () => {
     expect(privacySource).toContain('does not provide tax, legal, or accounting advice')
-    expect(termsSource).toContain('does not provide individualized legal, tax, accounting, or investment advice')
+    expect(termsSource).toContain('It does not act as your attorney, accountant, tax preparer, broker, appraiser, investment adviser, property manager')
   })
 })
 
