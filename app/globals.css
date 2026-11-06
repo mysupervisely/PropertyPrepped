@@ -4712,3 +4712,18 @@ h2, h3, p { margin-top: 0; }
 .nativeLoginPage .landingSignInCard { box-shadow: none; border: 0; padding: 0; background: transparent; }
 .nativeLoginPage .landingSignInCardTop .iconButton { display: none; }
 .nativeLoginPage .legalFooter { margin-top: auto; padding-top: 32px; }
+
+
+/* Keep property editing beside the identity banner, out of the section navigation. */
+.propertyHero .heroInfoHead { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+.propertyHero .propertyBannerEdit { min-height: 32px; padding: 6px 10px; font-size: 12px; border-radius: 8px; box-shadow: none; }
+
+/* iOS zooms focused fields with text smaller than 16px. Cover every mobile
+   entry surface, including tax amounts, notes, year pickers and dialogs.
+   Preserve pinch zoom and the normal device-width viewport. */
+@media (max-width: 760px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]):not([type="submit"]):not([type="button"]),
+  select, textarea, [contenteditable="true"] { font-size: 16px !important; }
+  .propertyHero .heroInfoHead { column-gap: 6px; }
+  .propertyHero .propertyBannerEdit { min-height: 32px; padding: 6px 8px; }
+}

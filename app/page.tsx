@@ -3285,13 +3285,7 @@ export default function Home() {
                   {currentRentRow && !(currentRentRow.status === 'Unknown' && rentAmountKnown) && <span className={`statusPill ${rentStatusPillClass(currentRentRow.status)}`}>Rent {rentStatusLabel(currentRentRow.status)}</span>}
                 </div>
               </div>
-              {/* Investment Analysis is a related but secondary action next
-                  to Edit — the same quiet brand-color text-link treatment
-                  as .needsAttentionViewAll (Simplification + Maintenance
-                  Workspace V2, Phase E1.1) so it no longer competes
-                  equal-weight with Edit for attention. Functionality and
-                  destination are unchanged. */}
-              <div className="heroInfoActions"><button className="secondary" onClick={() => openEditProperty(selected)}>Edit</button><Link className="heroInvestmentLink" href={`/investment-tools/property-evaluator?propertyId=${selected.id}`}>Investment Analysis</Link></div>
+              <button className="secondary propertyBannerEdit" aria-label={`Edit ${selected.address}`} onClick={() => openEditProperty(selected)}>Edit</button>
             </div>
           </div>
         </section>

@@ -86,7 +86,7 @@ const NAV_LINKS: { href: string; label: string }[] = [
   // multiple properties, so a single master directory — distinct from
   // Rent Ledger, which genuinely duplicated property-level data.
   { href: '/propcrew', label: 'PropCrew' },
-  { href: '/investment-tools', label: 'Investment Tools' },
+  { href: '/investment-tools', label: 'Investment Analysis' },
 ]
 
 // Account-level destinations — visually separated/lower priority (its
