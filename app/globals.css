@@ -4,6 +4,8 @@
   --text: #15201b;
   --muted: #6c7771;
   --line: #dfe5e1;
+  --card-outline: #8ca598;
+  --section-outline: #b2c1b8;
   --brand: #204b3b;
   --brand-soft: #e9f1ed;
   --warm: #f3efe7;
@@ -151,7 +153,7 @@ button { cursor: pointer; }
    scrollLeft at a nonzero value once scrollWidth <= clientWidth, so
    this also self-corrects any horizontal drift inherited from another
    route entirely, not just from this page's own content. */
-.shell { max-width: 1220px; margin: 0 auto; padding: 0 28px 70px; overflow-x: hidden; }
+.shell { max-width: 1280px; margin: 0 auto; padding: 0 28px 70px; overflow-x: hidden; }
 .workspaceShell { max-width: 1280px; }
 /* Mobile preview harness (app/preview) — a sticky banner making it
    unmistakable this is fictional fixture data, never real account
@@ -742,7 +744,7 @@ h2, h3, p { margin-top: 0; }
      so content never sits flush against a notched iPhone's home-
      indicator area now that there's no bar providing that clearance
      implicitly. */
-  .shell { padding: 0 17px calc(50px + env(safe-area-inset-bottom)); }
+  .shell { padding: 0 10px calc(50px + env(safe-area-inset-bottom)); }
   /* Mobile V2 — above-the-fold pass: 76px -> 64px. The header's own
      content (wordmark + the circular avatar button) is unaffected —
      both are vertically centered by .topbar's own align-items: center
@@ -5067,7 +5069,7 @@ h2, h3, p { margin-top: 0; }
 .nativeLoginPage .legalFooter nav { justify-content: center; gap: 14px; }
 
 /* Tenant portal: compact cards and boxed navigation, no page overflow. */
-.tenantPortalShell { width: 100%; min-width: 0; min-height: 100dvh; padding: 0 16px 32px; }
+.tenantPortalShell { width: 100%; min-width: 0; min-height: 100dvh; padding: 0 10px 32px; }
 .tenantPortalPropertyHead { padding: 18px 0 12px; }
 .tenantPortalPropertyHead h1 { font-size: clamp(22px,6vw,30px); line-height: 1.2; overflow-wrap: anywhere; margin: 4px 0 6px; }
 .tenantPortalQuickActions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
@@ -5098,12 +5100,36 @@ h2, h3, p { margin-top: 0; }
 .tenantPortalRentRow > * { min-width: 0; overflow-wrap: anywhere; }
 
 /* Compact dashboard shortcuts immediately beneath the header. */
-.dashboardHome > .mobileQuickActions { padding: 12px 10px 9px; margin: 18px 0 16px; }
-.dashboardHome .mobileQuickActionsHead { padding-bottom: 7px; margin-bottom: 6px; }
+.dashboardHome > .mobileQuickActions { padding: 7px 8px; margin: 18px 0 14px; }
+.dashboardHome .mobileQuickActionsHead { border-bottom: 0; padding-bottom: 0; margin-bottom: 4px; }
 .dashboardHome .mobileQuickActionsHeading { font-size: 10px; }
-.dashboardHome .mobileQuickActionsCustomize { font-size: 11px; margin: 0; padding: 6px 2px; min-height: 32px; line-height: 1.4; }
+.dashboardHome .mobileQuickActionsCustomize { font-size: 11px; margin: 0; padding: 2px; min-height: 28px; line-height: 1.4; }
 .dashboardHome .mobileQuickActionsRow { gap: 6px; }
-.dashboardHome .mobileQuickAction { min-height: 52px; padding: 5px 3px; gap: 3px; border-radius: 9px; }
-.dashboardHome .mobileQuickActionIcon { width: 28px; height: 28px; }
+.dashboardHome .mobileQuickAction { min-height: 44px; padding: 4px 2px; gap: 2px; border-radius: 9px; }
+.dashboardHome .mobileQuickActionIcon { width: 20px; height: 20px; }
 .dashboardHome .mobileQuickActionIcon svg { width: 18px; height: 18px; }
 .dashboardHome .mobileQuickActionLabel { font-size: 10px; line-height: 1.2; }
+
+/* Clear boundaries for content cards, while keeping dividers and controls light. */
+:is(.overviewPanel, .recordCard:not(.leaseCompartments), .maintenanceRow,
+    .leaseHistoryRow, .toolCard, .analysisRow, .evaluatorSection, .billingCard,
+    .documentList, .compsSearchCard, .compRow, .propCrewLinkRow,
+    .rentThisMonthCard, .taxPanelGroupCollapsible, .tenantPortalInviteCard,
+    .providerCard, .conditionMediaCard, .conditionRoom, .taxAdditionalInfo,
+    .taxAnnualAdjustments, .leaseIdentityBox, .leaseTermsBox, .leaseSupportingBox,
+    .propertyExpenseBox, .propertyExpenseHistory, .tenantPortalSection) {
+  border-color: var(--card-outline);
+}
+.tenantConnectRow:not(.tenantConnectRowUnread):not(:hover),
+.tenantPortalRequestRow:not(:hover),
+.maintenanceCommandCenterCard:not(.maintenanceCommandCenterCardUrgent):not(:hover) {
+  border-color: var(--card-outline);
+}
+.dashboardHome > :is(.portfolioSnapshot, .mobileQuickActions, .commandCenterSection, .dashboardPropertiesSection) {
+  border-color: var(--section-outline);
+}
+.dashboardHome .grid > .propertyCard { border-color: var(--card-outline); }
+@media (max-width: 760px) {
+  .dashboardHome > :is(.portfolioSnapshot, .commandCenterSection, .dashboardPropertiesSection) { padding: 10px; }
+  .dashboardHome .grid > .propertyCard { padding: 8px; }
+}
