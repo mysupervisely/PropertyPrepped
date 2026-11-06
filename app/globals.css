@@ -5096,3 +5096,14 @@ h2, h3, p { margin-top: 0; }
 .tenantMediaSelected > span { min-width: 0; overflow-wrap: anywhere; }
 .tenantPortalRentRow { min-width: 0; }
 .tenantPortalRentRow > * { min-width: 0; overflow-wrap: anywhere; }
+
+/* Compact dashboard shortcuts immediately beneath the header. */
+.dashboardHome > .mobileQuickActions { padding: 9px 10px; margin: 10px 0 16px; }
+.dashboardHome .mobileQuickActionsHead { padding-bottom: 7px; margin-bottom: 6px; }
+.dashboardHome .mobileQuickActionsHeading { font-size: 10px; }
+.dashboardHome .mobileQuickActionsCustomize { font-size: 11px; }
+.dashboardHome .mobileQuickActionsRow { gap: 6px; }
+.dashboardHome .mobileQuickAction { min-height: 52px; padding: 5px 3px; gap: 3px; border-radius: 9px; }
+.dashboardHome .mobileQuickActionIcon { width: 28px; height: 28px; }
+.dashboardHome .mobileQuickActionIcon svg { width: 18px; height: 18px; }
+.dashboardHome .mobileQuickActionLabel { font-size: 10px; line-height: 1.2; }
