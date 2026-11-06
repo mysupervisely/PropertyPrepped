@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { GoogleAnalytics } from '../components/GoogleAnalytics'
 import { ServiceWorkerRegistration } from '../components/ServiceWorkerRegistration'
-import { InstallPrompt } from '../components/InstallPrompt'
 import { NativeBackButtonHandler } from '../components/mobile/NativeBackButtonHandler'
 
 // PWA/Mobile Installability V1 additions below — everything else in
@@ -59,16 +58,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         {children}
-        {/* Property Intelligence V1, Phase C.3 follow-up: rendered inside
-            <body>, after the page's own content, deliberately — this is
-            what makes it a normal, in-flow block (see InstallPrompt.tsx's
-            own top comment) rather than a fixed overlay computing its own
-            clearance. Every route shares this one root layout, so it
-            naturally appears at the bottom of whichever page is showing
-            (Dashboard, a property page, etc.) without any per-page
-            wiring. Renders nothing visible until it has something to
-            show (see the component itself). */}
-        <InstallPrompt />
       </body>
       {/* Global GA4 site tag (components/GoogleAnalytics.tsx) — loaded
           once here so every route gets it, matching next/script's own
