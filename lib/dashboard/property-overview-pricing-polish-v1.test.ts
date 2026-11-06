@@ -101,14 +101,14 @@ describe('Part C, Stage 1 (FINAL decision) — capabilities are uniform across e
 })
 
 describe('Part C — shared "same core, scale by portfolio size" messaging', () => {
-  it('the pricing page renders CORE_FEATURES_STATEMENT and CORE_FEATURES once, above the per-plan cards, not repeated per card', () => {
+  it('the pricing page renders CORE_FEATURES_STATEMENT and CORE_FEATURES once, after the per-plan cards, not repeated per card', () => {
     expect(pricingPageSource).toContain('CORE_FEATURES_STATEMENT')
     expect(pricingPageSource).toContain('{CORE_FEATURES.map((feature) => <li key={feature}>{feature}</li>)}')
     // Rendered once — not inside the PUBLIC_PLAN_ORDER.map per-card loop.
     const cardsLoopIdx = pricingPageSource.indexOf('{PUBLIC_PLAN_ORDER.map((planId) => {')
-    const coreFeaturesIdx = pricingPageSource.indexOf('CORE_FEATURES_STATEMENT')
+    const coreFeaturesIdx = pricingPageSource.indexOf('{CORE_FEATURES_STATEMENT}')
     expect(coreFeaturesIdx).toBeGreaterThan(-1)
-    expect(coreFeaturesIdx).toBeLessThan(cardsLoopIdx)
+    expect(coreFeaturesIdx).toBeGreaterThan(cardsLoopIdx)
   })
 
   it('the shared statement communicates the same-core-experience message without over-explaining or promising "all features forever"', () => {
@@ -137,7 +137,7 @@ describe('Part C — shared "same core, scale by portfolio size" messaging', () 
 
   it('the pricing footer note describes the AI allowance as a shared, every-plan safeguard, never a Manage-exclusive perk', () => {
     expect(pricingPageSource).not.toMatch(/Manage includes \d+ AI-powered/i)
-    expect(pricingPageSource).toMatch(/included on every plan/i)
+    expect(pricingPageSource).toMatch(/Every plan includes up to 50 AI document analyses per month/i)
   })
 })
 
@@ -162,11 +162,11 @@ describe('Part A — avatar is the single navigation trigger; existing menu/logi
     expect(authNavMenuSource).toContain('{open && <div className="authNavMenuBackdrop" onClick={() => onOpenChange(false)} />}')
   })
 
-  it('every existing menu destination and account action is still present — nothing was deleted while consolidating triggers', () => {
-    for (const href of ['/', '/documents', '/maintenance', '/tax-center', '/propcrew', '/investment-tools', '/profile', '/pricing']) {
+  it('portfolio navigation remains available and billing replaces the separate pricing shortcut', () => {
+    for (const href of ['/', '/documents', '/maintenance', '/tax-center', '/propcrew', '/investment-tools', '/profile', '/account/billing']) {
       expect(authNavMenuSource).toContain(`'${href}'`)
     }
-    expect(authNavMenuSource).toContain('href="/?add=property"')
+    expect(authNavMenuSource).not.toContain('href="/?add=property"')
     expect(authNavMenuSource).toContain('Log out')
   })
 })
@@ -180,7 +180,7 @@ describe('Part B — Property Overview reads as sections, not a stack of equally
     expect(pageSource).not.toContain('className="overviewPanel financialDetailsCard"')
     expect(pageSource).not.toContain('<div className="overviewPanel"><h3>Property facts</h3>')
     expect(pageSource).not.toContain('<h3>Rent &amp; tenant</h3>')
-    expect(pageSource).toContain('<h2 className="overviewSectionHeading">Tenancy</h2>')
+    expect(pageSource).toContain('<summary className="overviewSectionHeading">Tenancy</summary>')
   })
 
   it('new quiet-section classes exist and give only a top hairline + spacing, no border/background/shadow card treatment', () => {

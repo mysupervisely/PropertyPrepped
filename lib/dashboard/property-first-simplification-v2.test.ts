@@ -25,7 +25,7 @@ describe('Avatar menu simplification — AuthNavMenu', () => {
     expect(source).toContain("{ href: '/documents', label: 'Documents' }")
     expect(source).toContain("{ href: '/tax-center', label: 'Tax Center' }")
     expect(source).toContain("{ href: '/propcrew', label: 'PropCrew' }")
-    expect(source).toContain("{ href: '/investment-tools', label: 'Investment Tools' }")
+    expect(source).toContain("{ href: '/investment-tools', label: 'Investment Analysis' }")
   })
 
   it('Rent Ledger is absent from the main navigation menu', () => {
@@ -39,12 +39,12 @@ describe('Avatar menu simplification — AuthNavMenu', () => {
   })
 
   it('Profile and Pricing are a visually de-emphasized ACCOUNT_LINKS group, not equal-weight NAV_LINKS entries', () => {
-    expect(source).toContain("const ACCOUNT_LINKS: { href: string; label: string }[] = [\n  { href: '/profile', label: 'Profile' },\n  { href: '/pricing', label: 'Pricing' },\n]")
+    expect(source).toContain("const ACCOUNT_LINKS: { href: string; label: string }[] = [\n  { href: '/profile', label: 'Profile' },\n  { href: '/account/billing', label: 'Plan & billing' },\n]")
     expect(source).toContain('className="authNavMenuSecondary"')
   })
 
-  it('+ Add Property and Log out remain', () => {
-    expect(source).toContain('+ Add Property')
+  it('Add Property stays on the dashboard and Log out remains in the menu', () => {
+    expect(source).not.toContain('href="/?add=property"')
     expect(source).toContain('Log out')
   })
 
@@ -58,7 +58,7 @@ describe('Avatar menu simplification — AuthNavMenu', () => {
     // leases every property workspace's Rent > Tenant tab already reads/
     // writes. Every other destination from this V2 milestone is unchanged.
     const hrefs = [...source.matchAll(/href: '([^']+)'/g)].map((m) => m[1])
-    expect(new Set(hrefs)).toEqual(new Set(['/', '/documents', '/tenant-connect', '/maintenance', '/tax-center', '/propcrew', '/investment-tools', '/profile', '/pricing']))
+    expect(new Set(hrefs)).toEqual(new Set(['/', '/documents', '/tenant-connect', '/maintenance', '/tax-center', '/propcrew', '/investment-tools', '/profile', '/account/billing']))
   })
 })
 
@@ -122,7 +122,7 @@ describe('Pricing hero simplification', () => {
 
   it('uses the simplified hero copy', () => {
     expect(source).toContain('<h1>Simple pricing for your properties.</h1>')
-    expect(source).toContain('Start free with one property. Upgrade when your portfolio grows.')
+    expect(source).toContain('All plans include the same features. Choose by the number of properties you manage.')
   })
 
   it('no longer leads with the old feature-explanation hero copy', () => {

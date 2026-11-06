@@ -3120,7 +3120,7 @@ export default function Home() {
   // {error} banner (stale-but-real data, not a misleading zero-state).
   if (!hasLoadedPortfolio && busy) {
     return (
-      <main className="shell">
+      <main className="shell dashboardHome">
         <AuthHeader onSmartUploadCompleted={() => void loadPortfolio()} />
         <div className="loadingState portfolioLoadingState">Loading your portfolio…</div>
       </main>
@@ -4459,7 +4459,7 @@ export default function Home() {
         )}
       </section>
 
-      <section><div className="sectionHead"><div><h2>My Properties</h2><p>{busy && !properties.length ? 'Loading your portfolio…' : `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} in your portfolio`}</p></div><button className="primary" onClick={() => openAddProperty()}>+ Add Property</button></div>
+      <section className="dashboardPropertiesSection"><div className="sectionHead"><div><h2>My Properties</h2><p>{busy && !properties.length ? 'Loading your portfolio…' : `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} in your portfolio`}</p></div><button className="primary" onClick={() => openAddProperty()}>+ Add Property</button></div>
         {/* Property-First UX Cleanup: property cards are the dashboard's
             dominant, most-scannable element — address/image, occupancy,
             rent + this-month's rent status, and up to one alert count,

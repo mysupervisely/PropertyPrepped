@@ -112,7 +112,7 @@ describe('Public Homepage V2: returning-user sign-in moved to the header, not a 
     const heroEnd = landingSource.indexOf('</section>', heroIdx)
     const heroBlock = landingSource.slice(heroIdx, heroEnd)
     expect(heroBlock).not.toContain('landingSignInCard')
-    expect(landingSource).toContain('{authOpen && (')
+    expect(landingSource).toContain('{(authOpen || nativeShell) && (')
   })
 
   it('auth behavior itself is completely unchanged: same submitAuth/switchMode functions, same signInWithPassword/signUp calls', () => {
@@ -210,8 +210,8 @@ describe('Homepage pricing section reads from the canonical source — never a s
 
   it('16+ properties has a simple, honest contact line — reuses the exact same mailto address /pricing already uses, never a fabricated contact route', () => {
     expect(landingSource).toContain('More than 15 properties?')
-    expect(landingSource).toContain('mailto:sales@proproster.com?subject=PropRoster%20%E2%80%94%2016%2B%20properties')
-    expect(pricingPageSource).toContain('mailto:sales@proproster.com?subject=PropRoster%20%E2%80%94%2016%2B%20properties')
+    expect(landingSource).toContain('mailto:hello@proproster.com')
+    expect(pricingPageSource).toContain('mailto:hello@proproster.com')
   })
 })
 

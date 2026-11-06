@@ -597,10 +597,6 @@ export default function LandingPage({ sessionExpired = false }: { sessionExpired
             <p className="eyebrow">TENANT CONNECT</p>
             <h2 className="landingSceneHeadline">Keeps you out of the middle of every request.</h2>
             <p className="landingSceneBody">Connect tenants with your trusted PropCrew — without all the back-and-forth. PropCrew is your own private directory, not a marketplace. You choose who to contact, and you confirm every appointment.</p>
-            <p className="landingTenantConnectPlanned">
-              <span className="statusPill pillMuted">Planned</span>
-              {' '}Deeper automation — fewer manual confirmations along the way — is part of the Automate plan on our roadmap.
-            </p>
           </div>
           <div className="landingTenantConnectSteps">
             <span className="statusPill pillGood landingTenantConnectLiveBadge">Available today</span>
@@ -640,7 +636,7 @@ export default function LandingPage({ sessionExpired = false }: { sessionExpired
         <div className="landingPricingIntro">
           <p className="eyebrow">PRICING</p>
           <h2>Simple pricing that grows with your portfolio</h2>
-          <p className="landingPricingSub">Start with your first property free. Upgrade when your portfolio grows.</p>
+          <p className="landingPricingSub">The same features on every plan. Start free with one property and upgrade for more properties.</p>
         </div>
 
         <div className="pricingGrid landingPricingGrid">
@@ -651,7 +647,6 @@ export default function LandingPage({ sessionExpired = false }: { sessionExpired
               <article className={`pricingCard${def.mostPopular ? ' pricingCardPopular' : ''}`} key={planId}>
                 {def.mostPopular && <span className="pricingBadge">Most Popular</span>}
                 <h3>{def.name}</h3>
-                <p className="pricingTagline">{def.tagline}</p>
                 <div className="pricingPrice">
                   <strong>${def.priceMonthly.toFixed(2)}</strong>
                   <span>/month</span>

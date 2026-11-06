@@ -4964,3 +4964,75 @@ h2, h3, p { margin-top: 0; }
 @media (max-width: 370px) {
   .grid > .propertyCard { grid-template-columns: 88px minmax(0,1fr); }
 }
+
+/* Clear sections for the portfolio dashboard and its property records. */
+.dashboardHome > .portfolioSnapshot,
+.dashboardHome > .mobileQuickActions,
+.dashboardHome > .commandCenterSection,
+.dashboardHome > .dashboardPropertiesSection {
+  border: 1px solid #d8e3dd;
+  border-radius: 16px;
+  background: #fff;
+  padding: 18px;
+  margin: 18px 0;
+  box-shadow: 0 2px 8px rgba(27,58,44,.025);
+}
+.dashboardHome > .mobileQuickActions { display: block; }
+.dashboardHome .sectionHead { align-items: center; gap: 12px; margin-bottom: 14px; }
+.dashboardHome .dashboardPropertiesSection > .sectionHead,
+.dashboardHome .mobileQuickActionsHead { border-bottom: 1px solid var(--line); padding-bottom: 13px; }
+.dashboardHome .mobileQuickActionsRow { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
+.dashboardHome .mobileQuickAction { border: 1px solid #e2e9e5; background: #f7faf8; padding: 10px 4px; border-radius: 11px; }
+.dashboardHome .mobileQuickActionIcon { background: transparent; }
+.dashboardHome .dashboardPropertiesSection > .grid { gap: 14px; }
+.dashboardHome .grid > .propertyCard { border: 1px solid #d8e3dd; border-radius: 13px; background: #f8faf9; }
+.dashboardHome .propertyRowStatuses { border-top: 1px solid #dfe7e2; }
+.dashboardHome .recentActivitySummary { margin: 0; }
+.dashboardHome .recentActivityDetails[open] .recentActivitySummary { border-bottom: 1px solid var(--line); padding-bottom: 12px; margin-bottom: 12px; }
+.dashboardHome .dashboardItemRow { background: #f8faf9; }
+
+/* One menu, with distinct portfolio and account groups. */
+.authNavMenuPanel { left: auto; right: 0; width: 280px; padding: 10px; gap: 9px; }
+.authNavMenuHead { display: flex; align-items: center; justify-content: space-between; padding: 2px 5px; }
+.authNavMenuHead strong { font-size: 17px; }
+.authNavMenuHead button { background: transparent; border: 0; font-size: 24px; color: var(--muted); width: 40px; height: 40px; cursor: pointer; }
+.authNavMenuGroup { border: 1px solid var(--line); border-radius: 10px; padding: 5px; }
+.authNavMenuGroupLabel { margin: 7px 12px 5px; font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.authNavMenuPanel a[aria-current="page"] { background: #e9f2ed; color: var(--brand); }
+.authNavMenuPanel a.authNavMenuSecondary { font-size: 14px; color: var(--text); }
+.authNavMenuDivider { margin: 0 5px; }
+.authNavMenuPanel a:focus-visible, .authNavMenuPanel button:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+
+/* Show current plans first, followed by their shared features. */
+.pricingPage .pricingGrid { grid-template-columns: repeat(3,minmax(0,1fr)); margin-top: 24px; }
+.pricingPage .pricingCard { min-width: 0; }
+.pricingPage .pricingCard h2 { margin-bottom: 20px; }
+.pricingPage .pricingPropertyLimit { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 16px; }
+.pricingPage .pricingCoreFeatures { border: 1px solid var(--line); border-radius: 14px; padding: 22px; margin: 22px 0; background: white; }
+.pricingPage .pricingCoreFeatures h2 { font-size: 20px; margin: 0 0 8px; }
+.pricingPage .pricingCoreFeaturesList { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px 24px; }
+.pricingContactStrip { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; background: #f3f8f5; font-size: 14px; }
+.pricingContactStrip a { color: var(--brand); font-weight: 600; }
+@media (max-width: 760px) {
+  .dashboardHome > .portfolioSnapshot,
+  .dashboardHome > .mobileQuickActions,
+  .dashboardHome > .commandCenterSection,
+  .dashboardHome > .dashboardPropertiesSection { padding: 12px; margin: 14px 0; border-radius: 13px; }
+  .dashboardHome .sectionHead h2 { font-size: 19px; }
+  .dashboardHome .sectionHead p { font-size: 11px; }
+  .dashboardHome .sectionHead > .primary { font-size: 11px; padding: 8px 10px; white-space: nowrap; min-height: 36px; }
+  .dashboardHome .grid > .propertyCard { padding: 10px; margin: 0; border: 1px solid #d8e3dd; }
+  .dashboardHome .grid > .propertyCard .propertyRowStatuses { padding: 10px 0 0; margin: 0; }
+  .dashboardHome .grid > .propertyCard:hover { transform: none; }
+  .dashboardHome .mobileQuickActionLabel { font-size: 10px; }
+  .authNavMenuPanel { width: 100%; left: 0; right: 0; max-height: 85dvh; padding: 10px 12px calc(14px + env(safe-area-inset-bottom)); }
+  .authNavMenuPanel a { padding: 11px 12px; }
+}
+@media (max-width: 620px) {
+  .pricingPage .pricingGrid { grid-template-columns: 1fr; }
+  .pricingPage .pricingCoreFeaturesList { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .dashboardHome .dashboardPropertiesSection > .grid { border-top: 0; }
+  .dashboardHome .grid > .propertyCard > .cardOpen { width: 100%; }
+}

@@ -165,12 +165,12 @@ describe('Tenant Connect — a distinct workflow section (Step 9), explicit abou
     expect(landingSource).toContain('>Available today</span>')
   })
 
-  it('the one forward-looking line is explicitly labeled "Planned" and points at the real, existing Automate plan tier — never presented as live', () => {
+  it('the live workflow has no unavailable Automate plan teaser', () => {
     const start = landingSource.indexOf('className="landingTenantConnect"')
     const end = landingSource.indexOf('</section>', start)
     const block = landingSource.slice(start, end)
-    expect(block).toContain('>Planned</span>')
-    expect(block).toMatch(/Automate plan/)
+    expect(block).not.toContain('>Planned</span>')
+    expect(block).not.toMatch(/Automate plan/)
   })
 
   it('the referenced Automate plan really exists as a Coming Soon tier in lib/billing/plans.ts — not invented for this page', () => {
