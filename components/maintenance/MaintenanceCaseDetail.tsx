@@ -408,7 +408,7 @@ export function MaintenanceCaseDetail({
         <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowContactConfirm(false)}>
           <div className="modal">
             <div className="modalTop"><h2>Contact {assignedContact.name}{assignedContact.business_name ? ` at ${assignedContact.business_name}` : ''}?</h2><button className="iconButton" onClick={() => setShowContactConfirm(false)}>×</button></div>
-            <p>PropRoster will send the maintenance request to {assignedContact.name} so they can review and respond.</p>
+            <p>PropRoster will email this maintenance request to {assignedContact.name} so they can review and respond. Assigning a contact does not send an email. Text messages are not sent.</p>
             <div className="maintenanceContactConfirmMeta">
               <span className="muted">{propertyLabel}</span>
               <span className="muted">{caseRow.title}</span>
@@ -416,7 +416,7 @@ export function MaintenanceCaseDetail({
             </div>
             <div className="modalActions">
               <button className="secondary" onClick={() => setShowContactConfirm(false)}>Cancel</button>
-              <button className="primary" disabled={outreachBusy} onClick={() => { setShowContactConfirm(false); onSendOutreach?.() }}>{outreachBusy ? 'Sending…' : 'Send Request'}</button>
+              <button className="primary" disabled={outreachBusy} onClick={() => { setShowContactConfirm(false); onSendOutreach?.() }}>{outreachBusy ? 'Sending…' : 'Send email'}</button>
             </div>
           </div>
         </div>

@@ -222,11 +222,13 @@ export async function analyzeDocument(supabase: SupabaseClient, documentId: stri
  * (supabase/milestone-12-smart-upload.sql) always holds.
  */
 export async function confirmItemProperty(supabase: SupabaseClient, documentId: string, itemId: string, propertyId: string): Promise<void> {
-  await Promise.all([
+  const results = await Promise.all([
     supabase.from('property_documents').update({ property_id: propertyId }).eq('id', documentId),
     supabase.from('document_analyses').update({ property_id: propertyId }).eq('document_id', documentId),
     supabase.from('smart_upload_items').update({ confirmed_property_id: propertyId }).eq('id', itemId),
   ])
+  const failure = results.find(result => result.error)?.error
+  if (failure) throw new Error('Could not confirm the property. Please choose it again before saving.')
 }
 
 /**

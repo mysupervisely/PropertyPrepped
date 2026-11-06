@@ -41,8 +41,9 @@ import { useAuthUser } from '../lib/useAuthUser'
 import { useUnreadNotificationCount } from '../lib/notifications/useUnreadCount'
 
 export function AuthHeader({
-  onBrandClick, onSmartUploadCompleted, registerSmartUploadTrigger,
+  onBrandClick, onSmartUploadCompleted, registerSmartUploadTrigger, defaultUploadPropertyId,
 }: {
+  defaultUploadPropertyId?: string
   onBrandClick?: () => void
   onSmartUploadCompleted?: () => void
   registerSmartUploadTrigger?: (fn: () => void) => void
@@ -141,7 +142,7 @@ export function AuthHeader({
           navigation reach. The avatar above is now the single mobile
           navigation entry point, at every breakpoint, the same as
           desktop already was. */}
-      <SmartUploadModal open={smartUploadOpen} onClose={() => setSmartUploadOpen(false)} onCompleted={onSmartUploadCompleted} />
+      <SmartUploadModal defaultPropertyId={defaultUploadPropertyId} open={smartUploadOpen} onClose={() => setSmartUploadOpen(false)} onCompleted={onSmartUploadCompleted} />
     </>
   )
 }

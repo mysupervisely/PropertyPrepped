@@ -4842,3 +4842,108 @@ h2, h3, p { margin-top: 0; }
 .taxCenterPropertyLinks a { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; text-decoration: none; color: var(--brand); background: #fff; min-width: 0; }
 .taxCenterPropertyLinks strong { display: block; font-size: 14px; overflow-wrap: anywhere; }
 .taxCenterPropertyLinks small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+
+/* Property workspace actions stay compact and aligned with their section title. */
+.workspaceContent .sectionHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.workspaceContent .sectionHead > div:first-child { min-width: 0; }
+.workspaceContent .sectionHead > .primary, .workspaceContent .sectionHead > .secondary,
+.workspaceContent .emptyModule .primary, .workspaceContent .rentThisMonthActions .primary,
+.workspaceContent .compactAction { width: auto; flex: 0 0 auto; min-height: 34px; padding: 8px 12px; border-radius: 9px; font-size: 12px; font-weight: 600; line-height: 1.3; }
+.workspaceContent .workspaceHeading h2 { font-size: 22px; margin-bottom: 5px; }
+.workspaceContent .workspaceHeading p { font-size: 12px; line-height: 1.5; }
+.workspaceContent .taxSectionHead { align-items: center; padding: 0; margin: 0 0 14px; }
+.workspaceContent .taxSectionHead h2 { margin: 0; }
+.taxSectionHead .eyebrow { display: none; }
+.propertyMarketRentActions { display: flex; justify-content: flex-end; margin: 8px 0 0; }
+.propertyMarketRentButton { min-height: 32px; padding: 7px 11px; font-size: 12px; border-radius: 8px; }
+.propertyMarketRentEmpty { max-width: 100%; }
+
+/* Lease identity, terms and monthly collection are distinct readable boxes. */
+.currentLeaseCard.leaseCompartments { max-width: none; border: 0; border-radius: 0; padding: 0; background: transparent; box-shadow: none; display: grid; gap: 12px; margin-bottom: 16px; }
+.leaseIdentityBox, .leaseTermsBox, .leaseSupportingBox { border: 1px solid var(--line); border-radius: 13px; background: #fff; padding: 15px; }
+.leaseIdentityBox .recordTop { margin: 0; padding: 0 0 12px; border-bottom: 1px solid var(--line); }
+.leaseIdentityBox .recordTop > div:first-child { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.leaseIdentityBox h3 { font-size: 16px; margin: 0; }
+.leaseTenantBox { margin-top: 13px; }
+.leaseTenantBox .eyebrow { font-size: 10px; margin-bottom: 7px; }
+.leaseTermsBox h4 { font-size: 13px; margin: 0 0 10px; }
+.leaseTermsBox .recordMetrics, .rentThisMonthCard .recordMetrics { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; padding: 0; background: transparent; }
+.leaseTermsBox .recordMetrics > div, .rentThisMonthCard .recordMetrics > div { min-width: 0; background: #f5f8f6; border-radius: 9px; padding: 11px 9px; }
+.leaseTermsBox .recordMetrics strong, .rentThisMonthCard .recordMetrics strong { font-size: 17px; overflow-wrap: anywhere; }
+.leaseTermsBox .recordMetrics span, .rentThisMonthCard .recordMetrics span { font-size: 10px; }
+.leaseDateGrid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.leaseDateGrid span, .leaseDateGrid strong { display: block; font-size: 12px; }
+.leaseDateGrid span { font-size: 10px; color: var(--muted); margin-bottom: 5px; }
+.leaseSupportingBox summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--brand); }
+.leaseSupportingBox[open] summary { margin-bottom: 12px; }
+.leaseSupportingBox p { font-size: 12px; margin-top: 12px; }
+.rentThisMonthCard { padding: 15px; margin-top: 16px; border-radius: 13px; }
+.rentThisMonthHead h3 { margin: 0; font-size: 16px; }
+.rentThisMonthHead .eyebrow { font-size: 10px; margin-bottom: 5px; }
+.rentTenantName { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+.rentThisMonthActions { display: flex; gap: 10px; margin-top: 13px; flex-wrap: wrap; }
+.rentThisMonthActions .secondary { font-size: 12px; padding: 8px 10px; min-height: 34px; }
+
+/* An expense is an individual payment, with a fresh amount after each save. */
+.propertyExpenseBox { background: #fff; border: 1px solid var(--line); border-radius: 13px; padding: 15px; }
+.propertyExpenseTitle { display: flex; justify-content: space-between; align-items: start; gap: 12px; margin-bottom: 14px; }
+.propertyExpenseTitle h3 { font-size: 16px; margin: 0 0 4px; }
+.propertyExpenseTitle p { color: var(--muted); font-size: 12px; margin: 0; }
+.propertyExpenseFields { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; min-width: 0; }
+.propertyExpenseFields label { display: grid; gap: 6px; min-width: 0; font-size: 12px; color: var(--muted); }
+.propertyExpenseFields input, .propertyExpenseFields select { width: 100%; min-width: 0; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--text); padding: 10px; font-size: 16px; }
+.propertyExpenseFooter { display: flex; align-items: center; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.propertyExpenseFooter > .primary { margin-left: auto; }
+.receiptAttach { position: relative; max-width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.receiptAttach input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.textAction { border: 0; background: transparent; padding: 6px 0; color: var(--muted); font-size: 11px; }
+.propertyExpenseNotice { color: var(--brand); font-size: 12px; margin: 12px 0 0; }
+.propertyExpenseHistory { border: 1px solid var(--line); border-radius: 13px; background: #fff; padding: 14px; }
+.propertyExpenseHistory h3 { font-size: 14px; margin-bottom: 10px; }
+.propertyExpenseHistory > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); padding: 10px 0; }
+.propertyExpenseHistory strong { font-size: 12px; }
+.propertyExpenseHistory small { display: block; font-size: 10px; color: var(--muted); margin-top: 3px; }
+.taxAnnualAdjustments { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: #fff; }
+.taxAnnualAdjustments > summary { cursor: pointer; font-size: 13px; color: var(--brand); font-weight: 600; }
+.taxAnnualAdjustments[open] > summary { margin-bottom: 12px; }
+.taxAnnualAdjustments > p { font-size: 12px; margin: 0 0 14px; }
+.taxAnnualAdjustments > .taxPanelGroup { margin-top: 10px; }
+.taxAnnualAdjustments > .taxPanelSave { margin-top: 12px; }
+.taxOverrideNotice { color: #785820; background: #fff8e8; border-radius: 8px; padding: 10px; font-size: 11px; margin: 0; }
+.galleryMeta { min-width: 0; }
+.galleryMeta > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.galleryButtons { display: flex; gap: 6px; flex-wrap: wrap; }
+.galleryButtons button { font-size: 11px; padding: 6px 8px; }
+
+@media (max-width: 760px) {
+  .grid > .propertyCard { grid-template-columns: 98px minmax(0,1fr); gap: 10px 12px; }
+  .grid > .propertyCard .photo { height: 100px; }
+  .grid > .propertyCard .cardBody { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 4px 8px; align-content: start; }
+  .grid > .propertyCard .titleButton { grid-column: 1; grid-row: 1; }
+  .grid > .propertyCard .titleButton h3 { font-size: 14px; line-height: 1.3; overflow-wrap: anywhere; }
+  .grid > .propertyCard .titleButton p { font-size: 11px; line-height: 1.4; }
+  .grid > .propertyCard .propertyRowType { grid-column: 1; grid-row: 2; margin: 0; }
+  .grid > .propertyCard .miniStats { grid-column: 2; grid-row: 1 / 3; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding: 0; margin: 0; border: 0; }
+  .grid > .propertyCard .miniStats > div { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+  .grid > .propertyCard .miniStats strong { font-size: 14px; white-space: nowrap; }
+  .grid > .propertyCard .miniStats span { font-size: 10px; }
+  .grid > .propertyCard .cardActions { grid-column: 1 / -1; grid-row: 3; justify-content: space-between; margin-top: 5px; padding-top: 0; }
+  .grid > .propertyCard .propertyRowStatuses { justify-content: space-between; gap: 6px; }
+  .propertyRowStatuses .statusPill, .propertyRowStatuses .propertyRowAlert { flex: 1; text-align: center; padding: 5px 6px; font-size: 10px; white-space: nowrap; }
+  .propertyMarketRentActions { justify-content: flex-end; }
+  .workspaceContent .sectionHead > .primary { min-height: 32px; padding: 7px 10px; font-size: 11px; }
+  .workspaceContent .workspaceHeading h2 { font-size: 20px; }
+  .workspaceContent .sectionHead > div:first-child { flex: 1; }
+  .leaseTermsBox .recordMetrics strong, .rentThisMonthCard .recordMetrics strong { font-size: 15px; }
+}
+@media (max-width: 370px) {
+  .grid > .propertyCard { grid-template-columns: 78px minmax(0,1fr); column-gap: 9px; }
+  .grid > .propertyCard .photo { height: 86px; }
+  .grid > .propertyCard .titleButton h3 { font-size: 13px; }
+}
+@media (max-width: 760px) {
+  .grid > .propertyCard .miniStats > .propertyDesktopRentStatus { display: none; }
+}
+@media (max-width: 760px) {
+  .propertyRowStatuses > :only-child { flex: 0 1 auto; }
+}

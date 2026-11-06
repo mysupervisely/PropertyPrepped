@@ -60,7 +60,7 @@ type QueueItem = {
   debug: SmartUploadDebugState
 }
 
-export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean; onClose: () => void; onCompleted?: () => void }) {
+export function SmartUploadModal({ open, onClose, onCompleted, defaultPropertyId }: { defaultPropertyId?: string; open: boolean; onClose: () => void; onCompleted?: () => void }) {
   const [ownerId, setOwnerId] = useState<string | null>(null)
   const [properties, setProperties] = useState<SmartUploadProperty[]>([])
   const [contacts, setContacts] = useState<SmartUploadContact[]>([])
@@ -175,6 +175,12 @@ export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean
     // the real row.
     setItems((prev) => prev.map((it) => (it.id === localId ? { ...it, id: uploadResult.itemId, documentId: uploadResult.documentId, status: 'Analyzing', debug: { ...it.debug, storageUpload: 'success', databaseRecord: 'success' } } : it)))
 
+    if (defaultPropertyId && properties.some(property => property.id === defaultPropertyId)) {
+      try {
+        await confirmItemProperty(supabase, uploadResult.documentId, uploadResult.itemId, defaultPropertyId)
+        patchItem(uploadResult.itemId, {confirmedPropertyId:defaultPropertyId})
+      } catch { setGlobalError('Please choose the property in the review before saving.') }
+    }
     await runAnalyze(uploadResult.documentId, uploadResult.itemId, flow)
   }
 
@@ -187,11 +193,11 @@ export function SmartUploadModal({ open, onClose, onCompleted }: { open: boolean
 
   async function selectProperty(item: QueueItem, propertyId: string) {
     if (!supabase) return
-    patchItem(item.id, { confirmedPropertyId: propertyId })
-    // Persisted immediately (not only at final Save) — Part 21's
-    // leave-and-return foundation: closing and reopening Smart Upload
-    // mid-review keeps this confirmed choice.
-    await confirmItemProperty(supabase, item.documentId, item.id, propertyId)
+    try {
+      await confirmItemProperty(supabase, item.documentId, item.id, propertyId)
+      patchItem(item.id, { confirmedPropertyId: propertyId })
+      setGlobalError('')
+    } catch { setGlobalError('Could not confirm the property. Please choose it again before saving.') }
   }
 
   async function addToPropCrew(item: QueueItem, prefill: { name: string; businessName: string | null; phone: string | null; email: string | null; role: string }): Promise<{ id: string | null; error?: string }> {

@@ -592,28 +592,19 @@ function LeaseCard({ lease, doc, heading, onEdit, onDelete, onOpenDocument }: {
 }) {
   const status = deriveLeaseStatus(lease)
   const rentDue = formatRentDueDay(lease.rent_due_day ?? null)
-  return <article className="recordCard currentLeaseCard">
-    <div className="recordTop">
-      <div>
-        <span className={`statusPill ${leaseStatusPillClass(status)}`}>{status || 'Status unknown'}</span>
-        <h3>{heading}</h3>
-        <TenantContactList lease={lease} />
+  return <article className="recordCard currentLeaseCard leaseCompartments">
+    <div className="leaseIdentityBox">
+      <div className="recordTop"><div><h3>{heading}</h3><span className={`statusPill ${leaseStatusPillClass(status)}`}>{status || 'Status unknown'}</span></div>
+        <div className="leaseCardActions"><button className="recordEdit" onClick={onEdit} aria-label={`Edit lease for ${lease.tenant_name}`}>Edit</button><button className="recordDelete" onClick={onDelete} aria-label={`Delete lease for ${lease.tenant_name}`}>×</button></div>
       </div>
-      <div className="leaseCardActions">
-        <button className="recordEdit" onClick={onEdit} aria-label={`Edit lease for ${lease.tenant_name}`}>Edit</button>
-        <button className="recordDelete" onClick={onDelete} aria-label={`Delete lease for ${lease.tenant_name}`}>×</button>
-      </div>
+      <div className="leaseTenantBox"><p className="eyebrow">TENANT</p><TenantContactList lease={lease} /></div>
     </div>
-    <div className="recordMetrics">
+    <div className="leaseTermsBox"><h4>Lease terms</h4><div className="recordMetrics">
       <div><span>Monthly rent</span><strong>{money(lease.monthly_rent)}</strong></div>
-      {lease.security_deposit > 0 && <div><span>Security deposit</span><strong>{money(lease.security_deposit)}</strong></div>}
+      <div><span>Security deposit</span><strong>{money(lease.security_deposit)}</strong></div>
       {rentDue && <div><span>Rent due</span><strong>{rentDue.replace('Rent due on the ', '').replace(' of each month', '')}</strong></div>}
-    </div>
-    <div className="recordRows">
-      <div><span>Lease term</span><strong>{new Date(`${lease.start_date}T12:00:00`).toLocaleDateString()} – {new Date(`${lease.end_date}T12:00:00`).toLocaleDateString()}</strong></div>
-      {doc && <div><span>Signed lease</span><button onClick={() => onOpenDocument(doc)}>{doc.name}</button></div>}
-      {lease.notes && <div><span>Notes</span><strong>{lease.notes}</strong></div>}
-    </div>
+    </div><div className="leaseDateGrid"><div><span>Starts</span><strong>{new Date(`${lease.start_date}T12:00:00`).toLocaleDateString()}</strong></div><div><span>Ends</span><strong>{new Date(`${lease.end_date}T12:00:00`).toLocaleDateString()}</strong></div></div></div>
+    {(doc || lease.notes) && <details className="leaseSupportingBox"><summary>Lease document &amp; notes</summary>{doc && <button className="attachmentButton" onClick={()=>onOpenDocument(doc)}>{doc.name}</button>}{lease.notes && <p>{lease.notes}</p>}</details>}
   </article>
 }
 
@@ -2256,6 +2247,17 @@ export default function Home() {
     setBusy(false)
   }
 
+  async function downloadPropertyPhoto(photo: PropertyPhoto) {
+    if (!supabase) return
+    const tab = window.open('', '_blank')
+    try {
+      const {data,error} = await supabase.storage.from('property-photos').createSignedUrl(photo.storage_path, 60, {download:photo.name})
+      if (error || !data?.signedUrl) throw error || new Error('Photo unavailable')
+      if (tab) tab.location.href=data.signedUrl
+      else window.location.assign(data.signedUrl)
+    } catch { tab?.close(); surfaceError('Unable to download this photo. Please try again.') }
+  }
+
   async function addPhotoFiles(files: FileList | File[], bytesPromises: Promise<ArrayBuffer>[]) {
     if (!supabase || !user || !selectedId) return
     // Post-selection-failure investigation (V2) — the FileList must be
@@ -3249,7 +3251,7 @@ export default function Home() {
 
     return (
       <main className="shell workspaceShell">
-        <AuthHeader onBrandClick={closeProperty} onSmartUploadCompleted={() => void loadPortfolio()} registerSmartUploadTrigger={(fn) => { smartUploadTriggerRef.current = fn }} />
+        <AuthHeader defaultUploadPropertyId={selected.id} onBrandClick={closeProperty} onSmartUploadCompleted={() => void loadPortfolio()} registerSmartUploadTrigger={(fn) => { smartUploadTriggerRef.current = fn }} />
         {error && <div className="globalError">{error}<button onClick={() => setError('')}>×</button></div>}
         {/* Onboarding & First-Run Experience V2 — the one-time activation
             note (see addProperty()'s isFirstProperty branch). Plain,
@@ -3382,7 +3384,7 @@ export default function Home() {
                 <p className="propertyMarketRentEmpty">Your estimate: {money(Number(selected.market_rent_estimate))}/mo. Not independently verified.</p>
               ) : <p className="propertyMarketRentEmpty">Check estimated market rent using nearby rental data.</p>}
               <div className="propertyMarketRentActions">
-                <button type="button" className="propertyMarketRentButton" disabled={rentEstimateLoading} onClick={() => requestMarketRent(selected.id)}>{rentEstimateLoading ? 'Checking…' : rentEstimateByProperty[selected.id] ? 'Refresh estimate' : 'Get market estimate'}<span aria-hidden="true">↗</span></button>
+                <button type="button" className="propertyMarketRentButton" disabled={rentEstimateLoading} onClick={() => requestMarketRent(selected.id)}>{rentEstimateLoading ? 'Checking…' : rentEstimateByProperty[selected.id] ? 'Refresh estimate' : 'Estimate rent'}</button>
               </div>
               {rentEstimateError && <p className="propertyMarketRentError" role="status">{rentEstimateError}</p>}
             </div>
@@ -3604,13 +3606,13 @@ export default function Home() {
           </>}
 
           {documentsSubTab === 'Photos' && <>
-          <div className="sectionHead workspaceHeading"><div><p className="eyebrow">PROPERTY PHOTOS</p><h2>Visual record</h2><p>Keep listing photos, renovation progress, inspections and property-condition photos together.</p></div></div>
-          <label className="photoUploader"><span>+</span><strong>{busy ? 'Uploading…' : 'Add property photos'}</strong><small>Select multiple images at once. The first photo becomes the cover if there is no cover yet.</small><input type="file" accept="image/*" multiple disabled={busy} onChange={(e) => {
+          <div className="sectionHead workspaceHeading"><div><p className="eyebrow">PROPERTY PHOTOS</p><h2>Listing photo library</h2><p>Keep your original property photos ready for your next listing.</p></div></div>
+          <label className="photoUploader"><span>+</span><strong>{busy ? 'Uploading…' : 'Add listing photos'}</strong><small>Choose multiple photos. Originals are kept at their uploaded quality.</small><input type="file" accept="image/*" multiple disabled={busy} onChange={(e) => {
                 const { files, bytesPromises } = capturePhotoPicker(e.currentTarget)
                 if (files.length) void addPhotoFiles(files, bytesPromises)
               }} /></label>
           {error && <p className="photoUploadError" role="alert">{error}</p>}
-          <div className="photoGallery">{selectedPhotos.length ? selectedPhotos.map((photo) => <div className={`galleryItem ${photo.is_cover ? 'coverItem' : ''}`} key={photo.id}>{photo.signedUrl ? <img src={photo.signedUrl} alt={photo.name} /> : <div className="heroPlaceholder">Photo unavailable</div>}<div className="galleryMeta"><span>{photo.name}</span><div className="galleryButtons">{!photo.is_cover && <button onClick={() => void setCover(photo)}>Set cover</button>}<button className="removePhoto" onClick={() => void removePhoto(photo)}>×</button></div></div></div>) : <div className="emptyGallery"><strong>No photos uploaded yet</strong><span>Add photos to build this property's visual history.</span></div>}</div>
+          <div className="photoGallery">{selectedPhotos.length ? selectedPhotos.map((photo) => <div className={`galleryItem ${photo.is_cover ? 'coverItem' : ''}`} key={photo.id}>{photo.signedUrl ? <img src={photo.signedUrl} alt={photo.name} /> : <div className="heroPlaceholder">Photo unavailable</div>}<div className="galleryMeta"><span>{photo.name}</span><div className="galleryButtons"><button onClick={() => void downloadPropertyPhoto(photo)}>Download original</button>{!photo.is_cover && <button onClick={() => void setCover(photo)}>Set cover</button>}<button className="removePhoto" onClick={() => void removePhoto(photo)}>×</button></div></div></div>) : <div className="emptyGallery"><strong>No photos uploaded yet</strong><span>Add photos to build this property's visual history.</span></div>}</div>
           </>}
         </section>}
 
@@ -3673,7 +3675,7 @@ export default function Home() {
             const leaseOccupancy = deriveOccupancy(selectedLeases)
             const history = sortLeaseHistory(selectedLeases).filter((l) => l.id !== currentLease?.id)
             return <>
-              <div className="sectionHead workspaceHeading"><div><p className="eyebrow">RENT &amp; LEASE</p><h2>Tenants &amp; lease terms</h2><p>Keep rent, deposits, renewal dates and the signed lease together.</p></div><button className="primary" onClick={() => openLeaseForm()}>+ Add lease</button></div>
+              <div className="sectionHead workspaceHeading"><div><p className="eyebrow">RENT &amp; LEASE</p><h2>Rent &amp; tenancy</h2></div><button className="primary" onClick={() => openLeaseForm()}>+ Add lease</button></div>
 
               {currentLease ? (
                 <LeaseCard
@@ -3712,7 +3714,7 @@ export default function Home() {
               {rentThisMonth.length > 0 && rentThisMonth.map((row) => (
                 <div className="rentThisMonthCard" key={row.leaseId}>
                   <div className="rentThisMonthHead">
-                    <div><p className="eyebrow">RENT — {formatPeriodLabel(currentRentPeriod).toUpperCase()}</p><h3>{row.tenantName}</h3></div>
+                    <div><p className="eyebrow">RENT — {formatPeriodLabel(currentRentPeriod).toUpperCase()}</p><h3>Monthly rent</h3><p className="rentTenantName">{row.tenantName}</p></div>
                     <span className={`statusPill ${rentStatusPillClass(row.status)}`}>{rentStatusLabel(row.status)}</span>
                   </div>
                   <div className="recordMetrics">
@@ -3722,7 +3724,7 @@ export default function Home() {
                   </div>
                   <div className="rentThisMonthActions">
                     <Link href={`/rent-ledger?lease=${row.leaseId}`} className="primary">+ Record Payment</Link>
-                    <Link href="/rent-ledger" className="secondary">View Full Rent Ledger</Link>
+                    <Link href="/rent-ledger" className="secondary">View ledger</Link>
                   </div>
                 </div>
               ))}
@@ -3811,7 +3813,7 @@ export default function Home() {
               itself (calculation engine, override semantics, collapsible
               groups, manual entry) is completely untouched below. */}
           <div className="sectionHead workspaceHeading taxSectionHead">
-            <div><p className="eyebrow">TAX</p><h2>Tax records</h2></div>
+            <div><h2>Income &amp; expenses</h2></div>
             <button className="primary" onClick={() => { setUploadCategory('Tax'); setShowAddDocumentChooser(true) }}>+ Add document</button>
           </div>
 
@@ -3847,6 +3849,7 @@ export default function Home() {
             taxRecords={selectedTaxRecords}
             customItems={selectedTaxCustomItems}
             onRefresh={() => void loadPortfolio()}
+            onScanReceipt={() => smartUploadTriggerRef.current()}
           />
           <p className="ledgerNote">Tax Center (the portfolio-wide view across every property) aggregates these same manual entries alongside your Rent ledger — see the <Link href="/tax-center">Tax Center</Link> page.</p>
         </section>}

@@ -6,6 +6,7 @@
 // TaxAmountInput preserves the browser's editing buffer during recalculations.
 
 import { useEffect, useMemo, useState } from 'react'
+import { PropertyExpenseEntry } from './PropertyExpenseEntry'
 import { TaxAmountInput } from './TaxAmountInput'
 import { parseTaxAmount } from '../../lib/tax-center/amount-input'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -111,7 +112,7 @@ function emptyCustomItemDraft(): { description: string; amount: string; group: C
 }
 
 export function PropertyTaxPanel({
-  supabase, propertyId, ownerId, transactions, maintenanceRecords, documents, taxRecords, customItems, onRefresh,
+  supabase, propertyId, ownerId, transactions, maintenanceRecords, documents, taxRecords, customItems, onRefresh, onScanReceipt,
 }: {
   supabase: SupabaseClient
   propertyId: string
@@ -122,6 +123,7 @@ export function PropertyTaxPanel({
   taxRecords: PropertyTaxRecordRow[]
   customItems: CustomTaxItemRow[]
   onRefresh: () => void
+  onScanReceipt?: () => void
 }) {
   const availableYears = useMemo(() => getAvailableTaxYears(transactions), [transactions])
   const [year, setYear] = useState<string>(availableYears[0] || String(new Date().getFullYear()))
@@ -409,8 +411,8 @@ export function PropertyTaxPanel({
     <div className="taxPanel taxPanelSimple">
       <div className="taxPanelHead">
         <div>
-          <p className="eyebrow">ANNUAL TAX TOTALS</p>
-          <p className="muted">Choose a category below to review or enter annual totals. Saved income and expenses are already included. A manual total replaces the tracked amount; it is not added twice.</p>
+          <p className="eyebrow">INCOME &amp; EXPENSES</p>
+          <p className="muted">Add expenses below or scan a receipt. Your saved entries build the yearly totals.</p>
         </div>
         <label className="taxPanelYear">
           Tax year
@@ -430,6 +432,11 @@ export function PropertyTaxPanel({
         <div className="taxSummaryNet"><span>Net result</span><strong>{moneyStr(summaryNetResult)}</strong></div>
       </div>
 
+      {existingRecord && MANUAL_FIELD_KEYS.some(key=>existingRecord[key] !== null && existingRecord[key] !== undefined) && <p className="taxOverrideNotice">Annual adjustments are active. They replace tracked amounts for those categories; review them below if you want to use the expense log totals instead.</p>}
+      <PropertyExpenseEntry key={`${propertyId}-${year}`} year={year} client={supabase} propertyId={propertyId} ownerId={ownerId} onSaved={onRefresh} onScanReceipt={onScanReceipt} />
+      {yearTransactions.length > 0 && <section className="propertyExpenseHistory"><h3>Recent entries · {year}</h3>{[...yearTransactions].sort((a,b)=>b.transaction_date.localeCompare(a.transaction_date)).slice(0,8).map(entry=><div key={entry.id}><span><strong>{entry.category}</strong><small>{entry.category} · {entry.transaction_date}</small></span><strong>{entry.transaction_type === 'Income' ? '+' : ''}{moneyStr(Number(entry.amount))}</strong></div>)}</section>}
+      <details className="taxAnnualAdjustments"><summary>Annual totals &amp; adjustments</summary>
+        <p className="muted">Optional totals from annual statements. These replace tracked amounts in the selected category. Use Add an expense above for individual payments.</p>
       {GROUP_ORDER.map((group) => {
         const meta = GROUP_META[group]
         const expanded = expandedGroups.has(group)
@@ -609,6 +616,7 @@ export function PropertyTaxPanel({
           {saving ? 'Saving…' : 'Save tax totals'}
         </button>
       </div>
+      </details>
     </div>
   )
 }
