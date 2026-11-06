@@ -1,41 +1,13 @@
 'use client'
 
-// PropRoster — Tax Center: property-level "Tax & Financials" panel.
-//
-// Self-contained (owns its own Supabase reads/writes), same pattern as
-// PropertySystemsPanel/PropertyNotesPanel — the parent (app/page.tsx)
-// only supplies what it already has loaded (this property's
-// transactions/maintenance records/documents/tax records/custom tax
-// items) and an onRefresh to re-pull the parent's own data after a save.
-//
-// One property_tax_records row per (property, tax year) — switching the
-// year here loads (or starts a blank draft for) that year's row. Every
-// manual field is optional — a blank field means "no manual entry,"
-// which falls back to PropRoster's tracked ledger total, never to zero
-// (lib/tax-center/manual-entry.ts's computeCategoryValue is the single
-// place that rule lives; this panel only ever sends what the user
-// actually typed, never invents a value).
-//
-// Tax Center V3 ("More capability, less visible complexity"): the flat
-// category list is now organized into COLLAPSIBLE groups — Income,
-// Property & Operating Expenses, Professional & Administrative, Travel &
-// Vehicle (+ a separate mileage QUANTITY, never a dollar figure),
-// Meals, Mortgage & Financing, Capital & Depreciable Items, and Other
-// Tax Items (custom, landlord-defined records via the new
-// property_tax_custom_items table). Every dollar category still shows
-// the same three numbers V2 established — Tracked in PropRoster, Manual
-// tax entry, Tax Center amount — so the source of every figure stays
-// unambiguous; for a category with no possible tracked source at all
-// (every V3 category, and most of V2's), the Tracked stat is presented
-// as "Not tracked — manual entry only," never a misleading $0.
-//
-// Each category row shows all three numbers the spec asks for: Tracked
-// in PropRoster, Manual tax entry, and the resulting Tax Center amount
-// — so the source of every figure is never ambiguous, and entering a
-// manual value visibly REPLACES the tracked one instead of silently
-// stacking on top of it.
+// Annual property totals use the existing tax records and calculation engine.
+// A blank amount uses the ledger total; a manual amount replaces it, never adds
+// to it. Categories start collapsed, with one amount field per category.
+// TaxAmountInput preserves the browser's editing buffer during recalculations.
 
 import { useEffect, useMemo, useState } from 'react'
+import { TaxAmountInput } from './TaxAmountInput'
+import { parseTaxAmount } from '../../lib/tax-center/amount-input'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { filterTransactionsForYear, getAvailableTaxYears, sumByCategory } from '../../lib/tax-center/aggregate'
 import {
@@ -76,7 +48,7 @@ type DocumentOption = { id: string; name: string; category: string }
 const MANUAL_FIELD_KEYS = Object.keys(emptyManualFields()) as (keyof ManualTaxFields)[]
 
 function moneyStr(n: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Number.isFinite(n) ? n : 0)
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(Number.isFinite(n) ? n : 0)
 }
 
 type DraftFields = { [K in keyof ManualTaxFields]: string }
@@ -98,7 +70,7 @@ function draftToManualFields(fields: DraftFields): ManualTaxFields {
   const out = {} as ManualTaxFields
   for (const key of MANUAL_FIELD_KEYS) {
     const raw = fields[key].trim()
-    out[key] = raw === '' ? null : Number(raw)
+    out[key] = parseTaxAmount(raw)
   }
   return out
 }
@@ -131,12 +103,8 @@ const GROUP_META: Record<TaxCategoryGroup, { title: string; hint?: string }> = {
 }
 
 const GROUP_ORDER: TaxCategoryGroup[] = ['income', 'operatingExpense', 'professional', 'travel', 'meals', 'financing', 'capital']
-// Property-First UX Cleanup precedent + this milestone's own "more
-// capability, less visible complexity": the groups a landlord uses on
-// nearly every property stay open by default; the less-common ones
-// start collapsed but are always one click away, and their own header
-// still shows a running total even while closed.
-const DEFAULT_EXPANDED_GROUPS: TaxCategoryGroup[] = ['income', 'operatingExpense', 'financing']
+// Start with a short category list; expand only the section being reviewed.
+const DEFAULT_EXPANDED_GROUPS: TaxCategoryGroup[] = []
 
 function emptyCustomItemDraft(): { description: string; amount: string; group: CustomTaxItemGroup; notes: string; documentId: string } {
   return { description: '', amount: '', group: 'operatingExpense', notes: '', documentId: '' }
@@ -157,7 +125,7 @@ export function PropertyTaxPanel({
 }) {
   const availableYears = useMemo(() => getAvailableTaxYears(transactions), [transactions])
   const [year, setYear] = useState<string>(availableYears[0] || String(new Date().getFullYear()))
-  const existingRecord = useMemo(() => taxRecords.find((r) => String(r.tax_year) === year), [taxRecords, year])
+  const existingRecord = useMemo(() => taxRecords.find((r) => r.property_id === propertyId && String(r.tax_year) === year), [taxRecords, year, propertyId])
   const [draftFields, setDraftFields] = useState<DraftFields>(() => draftFromRecord(existingRecord).fields)
   const [notes, setNotes] = useState('')
   const [documentId, setDocumentId] = useState('')
@@ -292,9 +260,9 @@ export function PropertyTaxPanel({
     for (const key of MANUAL_FIELD_KEYS) {
       const raw = draftFields[key].trim()
       if (raw === '') continue
-      const n = Number(raw)
+      const n = parseTaxAmount(raw)
       if (!Number.isFinite(n)) problems.push(key)
-      else if (n < 0) problems.push(key)
+      else if (n !== null && n < 0) problems.push(key)
     }
     const rawMileage = mileage.trim()
     if (rawMileage !== '') {
@@ -322,15 +290,17 @@ export function PropertyTaxPanel({
       notes: notes.trim() || null,
       document_id: documentId || null,
     }
-    const { error: saveError } = await supabase.from('property_tax_records').upsert(payload, { onConflict: 'property_id,tax_year' })
-    setSaving(false)
-    if (saveError) {
-      setError(toSafeErrorMessage(saveError, 'Unable to save your tax figures.'))
-      return
+    try {
+      const { error: saveError } = await supabase.from('property_tax_records').upsert(payload, { onConflict: 'property_id,tax_year' })
+      if (saveError) { setError(toSafeErrorMessage(saveError, 'Unable to save your tax figures.')); return }
+      setDirty(false)
+      setSaved(true)
+      onRefresh()
+    } catch {
+      setError('Unable to save right now. Your entries are still here. Please try again.')
+    } finally {
+      setSaving(false)
     }
-    setDirty(false)
-    setSaved(true)
-    onRefresh()
   }
 
   const documentOptions = documents.filter((d) => ['Tax', 'Receipts', 'Other'].includes(d.category))
@@ -364,62 +334,66 @@ export function PropertyTaxPanel({
 
   async function saveCustomItem() {
     const description = customItemDraft.description.trim()
-    const amount = Number(customItemDraft.amount)
+    const amount = parseTaxAmount(customItemDraft.amount)
     if (!description) { setCustomItemError('Enter a description for this item.'); return }
-    if (!Number.isFinite(amount) || amount < 0) { setCustomItemError('Enter a valid, non-negative amount.'); return }
+    if (amount === null || !Number.isFinite(amount) || amount < 0) { setCustomItemError('Enter a valid, non-negative amount.'); return }
     setCustomItemSaving(true)
     setCustomItemError('')
 
-    // Section 3 — a newly attached file takes priority over whatever was
-    // picked in the "existing document" dropdown; uploaded FIRST, exactly
-    // like the new Tax Center "+ Add Expense" flow, so a failed upload
-    // never saves an item that silently lost its receipt.
-    let documentId = customItemDraft.documentId || null
-    if (customItemReceiptFile && customItemReceiptBytesPromise) {
-      const durable = await toDurableUploadableFile(customItemReceiptFile, customItemReceiptFile.type || undefined, customItemReceiptBytesPromise)
-      const uploadResult = await uploadReceiptDocument(ownerId, propertyId, durable.file, {
-        uploadFile: async (path, file, contentType) => {
-          const { error: uploadError } = await supabase.storage.from('property-documents').upload(path, file, { contentType, upsert: false })
-          return { error: uploadError?.message || null }
-        },
-        insertDocumentRow: async (row) => {
-          const { data, error: rowError } = await supabase.from('property_documents').insert(row).select('id').single()
-          return { id: (data?.id as string) || null, error: rowError?.message || null }
-        },
-        removeFile: async (path) => { await supabase.storage.from('property-documents').remove([path]) },
-      })
-      if (!uploadResult.ok) {
-        setCustomItemError(`Item not saved — the receipt could not be uploaded. ${toSafeErrorMessage(uploadResult.error, 'Try again, or save without a receipt.')}`)
-        setCustomItemSaving(false)
+    try {
+      // Section 3 — a newly attached file takes priority over whatever was
+      // picked in the "existing document" dropdown; uploaded FIRST, exactly
+      // like the new Tax Center "+ Add Expense" flow, so a failed upload
+      // never saves an item that silently lost its receipt.
+      let documentId = customItemDraft.documentId || null
+      if (customItemReceiptFile && customItemReceiptBytesPromise) {
+        const durable = await toDurableUploadableFile(customItemReceiptFile, customItemReceiptFile.type || undefined, customItemReceiptBytesPromise)
+        const uploadResult = await uploadReceiptDocument(ownerId, propertyId, durable.file, {
+          uploadFile: async (path, file, contentType) => {
+            const { error: uploadError } = await supabase.storage.from('property-documents').upload(path, file, { contentType, upsert: false })
+            return { error: uploadError?.message || null }
+          },
+          insertDocumentRow: async (row) => {
+            const { data, error: rowError } = await supabase.from('property_documents').insert(row).select('id').single()
+            return { id: (data?.id as string) || null, error: rowError?.message || null }
+          },
+          removeFile: async (path) => { await supabase.storage.from('property-documents').remove([path]) },
+        })
+        if (!uploadResult.ok) {
+          setCustomItemError(`Item not saved — the receipt could not be uploaded. ${toSafeErrorMessage(uploadResult.error, 'Try again, or save without a receipt.')}`)
+          return
+        }
+        documentId = uploadResult.documentId
+      }
+
+      const payload = {
+        property_id: propertyId,
+        owner_id: ownerId,
+        tax_year: Number(year),
+        // Best-effort link to the parent annual record where one already
+        // exists — never required (see the migration's own comment); a
+        // custom item's real identity keys are property_id + tax_year.
+        tax_record_id: existingRecord?.id || null,
+        description,
+        amount,
+        category_group: customItemDraft.group,
+        notes: customItemDraft.notes.trim() || null,
+        document_id: documentId,
+      }
+      const { error: saveError } = customItemFormOpenId === 'new'
+        ? await supabase.from('property_tax_custom_items').insert(payload)
+        : await supabase.from('property_tax_custom_items').update(payload).eq('id', customItemFormOpenId)
+      if (saveError) {
+        setCustomItemError(toSafeErrorMessage(saveError, 'Unable to save this item.'))
         return
       }
-      documentId = uploadResult.documentId
+      setCustomItemFormOpenId(null)
+      onRefresh()
+    } catch {
+      setCustomItemError('Unable to save this item. Your entries are still here. Check Documents before retrying a receipt upload.')
+    } finally {
+      setCustomItemSaving(false)
     }
-
-    const payload = {
-      property_id: propertyId,
-      owner_id: ownerId,
-      tax_year: Number(year),
-      // Best-effort link to the parent annual record where one already
-      // exists — never required (see the migration's own comment); a
-      // custom item's real identity keys are property_id + tax_year.
-      tax_record_id: existingRecord?.id || null,
-      description,
-      amount,
-      category_group: customItemDraft.group,
-      notes: customItemDraft.notes.trim() || null,
-      document_id: documentId,
-    }
-    const { error: saveError } = customItemFormOpenId === 'new'
-      ? await supabase.from('property_tax_custom_items').insert(payload)
-      : await supabase.from('property_tax_custom_items').update(payload).eq('id', customItemFormOpenId)
-    setCustomItemSaving(false)
-    if (saveError) {
-      setCustomItemError(toSafeErrorMessage(saveError, 'Unable to save this item.'))
-      return
-    }
-    setCustomItemFormOpenId(null)
-    onRefresh()
   }
 
   async function removeCustomItem(item: CustomTaxItemRow) {
@@ -432,11 +406,11 @@ export function PropertyTaxPanel({
   const customItemsTotal = yearCustomItems.reduce((sum, i) => sum + Number(i.amount), 0)
 
   return (
-    <div className="taxPanel">
+    <div className="taxPanel taxPanelSimple">
       <div className="taxPanelHead">
         <div>
-          <p className="eyebrow">TAX &amp; FINANCIALS</p>
-          <p className="muted">Review what PropRoster already tracks, and enter manual annual amounts where you want them to replace it for Tax Center reporting.</p>
+          <p className="eyebrow">ANNUAL TAX TOTALS</p>
+          <p className="muted">Choose a category below to review or enter annual totals. Saved income and expenses are already included. A manual total replaces the tracked amount; it is not added twice.</p>
         </div>
         <label className="taxPanelYear">
           Tax year
@@ -497,23 +471,15 @@ export function PropertyTaxPanel({
                 const value = breakdown[c.key]
                 const hasTrackedSource = c.trackedCategory !== null
                 return (
-                  <div className="taxManualRow" key={c.key}>
-                    <div className="taxManualRowHead"><span>{c.label}</span></div>
-                    <div className="taxManualRowBody">
-                      {hasTrackedSource ? (
-                        <div className="taxManualRowStat"><span>Tracked in PropRoster</span><strong>{moneyStr(value.tracked)}</strong></div>
-                      ) : (
-                        <div className="taxManualRowStat taxManualRowNoTrack"><span>Source</span><strong>Manual entry only</strong></div>
-                      )}
-                      <label className="taxManualRowInput evalField">
-                        <span>Manual tax entry{hasTrackedSource ? ' (override)' : ''}</span>
-                        <div className="evalInputWrap">
-                          <input inputMode="decimal" value={draftFields[c.manualField as keyof ManualTaxFields]} onChange={(e) => updateField(c.manualField as keyof ManualTaxFields, e.target.value)} placeholder={hasTrackedSource ? 'Leave blank to use tracked' : '0.00'} />
-                          <span className="evalSuffix">$</span>
-                        </div>
-                      </label>
-                      <div className="taxManualRowStat taxManualRowEffective"><span>Tax Center amount</span><strong>{moneyStr(value.effective)}</strong></div>
+                  <div className="taxAmountRow" key={c.key}>
+                    <div className="taxAmountRowInfo">
+                      <strong>{c.label}</strong>
+                      <small>{hasTrackedSource ? `Tracked: ${moneyStr(value.tracked)}. Leave blank to use this.` : 'Enter the annual total.'}</small>
                     </div>
+                    <label className="taxAmountRowField">
+                      <span className="taxAmountCurrency" aria-hidden="true">$</span>
+                      <TaxAmountInput key={`${propertyId}-${year}-${c.manualField}`} label={`${c.label} annual amount`} value={draftFields[c.manualField as keyof ManualTaxFields]} onChange={(text) => updateField(c.manualField as keyof ManualTaxFields, text)} placeholder={hasTrackedSource ? String(value.tracked) : '0.00'} invalid={validationProblems.includes(c.manualField as string)} />
+                    </label>
                   </div>
                 )
               })}
@@ -557,7 +523,7 @@ export function PropertyTaxPanel({
         </button>
 
         {customItemsExpanded && <div className="taxPanelGroupBody">
-          <p className="muted taxPanelHint">For anything that doesn&apos;t fit a category above — add, edit, or remove items here. Each item counts exactly once, already included in its own group&apos;s total above (Property &amp; Operating Expenses, Professional &amp; Administrative, Travel &amp; Vehicle, Meals, Mortgage &amp; Financing, or Capital &amp; Depreciable Items) — never added a second time here.</p>
+          <p className="muted taxPanelHint">Add a named expense when it does not fit the standard categories. It is included in its selected category once.</p>
 
           {yearCustomItems.length > 0 && <div className="taxCustomItemList">
             {yearCustomItems.map((item) => (
@@ -582,7 +548,7 @@ export function PropertyTaxPanel({
                   <input value={customItemDraft.description} onChange={(e) => setCustomItemDraft((d) => ({ ...d, description: e.target.value }))} placeholder="e.g. Storm damage tarp rental" />
                 </label>
                 <label>Amount
-                  <input inputMode="decimal" value={customItemDraft.amount} onChange={(e) => setCustomItemDraft((d) => ({ ...d, amount: e.target.value }))} placeholder="0.00" />
+                  <TaxAmountInput label="Other tax item amount" value={customItemDraft.amount} onChange={(amount) => setCustomItemDraft((d) => ({ ...d, amount }))} />
                 </label>
                 <label>Category / group
                   <select value={customItemDraft.group} onChange={(e) => setCustomItemDraft((d) => ({ ...d, group: e.target.value as CustomTaxItemGroup }))}>
@@ -623,8 +589,8 @@ export function PropertyTaxPanel({
         </div>}
       </div>
 
-      <div className="taxPanelGroup">
-        <h4>Additional information</h4>
+      <details className="taxPanelGroup taxAdditionalInfo">
+        <summary>Notes &amp; supporting document</summary>
         <label className="fullField">Notes<textarea rows={3} value={notes} onChange={(e) => { setNotes(e.target.value); setDirty(true); setSaved(false) }} placeholder="e.g. Property tax figure from county bill; mortgage interest from Form 1098" /></label>
         <label className="fullField">Supporting document (optional)
           <select value={documentId} onChange={(e) => { setDocumentId(e.target.value); setDirty(true); setSaved(false) }}>
@@ -632,14 +598,15 @@ export function PropertyTaxPanel({
             {documentOptions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
         </label>
-      </div>
+      </details>
 
       {error && <p className="errorMessage">{error}</p>}
       <div className="taxPanelSave">
         {saved && !dirty && <span className="muted taxPanelSavedNote">Saved.</span>}
         {dirty && <span className="muted taxPanelSavedNote">Unsaved changes</span>}
-        <button type="button" className="primary" disabled={saving || validationProblems.length > 0} onClick={() => void save()}>
-          {saving ? 'Saving…' : 'Save manual tax entries'}
+        {validationProblems.length > 0 && <span className="errorMessage" role="status">Check the highlighted amounts. Use a positive number, such as 1,250.50.</span>}
+        <button type="button" className="primary" disabled={saving || !dirty || validationProblems.length > 0} onClick={() => void save()}>
+          {saving ? 'Saving…' : 'Save tax totals'}
         </button>
       </div>
     </div>

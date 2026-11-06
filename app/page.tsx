@@ -20,6 +20,9 @@ import { PropertySystemsPanel, type PropertySystem } from '../components/propert
 import { PropertyNotesPanel, type PropertyNote } from '../components/property-profile/PropertyNotesPanel'
 import { PropertyOwnershipPanel, type PropertyOwnership } from '../components/property-profile/PropertyOwnershipPanel'
 import { PropertyTimelinePanel } from '../components/property-profile/PropertyTimelinePanel'
+import { capturePhotoPicker } from '../lib/property-photos/picker'
+import { ConditionRecordsPanel } from '../components/property-profile/ConditionRecordsPanel'
+import { isMissingConditionSetup } from '../lib/condition-records/model'
 import { PropertyTaxPanel, type PropertyTaxRecordRow, type CustomTaxItemRow } from '../components/property-profile/PropertyTaxPanel'
 import type { NormalizedAddress } from '../lib/address/types'
 import { deriveTimeline } from '../lib/property-timeline/derive-timeline'
@@ -313,12 +316,12 @@ type PropertySubTab = 'Mortgage' | 'Insurance' | 'Systems' | 'Ownership'
 // belong under "Rent," so they get their own lightweight sub-tabs rather
 // than one long scroll (the same pattern Property's own sub-tabs already
 // use, not a new UI concept).
-type RentSubTab = 'Lease' | 'Ledger' | 'Tenant'
+type RentSubTab = 'Lease' | 'Ledger' | 'Tenant' | 'Conditions'
 type DocumentsSubTab = 'Documents' | 'Photos'
 
 const tabs: Tab[] = ['Overview', 'Rent', 'Maintenance', 'Details', 'PropCrew', 'Documents', 'Tax']
 const propertySubTabs: PropertySubTab[] = ['Mortgage', 'Insurance', 'Systems', 'Ownership']
-const rentSubTabs: RentSubTab[] = ['Lease', 'Ledger', 'Tenant']
+const rentSubTabs: RentSubTab[] = ['Lease', 'Ledger', 'Tenant', 'Conditions']
 const docCategories = ['All', ...DOCUMENT_CATEGORIES]
 
 const money = (n: number) => new Intl.NumberFormat('en-US', {
@@ -877,6 +880,12 @@ export default function Home() {
   const [propertyNotes, setPropertyNotes] = useState<PropertyNote[]>([])
   const [propertyOwnership, setPropertyOwnership] = useState<PropertyOwnership[]>([])
   const [propertySubTab, setPropertySubTab] = useState<PropertySubTab>('Mortgage')
+  const conditionUnsavedRef = useRef(false)
+  function mayLeaveConditions() {
+    if (conditionUnsavedRef.current && !window.confirm('Leave unsaved inspection changes or an upload in progress? Saved records will be retained.')) return false
+    conditionUnsavedRef.current = false
+    return true
+  }
   const [rentSubTab, setRentSubTab] = useState<RentSubTab>('Lease')
   const [documentsSubTab, setDocumentsSubTab] = useState<DocumentsSubTab>('Documents')
   // Documents redesign: which category chip is active in the "Add
@@ -1937,6 +1946,9 @@ export default function Home() {
 
   async function deleteProperty() {
     if (!supabase || !user || !selected) return
+    const conditionCheck = await supabase.from('condition_inspections').select('id', { count: 'exact', head: true }).eq('property_id', selected.id).eq('owner_id', user.id)
+    if (conditionCheck.error && !isMissingConditionSetup(conditionCheck.error)) { setError('Could not check retained inspection records. No property files were removed.'); return }
+    if ((conditionCheck.count ?? 0) > 0) { setError('This property has retained condition reports and cannot be deleted. Keep it to preserve inspection records.'); return }
     setBusy(true)
     setError('')
 
@@ -1969,6 +1981,7 @@ export default function Home() {
   }
 
   const openProperty = (id: string, tab: Tab = 'Overview', docsSubTab?: DocumentsSubTab, propSubTab?: PropertySubTab, rentSubTab?: RentSubTab) => {
+    if (!mayLeaveConditions()) return
     // Mobile V2 — Area E: give the dashboard-to-property transition its own
     // history entry so the native/browser back gesture returns to the
     // dashboard instead of leaving the app. Only pushed when we're actually
@@ -1995,6 +2008,7 @@ export default function Home() {
   // real back-press would be a silent no-op (popstate firing on an already-
   // null selectedId) before it actually left the page.
   function closeProperty() {
+    if (!mayLeaveConditions()) return
     if (typeof window !== 'undefined' && (window.history.state as { proproster?: string } | null)?.proproster === 'property') {
       window.history.back()
     } else {
@@ -2013,6 +2027,7 @@ export default function Home() {
   // with any other history traffic (e.g. a future route change).
   useEffect(() => {
     const onPopState = () => {
+      if (!mayLeaveConditions()) { window.history.pushState({ proproster: 'property' }, '', window.location.href); return }
       setSelectedId((current) => (current === null ? current : null))
     }
     window.addEventListener('popstate', onPopState)
@@ -2283,41 +2298,29 @@ export default function Home() {
     // onChange started BEFORE resetting the input, giving a durable,
     // in-memory-backed File no matter how much of this loop's own
     // `await`s have already run by the time we get to it.
-    const incoming: { file: File; contentType: string | undefined }[] = []
-    for (let i = 0; i < results.length; i++) {
-      const { file, validation } = results[i]
-      if (!validation.ok) continue
-      try {
-        const durable = await toDurableUploadableFile(file, validation.contentType, bytesPromises[i])
-        logPhotoUploadDiagnostic('PHOTO_PAYLOAD_READY', { site: 'gallery-add', originalSize: file.size, byteLength: durable.byteLength })
-        if (file.size > 0 && durable.byteLength === 0) {
-          logPhotoUploadDiagnostic('PHOTO_PAYLOAD_READ_ERROR', { site: 'gallery-add', error: { message: `reported ${file.size} bytes but 0 bytes were readable` } })
-        }
-        incoming.push({ file: durable.file, contentType: validation.contentType })
-      } catch (err) {
-        logPhotoUploadDiagnostic('PHOTO_PAYLOAD_READ_ERROR', { site: 'gallery-add', error: safeErrorSummary(err) })
-        surfaceError(`"${file.name}" could not be read. Please try selecting it again.`)
-      }
-    }
-    if (!incoming.length) {
-      if (rejectionMessage) surfaceError(rejectionMessage)
-      return
-    }
     setBusy(true)
     setError(rejectionMessage)
-    // Post-selection-failure investigation (V2): the entire upload loop
-    // below is now wrapped in try/finally. Previously NOTHING in this
-    // function caught an unexpected exception — the input's onChange
-    // calls this with `void addPhotoFiles(files)` (fire-and-forget, no
-    // `.catch()`), so any throw that wasn't a Supabase-returned `{error}`
-    // (already all checked below) would become a silent unhandled
-    // promise rejection: no setError, no console.error, no
-    // loadPortfolio(), and `busy` left stuck true. That exact failure
-    // mode — total silence, no photo, no error — matches the reported
-    // symptom, and this closes it regardless of what specifically
-    // throws (a future SDK change, a transient browser API failure,
-    // etc.), not just the causes already ruled out below.
     try {
+      const incoming: { file: File; contentType: string | undefined }[] = []
+      for (let i = 0; i < results.length; i++) {
+        const { file, validation } = results[i]
+        if (!validation.ok) continue
+        try {
+          const durable = await toDurableUploadableFile(file, validation.contentType, bytesPromises[i])
+          logPhotoUploadDiagnostic('PHOTO_PAYLOAD_READY', { site: 'gallery-add', originalSize: file.size, byteLength: durable.byteLength })
+          if (file.size > 0 && durable.byteLength === 0) {
+            logPhotoUploadDiagnostic('PHOTO_PAYLOAD_READ_ERROR', { site: 'gallery-add', error: { message: `reported ${file.size} bytes but 0 bytes were readable` } })
+          }
+          incoming.push({ file: durable.file, contentType: validation.contentType })
+        } catch (err) {
+          logPhotoUploadDiagnostic('PHOTO_PAYLOAD_READ_ERROR', { site: 'gallery-add', error: safeErrorSummary(err) })
+          surfaceError(`"${file.name}" could not be read. Please try selecting it again.`)
+        }
+      }
+      if (!incoming.length) {
+        if (rejectionMessage) surfaceError(rejectionMessage)
+        return
+      }
       const hasCover = selectedPhotos.some((photo) => photo.is_cover)
       for (let index = 0; index < incoming.length; index++) {
         // `file` here is already a durable, MIME-corrected,
@@ -3300,7 +3303,7 @@ export default function Home() {
             replaced the horizontally-scrolling mobile version of this
             same strip with .mobilePropertyNav below — see its own
             comment). */}
-        <nav className="tabs" role="tablist" aria-label="Property sections">{tabs.map((tab) => <button key={tab} role="tab" aria-selected={activeTab === tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
+        <nav className="tabs" role="tablist" aria-label="Property sections">{tabs.map((tab) => <button key={tab} role="tab" aria-selected={activeTab === tab} className={activeTab === tab ? 'active' : ''} onClick={() => { if (mayLeaveConditions()) setActiveTab(tab) }}>{tab}</button>)}</nav>
 
         <nav className="propertySectionTiles" aria-label="Property sections">
           {([
@@ -3315,7 +3318,7 @@ export default function Home() {
             { id: 'tenant', label: 'Tenant Connect', tab: 'Rent', rent: 'Tenant', Icon: ChatIcon },
           ] as { id: string; label: string; tab: Tab; rent?: RentSubTab; docs?: DocumentsSubTab; Icon: typeof HomeIcon }[]).map(({ id, label, tab, rent, docs, Icon }) => {
             const active = activeTab === tab && (!docs || documentsSubTab === docs) && (!rent || (rent === 'Lease' ? rentSubTab !== 'Tenant' : rentSubTab === rent))
-            return <button type="button" key={id} aria-pressed={active} className={active ? 'active' : ''} onClick={() => { setActiveTab(tab); if (rent) setRentSubTab(rent); if (docs) setDocumentsSubTab(docs) }}>
+            return <button type="button" key={id} aria-pressed={active} className={active ? 'active' : ''} onClick={() => { if (!mayLeaveConditions()) return; setActiveTab(tab); if (rent) setRentSubTab(rent); if (docs) setDocumentsSubTab(docs) }}>
               <Icon /><span>{label}</span>
               {tab === 'Maintenance' && selectedOpenMaintenanceCount > 0 && <span className="propertyTileBadge">{selectedOpenMaintenanceCount}</span>}
             </button>
@@ -3603,14 +3606,10 @@ export default function Home() {
           {documentsSubTab === 'Photos' && <>
           <div className="sectionHead workspaceHeading"><div><p className="eyebrow">PROPERTY PHOTOS</p><h2>Visual record</h2><p>Keep listing photos, renovation progress, inspections and property-condition photos together.</p></div></div>
           <label className="photoUploader"><span>+</span><strong>{busy ? 'Uploading…' : 'Add property photos'}</strong><small>Select multiple images at once. The first photo becomes the cover if there is no cover yet.</small><input type="file" accept="image/*" multiple disabled={busy} onChange={(e) => {
-                const files = e.target.files
-                // V1.2: begin reading every file's bytes here,
-                // synchronously, BEFORE the input's value is reset below
-                // — see lib/uploads/durable-file.ts's header.
-                const bytesPromises = files ? Array.from(files).map(beginReadingFileBytes) : []
-                e.target.value = ''
-                if (files) void addPhotoFiles(files, bytesPromises)
+                const { files, bytesPromises } = capturePhotoPicker(e.currentTarget)
+                if (files.length) void addPhotoFiles(files, bytesPromises)
               }} /></label>
+          {error && <p className="photoUploadError" role="alert">{error}</p>}
           <div className="photoGallery">{selectedPhotos.length ? selectedPhotos.map((photo) => <div className={`galleryItem ${photo.is_cover ? 'coverItem' : ''}`} key={photo.id}>{photo.signedUrl ? <img src={photo.signedUrl} alt={photo.name} /> : <div className="heroPlaceholder">Photo unavailable</div>}<div className="galleryMeta"><span>{photo.name}</span><div className="galleryButtons">{!photo.is_cover && <button onClick={() => void setCover(photo)}>Set cover</button>}<button className="removePhoto" onClick={() => void removePhoto(photo)}>×</button></div></div></div>) : <div className="emptyGallery"><strong>No photos uploaded yet</strong><span>Add photos to build this property's visual history.</span></div>}</div>
           </>}
         </section>}
@@ -3625,14 +3624,14 @@ export default function Home() {
                   <p>Choose a category, then drop in a file — no AI involved.</p>
                   <label>File category<select value={uploadCategory} onChange={(e) => setUploadCategory(e.target.value)}>{DOCUMENT_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></label>
                   <label className={`dropZone ${isDragging ? 'dragging' : ''}`} onDragEnter={(e) => { e.preventDefault(); setIsDragging(true) }} onDragOver={(e) => e.preventDefault()} onDragLeave={() => setIsDragging(false)} onDrop={(e: DragEvent<HTMLLabelElement>) => { e.preventDefault(); setIsDragging(false); void addDocumentFiles(e.dataTransfer.files, Array.from(e.dataTransfer.files).map(beginReadingFileBytes)) }}><span className="uploadIcon">↑</span><strong>{busy ? 'Uploading…' : 'Drop a file here or choose one'}</strong><small>PDF, spreadsheets, receipts, contracts and more · up to 50 MB each</small><input type="file" multiple disabled={busy} onChange={(e) => {
-                    const files = e.target.files
+                    const files = Array.from(e.target.files || [])
                     // V1.2: begin reading every file's bytes here,
                     // synchronously, BEFORE the input's value is reset
                     // below — see lib/uploads/durable-file.ts's header.
                     // This input previously never reset its value at
                     // all, meaning the browser wouldn't fire onChange
                     // again for a re-selected file — fixed here too.
-                    const bytesPromises = files ? Array.from(files).map(beginReadingFileBytes) : []
+                    const bytesPromises = files.map(beginReadingFileBytes)
                     e.target.value = ''
                     if (files) void addDocumentFiles(files, bytesPromises)
                   }} /></label>
@@ -3663,7 +3662,9 @@ export default function Home() {
               Requests" to "Tenant" — the internal RentSubTab value was
               already 'Tenant', so this is a label-only change, no
               route/state rename. */}
-          <div className="subTabs" role="tablist" aria-label="Rent sections">{rentSubTabs.map((sub) => <button key={sub} role="tab" aria-selected={rentSubTab === sub} className={rentSubTab === sub ? 'active' : ''} onClick={() => setRentSubTab(sub)}>{sub === 'Tenant' ? 'Tenant' : sub === 'Ledger' ? 'Ledger' : 'Lease & Rent'}</button>)}</div>
+          <div className="subTabs" role="tablist" aria-label="Rent sections">{rentSubTabs.map((sub) => <button key={sub} role="tab" aria-selected={rentSubTab === sub} className={rentSubTab === sub ? 'active' : ''} onClick={() => { if (mayLeaveConditions()) setRentSubTab(sub) }}>{sub === 'Tenant' ? 'Tenant' : sub === 'Ledger' ? 'Ledger' : sub === 'Conditions' ? 'Move-in / Move-out' : 'Lease & Rent'}</button>)}</div>
+
+          {rentSubTab === 'Conditions' && supabase && <ConditionRecordsPanel key={selected.id} client={supabase} propertyId={selected.id} ownerId={user.id} address={selected.address} leases={selectedLeases} onDirtyChange={value => { conditionUnsavedRef.current = value }} />}
 
           {rentSubTab === 'Lease' && (() => {
             // Ungated by property_type (unlike the hero/Overview occupancy
@@ -3810,8 +3811,8 @@ export default function Home() {
               itself (calculation engine, override semantics, collapsible
               groups, manual entry) is completely untouched below. */}
           <div className="sectionHead workspaceHeading taxSectionHead">
-            <div><p className="eyebrow">TAX</p><h2>Property tax workspace</h2></div>
-            <button className="primary" onClick={() => { setUploadCategory('Tax'); setShowAddDocumentChooser(true) }}>+ Add Tax Document</button>
+            <div><p className="eyebrow">TAX</p><h2>Tax records</h2></div>
+            <button className="primary" onClick={() => { setUploadCategory('Tax'); setShowAddDocumentChooser(true) }}>+ Add document</button>
           </div>
 
           {/* A lightweight, property-scoped list of already-uploaded Tax
@@ -3836,6 +3837,7 @@ export default function Home() {
           )}
 
           <PropertyTaxPanel
+            key={selected.id}
             supabase={supabase}
             propertyId={selected.id}
             ownerId={user.id}

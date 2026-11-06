@@ -40,6 +40,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { TaxAmountInput } from '../../components/property-profile/TaxAmountInput'
+import { parseTaxAmount } from '../../lib/tax-center/amount-input'
 import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
 import { AuthHeader } from '../../components/AuthHeader'
@@ -355,9 +357,9 @@ function TaxCenterWorkspace() {
 
   async function saveExpense() {
     if (!supabase || !user) return
-    const amount = Number(expenseDraft.amount)
+    const amount = parseTaxAmount(expenseDraft.amount)
     if (!expenseDraft.propertyId) { setExpenseError('Select which property this expense is for.'); return }
-    if (!Number.isFinite(amount) || amount <= 0) { setExpenseError('Enter a valid amount.'); return }
+    if (amount === null || !Number.isFinite(amount) || amount <= 0) { setExpenseError('Enter a valid amount.'); return }
     if (!expenseDraft.date) { setExpenseError('Enter a date.'); return }
     setExpenseSaving(true)
     setExpenseError('')
@@ -535,8 +537,8 @@ function TaxCenterWorkspace() {
 
       <section className="intro noPrint">
         <p className="eyebrow">TAX CENTER</p>
-        <h1>Organize your rental income and expenses for tax time.</h1>
-        <p>A reporting and organization tool — PropRoster does not calculate your final tax liability, file returns, or give individualized tax advice. Review everything here with your tax professional.</p>
+        <h1>Tax Center</h1>
+        <p>Your rental income, expenses and receipts, ready to review and share with your tax professional.</p>
       </section>
 
       {error && <p className="errorMessage noPrint">{error}</p>}
@@ -589,6 +591,15 @@ function TaxCenterWorkspace() {
               <div className="taxCenterSummaryTile taxCenterSummaryTileReceipts"><span>Receipts</span><strong>{yearSummary.receiptCount}</strong></div>
             </div>
             <button type="button" className="primary taxCenterAddExpense" onClick={openAddExpense}>+ Add Expense</button>
+          </section>
+
+          <section className="noPrint taxCenterPropertyEntry">
+            <div className="sectionHead"><div><h2>Annual totals by property</h2><p>Review tracked amounts or enter totals from your statements.</p></div></div>
+            <div className="taxCenterPropertyLinks">
+              {properties.map(property => <Link key={property.id} href={`/?openProperty=${property.id}&openTab=Tax`}>
+                <span><strong>{property.address}</strong><small>Review annual totals</small></span><span aria-hidden="true">›</span>
+              </Link>)}
+            </div>
           </section>
 
           <section className="noPrint taxCenterFeedSection">
@@ -664,7 +675,7 @@ function TaxCenterWorkspace() {
                         Upload's expense review (ReceiptReview.tsx) uses. */}
                     <div className="currencyField">
                       <span className="currencyFieldPrefix" aria-hidden="true">$</span>
-                      <input inputMode="decimal" value={expenseDraft.amount} onChange={(e) => setExpenseDraft((d) => ({ ...d, amount: e.target.value }))} placeholder="184.27" />
+                      <TaxAmountInput label="Expense amount" value={expenseDraft.amount} onChange={(amount) => setExpenseDraft((d) => ({ ...d, amount }))} placeholder="184.27" />
                     </div>
                   </label>
                   <label>Property
