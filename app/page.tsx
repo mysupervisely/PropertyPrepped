@@ -3820,7 +3820,6 @@ export default function Home() {
               groups, manual entry) is completely untouched below. */}
           <div className="sectionHead workspaceHeading taxSectionHead">
             <div><h2>Income &amp; expenses</h2></div>
-            <button className="primary" onClick={() => { setUploadCategory('Tax'); setShowAddDocumentChooser(true) }}>+ Add document</button>
           </div>
 
           {/* A lightweight, property-scoped list of already-uploaded Tax
@@ -3856,6 +3855,7 @@ export default function Home() {
             customItems={selectedTaxCustomItems}
             onRefresh={() => void loadPortfolio()}
             onScanReceipt={() => smartUploadTriggerRef.current()}
+            onAddDocument={() => { setUploadCategory('Tax'); setShowAddDocumentChooser(true) }}
           />
           <p className="ledgerNote">Tax Center (the portfolio-wide view across every property) aggregates these same manual entries alongside your Rent ledger — see the <Link href="/tax-center">Tax Center</Link> page.</p>
         </section>}

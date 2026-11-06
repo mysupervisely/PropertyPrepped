@@ -5133,3 +5133,24 @@ h2, h3, p { margin-top: 0; }
   .dashboardHome > :is(.portfolioSnapshot, .commandCenterSection, .dashboardPropertiesSection) { padding: 10px; }
   .dashboardHome .grid > .propertyCard { padding: 8px; }
 }
+
+/* Property taxes: one compact toolbar and mobile-safe expense fields. */
+.taxPanelSimple { gap: 16px; min-width: 0; }
+.taxPanelSimple .taxPanelHead { gap: 10px; min-width: 0; }
+.taxPanelSimple .propertyTaxToolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; width: 100%; min-width: 0; }
+.taxPanelSimple .taxPanelYear { order: 0; justify-content: flex-start; gap: 8px; font-size: 12px; }
+.taxPanelSimple .taxPanelYear select { min-width: 80px; min-height: 40px; padding: 7px 8px; font-size: 16px; }
+.taxPanelSimple .propertyTaxToolbar > button { min-height: 40px; padding: 8px 10px; font-size: 12px; white-space: nowrap; }
+.taxPanelSimple .taxPanelHead > p { margin: 0; font-size: 12px; line-height: 1.5; }
+.propertyExpenseFields > label { min-inline-size: 0; max-inline-size: 100%; }
+.propertyExpenseFields input, .propertyExpenseFields select { display: block; min-inline-size: 0; max-inline-size: 100%; box-sizing: border-box; }
+.propertyExpenseFields input[type="date"] { appearance: none; -webkit-appearance: none; text-align: left; min-height: 44px; }
+.propertyExpenseFields input[type="date"]::-webkit-date-and-time-value { text-align: left; min-height: 20px; }
+.propertyExpenseFooter > .receiptAttach { max-width: 100%; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 480px) {
+  .propertyExpenseFields .propertyExpenseDate,
+  .propertyExpenseFields .propertyExpenseNote { grid-column: 1 / -1; }
+  .propertyExpenseTitle { flex-wrap: wrap; gap: 8px; }
+  .propertyExpenseFields { gap: 12px 10px; }
+  .propertyExpenseBox { padding: 12px; }
+}

@@ -112,7 +112,7 @@ function emptyCustomItemDraft(): { description: string; amount: string; group: C
 }
 
 export function PropertyTaxPanel({
-  supabase, propertyId, ownerId, transactions, maintenanceRecords, documents, taxRecords, customItems, onRefresh, onScanReceipt,
+  supabase, propertyId, ownerId, transactions, maintenanceRecords, documents, taxRecords, customItems, onRefresh, onScanReceipt, onAddDocument,
 }: {
   supabase: SupabaseClient
   propertyId: string
@@ -124,6 +124,7 @@ export function PropertyTaxPanel({
   customItems: CustomTaxItemRow[]
   onRefresh: () => void
   onScanReceipt?: () => void
+  onAddDocument?: () => void
 }) {
   const availableYears = useMemo(() => getAvailableTaxYears(transactions), [transactions])
   const [year, setYear] = useState<string>(availableYears[0] || String(new Date().getFullYear()))
@@ -410,15 +411,16 @@ export function PropertyTaxPanel({
   return (
     <div className="taxPanel taxPanelSimple">
       <div className="taxPanelHead">
-        <div>
-          <p className="muted">Add expenses below or scan a receipt. Your saved entries build the yearly totals.</p>
+        <div className="propertyTaxToolbar">
+          <label className="taxPanelYear">
+            Tax year
+            <select value={year} onChange={(e) => changeYear(e.target.value)}>
+              {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </label>
+          {onAddDocument && <button type="button" className="secondary compactAction" onClick={onAddDocument}>+ Add document</button>}
         </div>
-        <label className="taxPanelYear">
-          Tax year
-          <select value={year} onChange={(e) => changeYear(e.target.value)}>
-            {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </label>
+        <p className="muted">Add expenses below or scan a receipt. Your saved entries build the yearly totals.</p>
       </div>
 
       {/* Concise annual summary — the comprehensive category list below

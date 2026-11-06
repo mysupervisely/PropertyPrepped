@@ -46,7 +46,7 @@ export function PropertyExpenseEntry({ client, ownerId, propertyId, onSaved, onS
     <fieldset disabled={saving} className="propertyExpenseFields">
       <label>Category<select value={draft.category} onChange={event=>setDraft(d=>({...d,category:event.target.value}))}>{PROPERTY_EXPENSE_CATEGORIES.map(category=><option key={category} value={category}>{category === 'Taxes' ? 'Property taxes' : category === 'CapEx' ? 'Capital improvements' : category}</option>)}</select></label>
       <label>Amount<TaxAmountInput key={entryKey} label="New expense amount" value={draft.amount} onChange={amount=>setDraft(d=>({...d,amount}))} /></label>
-      <label>Date<input type="date" value={draft.date} onChange={event=>setDraft(d=>({...d,date:event.target.value}))} /></label>
+      <label className="propertyExpenseDate">Date<input type="date" value={draft.date} onChange={event=>setDraft(d=>({...d,date:event.target.value}))} /></label>
       <label className="propertyExpenseNote">Note (optional)<input value={draft.note} onChange={event=>setDraft(d=>({...d,note:event.target.value}))} placeholder="What was this for?" /></label>
     </fieldset>
     <div className="propertyExpenseFooter"><label className="secondary compactAction receiptAttach">{receipt ? receipt.file.name : 'Attach receipt'}<input type="file" accept="image/*,.pdf,application/pdf" disabled={saving} onChange={event=>{const file=event.currentTarget.files?.[0]; if(file){setReceipt({file,bytes:beginReadingFileBytes(file)});uploadedDocument.current=null} event.currentTarget.value=''}} /></label>
