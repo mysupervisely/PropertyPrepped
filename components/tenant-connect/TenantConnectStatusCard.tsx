@@ -18,6 +18,7 @@
 import { useEffect, useState } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { tenantConnectStatusLabel, findAccessForLease, staleInvitedEmail } from '../../lib/tenant-connect/helpers'
+import { tenantInviteLink } from '../../lib/tenant-connect/notify'
 import { notifyTenantConnect } from '../../lib/tenant-connect/notify-client'
 import type { TenantPropertyAccess } from '../../lib/tenant-connect/types'
 
@@ -37,6 +38,8 @@ export function TenantConnectStatusCard({
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [shareLink, setShareLink] = useState('')
+  const [linkCopied, setLinkCopied] = useState(false)
   const [showRevokeConfirm, setShowRevokeConfirm] = useState(false)
   // Simplification + Maintenance Workspace V2, Phase D.3: revoking
   // access is a rare, destructive, administrative action — it now sits
@@ -46,6 +49,8 @@ export function TenantConnectStatusCard({
   // existing confirmation step below (showRevokeConfirm) — this adds a
   // step before that, it doesn't remove one.
   const [showManageAccess, setShowManageAccess] = useState(false)
+
+  useEffect(() => { setShareLink(''); setLinkCopied(false) }, [propertyId, currentLease?.id])
 
   async function load() {
     setLoading(true)
@@ -79,6 +84,14 @@ export function TenantConnectStatusCard({
 
   const access = findAccessForLease(rows, currentLease.id)
   const statusLabel = tenantConnectStatusLabel(access?.status ?? null)
+
+  async function copyPortalLink() {
+    if (!access || access.status === 'Revoked') return
+    const link = tenantInviteLink(window.location.origin, access.id)
+    setShareLink(link)
+    try { await navigator.clipboard.writeText(link); setLinkCopied(true) }
+    catch { setLinkCopied(false) }
+  }
 
   async function invite() {
     if (!currentLease?.tenant_email) return
@@ -154,6 +167,7 @@ export function TenantConnectStatusCard({
             {!access && currentLease.tenant_email && <button className="primary" disabled={busy} onClick={() => void invite()}>{busy ? 'Sending…' : 'Invite Tenant'}</button>}
             {!access && !currentLease.tenant_email && <p className="muted">Add a tenant email on the lease to invite them.</p>}
             {access?.status === 'Invited' && <button className="secondary" disabled={busy} onClick={() => void resend()}>{busy ? 'Sending…' : 'Resend Invitation'}</button>}
+            {access && access.status !== 'Revoked' && <button type="button" className="secondary" onClick={() => void copyPortalLink()}>{linkCopied ? 'Link copied' : 'Copy tenant link'}</button>}
             {/* Phase D.3: "Manage access" replaces a permanently visible
                 "Revoke access" — a rare, destructive, administrative
                 action shouldn't compete for attention with Invite/
@@ -176,6 +190,7 @@ export function TenantConnectStatusCard({
             )}
             {access?.status === 'Revoked' && currentLease.tenant_email && <button className="secondary" disabled={busy} onClick={() => void invite()}>{busy ? 'Sending…' : 'Invite Tenant'}</button>}
           </div>
+          {shareLink && <label className="tenantInviteLinkField">Send this link to your tenant. They must use the invited email address.<input aria-label="Tenant portal invitation link" readOnly value={shareLink} onFocus={event=>event.currentTarget.select()} /></label>}
         </>
       )}
     </div>

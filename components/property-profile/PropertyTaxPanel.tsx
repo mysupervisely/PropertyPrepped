@@ -411,7 +411,6 @@ export function PropertyTaxPanel({
     <div className="taxPanel taxPanelSimple">
       <div className="taxPanelHead">
         <div>
-          <p className="eyebrow">INCOME &amp; EXPENSES</p>
           <p className="muted">Add expenses below or scan a receipt. Your saved entries build the yearly totals.</p>
         </div>
         <label className="taxPanelYear">

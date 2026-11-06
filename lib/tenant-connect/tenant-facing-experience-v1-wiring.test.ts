@@ -33,7 +33,9 @@ const migrationSource = readFile('supabase/milestone-29-tenant-facing-experience
 describe('1. Invited new tenant signup — opens in tenant context, never the landlord dashboard', () => {
   it('an unauthenticated /tenant visitor gets a real sign-in/signup form on THIS page, not a link elsewhere', () => {
     expect(tenantPageSource).toContain('function TenantSignIn()')
-    expect(tenantPageSource).toContain("supabase.auth.signUp({ email: email.trim(), password })")
+    expect(tenantPageSource).toContain("supabase.auth.signUp({ email: email.trim(), password,")
+    expect(tenantPageSource).toContain("emailRedirectTo: `${window.location.origin}/tenant`")
+    expect(tenantPageSource).toContain("window.localStorage.setItem(INTENDED_ROLE_STORAGE_KEY, 'tenant')")
     expect(tenantPageSource).toContain("supabase.auth.signInWithPassword({ email: email.trim(), password })")
   })
 

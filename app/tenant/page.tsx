@@ -38,6 +38,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { INTENDED_ROLE_STORAGE_KEY } from '../../lib/tenant-connect/onboarding'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
@@ -104,7 +105,8 @@ function TenantSignIn() {
       const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
       if (err) setError(err.message)
     } else {
-      const { data, error: err } = await supabase.auth.signUp({ email: email.trim(), password })
+      try { window.localStorage.setItem(INTENDED_ROLE_STORAGE_KEY, 'tenant') } catch {}
+      const { data, error: err } = await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: `${window.location.origin}/tenant` } })
       if (err) setError(err.message)
       else if (!data.session) setMessage('Account created. Check your email to confirm your address, then sign in.')
       // If a session came back immediately, this component just
