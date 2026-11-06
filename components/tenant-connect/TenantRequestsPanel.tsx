@@ -15,6 +15,8 @@
 // foundation repair; milestone-24's own migration was never applied to
 // production — see docs/tenant-connect-maintenance-m1-foundation.md).
 
+import { uploadTenantMedia, prepareTenantMedia, type TenantMediaLink } from '../../lib/tenant-connect/media'
+import { TenantMediaPreview } from './TenantMediaPreview'
 import { useEffect, useRef, useState } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { notifyTenantConnect } from '../../lib/tenant-connect/notify-client'
@@ -52,7 +54,7 @@ export function TenantRequestsPanel({
   const [openId, setOpenId] = useState<string | null>(null)
   const openIdRef = useRef<string | null>(null)
   const [threadMessages, setThreadMessages] = useState<PropertyMessage[]>([])
-  const [attachmentsByMessage, setAttachmentsByMessage] = useState<Map<string, string[]>>(new Map())
+  const [attachmentsByMessage, setAttachmentsByMessage] = useState<Map<string, TenantMediaLink[]>>(new Map())
   const [replyText, setReplyText] = useState('')
   const [attachFile, setAttachFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
@@ -84,12 +86,12 @@ export function TenantRequestsPanel({
   // real photos until the panel is reopened.
   async function loadAttachments(messages: PropertyMessage[], forRequestId: string) {
     if (!messages.length) { if (openIdRef.current === forRequestId) setAttachmentsByMessage(new Map()); return }
-    const { data } = await supabase.from('property_message_attachments').select('message_id, storage_path').in('message_id', messages.map((m) => m.id))
-    const rows = (data as { message_id: string; storage_path: string }[]) || []
-    const byMessage = new Map<string, string[]>()
+    const { data } = await supabase.from('property_message_attachments').select('message_id, storage_path, mime_type').in('message_id', messages.map((m) => m.id))
+    const rows = (data as { message_id: string; storage_path: string; mime_type: string | null }[]) || []
+    const byMessage = new Map<string, TenantMediaLink[]>()
     for (const row of rows) {
       const { data: signed } = await supabase.storage.from('tenant-connect-attachments').createSignedUrl(row.storage_path, 3600)
-      if (signed?.signedUrl) byMessage.set(row.message_id, [...(byMessage.get(row.message_id) || []), signed.signedUrl])
+      if (signed?.signedUrl) byMessage.set(row.message_id, [...(byMessage.get(row.message_id) || []), {url: signed.signedUrl, mimeType: row.mime_type}])
     }
     if (openIdRef.current === forRequestId) setAttachmentsByMessage(byMessage)
   }
@@ -136,10 +138,8 @@ export function TenantRequestsPanel({
       .single()
     if (msgErr || !msg) { setBusy(false); setError(msgErr?.message || 'Could not send message.'); return }
     if (attachFile) {
-      const path = `${open.conversation_id}/${crypto.randomUUID()}-${attachFile.name}`
-      const { error: uploadErr } = await supabase.storage.from('tenant-connect-attachments').upload(path, attachFile)
-      if (!uploadErr) await supabase.from('property_message_attachments').insert({ message_id: msg.id, storage_path: path, mime_type: attachFile.type, size_bytes: attachFile.size })
-      else setError(`Message sent, but the attachment failed to upload: ${uploadErr.message}`)
+      const attachmentError = await uploadTenantMedia(supabase, open.conversation_id, msg.id, attachFile)
+      if (attachmentError) setError(attachmentError)
     }
     setBusy(false)
     setReplyText('')
@@ -209,8 +209,8 @@ export function TenantRequestsPanel({
                   <p>{m.message}</p>
                   {(attachmentsByMessage.get(m.id) || []).length > 0 && (
                     <div className="tenantConnectBubbleAttachments">
-                      {(attachmentsByMessage.get(m.id) || []).map((url) => (
-                        <a key={url} href={url} target="_blank" rel="noreferrer"><img src={url} alt="Attached photo" /></a>
+                      {(attachmentsByMessage.get(m.id) || []).map((media) => (
+                        <TenantMediaPreview key={media.url} media={media} />
                       ))}
                     </div>
                   )}
@@ -222,8 +222,8 @@ export function TenantRequestsPanel({
               <textarea value={replyText} onChange={(e) => setReplyText(e.target.value)} rows={3} placeholder="Write a reply…" />
               <div className="tenantConnectComposeRow">
                 <label className="secondary tenantConnectAttachLabel">
-                  {attachFile ? attachFile.name : 'Attach photo'}
-                  <input type="file" accept="image/*" onChange={(e) => setAttachFile(e.target.files?.[0] || null)} hidden />
+                  {attachFile ? attachFile.name : 'Attach photo or video'}
+                  <input type="file" accept="image/*,video/mp4,video/quicktime,video/webm" onChange={(e) => { const file=e.currentTarget.files?.[0]; e.currentTarget.value=''; if (!file) return; const result=prepareTenantMedia(file); if(result.error) setError(result.error); else {setAttachFile(result.file!);setError('')} }} hidden />
                 </label>
                 <button className="primary" disabled={busy || !replyText.trim()} onClick={() => void sendReply()}>{busy ? 'Sending…' : 'Reply'}</button>
               </div>

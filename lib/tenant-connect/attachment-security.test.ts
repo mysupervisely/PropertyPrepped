@@ -32,7 +32,7 @@ describe.each([
   })
 
   it('fetches attachment rows scoped to the messages of the currently-open conversation only, relying on RLS to re-verify — never a bare unscoped select', () => {
-    expect(source).toMatch(/property_message_attachments'\)\.select\('message_id, storage_path'\)\.in\('message_id',\s*messages\.map/)
+    expect(source).toMatch(/property_message_attachments'\)\.select\('message_id, storage_path, mime_type'\)\.in\('message_id',\s*messages\.map/)
   })
 
   it('guards against a stale, out-of-order attachment fetch overwriting the currently-open request\'s attachments (rapid open-A-then-B race)', () => {

@@ -5065,3 +5065,33 @@ h2, h3, p { margin-top: 0; }
 .nativeLoginPage .landingSubmit { min-height: 46px; }
 .nativeLoginPage .legalFooter { width: 100%; padding: 16px 0 0; margin: 24px 0 0; align-items: center; justify-content: center; text-align: center; font-size: 11px; gap: 8px; }
 .nativeLoginPage .legalFooter nav { justify-content: center; gap: 14px; }
+
+/* Tenant portal: compact cards and swipeable navigation, no page overflow. */
+.tenantPortalShell { width: 100%; min-width: 0; min-height: 100dvh; padding: 0 16px 32px; }
+.tenantPortalPropertyHead { padding: 18px 0 12px; }
+.tenantPortalPropertyHead h1 { font-size: clamp(22px,6vw,30px); line-height: 1.2; overflow-wrap: anywhere; margin: 4px 0 6px; }
+.tenantPortalQuickActions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.tenantPortalQuickActions button { min-width: 0; font-size: 13px; padding: 12px 8px; min-height: 46px; border-radius: 11px; }
+.tenantPortalHelp, .tenantMediaHint { font-size: 12px; color: var(--muted); line-height: 1.5; margin: 10px 0 16px; }
+.tenantPortalTabs { border: 0; gap: 8px; padding: 2px 0 10px; margin: 8px 0; scroll-snap-type: x proximity; scrollbar-width: thin; }
+.tenantPortalTabs button { flex: 0 0 auto; min-width: 106px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 11px; background: #fff; font-size: 13px; scroll-snap-align: start; }
+.tenantPortalTabs button.active { border: 1px solid var(--brand); background: var(--brand-soft); }
+.tenantPortalSection { padding: 16px; margin: 10px 0; border: 1px solid var(--line); border-radius: 14px; background: #fff; min-width: 0; }
+.tenantPortalSection .detailRows > div { align-items: flex-start; gap: 12px; }
+.tenantPortalSection .detailRows span { font-size: 12px; flex: 0 0 95px; }
+.tenantPortalSection .detailRows strong { min-width: 0; max-width: 65%; overflow-wrap: anywhere; text-align: right; font-size: 13px; }
+.tenantPortalSectionHead { flex-wrap: wrap; }
+.tenantPortalSectionHead .primary, .tenantPortalSectionHead .secondary { font-size: 12px; padding: 8px 10px; min-height: 36px; }
+.tenantMediaVideo { width: min(260px,100%); display: grid; gap: 5px; }
+.tenantMediaVideo video { display: block; width: 100%; max-height: 240px; border-radius: 10px; background: #15221c; }
+.tenantMediaVideo a { font-size: 12px; color: var(--brand); }
+.tenantMessageCard > .muted { font-size: 13px; line-height: 1.5; }
+.tenantMessageCard textarea { width: 100%; min-width: 0; font-size: 16px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; }
+.tenantMessageLabel { display: block; margin: 14px 0 7px; font-size: 13px; font-weight: 600; }
+.tenantMessageCard .tenantConnectComposeRow { flex-wrap: wrap; margin-top: 10px; gap: 8px; }
+.tenantMessageCard .tenantConnectComposeRow > * { max-width: 100%; overflow-wrap: anywhere; font-size: 12px; }
+@media(max-width:360px) { .tenantPortalSection .detailRows > div { flex-direction: column; gap: 5px; } .tenantPortalSection .detailRows span { flex: auto; } .tenantPortalSection .detailRows strong { max-width: 100%; text-align: left; } }
+.tenantMediaSelected { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+.tenantMediaSelected > span { min-width: 0; overflow-wrap: anywhere; }
+.tenantPortalRentRow { min-width: 0; }
+.tenantPortalRentRow > * { min-width: 0; overflow-wrap: anywhere; }

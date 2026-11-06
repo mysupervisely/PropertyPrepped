@@ -36,6 +36,8 @@
 // service-role key, and a bug here can only ever surface what these
 // views/policies already allow, never bypass them.
 
+import { uploadTenantMedia, prepareTenantMedia, type TenantMediaLink } from '../../lib/tenant-connect/media'
+import { TenantMediaPreview } from '../../components/tenant-connect/TenantMediaPreview'
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { INTENDED_ROLE_STORAGE_KEY } from '../../lib/tenant-connect/onboarding'
@@ -48,6 +50,7 @@ import type { TenantRequest } from '../../lib/tenant-connect/types'
 import type { TenantPropertyAccess, PropertyMessage } from '../../lib/tenant-connect/types'
 import { notifyTenantConnect } from '../../lib/tenant-connect/notify-client'
 import { maintenanceCategoryLabel } from '../../lib/maintenance/categories'
+import { TenantLandlordMessages } from '../../components/tenant-connect/TenantLandlordMessages'
 import { GuidedIntake } from '../../components/tenant-connect/GuidedIntake'
 
 type PropertyRef = { id: string; address: string; city: string }
@@ -142,8 +145,8 @@ function TenantSignIn() {
   )
 }
 
-type TenantView = 'My Rental' | 'Lease' | 'Rent' | 'Requests' | 'Documents'
-const TENANT_VIEWS: TenantView[] = ['My Rental', 'Lease', 'Rent', 'Requests', 'Documents']
+type TenantView = 'My Rental' | 'Lease' | 'Rent' | 'Requests' | 'Documents' | 'Messages'
+const TENANT_VIEWS: TenantView[] = ['My Rental', 'Lease', 'Rent', 'Requests', 'Messages', 'Documents']
 
 function TenantPortal({ userId }: { userId: string }) {
   const [access, setAccess] = useState<TenantPropertyAccess[]>([])
@@ -151,6 +154,8 @@ function TenantPortal({ userId }: { userId: string }) {
   const [selectedAccessId, setSelectedAccessId] = useState<string | null>(null)
   const [property, setProperty] = useState<PropertyRef | null>(null)
   const [lease, setLease] = useState<LeaseRef | null>(null)
+  const [maintenanceOpen, setMaintenanceOpen] = useState(false)
+  const [submissionNotice, setSubmissionNotice] = useState('')
   const [view, setView] = useState<TenantView>('My Rental')
   const [error, setError] = useState('')
   const [acceptBusy, setAcceptBusy] = useState<string | null>(null)
@@ -261,12 +266,22 @@ function TenantPortal({ userId }: { userId: string }) {
             {property?.city && <p className="muted">{property.city}</p>}
           </section>
 
+          <div className="tenantPortalQuickActions">
+            <button className="primary" onClick={() => setMaintenanceOpen(true)}>Request maintenance</button>
+            <button className="secondary" onClick={() => setView('Messages')}>Contact landlord</button>
+          </div>
+          <p className="tenantPortalHelp">Send photos or a short video of the issue. Your landlord reviews it and coordinates repairs with PropCrew.</p>
+          {submissionNotice && <p className="statusMessage" role="status">{submissionNotice}</p>}
+          {maintenanceOpen && supabase && <GuidedIntake supabase={supabase} propertyId={selected.property_id} ownerId={selected.owner_id} tenantAccessId={selected.id} onClose={() => setMaintenanceOpen(false)} onSubmitted={(id, failures) => {
+            setMaintenanceOpen(false); setView('Requests'); setSubmissionNotice(failures ? `Request sent. ${failures} attachment(s) could not upload. Open your request to attach them again.` : 'Request sent to your landlord. You can follow updates in Maintenance.'); void notifyTenantConnect(supabase!, 'new_request', {requestId:id})
+          }} />}
           <nav className="tenantPortalTabs" role="tablist" aria-label="Tenant Portal sections">
             {TENANT_VIEWS.map((tab) => (
-              <button key={tab} role="tab" aria-selected={view === tab} className={view === tab ? 'active' : ''} onClick={() => setView(tab)}>{tab}</button>
+              <button key={tab} role="tab" aria-selected={view === tab} className={view === tab ? 'active' : ''} onClick={() => setView(tab)}>{tab === 'Requests' ? 'Maintenance' : tab}</button>
             ))}
           </nav>
 
+          {view === 'Messages' && supabase && <TenantLandlordMessages key={selected.id} client={supabase} propertyId={selected.property_id} ownerId={selected.owner_id} accessId={selected.id} />}
           {view === 'My Rental' && <TenantMyRentalView property={property} lease={lease} />}
           {view === 'Lease' && supabase && <TenantLeaseView supabase={supabase} lease={lease} />}
           {view === 'Rent' && supabase && <TenantRentView supabase={supabase} lease={lease} />}
@@ -470,7 +485,7 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
   const [openId, setOpenId] = useState<string | null>(null)
   const openIdRef = useRef<string | null>(null)
   const [threadMessages, setThreadMessages] = useState<PropertyMessage[]>([])
-  const [attachmentsByMessage, setAttachmentsByMessage] = useState<Map<string, string[]>>(new Map())
+  const [attachmentsByMessage, setAttachmentsByMessage] = useState<Map<string, TenantMediaLink[]>>(new Map())
   const [replyText, setReplyText] = useState('')
   const [attachFile, setAttachFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
@@ -485,10 +500,11 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
 
   useEffect(() => { void load() }, [tenantAccessId])
 
-  async function handleGuidedIntakeSubmitted(tenantRequestId: string) {
+  async function handleGuidedIntakeSubmitted(tenantRequestId: string, attachmentFailures?: number) {
     void notifyTenantConnect(supabase, 'new_request', { requestId: tenantRequestId })
     setShowNew(false)
     await load()
+    if (attachmentFailures) setError(`Request sent, but ${attachmentFailures} attachment(s) could not upload. Open your request to attach them again.`)
   }
 
   // M2.1 review pass (Part 6): forRequestId guards against a rapid
@@ -496,12 +512,12 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
   // identical note in TenantRequestsPanel.tsx's own loadAttachments().
   async function loadAttachments(messages: PropertyMessage[], forRequestId: string) {
     if (!messages.length) { if (openIdRef.current === forRequestId) setAttachmentsByMessage(new Map()); return }
-    const { data } = await supabase.from('property_message_attachments').select('message_id, storage_path').in('message_id', messages.map((m) => m.id))
-    const rows = (data as { message_id: string; storage_path: string }[]) || []
-    const byMessage = new Map<string, string[]>()
+    const { data } = await supabase.from('property_message_attachments').select('message_id, storage_path, mime_type').in('message_id', messages.map((m) => m.id))
+    const rows = (data as { message_id: string; storage_path: string; mime_type: string | null }[]) || []
+    const byMessage = new Map<string, TenantMediaLink[]>()
     for (const row of rows) {
       const { data: signed } = await supabase.storage.from('tenant-connect-attachments').createSignedUrl(row.storage_path, 3600)
-      if (signed?.signedUrl) byMessage.set(row.message_id, [...(byMessage.get(row.message_id) || []), signed.signedUrl])
+      if (signed?.signedUrl) byMessage.set(row.message_id, [...(byMessage.get(row.message_id) || []), {url: signed.signedUrl, mimeType: row.mime_type}])
     }
     if (openIdRef.current === forRequestId) setAttachmentsByMessage(byMessage)
   }
@@ -527,21 +543,19 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
   }
 
   async function sendReply() {
-    if (!open || !replyText.trim()) return
+    if (!open || (!replyText.trim() && !attachFile)) return
     setBusy(true)
     setError('')
     const { data: userData } = await supabase.auth.getUser()
     const { data: msg, error: msgErr } = await supabase
       .from('property_messages')
-      .insert({ conversation_id: open.conversation_id, sender_user_id: userData.user?.id, sender_role: 'Tenant', message: replyText.trim() })
+      .insert({ conversation_id: open.conversation_id, sender_user_id: userData.user?.id, sender_role: 'Tenant', message: replyText.trim() || 'Photo or video attached.' })
       .select('id')
       .single()
     if (msgErr || !msg) { setBusy(false); setError(msgErr?.message || 'Could not send message.'); return }
     if (attachFile) {
-      const path = `${open.conversation_id}/${crypto.randomUUID()}-${attachFile.name}`
-      const { error: uploadErr } = await supabase.storage.from('tenant-connect-attachments').upload(path, attachFile)
-      if (!uploadErr) await supabase.from('property_message_attachments').insert({ message_id: msg.id, storage_path: path, mime_type: attachFile.type, size_bytes: attachFile.size })
-      else setError(`Message sent, but the attachment failed to upload: ${uploadErr.message}`)
+      const attachmentError = await uploadTenantMedia(supabase, open.conversation_id, msg.id, attachFile)
+      if (attachmentError) setError(attachmentError)
     }
     setBusy(false)
     setReplyText('')
@@ -579,7 +593,7 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
           ownerId={ownerId}
           tenantAccessId={tenantAccessId}
           onClose={() => setShowNew(false)}
-          onSubmitted={(tenantRequestId) => void handleGuidedIntakeSubmitted(tenantRequestId)}
+          onSubmitted={(tenantRequestId, failures) => void handleGuidedIntakeSubmitted(tenantRequestId, failures)}
         />
       )}
 
@@ -602,8 +616,8 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
                   <p>{m.message}</p>
                   {(attachmentsByMessage.get(m.id) || []).length > 0 && (
                     <div className="tenantConnectBubbleAttachments">
-                      {(attachmentsByMessage.get(m.id) || []).map((url) => (
-                        <a key={url} href={url} target="_blank" rel="noreferrer"><img src={url} alt="Attached photo" /></a>
+                      {(attachmentsByMessage.get(m.id) || []).map((media) => (
+                        <TenantMediaPreview key={media.url} media={media} />
                       ))}
                     </div>
                   )}
@@ -615,10 +629,10 @@ function TenantRequestsView({ supabase, propertyId, ownerId, tenantAccessId, pro
               <textarea value={replyText} onChange={(e) => setReplyText(e.target.value)} rows={3} placeholder="Write a reply…" />
               <div className="tenantConnectComposeRow">
                 <label className="secondary tenantConnectAttachLabel">
-                  {attachFile ? attachFile.name : 'Attach photo'}
-                  <input type="file" accept="image/*" onChange={(e) => setAttachFile(e.target.files?.[0] || null)} hidden />
+                  {attachFile ? attachFile.name : 'Attach photo or video'}
+                  <input type="file" accept="image/*,video/mp4,video/quicktime,video/webm" onChange={(e) => { const file=e.currentTarget.files?.[0]; e.currentTarget.value=''; if (!file) return; const result=prepareTenantMedia(file); if(result.error) setError(result.error); else {setAttachFile(result.file!);setError('')} }} hidden />
                 </label>
-                <button className="primary" disabled={busy || !replyText.trim()} onClick={() => void sendReply()}>{busy ? 'Sending…' : 'Reply'}</button>
+                <button className="primary" disabled={busy || (!replyText.trim() && !attachFile)} onClick={() => void sendReply()}>{busy ? 'Sending…' : 'Reply'}</button>
               </div>
             </div>
           </div>

@@ -1,3 +1,4 @@
+import { uploadTenantMedia } from '../../tenant-connect/media'
 // PropRoster Milestone 27 — Guided Maintenance Intake M2 V1: submission.
 //
 // Reuses the EXACT SAME sequential-insert pattern
@@ -53,7 +54,7 @@ export type SubmitGuidedIntakeParams = {
 }
 
 export type SubmitGuidedIntakeResult =
-  | { ok: true; tenantRequestId: string; conversationId: string }
+  | { ok: true; tenantRequestId: string; conversationId: string; attachmentFailures?: number }
   | { ok: false; error: string }
 
 /**
@@ -136,17 +137,13 @@ export async function submitGuidedIntake(params: SubmitGuidedIntakeParams): Prom
     console.error('guided intake: failed to persist intake session (request was still submitted)', sessionErr)
   }
 
+  let attachmentFailures = 0
   if (photos?.length) {
     for (const photo of photos) {
-      const path = `${conversationId}/${crypto.randomUUID()}-${photo.file.name}`
-      const { error: uploadErr } = await supabase.storage.from('tenant-connect-attachments').upload(path, photo.file)
-      if (!uploadErr) {
-        await supabase.from('property_message_attachments').insert({ message_id: messageId, storage_path: path, mime_type: photo.file.type, size_bytes: photo.file.size })
-      } else {
-        console.error('guided intake: photo upload failed (request was still submitted)', uploadErr)
-      }
+      const error = await uploadTenantMedia(supabase, conversationId, messageId, photo.file)
+      if (error) attachmentFailures++
     }
   }
 
-  return { ok: true, tenantRequestId, conversationId }
+  return { ok: true, tenantRequestId, conversationId, ...(attachmentFailures ? {attachmentFailures} : {}) }
 }

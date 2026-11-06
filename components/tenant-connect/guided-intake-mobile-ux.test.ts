@@ -34,7 +34,7 @@ describe('GuidedIntake mobile UX (Part 3 review pass)', () => {
   })
 
   it('the file input resets its value after each selection, so re-picking the same file fires a change event again', () => {
-    const inputLine = source.split('\n').find((l) => l.includes('type="file"') && l.includes('guidedIntakePhotoLabel') === false && l.includes('accept="image/*"') && l.includes('multiple'))
+    const inputLine = source.split('\n').find((l) => l.includes('type="file"') && l.includes('guidedIntakePhotoLabel') === false && l.includes('accept="image/*,video/mp4,video/quicktime,video/webm"') && l.includes('multiple'))
     expect(inputLine).toBeDefined()
   })
 

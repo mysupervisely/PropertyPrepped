@@ -14,6 +14,7 @@
 // submitGuidedIntake() (submit.ts) once, at the very end. No AI call
 // anywhere in this file.
 
+import { prepareTenantMedia } from '../../lib/tenant-connect/media'
 import { useEffect, useState } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { MAINTENANCE_CATEGORIES, maintenanceCategoryLabel, type MaintenanceCategoryId } from '../../lib/maintenance/categories'
@@ -49,7 +50,7 @@ export function GuidedIntake({ supabase, propertyId, ownerId, tenantAccessId, on
   ownerId: string
   tenantAccessId: string
   onClose: () => void
-  onSubmitted: (tenantRequestId: string) => void
+  onSubmitted: (tenantRequestId: string, attachmentFailures?: number) => void
 }) {
   const [phase, setPhase] = useState<Phase>('category')
   const [category, setCategory] = useState<MaintenanceCategoryId | null>(null)
@@ -169,7 +170,7 @@ export function GuidedIntake({ supabase, propertyId, ownerId, tenantAccessId, on
     }
     clearDraft(tenantAccessId)
     setPhase('done')
-    onSubmitted(result.tenantRequestId)
+    onSubmitted(result.tenantRequestId, result.attachmentFailures)
   }
 
   function updateAvailabilityDay(index: number, patch: Partial<AvailabilityDayInput>) {
@@ -241,7 +242,7 @@ export function GuidedIntake({ supabase, propertyId, ownerId, tenantAccessId, on
             )}
 
             {currentStep.question.type === 'photo' && (
-              <div className="guidedIntakePhotoStep">
+              <div className="guidedIntakePhotoStep"><p className="muted">Up to 5 photos or short videos, 15 MB each. Your landlord reviews the request and coordinates with PropCrew.</p>{errorMessage && <p role="alert">{errorMessage}</p>}
                 {photos.length > 0 && (
                   <ul className="guidedIntakePhotoList">
                     {photos.map((file, i) => (
@@ -253,8 +254,14 @@ export function GuidedIntake({ supabase, propertyId, ownerId, tenantAccessId, on
                   </ul>
                 )}
                 <label className="secondary guidedIntakePhotoLabel">
-                  {photos.length ? 'Add another photo' : 'Add a photo'}
-                  <input type="file" accept="image/*" multiple hidden disabled={photos.length >= 5} onChange={(e) => { setPhotos((prev) => [...prev, ...Array.from(e.target.files || [])].slice(0, 5)); e.target.value = '' }} />
+                  {photos.length ? 'Add another photo or video' : 'Add a photo or video'}
+                  <input type="file" accept="image/*,video/mp4,video/quicktime,video/webm" multiple hidden disabled={photos.length >= 5} onChange={(e) => {
+                    const files = Array.from(e.currentTarget.files || [])
+                    e.currentTarget.value = ''
+                    const results = files.map(prepareTenantMedia)
+                    setErrorMessage(results.find((r) => r.error)?.error || '')
+                    setPhotos((prev) => [...prev, ...results.flatMap((r) => r.file ? [r.file] : [])].slice(0,5))
+                  }} />
                 </label>
                 <button className="primary" onClick={() => answer(photos.length ? 'attached' : 'skipped')}>{photos.length ? 'Continue' : 'Skip'}</button>
               </div>
@@ -295,8 +302,18 @@ export function GuidedIntake({ supabase, propertyId, ownerId, tenantAccessId, on
           return (
             <div className="guidedIntakeReview">
               <h3>Review before you submit</h3>
+              <label className="secondary guidedIntakePhotoLabel">Add photos or a short video (optional)
+                <input hidden type="file" multiple accept="image/*,video/mp4,video/quicktime,video/webm" disabled={photos.length>=5} onChange={e=>{
+                  const files=Array.from(e.currentTarget.files||[]); e.currentTarget.value=''
+                  const results=files.map(prepareTenantMedia)
+                  setErrorMessage(results.find(r=>r.error)?.error||'')
+                  setPhotos(prev=>[...prev,...results.flatMap(r=>r.file?[r.file]:[])].slice(0,5))
+                }}/>
+              </label><p className="muted">Up to 5 files, 15 MB each. Your landlord can view them with this request.</p>
+              {errorMessage&&<p role="alert">{errorMessage}</p>}
+              {photos.map((file,i)=><div className="tenantMediaSelected" key={`${file.name}-${i}`}><span>{file.name}</span><button className="secondary" onClick={()=>setPhotos(prev=>prev.filter((_,index)=>index!==i))}>Remove</button></div>)}
               <pre className="guidedIntakeSummary">{description}</pre>
-              {photos.length > 0 && <p className="muted">{photos.length} photo{photos.length > 1 ? 's' : ''} attached</p>}
+              {photos.length > 0 && <p className="muted">{photos.length} attachment{photos.length > 1 ? 's' : ''} attached</p>}
 
               {/* Scheduling Coordination V1 (Section 2/3) — optional,
                   request-specific, coarse day-parts only. The entry-

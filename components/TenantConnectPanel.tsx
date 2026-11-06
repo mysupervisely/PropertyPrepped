@@ -18,7 +18,9 @@
 // (Section D explicitly allows deferring it: "implement only what is
 // required for Tenant Connect safely").
 
-import { useEffect, useState } from 'react'
+import { uploadTenantMedia, prepareTenantMedia, type TenantMediaLink } from '../lib/tenant-connect/media'
+import { TenantMediaPreview } from './tenant-connect/TenantMediaPreview'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { isConversationUnread, messagePreview, tenantDisplayName } from '../lib/tenant-connect/helpers'
 import type { ConversationType, PropertyConversation, PropertyMessage, TenantPropertyAccess } from '../lib/tenant-connect/types'
@@ -58,6 +60,8 @@ export function TenantConnectPanel({
 
   const [openConversationId, setOpenConversationId] = useState<string | null>(null)
   const [threadMessages, setThreadMessages] = useState<PropertyMessage[]>([])
+  const [messageMedia, setMessageMedia] = useState<Record<string,TenantMediaLink[]>>({})
+  const threadIdRef = useRef<string | null>(null)
   const [replyText, setReplyText] = useState('')
   const [attachFile, setAttachFile] = useState<File | null>(null)
 
@@ -166,7 +170,10 @@ export function TenantConnectPanel({
   }
 
   async function openConversation(id: string) {
+    threadIdRef.current = id
     setOpenConversationId(id)
+    setThreadMessages([])
+    setMessageMedia({})
     setReplyText('')
     setAttachFile(null)
     if (!supabase) return
@@ -175,7 +182,20 @@ export function TenantConnectPanel({
       setError(err.message)
       return
     }
-    setThreadMessages((data as PropertyMessage[]) || [])
+    if (threadIdRef.current !== id) return
+    const messages = (data as PropertyMessage[]) || []
+    setThreadMessages(messages)
+    threadIdRef.current = id
+    setMessageMedia({})
+    if (messages.length) {
+      const { data: attachments } = await supabase.from('property_message_attachments').select('message_id,storage_path,mime_type').in('message_id',messages.map(m=>m.id))
+      const next:Record<string,TenantMediaLink[]>={}
+      for (const attachment of attachments || []) {
+        const {data:signed}=await supabase.storage.from('tenant-connect-attachments').createSignedUrl(attachment.storage_path,3600)
+        if(signed?.signedUrl) (next[attachment.message_id] ||= []).push({url:signed.signedUrl,mimeType:attachment.mime_type})
+      }
+      if(threadIdRef.current === id) setMessageMedia(next)
+    }
     // Mark read — best-effort, never blocks the thread from opening.
     await supabase.from('property_conversation_reads').upsert({ conversation_id: id, user_id: ownerId, last_read_at: new Date().toISOString() }, { onConflict: 'conversation_id,user_id' })
     setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, unread: false } : c)))
@@ -196,13 +216,8 @@ export function TenantConnectPanel({
       return
     }
     if (attachFile) {
-      const path = `${openConversationId}/${crypto.randomUUID()}-${attachFile.name}`
-      const { error: uploadErr } = await supabase.storage.from('tenant-connect-attachments').upload(path, attachFile)
-      if (!uploadErr) {
-        await supabase.from('property_message_attachments').insert({ message_id: msg.id, storage_path: path, mime_type: attachFile.type, size_bytes: attachFile.size })
-      } else {
-        setError(`Message sent, but the attachment failed to upload: ${uploadErr.message}`)
-      }
+      const attachmentError = await uploadTenantMedia(supabase,openConversationId,msg.id,attachFile)
+      if(attachmentError) setError(attachmentError)
     }
     setBusy(false)
     setReplyText('')
@@ -319,7 +334,7 @@ export function TenantConnectPanel({
               {threadMessages.map((m) => (
                 <div key={m.id} className={`tenantConnectBubble tenantConnectBubble${m.sender_role}`}>
                   <div className="tenantConnectBubbleMeta"><strong>{m.sender_role}</strong><span>{new Date(m.created_at).toLocaleString()}</span></div>
-                  <p>{m.message}</p>
+                  <p>{m.message}</p><div className="tenantConnectBubbleAttachments">{(messageMedia[m.id] || []).map(media=><TenantMediaPreview key={media.url} media={media}/>)}</div>
                 </div>
               ))}
               {!threadMessages.length && <p className="muted">No messages yet.</p>}
@@ -327,10 +342,10 @@ export function TenantConnectPanel({
             <div className="tenantConnectCompose">
               <textarea value={replyText} onChange={(e) => setReplyText(e.target.value)} rows={3} placeholder="Write a reply…" />
               <div className="tenantConnectComposeRow">
-                {openConversation_.conversation_type === 'Maintenance' && (
+                {(
                   <label className="secondary tenantConnectAttachLabel">
-                    {attachFile ? attachFile.name : 'Attach photo'}
-                    <input type="file" accept="image/*" onChange={(e) => setAttachFile(e.target.files?.[0] || null)} hidden />
+                    {attachFile ? attachFile.name : 'Attach photo or video'}
+                    <input type="file" accept="image/*,video/mp4,video/quicktime,video/webm" onChange={(e) => { const file=e.currentTarget.files?.[0]; e.currentTarget.value=''; if (!file) return; const result=prepareTenantMedia(file); if(result.error) setError(result.error); else {setAttachFile(result.file!);setError('')} }} hidden />
                   </label>
                 )}
                 <button className="primary" disabled={busy || !replyText.trim()} onClick={() => void sendReply()}>{busy ? 'Sending…' : 'Send'}</button>
