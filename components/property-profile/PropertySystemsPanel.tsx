@@ -130,8 +130,8 @@ export function PropertySystemsPanel({
 
   return (
     <div className="systemsPanel">
-      <div className="sectionHead workspaceHeading">
-        <div><p className="eyebrow">PROPERTY SYSTEMS &amp; APPLIANCES</p><h2>Every system, one record</h2><p>Roof, HVAC, water heater and every major appliance — install dates, warranties and the provider who services them.</p></div>
+      <div className="sectionHead workspaceHeading detailsSectionHeading">
+        <div><p className="eyebrow">PROPERTY SYSTEMS &amp; APPLIANCES</p><h2>Systems &amp; appliances</h2><p>Roof, HVAC, water heater and every major appliance — install dates, warranties and the provider who services them.</p></div>
         <button className="primary" onClick={openAdd}>+ Add system</button>
       </div>
 
@@ -163,7 +163,7 @@ export function PropertySystemsPanel({
           })}
         </div>
       ) : (
-        <div className="emptyModule"><strong>No systems added yet</strong><span>Add your roof, HVAC, water heater and major appliances as you get to them — nothing is required.</span><button className="primary" onClick={openAdd}>+ Add system</button></div>
+        <div className="emptyModule detailsEmptyState"><strong>No systems added yet</strong><span>Add your roof, HVAC, water heater and major appliances as you get to them — nothing is required.</span></div>
       )}
 
       {showForm && (
