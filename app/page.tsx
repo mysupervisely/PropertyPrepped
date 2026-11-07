@@ -2,6 +2,8 @@
 
 import { ChangeEvent, DragEvent, ReactElement, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { RentPaymentReports } from '../components/rent-payments/RentPaymentReports'
+import { RentReceiptButton } from '../components/rent-payments/RentReceiptButton'
 import { shouldResetWorkspace } from '../lib/auth/session-navigation'
 import { isAuthSessionMissingError, type User } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
@@ -3740,6 +3742,7 @@ export default function Home() {
                   preferred integration point — a Rent subsection, not a
                   Financials one) — same buildRentLedgerRows() call, same
                   card, unchanged. */}
+              {supabase && <RentPaymentReports client={supabase} propertyId={selected.id} onChanged={()=>void loadPortfolio()} />}
               {rentThisMonth.length > 0 && rentThisMonth.map((row) => (
                 <div className="rentThisMonthCard" key={row.leaseId}>
                   <div className="rentThisMonthHead">
@@ -3770,6 +3773,7 @@ export default function Home() {
                   {selectedRentPayments.map((p) => (
                     <div className="rentPaymentEntry" key={p.id}>
                       <span>{money(p.amount)} · {p.payment_method}<span className="muted">{new Date(`${p.date_received}T12:00:00`).toLocaleDateString()}{p.reference_number ? ` · Ref ${p.reference_number}` : ''}{p.notes ? ` · ${p.notes}` : ''}</span></span>
+                      {supabase && <RentReceiptButton client={supabase} paymentId={p.id} owner />}
                     </div>
                   ))}
                 </div>
@@ -4480,6 +4484,7 @@ export default function Home() {
         )}
       </section>
 
+      {supabase && <RentPaymentReports client={supabase} onChanged={()=>void loadPortfolio()} />}
       <section className="dashboardPropertiesSection"><div className="sectionHead"><div><h2>My Properties</h2><p>{busy && !properties.length ? 'Loading your portfolio…' : `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} in your portfolio`}</p></div><button className="primary" onClick={() => openAddProperty()}>+ Add Property</button></div>
         {/* Property-First UX Cleanup: property cards are the dashboard's
             dominant, most-scannable element — address/image, occupancy,

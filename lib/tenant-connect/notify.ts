@@ -194,7 +194,7 @@ const RESEND_API_URL = 'https://api.resend.com/emails'
  * route) always call this AFTER the real DB write already succeeded —
  * an email failure must never take that back or block the caller's UI.
  */
-export async function sendTenantConnectEmail(to: string, email: TenantConnectEmail, env: Record<string, string | undefined> = process.env): Promise<SendResult> {
+export async function sendTenantConnectEmail(to: string, email: TenantConnectEmail, env: Record<string, string | undefined> = process.env, idempotencyKey?: string): Promise<SendResult> {
   if (!isTenantConnectEmailConfigured(env)) {
     console.error('tenant-connect: email is not fully configured (RESEND_API_KEY / TENANT_CONNECT_FROM_EMAIL) — notification was not sent.', { to, subject: email.subject })
     return { sent: false, reason: 'not_configured' }
@@ -206,6 +206,7 @@ export async function sendTenantConnectEmail(to: string, email: TenantConnectEma
       headers: {
         Authorization: `Bearer ${env.RESEND_API_KEY}`,
         'Content-Type': 'application/json',
+        ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
       },
       body: JSON.stringify({
         from: env.TENANT_CONNECT_FROM_EMAIL,

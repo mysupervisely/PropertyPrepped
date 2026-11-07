@@ -32,6 +32,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { RentPaymentReports } from '../../components/rent-payments/RentPaymentReports'
+import { RentReceiptButton } from '../../components/rent-payments/RentReceiptButton'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
 import { useAuthUser } from '../../lib/useAuthUser'
@@ -98,6 +100,8 @@ function RentLedgerWorkspace({ user }: { user: User }) {
   // previously gated behind a Manage-only capability check, removed
   // here along with the old upgrade prompt it triggered. See
   // lib/billing/entitlements.ts's own comment for the full reasoning.
+  const [emailReceipt, setEmailReceipt] = useState(false)
+  const [paymentNotice, setPaymentNotice] = useState('')
   const [properties, setProperties] = useState<PropertyRef[]>([])
   const [leases, setLeases] = useState<LeaseRef[]>([])
   const [payments, setPayments] = useState<PaymentRow[]>([])
@@ -164,7 +168,7 @@ function RentLedgerWorkspace({ user }: { user: User }) {
     if (!(amount > 0)) { setFormError('Enter an amount greater than $0.'); return }
     if (!draft.dateReceived) { setFormError('Enter the date received.'); return }
 
-    setBusy(true); setFormError('')
+    setBusy(true); setFormError(''); setPaymentNotice('')
     const lease = leases.find((l) => l.id === draft.leaseId)
     let financialTransactionId: string | null = null
 
@@ -199,7 +203,7 @@ function RentLedgerWorkspace({ user }: { user: User }) {
     // whenever "record as income" was checked, but with that box
     // unchecked this insert would have failed with the exact same class
     // of error.
-    const { error: payError } = await supabase.from('rent_payments').insert({
+    const { data: savedPayment, error: payError } = await supabase.from('rent_payments').insert({
       owner_id: user.id,
       property_id: draft.propertyId, lease_id: draft.leaseId, rent_period: periodStart(period),
       date_received: draft.dateReceived, amount, payment_method: draft.paymentMethod,
@@ -209,7 +213,7 @@ function RentLedgerWorkspace({ user }: { user: User }) {
       // — this is what lets deletePayment() safely know it's ours to
       // remove later, never a pre-existing/manual transaction.
       created_linked_transaction: financialTransactionId !== null,
-    })
+    }).select('id').single()
     if (payError) {
       // Best-effort cleanup: never leave a phantom Financials entry
       // behind if the payment record itself failed to save.
@@ -218,6 +222,19 @@ function RentLedgerWorkspace({ user }: { user: User }) {
       setFormError("We couldn't record this payment. Please try again."); setBusy(false); return
     }
 
+    if (savedPayment) {
+      const receipt = await supabase.rpc('prepare_rent_payment_receipt', { p_payment_id: savedPayment.id })
+      if (receipt.error) setPaymentNotice('Payment saved. Create its receipt from payment history.')
+      if (emailReceipt) {
+        try {
+          const { data } = await supabase.auth.getSession()
+          const result = await fetch('/api/rent-payments/receipt', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session?.access_token || ''}` }, body: JSON.stringify({ paymentId: savedPayment.id }) })
+          const delivery = await result.json()
+          if (!delivery.sent && !delivery.alreadySent) setPaymentNotice('Payment saved. Email was not sent; use Receipt to try again.')
+        } catch { setPaymentNotice('Payment saved. Email delivery could not be confirmed; use Receipt to retry.') }
+      }
+    }
+    setEmailReceipt(false)
     setShowRecordPayment(false)
     setDraft(defaultDraft())
     await load()
@@ -255,6 +272,7 @@ function RentLedgerWorkspace({ user }: { user: User }) {
       </div>
 
       {error && <p className="errorMessage">{error}</p>}
+      {paymentNotice && <p className="rentWorkflowNotice" role="status">{paymentNotice}</p>}
 
       <div className="rentLedgerSummary">
         <div className="rentLedgerSummaryTile"><span>Expected Rent</span><strong>{money(summary.expected)}</strong></div>
@@ -305,6 +323,7 @@ function RentLedgerWorkspace({ user }: { user: User }) {
                               {money(p.amount)} · {p.payment_method}
                               <span className="muted">{new Date(`${p.date_received}T12:00:00`).toLocaleDateString()}{p.reference_number ? ` · Ref ${p.reference_number}` : ''}{p.notes ? ` · ${p.notes}` : ''}</span>
                             </span>
+                            {supabase && <RentReceiptButton client={supabase} paymentId={p.id} owner />}
                             <button onClick={() => void deletePayment(p)} aria-label="Delete payment" disabled={busy}>×</button>
                           </div>
                         ))}
@@ -322,6 +341,7 @@ function RentLedgerWorkspace({ user }: { user: User }) {
         </div>
       )}
 
+      {supabase && <RentPaymentReports client={supabase} onChanged={()=>void load()} />}
       {showRecordPayment && (
         <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setShowRecordPayment(false)}>
           <div className="modal moduleModal">
@@ -345,6 +365,7 @@ function RentLedgerWorkspace({ user }: { user: User }) {
                 <label>Reference / confirmation #<input value={draft.referenceNumber} onChange={(e) => setDraft({ ...draft, referenceNumber: e.target.value })} placeholder="Optional" /></label>
                 <label className="fullField">Notes<input value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} placeholder="Optional" /></label>
                 <label className="recurringCheck fullField"><input type="checkbox" checked={draft.recordAsIncome} onChange={(e) => setDraft({ ...draft, recordAsIncome: e.target.checked })} /><span>Record this as rental income in Financials</span><small>Creates one linked Income transaction so you don&apos;t have to enter it twice. Uncheck if you&apos;ve already logged this payment manually.</small></label>
+                <label className="recurringCheck fullField"><input type="checkbox" checked={emailReceipt} onChange={e=>setEmailReceipt(e.target.checked)}/><span>Email tenant a payment receipt</span><small>Optional. The receipt is also available in their tenant portal.</small></label>
               </div></fieldset>
               {formError && <p className="errorMessage">{formError}</p>}
             </div>

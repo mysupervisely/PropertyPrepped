@@ -5279,3 +5279,27 @@ h2, h3, p { margin-top: 0; }
 .detailsEmptyState { min-height: 130px; padding: 22px 18px; gap: 7px; }
 .detailsEmptyState strong { font-size: 16px; }
 .detailsEmptyState span { font-size: 13px; line-height: 1.5; }
+
+/* Bank-free rent reporting and compact, readable receipts. */
+.rentWorkflow { border: 1px solid var(--card-outline); border-radius: 12px; background: var(--surface); padding: 14px; margin: 14px 0; min-width: 0; }
+.rentWorkflowHead { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.rentWorkflowHead h3 { flex: 1; margin: 0; font-size: 15px; }
+.rentWorkflowHead button, .rentWorkflowActions button { font-size: 12px; padding: 8px 10px; min-height: 36px; }
+.rentWorkflow .muted, .rentWorkflowNotice { font-size: 12px; line-height: 1.5; margin: 10px 0 0; }
+.rentWorkflowForm { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin: 14px 0; }
+.rentWorkflowForm label { display: grid; gap: 6px; min-width: 0; font-size: 12px; }
+.rentWorkflowForm input, .rentWorkflowForm select { width: 100%; min-width: 0; max-width: 100%; min-height: 42px; padding: 9px; font-size: 16px; color: var(--text); border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.rentWorkflowForm input[type=file] { font-size: 12px; }
+.rentWorkflowOptions { display: grid; gap: 8px; margin: 12px 0; font-size: 12px; }
+.rentWorkflowOptions label { display: flex; align-items: flex-start; gap: 8px; }
+.rentWorkflowOptions input { flex-shrink: 0; }
+.rentReport { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border-top: 1px solid var(--line); padding: 12px 0 0; margin-top: 12px; }
+.rentReport > div:first-child { flex: 1; min-width: 120px; }
+.rentReport strong { font-size: 14px; }
+.rentReport p, .rentReport small { font-size: 12px; margin: 5px 0 0; overflow-wrap: anywhere; }
+.rentWorkflowActions { display: flex; gap: 8px; flex-wrap: wrap; }
+.rentReport .rentWorkflowActions { width: 100%; }
+.rentReceiptModal pre { font: inherit; font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.rentReceiptOverlay { padding-top: max(64px,env(safe-area-inset-top)); }
+.rentReceiptModal { max-height: calc(100dvh - max(64px,env(safe-area-inset-top)) - 24px); }
+@media(max-width:480px) { .rentWorkflowForm {grid-template-columns:1fr;} .rentWorkflowForm input[type=date] {appearance:none;min-height:44px;} }

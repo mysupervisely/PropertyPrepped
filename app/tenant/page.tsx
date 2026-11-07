@@ -36,6 +36,8 @@
 // service-role key, and a bug here can only ever surface what these
 // views/policies already allow, never bypass them.
 
+import { RentPaymentReports } from '../../components/rent-payments/RentPaymentReports'
+import { RentReceiptButton } from '../../components/rent-payments/RentReceiptButton'
 import { uploadTenantMedia, prepareTenantMedia, type TenantMediaLink } from '../../lib/tenant-connect/media'
 import { TenantMediaPreview } from '../../components/tenant-connect/TenantMediaPreview'
 import { useEffect, useRef, useState } from 'react'
@@ -376,6 +378,7 @@ function TenantLeaseView({ supabase, lease }: { supabase: SupabaseClient; lease:
 // tenant_lease_view already established (Migration 29).
 function TenantRentView({ supabase, lease }: { supabase: SupabaseClient; lease: LeaseRef | null }) {
   const [payments, setPayments] = useState<RentPaymentRef[]>([])
+  const [paymentRefresh, setPaymentRefresh] = useState(0)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -385,7 +388,19 @@ function TenantRentView({ supabase, lease }: { supabase: SupabaseClient; lease: 
       setPayments((data as RentPaymentRef[]) || [])
       setLoading(false)
     })
-  }, [lease?.id])
+  }, [lease?.id, paymentRefresh])
+
+  useEffect(() => {
+    const refresh = () => { if (!document.hidden) setPaymentRefresh(value => value + 1) }
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refresh)
+    const timer = window.setInterval(refresh, 60000)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', refresh)
+      window.clearInterval(timer)
+    }
+  }, [])
 
   return (
     <section className="tenantPortalSection">
@@ -393,6 +408,7 @@ function TenantRentView({ supabase, lease }: { supabase: SupabaseClient; lease: 
         <div><span>Monthly rent</span><strong>{money(lease?.monthly_rent)}</strong></div>
         {lease?.rent_due_day != null && <div><span>Rent due day</span><strong>{lease.rent_due_day}</strong></div>}
       </div>
+      {lease && <RentPaymentReports client={supabase} tenant leaseId={lease.id} monthlyRent={Number(lease.monthly_rent)} onChanged={()=>setPaymentRefresh(v=>v+1)} />}
       <h3 className="tenantPortalSubheading">Payment history</h3>
       <p className="muted tenantPortalRentNote">PropRoster does not collect rent — this reflects what your landlord has recorded.</p>
       {loading ? (
@@ -405,6 +421,7 @@ function TenantRentView({ supabase, lease }: { supabase: SupabaseClient; lease: 
               <span className="muted">{new Date(`${p.date_received}T12:00:00`).toLocaleDateString()}</span>
               <span className="muted">{p.payment_method}</span>
               <strong>{money(p.amount)}</strong>
+              <RentReceiptButton client={supabase} paymentId={p.id} />
             </div>
           ))}
         </div>
