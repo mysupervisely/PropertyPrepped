@@ -4505,7 +4505,8 @@ export default function Home() {
               <p className="propertyRowType">{property.property_type}</p>
               <div className="miniStats">
                 <div><span>Rent</span><strong>{money(property.monthly_rent)}</strong></div>
-                {propertyRentRow ? <div className="propertyDesktopRentStatus"><span>Rent status</span><strong><span className={`statusPill ${rentStatusPillClass(propertyRentRow.status)}`}>{rentStatusLabel(propertyRentRow.status)}</span></strong></div> : <div><span>Value</span><strong>{money(property.estimated_value)}</strong></div>}
+                <div><span>Value</span><strong>{Number(property.estimated_value) > 0 ? money(property.estimated_value) : 'Not entered'}</strong></div>
+                {propertyRentRow && <div className="propertyDesktopRentStatus"><span>Rent status</span><strong><span className={`statusPill ${rentStatusPillClass(propertyRentRow.status)}`}>{rentStatusLabel(propertyRentRow.status)}</span></strong></div>}
               </div>
               {propertyAlertCount > 0 && <button className="cardAlertBadge propertyDesktopAlert" onClick={() => openProperty(property.id, 'Overview')}>{propertyAlertCount} alert{propertyAlertCount === 1 ? '' : 's'} need{propertyAlertCount === 1 ? 's' : ''} attention</button>}
               <div className="cardActions">
