@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { GoogleAnalytics } from '../components/GoogleAnalytics'
 import { ServiceWorkerRegistration } from '../components/ServiceWorkerRegistration'
+import { IOSBackSwipe } from '../components/mobile/IOSBackSwipe'
 import { NativeBackButtonHandler } from '../components/mobile/NativeBackButtonHandler'
 
 // PWA/Mobile Installability V1 additions below — everything else in
@@ -72,6 +73,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           inside the Capacitor native shell. See the component's own
           top comment. */}
       <NativeBackButtonHandler />
+      <IOSBackSwipe />
     </html>
   )
 }

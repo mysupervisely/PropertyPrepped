@@ -97,6 +97,7 @@ import { confirmAppointment as postConfirmAppointment, appointmentErrorMessage }
 import { MaintenanceCaseDetail } from '../components/maintenance/MaintenanceCaseDetail'
 import { NewMaintenanceRequestModal } from '../components/maintenance/NewMaintenanceRequestModal'
 import type { NewMaintenanceRequestPayload } from '../lib/maintenance/new-request'
+import { PublicPropertyRecords } from '../components/property-profile/PublicPropertyRecords'
 import { TenantConnectStatusCard } from '../components/tenant-connect/TenantConnectStatusCard'
 import { TenantRequestsPanel } from '../components/tenant-connect/TenantRequestsPanel'
 
@@ -3557,6 +3558,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
+            <PublicPropertyRecords key={selected.id} address={selected.address} city={selected.city} onEdit={() => openEditProperty(selected)} />
           </div></details>
 
           {selected.property_type === 'Rental Property' && (

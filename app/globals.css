@@ -5303,3 +5303,10 @@ h2, h3, p { margin-top: 0; }
 .rentReceiptOverlay { padding-top: max(64px,env(safe-area-inset-top)); }
 .rentReceiptModal { max-height: calc(100dvh - max(64px,env(safe-area-inset-top)) - 24px); }
 @media(max-width:480px) { .rentWorkflowForm {grid-template-columns:1fr;} .rentWorkflowForm input[type=date] {appearance:none;min-height:44px;} }
+
+/* County records are an explicit external lookup, never an automatic import. */
+.publicPropertyRecords { border-top: 1px solid #b6c3bd; margin-top: 16px; padding-top: 14px; }
+.publicPropertyRecordsHeading, .publicPropertyRecordsActions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.publicPropertyRecordsHeading h3 { margin: 0; font-size: 16px; }
+.publicPropertyRecords p { font-size: 14px; line-height: 1.5; margin: 10px 0; }
+.publicPropertyRecords .textAction { font-size: 14px; min-height: 44px; display: inline-flex; align-items: center; }
