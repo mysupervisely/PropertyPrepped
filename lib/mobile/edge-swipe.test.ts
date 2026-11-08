@@ -4,11 +4,15 @@ const start = { x: 10, y: 150, time: 100 }
 it('accepts a deliberate edge swipe back', () => {
   expect(isBackSwipe(start, { x: 110, y: 158, time: 450 })).toBe(true)
 })
-it('leaves vertical scrolling, taps, gallery drags and slow drags alone', () => {
+it('leaves vertical scrolling, taps, gallery drags and abandoned drags alone', () => {
   expect(isBackSwipe(start, { x: 110, y: 220, time: 450 })).toBe(false)
   expect(isBackSwipe(start, { x: 25, y: 152, time: 300 })).toBe(false)
   expect(isBackSwipe({ ...start, x: 100 }, { x: 230, y: 158, time: 450 })).toBe(false)
-  expect(isBackSwipe(start, { x: 110, y: 158, time: 1300 })).toBe(false)
+  expect(isBackSwipe(start, { x: 110, y: 158, time: 10300 })).toBe(false)
   expect(isBackSwipe(start, { x: 110, y: 158, time: 110 })).toBe(false)
   expect(isBackSwipe(start, { x: 0, y: 158, time: 450 })).toBe(false)
+})
+
+it('allows holding a deliberate swipe before releasing', () => {
+  expect(isBackSwipe(start, { x: 120, y: 155, time: 2000 })).toBe(true)
 })

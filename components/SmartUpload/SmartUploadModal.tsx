@@ -35,6 +35,7 @@ import {
 import { ReceiptReview, type ReceiptSaveInput } from './ReceiptReview'
 import { PrepareOnlyReview } from './PrepareOnlyReview'
 import { initialSmartUploadDebugState, type SmartUploadDebugState } from '../../lib/uploads/diagnostics'
+import { CloudFileImport } from '../uploads/CloudFileImport'
 import { beginReadingFileBytes } from '../../lib/uploads/durable-file'
 
 type ItemStatus = 'Uploading' | 'Analyzing' | 'Ready' | 'Failed' | 'Unsupported'
@@ -343,6 +344,7 @@ function SmartUploadEntry({ onFiles, compact }: { onFiles: (files: FileList | nu
         <span><strong>Upload Multiple</strong><small>Select several files</small></span>
         <input type="file" accept={SMART_UPLOAD_ACCEPT} multiple onChange={(e) => { const bytesPromises = readSelected(e.target.files); onFiles(e.target.files, bytesPromises); e.target.value = '' }} />
       </label>
+      <CloudFileImport smart onFiles={(files, bytes) => onFiles(files, bytes)} />
       {/* Milestone 14, item 1 / Final Launch Fixes: secondary to the
           three options above — a brief explainer plus a link out to the
           full Portfolio Import review queue (still /smart-import

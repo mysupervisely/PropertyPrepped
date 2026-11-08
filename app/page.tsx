@@ -97,6 +97,7 @@ import { confirmAppointment as postConfirmAppointment, appointmentErrorMessage }
 import { MaintenanceCaseDetail } from '../components/maintenance/MaintenanceCaseDetail'
 import { NewMaintenanceRequestModal } from '../components/maintenance/NewMaintenanceRequestModal'
 import type { NewMaintenanceRequestPayload } from '../lib/maintenance/new-request'
+import { CloudFileImport } from '../components/uploads/CloudFileImport'
 import { PublicPropertyRecords } from '../components/property-profile/PublicPropertyRecords'
 import { TenantConnectStatusCard } from '../components/tenant-connect/TenantConnectStatusCard'
 import { TenantRequestsPanel } from '../components/tenant-connect/TenantRequestsPanel'
@@ -3535,6 +3536,8 @@ export default function Home() {
             <div className="quickActionButtons"><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Documents') }}>Documents <span className="quickActionCount">{selectedDocs.length}</span></button><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Photos') }}>Photos <span className="quickActionCount">{selectedPhotos.length}</span></button><button onClick={() => setActiveTab('Maintenance')}>Maintenance <span className="quickActionCount">{selectedMaintenance.length}</span></button><button onClick={() => { setActiveTab('Rent'); setRentSubTab('Ledger') }}>Add transaction</button></div>
           </section>
 
+          <PublicPropertyRecords key={selected.id} address={selected.address} city={selected.city} onEdit={() => openEditProperty(selected)} />
+
           <details className="overviewInfoSection propertyOverviewDisclosure">
             <summary className="overviewSectionHeading">Property information</summary><div className="propertyDisclosureBody">
             <div className="overviewInfoGrid">
@@ -3558,7 +3561,6 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <PublicPropertyRecords key={selected.id} address={selected.address} city={selected.city} onEdit={() => openEditProperty(selected)} />
           </div></details>
 
           {selected.property_type === 'Rental Property' && (
@@ -3644,6 +3646,7 @@ export default function Home() {
                 const { files, bytesPromises } = capturePhotoPicker(e.currentTarget)
                 if (files.length) void addPhotoFiles(files, bytesPromises)
               }} /></label>
+          <CloudFileImport photos disabled={busy} onFiles={(files, bytes) => void addPhotoFiles(Array.from(files), bytes)} />
           {error && <p className="photoUploadError" role="alert">{error}</p>}
           <div className="photoGallery">{selectedPhotos.length ? selectedPhotos.map((photo) => <div className={`galleryItem ${photo.is_cover ? 'coverItem' : ''}`} key={photo.id}>{photo.storage_path ? <PropertyPhotoImage storagePath={photo.storage_path} initialUrl={photo.signedUrl} alt={photo.name} /> : <div className="heroPlaceholder">Photo unavailable</div>}<div className="galleryMeta"><span>{photo.name}</span><div className="galleryButtons"><button onClick={() => void downloadPropertyPhoto(photo)}>Download original</button>{!photo.is_cover && <button onClick={() => void setCover(photo)}>Set cover</button>}<button className="removePhoto" onClick={() => void removePhoto(photo)}>×</button></div></div></div>) : <div className="emptyGallery"><strong>No photos uploaded yet</strong><span>Add photos to build this property's visual history.</span></div>}</div>
           </>}
@@ -3670,6 +3673,7 @@ export default function Home() {
                     e.target.value = ''
                     if (files) void addDocumentFiles(files, bytesPromises)
                   }} /></label>
+                  <CloudFileImport disabled={busy} onFiles={(files, bytes) => void addDocumentFiles(Array.from(files), bytes)} />
                   {/* Launch Essentials V1 — this "temporary" debug panel
                       (see its own top comment) renders raw storage/DB
                       error text and was shipping to every production

@@ -73,8 +73,10 @@ describe('Every picker-driven upload entry point reads bytes BEFORE resetting it
     const idx = pageSource.indexOf('<input type="file" accept="image/*" multiple disabled={busy}')
     const end = pageSource.indexOf('}} /></label>', idx)
     const body = pageSource.slice(idx, end)
-    expect(body.indexOf('beginReadingFileBytes')).toBeGreaterThan(-1)
-    expect(body.indexOf("e.target.value = ''")).toBeGreaterThan(body.indexOf('beginReadingFileBytes'))
+    expect(body).toContain('capturePhotoPicker(e.currentTarget)')
+    const pickerSource = readFileSync(join(process.cwd(), 'lib/property-photos/picker.ts'), 'utf8')
+    expect(pickerSource.indexOf('files.map(beginReadingFileBytes)')).toBeGreaterThan(-1)
+    expect(pickerSource.indexOf("input.value = ''")).toBeGreaterThan(pickerSource.indexOf('files.map(beginReadingFileBytes)'))
   })
 
   it('Upload Multiple (Documents tab) — file picker AND drag-and-drop', () => {

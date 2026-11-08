@@ -6,5 +6,5 @@ export function isBackSwipe(start: SwipePoint, end: SwipePoint): boolean {
   const dx = end.x - start.x
   const dy = Math.abs(end.y - start.y)
   const duration = end.time - start.time
-  return start.x >= 0 && start.x <= 24 && dx >= 72 && dy <= 36 && dx > dy * 2 && duration >= 50 && duration <= 900
+  return start.x >= 0 && start.x <= 24 && dx >= 72 && dy <= 36 && dx > dy * 2 && duration >= 50 && duration <= 10000
 }
