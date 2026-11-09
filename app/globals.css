@@ -5309,7 +5309,6 @@ h2, h3, p { margin-top: 0; }
 .iosBackSwipeMoving { position: relative; z-index: 2; transform: translate3d(var(--ios-back-offset, 0px), 0, 0); box-shadow: -12px 0 32px #162d2326; will-change: transform; background: var(--bg, #f1f7f5); }
 .iosBackSwipeSettling { transition: transform 180ms ease-out; }
 body.iosBackSwipeActive { overflow-x: clip; }
-body.iosBackSwipeActive::before { content: '‹ Back'; position: fixed; left: 20px; top: 48%; color: var(--brand); font-size: 18px; font-weight: 600; pointer-events: none; z-index: 1; }
 @media (prefers-reduced-motion: reduce) { .iosBackSwipeSettling { transition: none; } }
 .cloudFileImport { padding: 12px 14px; border: 1px solid #9badA4; border-radius: 12px; margin: 12px 0; min-width: 0; }
 .cloudFileImport summary { cursor: pointer; font-weight: 600; color: var(--brand); min-height: 28px; }
