@@ -98,7 +98,6 @@ import { MaintenanceCaseDetail } from '../components/maintenance/MaintenanceCase
 import { NewMaintenanceRequestModal } from '../components/maintenance/NewMaintenanceRequestModal'
 import type { NewMaintenanceRequestPayload } from '../lib/maintenance/new-request'
 import { CloudFileImport } from '../components/uploads/CloudFileImport'
-import { PublicPropertyRecords } from '../components/property-profile/PublicPropertyRecords'
 import { TenantConnectStatusCard } from '../components/tenant-connect/TenantConnectStatusCard'
 import { TenantRequestsPanel } from '../components/tenant-connect/TenantRequestsPanel'
 
@@ -3536,7 +3535,6 @@ export default function Home() {
             <div className="quickActionButtons"><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Documents') }}>Documents <span className="quickActionCount">{selectedDocs.length}</span></button><button onClick={() => { setActiveTab('Documents'); setDocumentsSubTab('Photos') }}>Photos <span className="quickActionCount">{selectedPhotos.length}</span></button><button onClick={() => setActiveTab('Maintenance')}>Maintenance <span className="quickActionCount">{selectedMaintenance.length}</span></button><button onClick={() => { setActiveTab('Rent'); setRentSubTab('Ledger') }}>Add transaction</button></div>
           </section>
 
-          <PublicPropertyRecords key={selected.id} address={selected.address} city={selected.city} onEdit={() => openEditProperty(selected)} />
 
           <details className="overviewInfoSection propertyOverviewDisclosure">
             <summary className="overviewSectionHeading">Property information</summary><div className="propertyDisclosureBody">
