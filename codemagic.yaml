@@ -24,7 +24,7 @@ workflows:
     name: PropRoster iOS — TestFlight (internal)
     instance_type: mac_mini_m2
     max_build_duration: 60
-    environment:
+    environment: &ios_environment
       groups:
         - appstore_credentials
       vars:
@@ -34,7 +34,7 @@ workflows:
       node: 20.19.0
       xcode: latest
 
-    scripts:
+    scripts: &ios_scripts
       - name: Install web app dependencies
         script: npm ci
 
@@ -58,9 +58,10 @@ workflows:
           xcode-project build-ipa \
             --project "$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME" \
-            --archive-flags="CURRENT_PROJECT_VERSION=$BUILD_NUMBER DEVELOPMENT_TEAM=$APPLE_TEAM_ID"
+            --archive-flags="CURRENT_PROJECT_VERSION=$((BUILD_NUMBER + 1)) DEVELOPMENT_TEAM=$APPLE_TEAM_ID" \
+            --custom-export-options='{"testFlightInternalTestingOnly": false}'
 
-    artifacts:
+    artifacts: &ios_artifacts
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
 
@@ -70,3 +71,18 @@ workflows:
         key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
+
+  ios-app-store-upload:
+    name: PropRoster iOS App Store Upload
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment: *ios_environment
+    scripts: *ios_scripts
+    artifacts: *ios_artifacts
+    publishing:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        submit_to_testflight: false
+        submit_to_app_store: false
